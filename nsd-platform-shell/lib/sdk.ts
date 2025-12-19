@@ -4,8 +4,34 @@
  * This module provides the interface to the nsd-shared-sdk.
  * ALL data access in this platform shell MUST go through this wrapper.
  * 
- * NO DIRECT DATABASE ACCESS is allowed.
- * NO DOMAIN-SPECIFIC BUSINESS LOGIC should be implemented here.
+ * ============================================================================
+ * GOVERNANCE NOTICE — READ-ONLY BY DESIGN
+ * ============================================================================
+ * 
+ * This SDK wrapper intentionally exposes ONLY read operations.
+ * 
+ * WHY ALL DATA ACCESS GOES THROUGH THIS WRAPPER:
+ * 1. Single point of enforcement for authentication headers
+ * 2. Centralized error handling and retry logic
+ * 3. Type safety for all API responses
+ * 4. Explicit visibility of what data the shell can access
+ * 5. Prevention of direct database access or API drift
+ * 
+ * WHY THIS SHELL IS READ-ONLY:
+ * - Write operations (create, update, delete) belong to owning applications
+ * - The shell provides visibility, not mutation capability
+ * - Business logic must live in domain services, not the navigation shell
+ * - This prevents the shell from becoming a bottleneck or single point of failure
+ * 
+ * ❌ DO NOT add POST/PUT/PATCH/DELETE operations for business entities here
+ * ❌ DO NOT add business validation or workflow logic
+ * ❌ DO NOT bypass this wrapper for API calls
+ * 
+ * ✅ Authentication endpoints (login/logout) are the ONLY write operations allowed
+ * ✅ All business mutations must occur in owning apps (OMS, Sales, Quotes, etc.)
+ * 
+ * See README.md section "Shell Governance & Boundaries" for full policy.
+ * ============================================================================
  * 
  * This wrapper provides:
  * - Type-safe API calls

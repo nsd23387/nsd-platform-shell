@@ -282,6 +282,67 @@ In development mode (`MOCK_MODE=true`), you can log in with any email/password:
 
 ---
 
+## Shell Governance & Boundaries
+
+> **⚠️ PLATFORM POLICY — ENFORCEABLE**
+>
+> This section defines the architectural boundaries of the NSD Platform Shell.
+> These are not guidelines—they are enforced constraints that protect platform integrity.
+
+### ❌ The Shell Must NEVER
+
+| Constraint | Rationale |
+|------------|-----------|
+| Perform create, update, or delete operations on business data | Write operations belong to owning applications |
+| Implement business workflows (approvals, state machines, etc.) | Workflow logic belongs in domain services |
+| Bypass `nsd-shared-sdk` for data access | SDK is the single authorized data gateway |
+| Own canonical state for any business entity | Source of truth lives in owning systems |
+| Contain domain-specific validation or business rules | Business logic belongs in modular apps |
+
+### ✅ Write Operations Belong to Owning Applications
+
+| Domain | Owning Application | Examples |
+|--------|-------------------|----------|
+| Orders | `nsd-oms` | Create order, update status, cancel |
+| Custom Quotes | `nsd-quotes-custom` | Create quote, approve, revise |
+| Wholesale Quotes | `nsd-quotes-wholesale` | Bulk pricing, partner quotes |
+| Production | `nsd-production` | Schedule jobs, update progress |
+| Media | `nsd-media-intelligence` | Upload assets, tag, archive |
+| Sales | `nsd-sales-engine` | Manage accounts, contacts, opportunities |
+| Finance | `nsd-finance-console` | Invoicing, payments, reporting |
+
+### ✅ The Shell IS Responsible For
+
+| Responsibility | Description |
+|----------------|-------------|
+| Authentication & RBAC | SSO login, session management, role enforcement |
+| Navigation & App Discovery | Global nav, app launcher, deep linking |
+| Read-Only Aggregation | Universal search, cross-app visibility |
+| Activity-Driven Notifications | Consuming activity feeds, SLA alerts |
+| Executive Dashboards | Read-only metrics and KPI visualization |
+
+### Enforcement
+
+- **Code Review**: PRs adding write operations to the shell MUST be rejected
+- **SDK Compliance**: All data access MUST go through `lib/sdk.ts`
+- **Type Safety**: The SDK wrapper intentionally exposes only read operations
+- **Architectural Review**: New features must be evaluated against these boundaries
+
+### Why This Matters
+
+The platform shell exists to provide **cohesion without coupling**. If the shell
+begins to own business logic, it becomes:
+
+1. A bottleneck for all feature development
+2. A source of duplicated logic across the platform
+3. A single point of failure for business operations
+4. Impossible to maintain as the platform scales
+
+By enforcing these boundaries, we ensure the shell remains stable, lightweight,
+and focused on its core mission: **navigation, visibility, and access control**.
+
+---
+
 ## License
 
 Internal use only - NSD Platform

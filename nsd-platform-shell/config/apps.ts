@@ -27,6 +27,24 @@ import {
 
 export type AppStatus = 'active' | 'coming_soon' | 'maintenance';
 
+/**
+ * Optional capabilities that an application may support.
+ * This is a schema-only extension for future-proofing.
+ * 
+ * NOTE: No logic currently depends on these fields.
+ * They exist to allow incremental capability discovery as the platform evolves.
+ */
+export interface AppCapabilities {
+  /** Whether the app supports deep linking from the shell */
+  supportsDeepLink?: boolean;
+  /** Whether the app can receive notifications from the shell */
+  supportsNotifications?: boolean;
+  /** Whether the app supports embedding via iframe */
+  supportsIframeEmbed?: boolean;
+  /** Whether the app exposes search results to universal search */
+  supportsUniversalSearch?: boolean;
+}
+
 export interface AppConfig {
   app_id: string;
   display_name: string;
@@ -37,6 +55,11 @@ export interface AppConfig {
   icon: LucideIcon;
   status: AppStatus;
   category: 'sales' | 'operations' | 'media' | 'finance' | 'tools';
+  /**
+   * Optional capabilities supported by this application.
+   * This field is for future extensibility and does not affect current behavior.
+   */
+  capabilities?: AppCapabilities;
 }
 
 export const APP_REGISTRY: AppConfig[] = [
