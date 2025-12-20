@@ -1,70 +1,71 @@
+'use client';
+
 /**
- * RBAC Hook for Dashboard Access Control
+ * RBAC Hook - Bootstrap-Driven
  * 
  * Provides role-based access control for dashboard visibility.
- * All dashboard access is read-only.
+ * All permissions come from the bootstrap context (/api/v1/me).
+ * 
+ * GOVERNANCE:
+ * - No hardcoded permission matrices
+ * - No role-to-permission mappings
+ * - No role hierarchy logic
+ * - All checks read directly from bootstrap.permissions
  */
 
-import { useCallback, useContext, createContext } from 'react';
-import type { User, UserRole } from '../types/rbac';
-import { canViewDashboard } from '../types/rbac';
+import React from 'react';
+import { useBootstrap, PermissionGuard } from '../contexts/BootstrapContext';
 
 // ============================================
-// Auth Context (to be provided by app)
+// Permission Constants
 // ============================================
 
-interface AuthContextValue {
-  user: User | null;
-  isAuthenticated: boolean;
-}
+/**
+ * Dashboard permission strings as expected from bootstrap.
+ * These are the permission keys to check against bootstrap.permissions[].
+ */
+export const DASHBOARD_PERMISSIONS = {
+  executive: 'dashboard:executive:view',
+  operations: 'dashboard:operations:view',
+  design: 'dashboard:design:view',
+  media: 'dashboard:media:view',
+  sales: 'dashboard:sales:view',
+} as const;
 
-export const AuthContext = createContext<AuthContextValue>({
-  user: null,
-  isAuthenticated: false,
-});
+export type DashboardName = keyof typeof DASHBOARD_PERMISSIONS;
 
 // ============================================
 // RBAC Hook
 // ============================================
 
+/**
+ * Hook for accessing RBAC functionality.
+ * All checks are bootstrap-driven.
+ */
 export function useRBAC() {
-  const { user, isAuthenticated } = useContext(AuthContext);
+  const { data, hasPermission, isFeatureVisible, loading, error } = useBootstrap();
 
   /**
-   * Check if current user can view a specific dashboard
+   * Check if current user can view a specific dashboard.
+   * Reads directly from bootstrap.permissions - no inference.
    */
-  const canView = useCallback(
-    (dashboard: string): boolean => {
-      if (!isAuthenticated || !user) {
-        return false;
-      }
-      return canViewDashboard(user.role, dashboard);
-    },
-    [user, isAuthenticated]
-  );
-
-  /**
-   * Check if user has a specific role or higher
-   */
-  const hasRole = useCallback(
-    (requiredRole: UserRole): boolean => {
-      if (!user) return false;
-      
-      const roleHierarchy: UserRole[] = ['readonly', 'user', 'manager', 'admin'];
-      const userRoleIndex = roleHierarchy.indexOf(user.role);
-      const requiredRoleIndex = roleHierarchy.indexOf(requiredRole);
-      
-      return userRoleIndex >= requiredRoleIndex;
-    },
-    [user]
-  );
+  const canView = (dashboard: DashboardName): boolean => {
+    const permission = DASHBOARD_PERMISSIONS[dashboard];
+    return hasPermission(permission);
+  };
 
   return {
-    user,
-    isAuthenticated,
+    user: data?.user ?? null,
+    organization: data?.organization ?? null,
+    roles: data?.roles ?? [],
+    permissions: data?.permissions ?? [],
+    isAuthenticated: data !== null && !error,
+    loading,
+    error,
     canView,
-    hasRole,
-    orgId: user?.orgId ?? null,
+    hasPermission,
+    isFeatureVisible,
+    orgId: data?.organization?.id ?? null,
   };
 }
 
@@ -73,21 +74,28 @@ export function useRBAC() {
 // ============================================
 
 interface DashboardGuardProps {
-  dashboard: string;
+  dashboard: DashboardName;
   children: React.ReactNode;
   fallback?: React.ReactNode;
 }
 
+/**
+ * Guards dashboard content based on permissions from bootstrap.
+ * Permission is checked directly against bootstrap.permissions array.
+ */
 export function DashboardGuard({ 
   dashboard, 
   children, 
   fallback = null 
 }: DashboardGuardProps) {
-  const { canView } = useRBAC();
-
-  if (!canView(dashboard)) {
-    return <>{fallback}</>;
-  }
-
-  return <>{children}</>;
+  const permission = DASHBOARD_PERMISSIONS[dashboard];
+  
+  return (
+    <PermissionGuard permission={permission} fallback={fallback}>
+      {children}
+    </PermissionGuard>
+  );
 }
+
+// Re-export for convenience
+export { PermissionGuard } from '../contexts/BootstrapContext';

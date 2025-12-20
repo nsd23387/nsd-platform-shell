@@ -3,4 +3,4 @@
  */
 
 export * from './activity-spine';
-export * from './rbac';
+export * from './bootstrap';

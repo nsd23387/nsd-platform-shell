@@ -1,13 +1,16 @@
 /**
- * Activity Spine SDK Client
+ * SDK Client
  * 
- * This module provides read-only access to Activity Spine analytics endpoints.
+ * This module provides:
+ * - Bootstrap client for /api/v1/me (identity, permissions, features)
+ * - Read-only access to Activity Spine analytics endpoints
  * 
  * IMPORTANT GOVERNANCE RULES:
  * - All calls are READ-ONLY (GET requests only)
  * - No CRUD operations are allowed
- * - No local metric calculations - Activity Spine is the single source of truth
- * - All requests are org-scoped via headers
+ * - No local metric calculations - APIs are the single source of truth
+ * - No JWT parsing - tokens passed verbatim
+ * - No permission inference - permissions come from bootstrap
  * - No direct database access - SDK only
  */
 
@@ -21,29 +24,122 @@ import type {
   TimePeriod,
   ActivitySpineResponse,
 } from '../types/activity-spine';
+import type { BootstrapResponse } from '../types/bootstrap';
 
 // ============================================
 // Configuration
 // ============================================
 
+const ODS_API_URL = process.env.NEXT_PUBLIC_ODS_API_URL || '/api/v1';
 const ACTIVITY_SPINE_BASE_URL = process.env.NEXT_PUBLIC_ACTIVITY_SPINE_URL || '/api/activity-spine';
 
 interface SDKConfig {
-  baseUrl: string;
+  odsApiUrl: string;
+  activitySpineUrl: string;
   orgId: string;
   authToken?: string;
 }
 
 let sdkConfig: SDKConfig = {
-  baseUrl: ACTIVITY_SPINE_BASE_URL,
+  odsApiUrl: ODS_API_URL,
+  activitySpineUrl: ACTIVITY_SPINE_BASE_URL,
   orgId: '',
 };
 
 /**
- * Initialize the Activity Spine SDK with org context
+ * Initialize the SDK with configuration
+ */
+export function initSDK(config: Partial<SDKConfig>): void {
+  sdkConfig = { ...sdkConfig, ...config };
+}
+
+/**
+ * @deprecated Use initSDK instead
  */
 export function initActivitySpineSDK(config: Partial<SDKConfig>): void {
-  sdkConfig = { ...sdkConfig, ...config };
+  initSDK(config);
+}
+
+// ============================================
+// Token Handling
+// ============================================
+
+/**
+ * Get auth token from available sources.
+ * Token sources (in order):
+ * 1. SDK config (if set)
+ * 2. window.__NSD_AUTH_TOKEN__ (set by host application)
+ * 3. NEXT_PUBLIC_NSD_DEV_JWT (development fallback)
+ * 
+ * GOVERNANCE: Token is passed verbatim. No parsing or validation.
+ */
+function getAuthToken(): string | undefined {
+  if (sdkConfig.authToken) {
+    return sdkConfig.authToken;
+  }
+  
+  if (typeof window !== 'undefined' && (window as unknown as { __NSD_AUTH_TOKEN__?: string }).__NSD_AUTH_TOKEN__) {
+    return (window as unknown as { __NSD_AUTH_TOKEN__?: string }).__NSD_AUTH_TOKEN__;
+  }
+  
+  return process.env.NEXT_PUBLIC_NSD_DEV_JWT;
+}
+
+// ============================================
+// Bootstrap API (/api/v1/me)
+// ============================================
+
+/**
+ * GET /api/v1/me
+ * 
+ * Fetches bootstrap data: user identity, organization, roles, permissions,
+ * environment, and feature visibility.
+ * 
+ * GOVERNANCE:
+ * - Called exactly once on app load
+ * - Response stored in memory only (no persistence)
+ * - No JWT parsing
+ * - No role/permission inference
+ * - This is the SOLE source of truth for access control
+ */
+export async function getMe(): Promise<BootstrapResponse> {
+  const token = getAuthToken();
+  
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const response = await fetch(`${sdkConfig.odsApiUrl}/me`, {
+    method: 'GET',
+    headers,
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new BootstrapError(
+      `Bootstrap failed: ${response.status}`,
+      response.status
+    );
+  }
+  
+  return response.json();
+}
+
+/**
+ * Bootstrap-specific error
+ */
+export class BootstrapError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number
+  ) {
+    super(message);
+    this.name = 'BootstrapError';
+  }
 }
 
 // ============================================
@@ -55,13 +151,18 @@ export function initActivitySpineSDK(config: Partial<SDKConfig>): void {
  * Includes org scoping and authentication
  */
 function buildHeaders(): HeadersInit {
+  const token = getAuthToken();
+  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    'X-Org-Id': sdkConfig.orgId,
   };
+  
+  if (sdkConfig.orgId) {
+    headers['X-Org-Id'] = sdkConfig.orgId;
+  }
 
-  if (sdkConfig.authToken) {
-    headers['Authorization'] = `Bearer ${sdkConfig.authToken}`;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   return headers;
@@ -75,7 +176,7 @@ async function fetchFromActivitySpine<T>(
   endpoint: string,
   params?: Record<string, string>
 ): Promise<ActivitySpineResponse<T>> {
-  const url = new URL(`${sdkConfig.baseUrl}${endpoint}`);
+  const url = new URL(`${sdkConfig.activitySpineUrl}${endpoint}`, window.location.origin);
   
   if (params) {
     Object.entries(params).forEach(([key, value]) => {

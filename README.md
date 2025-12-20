@@ -8,8 +8,8 @@ The NSD Command Center provides unified navigation, read-only dashboards, and an
 
 - **Unified Navigation:** Single entry point for all NSD internal applications
 - **Read-Only Dashboards:** Executive, Operations, Design, Media, and Sales views
-- **App Registry:** Feature-gated application launcher with RBAC support (planned)
-- **Bootstrap Integration:** Will consume `/api/v1/me` for identity, permissions, and feature visibility (not yet wired)
+- **App Registry:** Feature-gated application launcher with RBAC support
+- **Bootstrap Integration:** Consumes `/api/v1/me` for identity, permissions, and feature visibility
 
 ## Quick Start
 
@@ -32,31 +32,39 @@ This project is a **pure frontend application** with zero backend logic:
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS with NSD design tokens
 - **Deployment:** Vercel (static export compatible)
-- **Typography:** System fonts (Poppins for headers, Inter for body - planned)
+- **Typography:** System fonts (Poppins for headers, Inter for body)
 - **Colors:** Deep Indigo `#020F5A`, Violet `#692BAA`, Magenta `#CC368F` (CTAs only)
 
 ### Bootstrap Flow
 
-> **Current Status:** The bootstrap integration via `/api/v1/me` is **planned but not yet wired**. The codebase includes scaffolding for RBAC and authentication contexts, but the actual bootstrap endpoint call is not implemented. During this transitional phase, dashboards render with Activity Spine data directly. **No governance rules are relaxed during this transition.**
+On application load:
 
-When fully implemented, the bootstrap flow will:
+1. Call `GET /api/v1/me` with JWT Bearer token (exactly once)
+2. Token source: `window.__NSD_AUTH_TOKEN__` or `NEXT_PUBLIC_NSD_DEV_JWT` fallback
+3. Store response in React context memory only (no persistence)
+4. No retries, caching, or transforms
+5. Provide: user identity, organization, roles, permissions, environment, feature_visibility
 
-1. Call `GET /api/v1/me` with JWT Bearer token on application load
-2. Read token from host application context
-3. Store response in React context (no persistence)
-4. Provide: user identity, organization, roles, permissions, environment, feature_visibility
+### Bootstrap Helpers
+
+The bootstrap context exposes two helpers:
+
+- `hasPermission(permission: string): boolean` - Check if user has a specific permission
+- `isFeatureVisible(feature: string): boolean` - Check if a feature is visible
+
+**These helpers read directly from bootstrap data. No inference, no role mapping, no hierarchy logic.**
 
 ### Data Access
 
 | Endpoint | Purpose | Status |
 |----------|---------|--------|
-| `/api/v1/me` | Bootstrap (identity, permissions, feature_visibility) | **Planned** |
-| `/activity-spine/metrics/orders` | Order metrics | Active |
-| `/activity-spine/metrics/media` | Media processing metrics | Active |
-| `/activity-spine/metrics/mockups` | Design mockup metrics | Active |
-| `/activity-spine/funnels/orders` | Order conversion funnel | Active |
-| `/activity-spine/slas` | SLA overview | Active |
-| `/activity-spine/slas/mockups` | Mockup SLA details | Active |
+| `/api/v1/me` | Bootstrap (identity, permissions, feature_visibility) | ✅ Active |
+| `/activity-spine/metrics/orders` | Order metrics | ✅ Active |
+| `/activity-spine/metrics/media` | Media processing metrics | ✅ Active |
+| `/activity-spine/metrics/mockups` | Design mockup metrics | ✅ Active |
+| `/activity-spine/funnels/orders` | Order conversion funnel | ✅ Active |
+| `/activity-spine/slas` | SLA overview | ✅ Active |
+| `/activity-spine/slas/mockups` | Mockup SLA details | ✅ Active |
 
 All Activity Spine endpoints accept `?period=7d|30d` query parameter.
 
@@ -78,7 +86,8 @@ All Activity Spine endpoints accept `?period=7d|30d` query parameter.
 │   │   ├── layout.tsx           # Dashboard layout with navigation
 │   │   └── page.tsx             # Dashboard index
 │   ├── globals.css              # Global styles
-│   ├── layout.tsx               # Root layout
+│   ├── layout.tsx               # Root layout with BootstrapProvider
+│   ├── providers.tsx            # Client-side providers
 │   └── page.tsx                 # Landing page
 ├── components/
 │   ├── dashboard/               # Dashboard-specific components
@@ -90,16 +99,19 @@ All Activity Spine endpoints accept `?period=7d|30d` query parameter.
 │   │   ├── TieredSLADistributionCard.tsx
 │   │   └── index.ts
 │   └── index.ts
+├── contexts/
+│   ├── BootstrapContext.tsx     # /api/v1/me integration
+│   └── index.ts
 ├── hooks/
 │   ├── useActivitySpine.ts      # Activity Spine data hooks
-│   ├── useRBAC.tsx              # RBAC hook (scaffolding)
+│   ├── useRBAC.tsx              # Bootstrap-driven RBAC hook
 │   └── index.ts
 ├── lib/
-│   ├── sdk.ts                   # Activity Spine API client
+│   ├── sdk.ts                   # Bootstrap + Activity Spine API client
 │   └── index.ts
 ├── types/
 │   ├── activity-spine.ts        # Activity Spine types
-│   ├── rbac.ts                  # RBAC types (scaffolding)
+│   ├── bootstrap.ts             # Bootstrap response types
 │   └── index.ts
 ├── next.config.js
 ├── package.json
@@ -123,25 +135,21 @@ All Activity Spine endpoints accept `?period=7d|30d` query parameter.
 
 | Variable | Description |
 |----------|-------------|
+| `NEXT_PUBLIC_ODS_API_URL` | Base URL for ODS API (bootstrap endpoint) |
 | `NEXT_PUBLIC_ACTIVITY_SPINE_URL` | Base URL for Activity Spine API |
+| `NEXT_PUBLIC_NSD_DEV_JWT` | JWT token for development (fallback) |
 | `ACTIVITY_SPINE_API_URL` | Backend URL for API proxy (development) |
 
 ---
 
 ## Governance & Non-Negotiables
 
-### Documentation Accuracy Principle
-
-**Documentation must reflect current enforced behavior, not aspirational future state.**
-
-Any planned features must be explicitly marked as such. The governance rules below apply to the current implementation and will continue to apply as features are completed.
-
 ### Strict Architecture Rules
 
-1. **`/api/v1/me` is the ONLY bootstrap source** (when implemented)
-   - All identity, permissions, roles, and feature visibility will come from this endpoint
+1. **`/api/v1/me` is the ONLY bootstrap source**
+   - All identity, permissions, roles, and feature visibility come from this endpoint
    - No other source of truth for access control
-   - **Current status:** Not yet wired; RBAC scaffolding exists but is not connected
+   - Called exactly once on app load
 
 2. **No backend logic in frontend**
    - This is a pure browser client
@@ -155,11 +163,11 @@ Any planned features must be explicitly marked as such. The governance rules bel
    - No business logic calculations
    - Display-only transformations (e.g., formatting percentages) are acceptable
 
-4. **RBAC and feature visibility from bootstrap ONLY** (when implemented)
-   - App visibility will be driven by `feature_visibility[]` from `/api/v1/me`
-   - Permission checks will reference `permissions[]` from bootstrap
+4. **RBAC and feature visibility from bootstrap ONLY**
+   - App visibility driven by `feature_visibility[]` from `/api/v1/me`
+   - Permission checks reference `permissions[]` from bootstrap
    - No conditional logic based on app internals
-   - **Current status:** Scaffolding includes placeholder permissions; production will use bootstrap
+   - No hardcoded permission matrices
 
 5. **Platform Shell is strictly read-only**
    - No write operations
@@ -170,7 +178,7 @@ Any planned features must be explicitly marked as such. The governance rules bel
 
 - **Do NOT** parse JWTs in UI code
 - **Do NOT** infer permissions from other data
-- **Do NOT** hardcode roles or role-based logic (except transitional scaffolding)
+- **Do NOT** hardcode roles or role-based logic
 - **Do NOT** derive feature visibility logic
 - **Do NOT** recreate RBAC rules
 - **Do NOT** add neon effects, shadows, or glows (minimalist design)
@@ -243,21 +251,22 @@ The build outputs a production-ready Next.js application.
 
 Set the following environment variables in Vercel:
 
+- `NEXT_PUBLIC_ODS_API_URL` - ODS API base URL (for bootstrap)
 - `NEXT_PUBLIC_ACTIVITY_SPINE_URL` - Activity Spine API base URL
 - `ACTIVITY_SPINE_API_URL` - Backend proxy target (if using rewrites)
 
 ---
 
-## Current Implementation Status
+## Implementation Status
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Dashboard UI | ✅ Complete | All 5 dashboards implemented |
 | Activity Spine Integration | ✅ Complete | SDK and hooks functional |
 | Tiered SLA Visualization | ✅ Complete | v1.5.1 tier model supported |
-| Bootstrap (`/api/v1/me`) | ⏳ Planned | Scaffolding exists, not wired |
-| RBAC Enforcement | ⏳ Planned | Placeholder permissions in place |
-| Feature Visibility Gating | ⏳ Planned | Depends on bootstrap integration |
+| Bootstrap (`/api/v1/me`) | ✅ Complete | Wired via BootstrapContext |
+| RBAC Enforcement | ✅ Complete | Bootstrap-driven permissions |
+| Feature Visibility Gating | ✅ Complete | Bootstrap-driven features |
 
 ---
 
