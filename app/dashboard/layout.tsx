@@ -15,6 +15,7 @@ interface DashboardLayoutProps {
 }
 
 const navItems = [
+  { href: '/dashboard/overview', label: 'Overview', icon: '🏠' },
   { href: '/dashboard/executive', label: 'Executive', icon: '📊' },
   { href: '/dashboard/operations', label: 'Operations', icon: '⚙️' },
   { href: '/dashboard/design', label: 'Design', icon: '🎨' },

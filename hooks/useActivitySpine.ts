@@ -20,6 +20,11 @@ import type {
   MockupSLAMetrics,
   TimePeriod,
   AsyncState,
+  SystemPulseMetrics,
+  ThroughputMetrics,
+  LatencyMetrics,
+  TrendMetrics,
+  OverviewDashboardData,
 } from '../types/activity-spine';
 import {
   getOrderMetrics,
@@ -33,6 +38,11 @@ import {
   getDesignDashboardData,
   getMediaDashboardData,
   getSalesDashboardData,
+  getSystemPulse,
+  getThroughput,
+  getLatency,
+  getTrend,
+  getOverviewDashboardData,
 } from '../lib/sdk';
 
 // ============================================
@@ -323,6 +333,99 @@ export function useSalesDashboard(period: TimePeriod = '30d') {
       setState({ data: null, loading: false, error: message });
     }
   }, [period]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { ...state, refetch: fetchData };
+}
+
+// ============================================
+// Milestone 7: Overview Dashboard Hooks
+// ============================================
+
+/**
+ * Fetch System Pulse metrics
+ * Read-only - no client-side computation
+ */
+export function useSystemPulse() {
+  return useAsyncData<SystemPulseMetrics>(
+    () => getSystemPulse(),
+    []
+  );
+}
+
+/**
+ * Fetch Throughput metrics
+ * Read-only - no client-side computation
+ */
+export function useThroughput(window: '24h' | '7d' = '24h') {
+  return useAsyncData<ThroughputMetrics>(
+    () => getThroughput(window),
+    [window]
+  );
+}
+
+/**
+ * Fetch Latency / SLA metrics
+ * Read-only - no client-side computation
+ */
+export function useLatency() {
+  return useAsyncData<LatencyMetrics>(
+    () => getLatency(),
+    []
+  );
+}
+
+/**
+ * Fetch Trend metrics
+ * Read-only - no client-side computation
+ */
+export function useTrend(window: '7d' = '7d') {
+  return useAsyncData<TrendMetrics>(
+    () => getTrend(window),
+    [window]
+  );
+}
+
+/**
+ * Fetch all data needed for Overview Dashboard (Milestone 7)
+ * 
+ * This is the primary hook for the read-only overview dashboard.
+ * All metrics are consumed exactly as provided - no client-side computation.
+ * 
+ * GOVERNANCE:
+ * - Read-only: No mutations, no side effects
+ * - No local calculations: All values come from the API
+ * - Safe empty states: Handles null/zero gracefully
+ */
+export function useOverviewDashboard() {
+  const [state, setState] = useState<AsyncState<OverviewDashboardData>>({
+    data: null,
+    loading: true,
+    error: null,
+  });
+
+  const fetchData = useCallback(async () => {
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const { systemPulse, throughput, latency, trend } = await getOverviewDashboardData();
+      setState({
+        data: {
+          systemPulse: systemPulse.data,
+          throughput: throughput.data,
+          latency: latency.data,
+          trend: trend.data,
+        },
+        loading: false,
+        error: null,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch dashboard data';
+      setState({ data: null, loading: false, error: message });
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();

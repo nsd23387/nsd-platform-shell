@@ -25,12 +25,31 @@ import { useBootstrap, PermissionGuard } from '../contexts/BootstrapContext';
  * These are the permission keys to check against bootstrap.permissions[].
  */
 export const DASHBOARD_PERMISSIONS = {
+  overview: 'dashboard:overview:view',
   executive: 'dashboard:executive:view',
   operations: 'dashboard:operations:view',
   design: 'dashboard:design:view',
   media: 'dashboard:media:view',
   sales: 'dashboard:sales:view',
 } as const;
+
+/**
+ * Overview Dashboard section permissions (Milestone 7)
+ * 
+ * Role-based visibility:
+ * - platform_admin: Full dashboard
+ * - executive: Full dashboard  
+ * - operator: Full dashboard
+ * - viewer: System Pulse only
+ */
+export const OVERVIEW_SECTION_PERMISSIONS = {
+  systemPulse: 'dashboard:overview:system-pulse',
+  throughput: 'dashboard:overview:throughput',
+  latency: 'dashboard:overview:latency',
+  trend: 'dashboard:overview:trend',
+} as const;
+
+export type OverviewSection = keyof typeof OVERVIEW_SECTION_PERMISSIONS;
 
 export type DashboardName = keyof typeof DASHBOARD_PERMISSIONS;
 
@@ -95,6 +114,60 @@ export function DashboardGuard({
       {children}
     </PermissionGuard>
   );
+}
+
+// ============================================
+// Overview Section Guard Component (Milestone 7)
+// ============================================
+
+interface OverviewSectionGuardProps {
+  section: OverviewSection;
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+}
+
+/**
+ * Guards overview dashboard sections based on permissions.
+ * 
+ * Permission mapping:
+ * - platform_admin, executive, operator: All sections visible
+ * - viewer: System Pulse only
+ * 
+ * Permission is checked directly against bootstrap.permissions array.
+ */
+export function OverviewSectionGuard({ 
+  section, 
+  children, 
+  fallback = null 
+}: OverviewSectionGuardProps) {
+  const permission = OVERVIEW_SECTION_PERMISSIONS[section];
+  
+  return (
+    <PermissionGuard permission={permission} fallback={fallback}>
+      {children}
+    </PermissionGuard>
+  );
+}
+
+/**
+ * Hook to check if user can view a specific overview section.
+ * Used for conditional rendering of dashboard sections.
+ */
+export function useOverviewSectionAccess() {
+  const { hasPermission } = useBootstrap();
+  
+  const canViewSection = (section: OverviewSection): boolean => {
+    const permission = OVERVIEW_SECTION_PERMISSIONS[section];
+    return hasPermission(permission);
+  };
+  
+  return {
+    canViewSystemPulse: canViewSection('systemPulse'),
+    canViewThroughput: canViewSection('throughput'),
+    canViewLatency: canViewSection('latency'),
+    canViewTrend: canViewSection('trend'),
+    canViewSection,
+  };
 }
 
 // Re-export for convenience

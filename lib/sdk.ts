@@ -23,6 +23,10 @@ import type {
   MockupSLAMetrics,
   TimePeriod,
   ActivitySpineResponse,
+  SystemPulseMetrics,
+  ThroughputMetrics,
+  LatencyMetrics,
+  TrendMetrics,
 } from '../types/activity-spine';
 import type { BootstrapResponse } from '../types/bootstrap';
 
@@ -368,4 +372,91 @@ export async function getSalesDashboardData(period: TimePeriod = '30d') {
   ]);
 
   return { funnel, orders };
+}
+
+// ============================================
+// Milestone 7: Platform Overview Metrics API
+// ============================================
+
+/**
+ * GET /metrics/system-pulse
+ * 
+ * Fetches system pulse metrics (vital signs).
+ * Read-only endpoint - no mutations.
+ * 
+ * Returns:
+ * - Total events (last 24h)
+ * - Active organizations (7d)
+ * - Active users (7d)
+ * - Errors (24h)
+ */
+export async function getSystemPulse(): Promise<ActivitySpineResponse<SystemPulseMetrics>> {
+  return fetchFromActivitySpine<SystemPulseMetrics>('/metrics/system-pulse');
+}
+
+/**
+ * GET /metrics/throughput
+ * 
+ * Fetches throughput metrics (events over time).
+ * Read-only endpoint - no mutations.
+ * 
+ * Returns:
+ * - Events per hour/day (time buckets)
+ * - Breakdown by entity type
+ * - Total events in window
+ */
+export async function getThroughput(
+  window: '24h' | '7d' = '24h'
+): Promise<ActivitySpineResponse<ThroughputMetrics>> {
+  return fetchFromActivitySpine<ThroughputMetrics>('/metrics/throughput', { window });
+}
+
+/**
+ * GET /metrics/latency
+ * 
+ * Fetches latency / SLA metrics.
+ * Read-only endpoint - no mutations.
+ * 
+ * Returns:
+ * - Average time to first activity
+ * - P95 latency
+ * - Count of stalled entities
+ */
+export async function getLatency(): Promise<ActivitySpineResponse<LatencyMetrics>> {
+  return fetchFromActivitySpine<LatencyMetrics>('/metrics/latency');
+}
+
+/**
+ * GET /metrics/trend
+ * 
+ * Fetches trend metrics (7-day activity trend).
+ * Read-only endpoint - no mutations.
+ * 
+ * Returns:
+ * - Daily event counts
+ * - Trend direction
+ * - Change percentage
+ */
+export async function getTrend(
+  window: '7d' = '7d'
+): Promise<ActivitySpineResponse<TrendMetrics>> {
+  return fetchFromActivitySpine<TrendMetrics>('/metrics/trend', { window });
+}
+
+/**
+ * Fetch all metrics needed for Overview Dashboard (Milestone 7)
+ * Batches requests for efficiency
+ * 
+ * This is the primary entry point for the read-only overview dashboard.
+ * All metrics are consumed exactly as provided - no client-side computation.
+ */
+export async function getOverviewDashboardData() {
+  const [systemPulse, throughput, latency, trend] = await Promise.all([
+    getSystemPulse(),
+    getThroughput('24h'),
+    getLatency(),
+    getTrend('7d'),
+  ]);
+
+  return { systemPulse, throughput, latency, trend };
 }
