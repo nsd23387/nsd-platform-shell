@@ -30,3 +30,10 @@ export type { SLACardProps } from './SLACard';
 
 export { BreachListCard } from './BreachListCard';
 export type { BreachListCardProps } from './BreachListCard';
+
+// Tiered SLA components (Activity Spine v1.5.1+)
+export { TieredSLADistributionCard, SLA_TIER_COLORS, SLA_TIER_LABELS, SLA_TIER_TOOLTIPS } from './TieredSLADistributionCard';
+export type { TieredSLADistributionCardProps } from './TieredSLADistributionCard';
+
+export { DetailedBreachListCard } from './DetailedBreachListCard';
+export type { DetailedBreachListCardProps } from './DetailedBreachListCard';

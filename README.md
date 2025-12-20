@@ -36,7 +36,7 @@ The shell provides read-only dashboards powered entirely by the Activity Spine a
 |-------|---------|-------------|
 | `/dashboard/executive` | High-level executive visibility | Orders volume, cycle times, SLA compliance |
 | `/dashboard/operations` | Production & fulfillment | Bottlenecks, stage distribution, P95 times |
-| `/dashboard/design` | Design team performance | Mockup turnaround, 2h SLA, breach analysis |
+| `/dashboard/design` | Design team performance | Mockup turnaround, tiered SLA distribution, breach analysis |
 | `/dashboard/media` | Media asset workflows | Created vs approved, utilization rates |
 | `/dashboard/sales` | Sales funnel health | Conversion rates, drop-off analysis |
 
@@ -97,7 +97,9 @@ nsd-platform-shell/
 │       ├── DistributionCard.tsx# Bar distribution chart
 │       ├── FunnelCard.tsx      # Funnel visualization
 │       ├── SLACard.tsx         # SLA compliance display
-│       └── BreachListCard.tsx  # Breach breakdown list
+│       ├── BreachListCard.tsx  # Breach breakdown list
+│       ├── TieredSLADistributionCard.tsx  # Tiered SLA visualization
+│       └── DetailedBreachListCard.tsx     # Detailed breach items
 ├── hooks/
 │   ├── useActivitySpine.ts     # Data fetching hooks
 │   └── useRBAC.ts              # Access control hooks
@@ -184,9 +186,10 @@ All dashboards follow these principles:
 
 ### Design Dashboard
 - Avg mockup turnaround (minutes)
-- SLA compliance rate (2h target)
-- Quotes pending > 90 minutes
-- Breaches by quote type
+- % Exceptional (≤ 2h)
+- % Breach (> 24h)
+- Tiered SLA distribution visualization
+- Breach details by quote
 
 ### Media Dashboard
 - Media created vs approved
@@ -197,6 +200,44 @@ All dashboards follow these principles:
 - Funnel conversion (lead → quote → order)
 - Drop-off by stage
 - Volume trends
+
+---
+
+## 📐 Mockup SLA Interpretation
+
+The Design Dashboard uses a **tiered SLA model** (Activity Spine v1.5.1+) that provides more nuanced performance visibility than binary pass/fail metrics.
+
+### Tier Definitions
+
+| Tier | Threshold | Color | Meaning |
+|------|-----------|-------|---------|
+| **Exceptional** | ≤ 2 hours | 🟢 Green | Outstanding turnaround - exceeds expectations |
+| **Standard** | 2–24 hours | 🟡 Yellow | Acceptable performance - within normal range |
+| **Breach** | > 24 hours | 🔴 Red | Requires attention - exceeds maximum threshold |
+| **Pending** | In progress | ⚪ Gray | No delivery yet - mockup still being created |
+
+### Why Standard ≠ Failure
+
+The **Standard** tier (2–24 hours) represents acceptable, normal business performance:
+
+- Not all mockups require immediate turnaround
+- Complex designs naturally take longer
+- Standard performance maintains quality while meeting expectations
+- Only **Breach** (> 24h) requires investigation or escalation
+
+### How to Read the Dashboard
+
+1. **% Exceptional**: Higher is better - indicates fast turnaround capacity
+2. **% Breach**: Lower is better - should be minimized
+3. **Standard count**: Normal operations - not a concern
+4. **Distribution bar**: Visual health check - green/yellow is healthy, watch for red growth
+
+### Data Source
+
+All tier classifications are computed by **Activity Spine** (the source of truth). The shell:
+- Does NOT calculate SLA tiers locally
+- Does NOT define threshold values
+- Only displays pre-computed distributions
 
 ---
 

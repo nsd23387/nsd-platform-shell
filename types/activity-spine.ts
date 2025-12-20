@@ -32,13 +32,42 @@ export interface MediaMetrics {
 }
 
 // ============================================
-// Mockup Metrics
+// Mockup Metrics (Activity Spine v1.5.1+)
 // ============================================
+
+/**
+ * Tiered SLA distribution as returned by Activity Spine.
+ * The shell does NOT compute these values - they are consumed read-only.
+ * 
+ * Tier definitions (computed by Activity Spine):
+ * - exceptional: ≤ 2 hours
+ * - standard: > 2h and ≤ 24h
+ * - breach: > 24h
+ * - pending: no mockup delivered yet
+ */
+export interface MockupSLADistribution {
+  exceptional: number;
+  standard: number;
+  breach: number;
+  pending: number;
+}
+
+export interface MockupSLATargets {
+  exceptionalMinutes: number;  // 120 (2h)
+  standardMinutes: number;     // 1440 (24h)
+}
+
 export interface MockupMetrics {
   avgTurnaroundMinutes: number;
   totalMockups: number;
   pendingMockups: number;
   periodDays: number;
+  /** Tiered SLA distribution (Activity Spine v1.5.1+) */
+  distribution?: MockupSLADistribution;
+  /** Counts for the last 30 days */
+  countsLast30Days?: number;
+  /** SLA tier thresholds */
+  slaTargets?: MockupSLATargets;
 }
 
 // ============================================
@@ -74,12 +103,39 @@ export interface SLAMetrics {
   stageDistribution: Record<string, number>;
 }
 
+/**
+ * Mockup SLA breach item for detailed breach list.
+ * Only items with sla_status === 'breach' should be displayed.
+ */
+export interface MockupBreachItem {
+  quoteId: string;
+  quoteType: string;
+  turnaroundMinutes: number;
+  elapsedSinceInquiryMinutes: number;
+  slaStatus: 'exceptional' | 'standard' | 'breach' | 'pending';
+}
+
 export interface MockupSLAMetrics {
+  /** 
+   * @deprecated Use distribution-based metrics instead.
+   * Kept for backward compatibility with Executive Dashboard.
+   */
   complianceRate: number;
+  /** 
+   * @deprecated Use slaTargets instead.
+   * Kept for backward compatibility.
+   */
   targetMinutes: number;
   quotesPendingOver90Min: number;
+  /** Breaches grouped by quote type (count) */
   breachesByQuoteType: Record<string, number>;
   totalEvaluated: number;
+  /** Detailed breach items (only sla_status === 'breach') */
+  breachItems?: MockupBreachItem[];
+  /** Tiered distribution (mirrors MockupMetrics.distribution) */
+  distribution?: MockupSLADistribution;
+  /** SLA tier thresholds */
+  slaTargets?: MockupSLATargets;
 }
 
 // ============================================
