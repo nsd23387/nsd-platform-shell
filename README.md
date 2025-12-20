@@ -1,266 +1,237 @@
-# nsd-platform-shell
+# NSD Command Center
 
-Unified internal platform shell for the NSD Unified Business Platform.
+**A pure frontend Platform Shell UI for Neon Signs Depot (NSD)**
 
-This application is the single entry point for internal users and provides:
-- Authentication
-- Global navigation
-- App registry
-- **Read-only executive visibility dashboards**
+The NSD Command Center provides unified navigation, read-only dashboards, and an app registry for NSD's internal platform. This is a browser-only React SPA that consumes pre-computed metrics from backend APIs.
 
----
+## Purpose
 
-## 🚫 Governance: What This Shell Does NOT Do
+- **Unified Navigation:** Single entry point for all NSD internal applications
+- **Read-Only Dashboards:** Executive, Operations, Design, Media, and Sales views
+- **App Registry:** Feature-gated application launcher with RBAC support
+- **Bootstrap Integration:** Consumes `/api/v1/me` for identity, permissions, and feature visibility
 
-This repository enforces strict governance boundaries:
-
-| ❌ Not Allowed | ✅ Allowed |
-|----------------|------------|
-| CRUD operations | Read-only data consumption |
-| Business logic | UI presentation |
-| Metric calculations | Display pre-computed metrics |
-| Direct database access | Activity Spine SDK calls only |
-| Bypassing SDKs | Using `nsd-shared-sdk` |
-
-**All data access must go through the Activity Spine API.**
-
----
-
-## 📊 Activity Spine Dashboards
-
-The shell provides read-only dashboards powered entirely by the Activity Spine analytics service.
-
-### Available Dashboards
-
-| Route | Purpose | Key Metrics |
-|-------|---------|-------------|
-| `/dashboard/executive` | High-level executive visibility | Orders volume, cycle times, SLA compliance |
-| `/dashboard/operations` | Production & fulfillment | Bottlenecks, stage distribution, P95 times |
-| `/dashboard/design` | Design team performance | Mockup turnaround, tiered SLA distribution, breach analysis |
-| `/dashboard/media` | Media asset workflows | Created vs approved, utilization rates |
-| `/dashboard/sales` | Sales funnel health | Conversion rates, drop-off analysis |
-
-### Activity Spine Endpoints
-
-The SDK consumes these read-only endpoints:
-
-```
-GET /activity-spine/metrics/orders    # Order volume and cycle times
-GET /activity-spine/metrics/media     # Media creation and approval
-GET /activity-spine/metrics/mockups   # Mockup turnaround metrics
-GET /activity-spine/funnels/orders    # Lead → Quote → Order conversion
-GET /activity-spine/slas              # Production SLA compliance
-GET /activity-spine/slas/mockups      # Mockup SLA (2h target)
-```
-
-All requests are:
-- **Read-only** (GET only)
-- **Org-scoped** (via `X-Org-Id` header)
-- **Authenticated** (via Bearer token)
-
----
-
-## 🔐 RBAC (Role-Based Access Control)
-
-All users can view dashboards. This is intentionally read-only.
-
-| Role | Dashboard Access |
-|------|-----------------|
-| `readonly` | ✅ View all dashboards |
-| `user` | ✅ View all dashboards |
-| `manager` | ✅ View all dashboards |
-| `admin` | ✅ View all dashboards |
-
-No mutation permissions are required for dashboard access.
-
----
-
-## 🏗️ Project Structure
-
-```
-nsd-platform-shell/
-├── app/
-│   └── dashboard/
-│       ├── layout.tsx          # Shared dashboard layout
-│       ├── page.tsx            # Dashboard index (redirects)
-│       ├── executive/page.tsx  # Executive dashboard
-│       ├── operations/page.tsx # Operations dashboard
-│       ├── design/page.tsx     # Design dashboard
-│       ├── media/page.tsx      # Media dashboard
-│       └── sales/page.tsx      # Sales dashboard
-├── components/
-│   └── dashboard/
-│       ├── DashboardCard.tsx   # Base card component
-│       ├── DashboardGrid.tsx   # Grid layout
-│       ├── DashboardHeader.tsx # Header with time selector
-│       ├── MetricCard.tsx      # Single metric display
-│       ├── DistributionCard.tsx# Bar distribution chart
-│       ├── FunnelCard.tsx      # Funnel visualization
-│       ├── SLACard.tsx         # SLA compliance display
-│       ├── BreachListCard.tsx  # Breach breakdown list
-│       ├── TieredSLADistributionCard.tsx  # Tiered SLA visualization
-│       └── DetailedBreachListCard.tsx     # Detailed breach items
-├── hooks/
-│   ├── useActivitySpine.ts     # Data fetching hooks
-│   └── useRBAC.ts              # Access control hooks
-├── lib/
-│   └── sdk.ts                  # Activity Spine SDK client
-├── types/
-│   ├── activity-spine.ts       # API response types
-│   └── rbac.ts                 # Permission types
-└── README.md
-```
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- Access to Activity Spine API
-
-### Installation
+## Quick Start
 
 ```bash
 npm install
+npm run dev      # Start Vite dev server
+npm run build    # Build for production
+npm run preview  # Preview production build
 ```
 
-### Configuration
+## Architecture
 
-Copy the environment example and configure:
+### Frontend Only
 
-```bash
-cp .env.example .env.local
+This project is a **pure frontend SPA** with zero backend logic:
+
+- **Framework:** React 18 with Vite
+- **Routing:** wouter (client-side)
+- **Styling:** Tailwind CSS with NSD design tokens
+- **State:** TanStack Query for data fetching
+- **Typography:** Poppins (headers), Inter (body)
+- **Colors:** Deep Indigo `#020F5A`, Violet `#692BAA`, Magenta `#CC368F` (CTAs only)
+
+### Bootstrap Flow
+
+On application load:
+
+1. Call `GET ${VITE_ODS_API_URL}/api/v1/me` with JWT Bearer token
+2. Token source: `window.__NSD_AUTH_TOKEN__` (primary) or `VITE_NSD_DEV_JWT` (fallback)
+3. Store response in React context memory only (no persistence)
+4. Bootstrap provides: user identity, organization, roles, permissions, environment, feature_visibility
+
+### Data Access
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/api/v1/me` | Bootstrap (identity, permissions, feature_visibility) |
+| `/activity-spine/metrics/orders` | Order metrics |
+| `/activity-spine/metrics/media` | Media processing metrics |
+| `/activity-spine/metrics/mockups` | Design mockup metrics |
+| `/activity-spine/funnels/orders` | Order conversion funnel |
+| `/activity-spine/slas` | SLA overview |
+| `/activity-spine/slas/mockups` | Mockup SLA details |
+
+All Activity Spine endpoints accept `?period=7d|30d` query parameter.
+
+## Project Structure
+
+```
+├── client/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── dashboard/     # MetricCard, SLABadge, FunnelChart, etc.
+│   │   │   ├── layout/        # TopNav, DashboardLayout
+│   │   │   └── ui/            # Shadcn UI components
+│   │   ├── contexts/
+│   │   │   └── BootstrapContext.tsx  # /api/v1/me integration
+│   │   ├── data/
+│   │   │   └── fixtures.ts    # Static fixtures for development
+│   │   ├── lib/
+│   │   │   ├── config.ts      # App registry, routes, API URLs
+│   │   │   ├── sdk.ts         # Activity Spine API client
+│   │   │   └── utils.ts       # Formatting utilities
+│   │   ├── pages/
+│   │   │   ├── executive-dashboard.tsx
+│   │   │   ├── operations-dashboard.tsx
+│   │   │   ├── design-dashboard.tsx
+│   │   │   ├── media-dashboard.tsx
+│   │   │   ├── sales-dashboard.tsx
+│   │   │   └── apps.tsx       # App registry with feature_visibility gating
+│   │   └── App.tsx
+│   └── index.html
+├── shared/
+│   └── schema.ts              # TypeScript types matching API responses
+├── package.json
+├── vite.config.ts
+├── tailwind.config.ts
+├── tsconfig.json
+└── README.md
 ```
 
-Required environment variables:
+## Routes
 
-```env
-NEXT_PUBLIC_ACTIVITY_SPINE_URL=/api/activity-spine
-ACTIVITY_SPINE_API_URL=http://your-activity-spine-api:3001
-```
+| Path | Description |
+|------|-------------|
+| `/` | Redirects to Executive Dashboard |
+| `/dashboard/executive` | High-level business metrics |
+| `/dashboard/operations` | Order pipeline and SLAs |
+| `/dashboard/design` | Mockup turnaround and designer performance |
+| `/dashboard/media` | Media processing metrics |
+| `/dashboard/sales` | Quote volume and conversion funnels |
+| `/apps` | App registry with feature_visibility gating |
 
-### Development
+## Environment Variables
 
-```bash
-npm run dev
-```
+| Variable | Description |
+|----------|-------------|
+| `VITE_ODS_API_URL` | Base URL for ODS API (bootstrap endpoint) |
+| `VITE_ACTIVITY_SPINE_URL` | Base URL for Activity Spine API |
+| `VITE_NSD_DEV_JWT` | JWT token for development (fallback) |
+| `VITE_USE_FIXTURES` | Set to `true` to force static fixtures |
 
-### Production Build
+## Authentication
 
-```bash
-npm run build
-npm start
-```
+- JWT token read from `window.__NSD_AUTH_TOKEN__` (set by host application)
+- Fallback to `VITE_NSD_DEV_JWT` environment variable for development
+- Attached to all API calls as `Authorization: Bearer <token>`
+- No login UI - authentication handled upstream in production
+- No token minting or refresh - read-only consumption
 
 ---
 
-## 🎨 UI Principles
+## Governance & Non-Negotiables
 
-All dashboards follow these principles:
+### Strict Architecture Rules
 
-1. **Read-only cards and charts** - No edit actions
-2. **Clear time windows** - 7d / 30d period selectors
-3. **Loading states** - Skeleton loaders during fetch
-4. **Empty states** - Clear messaging when no data
-5. **Error states** - Retry functionality on failures
-6. **Responsive grid** - 2-4 column layouts
+1. **`/api/v1/me` is the ONLY bootstrap source**
+   - All identity, permissions, roles, and feature visibility come from this endpoint
+   - No other source of truth for access control
 
----
+2. **No backend logic in frontend**
+   - This is a pure browser client
+   - No Express/Node servers
+   - No mock API servers
+   - No database access
 
-## 📋 Dashboard Widget Reference
+3. **No SLA or metric calculations in UI**
+   - UI displays pre-computed metrics from API
+   - SLA tiers (exceptional/standard/breach/pending) are API-provided
+   - No business logic calculations
 
-### Executive Dashboard
-- Orders volume (30 days)
-- Avg order cycle time
-- Avg mockup turnaround
-- Mockup SLA compliance %
-- Production SLA breaches
+4. **RBAC and feature visibility from bootstrap ONLY**
+   - App visibility driven by `feature_visibility[]` from `/api/v1/me`
+   - Permission checks reference `permissions[]` from bootstrap
+   - No conditional logic based on app internals
 
-### Operations Dashboard
-- Bottleneck stage (highest avg duration)
-- Orders exceeding SLA
-- Production stage distribution
-- P95 order cycle time
+5. **Platform Shell is strictly read-only**
+   - No write operations
+   - No state mutations beyond UI preferences
+   - Navigation is link-based only
 
-### Design Dashboard
-- Avg mockup turnaround (minutes)
-- % Exceptional (≤ 2h)
-- % Breach (> 24h)
-- Tiered SLA distribution visualization
-- Breach details by quote
+### Explicit Prohibitions
 
-### Media Dashboard
-- Media created vs approved
-- Avg internal → marketing approval time
-- Unused approved assets
+- **Do NOT** parse JWTs in UI code
+- **Do NOT** infer permissions from other data
+- **Do NOT** hardcode roles or role-based logic
+- **Do NOT** derive feature visibility logic
+- **Do NOT** recreate RBAC rules
+- **Do NOT** add neon effects, shadows, or glows (minimalist design)
+- **Do NOT** use Magenta except for CTAs
 
-### Sales Dashboard
-- Funnel conversion (lead → quote → order)
-- Drop-off by stage
-- Volume trends
+### SLA Tiered Visualization
 
----
+UI renders API-provided tiers without computation:
 
-## 📐 Mockup SLA Interpretation
+| Tier | Description | Visual |
+|------|-------------|--------|
+| `exceptional` | Response within 2 hours | Green/Violet |
+| `standard` | Response within 24 hours | Yellow/Indigo |
+| `breach` | Response exceeded 24 hours | Red/Magenta |
+| `pending` | Not yet evaluated | Gray |
 
-The Design Dashboard uses a **tiered SLA model** (Activity Spine v1.5.1+) that provides more nuanced performance visibility than binary pass/fail metrics.
-
-### Tier Definitions
-
-| Tier | Threshold | Color | Meaning |
-|------|-----------|-------|---------|
-| **Exceptional** | ≤ 2 hours | 🟢 Green | Outstanding turnaround - exceeds expectations |
-| **Standard** | 2–24 hours | 🟡 Yellow | Acceptable performance - within normal range |
-| **Breach** | > 24 hours | 🔴 Red | Requires attention - exceeds maximum threshold |
-| **Pending** | In progress | ⚪ Gray | No delivery yet - mockup still being created |
-
-### Why Standard ≠ Failure
-
-The **Standard** tier (2–24 hours) represents acceptable, normal business performance:
-
-- Not all mockups require immediate turnaround
-- Complex designs naturally take longer
-- Standard performance maintains quality while meeting expectations
-- Only **Breach** (> 24h) requires investigation or escalation
-
-### How to Read the Dashboard
-
-1. **% Exceptional**: Higher is better - indicates fast turnaround capacity
-2. **% Breach**: Lower is better - should be minimized
-3. **Standard count**: Normal operations - not a concern
-4. **Distribution bar**: Visual health check - green/yellow is healthy, watch for red growth
-
-### Data Source
-
-All tier classifications are computed by **Activity Spine** (the source of truth). The shell:
-- Does NOT calculate SLA tiers locally
-- Does NOT define threshold values
-- Only displays pre-computed distributions
+**Critical:** UI does NOT calculate SLA tiers - it only renders what the API returns.
 
 ---
 
-## ⚠️ Important: Read-Only Governance
+## Development
 
-This shell is designed as a **read-only consumer** of Activity Spine analytics.
+### Static Fixtures
 
-### Non-Negotiables
+When API URLs are not configured, the SDK automatically uses static fixtures from `client/src/data/fixtures.ts`. These fixtures match real API response shapes for development.
 
-1. **No local metric calculations** - All metrics come pre-computed from Activity Spine
-2. **No direct database access** - SDK only
-3. **No duplicated analytics logic** - Activity Spine is the single source of truth
-4. **No CRUD operations** - Display only
+### Error Handling
 
-### Why This Matters
+The UI handles:
 
-- **Consistency**: All users see the same metrics
-- **Performance**: Heavy calculations happen server-side
-- **Governance**: Single source of truth prevents drift
-- **Security**: No direct data access from the shell
+- Loading states (skeleton components)
+- Empty states (via `emptyReason` from API)
+- Error states using canonical error codes
+- 401 unauthorized (authentication failed)
+
+### Design System
+
+- Minimalist design with high whitespace
+- Flat cards with subtle borders (no shadows, no glows)
+- No decorative animations
+- Charts use Violet and Deep Indigo only
 
 ---
 
-## 📄 License
+## Deployment
 
-Internal use only. Part of the NSD Unified Business Platform.
+### Vercel Configuration
+
+Add `vercel.json` for SPA routing:
+
+```json
+{
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
+```
+
+### Build Output
+
+Production build outputs to `dist/public/`. Deploy this directory to any static host.
+
+---
+
+## Validation Checklist
+
+Before deployment, verify:
+
+- [ ] `/api/v1/me` is called once on app load via BootstrapContext
+- [ ] Dashboards render with real API data (or fixtures when not configured)
+- [ ] RBAC and feature gating come exclusively from bootstrap
+- [ ] No business logic exists in UI
+- [ ] App runs correctly with valid token
+- [ ] App handles invalid token (401) gracefully
+- [ ] App handles empty data scenarios with EmptyState components
+
+---
+
+## License
+
+MIT
