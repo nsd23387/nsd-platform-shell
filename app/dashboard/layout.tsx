@@ -21,6 +21,7 @@ const navItems = [
   { href: '/dashboard/design', label: 'Design', icon: '🎨' },
   { href: '/dashboard/media', label: 'Media', icon: '📸' },
   { href: '/dashboard/sales', label: 'Sales', icon: '💰' },
+  { href: '/dashboard/oms', label: 'OMS', icon: '⚡' },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
