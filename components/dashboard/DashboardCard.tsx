@@ -22,14 +22,14 @@ export interface DashboardCardProps {
   value?: string | number;
   subtitle?: string;
   trend?: {
-    direction: 'up' | 'down' | 'neutral';
+    direction: 'up' | 'down' | 'neutral' | 'flat';
     value: string;
   };
   loading?: boolean;
   error?: string | null;
   empty?: boolean;
   emptyMessage?: string;
-  timeWindow?: '7d' | '30d';
+  timeWindow?: '7d' | '30d' | '24h';
   variant?: 'default' | 'success' | 'warning' | 'danger';
   onRetry?: () => void;
   children?: React.ReactNode;
@@ -123,7 +123,7 @@ const retryButtonStyles: React.CSSProperties = {
 // ============================================
 
 interface TrendBadgeProps {
-  direction: 'up' | 'down' | 'neutral';
+  direction: 'up' | 'down' | 'neutral' | 'flat';
   value: string;
 }
 
@@ -132,12 +132,14 @@ function TrendBadge({ direction, value }: TrendBadgeProps) {
     up: { bg: '#dcfce7', text: '#166534' },
     down: { bg: '#fef2f2', text: '#dc2626' },
     neutral: { bg: '#f3f4f6', text: '#6b7280' },
+    flat: { bg: '#f3f4f6', text: '#6b7280' },
   };
 
   const arrows = {
     up: '↑',
     down: '↓',
     neutral: '→',
+    flat: '→',
   };
 
   return (

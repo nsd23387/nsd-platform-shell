@@ -23,7 +23,19 @@ import type {
   MockupSLAMetrics,
   TimePeriod,
   ActivitySpineResponse,
+  SystemPulseMetrics,
+  ThroughputMetrics,
+  LatencyMetrics,
+  TrendMetrics,
 } from '../types/activity-spine';
+import type {
+  AssignOwnerRequest,
+  AcknowledgeReviewRequest,
+  AdvanceLifecycleStageRequest,
+  FlagExceptionRequest,
+  MarkReadyForHandoffRequest,
+  OMSActionResponse,
+} from '../types/oms';
 import type { BootstrapResponse } from '../types/bootstrap';
 
 // ============================================
@@ -368,4 +380,284 @@ export async function getSalesDashboardData(period: TimePeriod = '30d') {
   ]);
 
   return { funnel, orders };
+}
+
+// ============================================
+// Milestone 7: Platform Overview Metrics API
+// ============================================
+
+/**
+ * GET /metrics/system-pulse
+ * 
+ * Fetches system pulse metrics (vital signs).
+ * Read-only endpoint - no mutations.
+ * 
+ * Returns:
+ * - Total events (last 24h)
+ * - Active organizations (7d)
+ * - Active users (7d)
+ * - Errors (24h)
+ */
+export async function getSystemPulse(): Promise<ActivitySpineResponse<SystemPulseMetrics>> {
+  return fetchFromActivitySpine<SystemPulseMetrics>('/metrics/system-pulse');
+}
+
+/**
+ * GET /metrics/throughput
+ * 
+ * Fetches throughput metrics (events over time).
+ * Read-only endpoint - no mutations.
+ * 
+ * Returns:
+ * - Events per hour/day (time buckets)
+ * - Breakdown by entity type
+ * - Total events in window
+ */
+export async function getThroughput(
+  window: '24h' | '7d' = '24h'
+): Promise<ActivitySpineResponse<ThroughputMetrics>> {
+  return fetchFromActivitySpine<ThroughputMetrics>('/metrics/throughput', { window });
+}
+
+/**
+ * GET /metrics/latency
+ * 
+ * Fetches latency / SLA metrics.
+ * Read-only endpoint - no mutations.
+ * 
+ * Returns:
+ * - Average time to first activity
+ * - P95 latency
+ * - Count of stalled entities
+ */
+export async function getLatency(): Promise<ActivitySpineResponse<LatencyMetrics>> {
+  return fetchFromActivitySpine<LatencyMetrics>('/metrics/latency');
+}
+
+/**
+ * GET /metrics/trend
+ * 
+ * Fetches trend metrics (7-day activity trend).
+ * Read-only endpoint - no mutations.
+ * 
+ * Returns:
+ * - Daily event counts
+ * - Trend direction
+ * - Change percentage
+ */
+export async function getTrend(
+  window: '7d' = '7d'
+): Promise<ActivitySpineResponse<TrendMetrics>> {
+  return fetchFromActivitySpine<TrendMetrics>('/metrics/trend', { window });
+}
+
+/**
+ * Fetch all metrics needed for Overview Dashboard (Milestone 7)
+ * Batches requests for efficiency
+ * 
+ * This is the primary entry point for the read-only overview dashboard.
+ * All metrics are consumed exactly as provided - no client-side computation.
+ */
+export async function getOverviewDashboardData() {
+  const [systemPulse, throughput, latency, trend] = await Promise.all([
+    getSystemPulse(),
+    getThroughput('24h'),
+    getLatency(),
+    getTrend('7d'),
+  ]);
+
+  return { systemPulse, throughput, latency, trend };
+}
+
+// ============================================
+// Phase 8B: OMS Mutation Functions
+// ============================================
+
+/**
+ * OMS API URL - separate from Activity Spine read endpoints
+ */
+const OMS_API_URL = process.env.NEXT_PUBLIC_OMS_API_URL || '/api/oms';
+
+/**
+ * Generic POST wrapper for OMS mutations.
+ * 
+ * GOVERNANCE:
+ * - Each call is a single mutation
+ * - No batching, no retries
+ * - No optimistic updates
+ * - Success/failure determined solely by backend response
+ */
+async function postOMSAction<T, R>(
+  endpoint: string,
+  payload: T
+): Promise<R> {
+  const token = getAuthToken();
+  
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (sdkConfig.orgId) {
+    headers['X-Org-Id'] = sdkConfig.orgId;
+  }
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${OMS_API_URL}${endpoint}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    let errorMessage = `OMS action failed: ${response.status}`;
+    
+    try {
+      const errorJson = JSON.parse(errorBody);
+      errorMessage = errorJson.error || errorJson.message || errorMessage;
+    } catch {
+      // Use default error message
+    }
+    
+    throw new OMSActionError(errorMessage, response.status, errorBody);
+  }
+
+  return response.json();
+}
+
+/**
+ * OMS-specific error class
+ */
+export class OMSActionError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number,
+    public readonly body?: string
+  ) {
+    super(message);
+    this.name = 'OMSActionError';
+  }
+}
+
+// ============================================
+// OMS Action 1: Assign Owner
+// ============================================
+
+/**
+ * POST /oms/assign-owner
+ * 
+ * Assigns an owner to an entity.
+ * Emits: entity.assigned
+ * 
+ * GOVERNANCE:
+ * - Single mutation, single event
+ * - No retry, no optimistic update
+ * - Backend is sole source of truth
+ */
+export async function assignOwner(
+  request: AssignOwnerRequest
+): Promise<OMSActionResponse> {
+  return postOMSAction<AssignOwnerRequest, OMSActionResponse>(
+    '/assign-owner',
+    request
+  );
+}
+
+// ============================================
+// OMS Action 2: Acknowledge Review
+// ============================================
+
+/**
+ * POST /oms/acknowledge-review
+ * 
+ * Acknowledges that an entity has been reviewed.
+ * Emits: entity.reviewed
+ * 
+ * GOVERNANCE:
+ * - Single mutation, single event
+ * - No retry, no optimistic update
+ * - Backend is sole source of truth
+ */
+export async function acknowledgeReview(
+  request: AcknowledgeReviewRequest
+): Promise<OMSActionResponse> {
+  return postOMSAction<AcknowledgeReviewRequest, OMSActionResponse>(
+    '/acknowledge-review',
+    request
+  );
+}
+
+// ============================================
+// OMS Action 3: Advance Lifecycle Stage
+// ============================================
+
+/**
+ * POST /oms/advance-stage
+ * 
+ * Advances an entity to the next lifecycle stage.
+ * Emits: entity.stage_advanced
+ * 
+ * GOVERNANCE:
+ * - Single mutation, single event
+ * - No retry, no optimistic update
+ * - Backend is sole source of truth
+ */
+export async function advanceLifecycleStage(
+  request: AdvanceLifecycleStageRequest
+): Promise<OMSActionResponse> {
+  return postOMSAction<AdvanceLifecycleStageRequest, OMSActionResponse>(
+    '/advance-stage',
+    request
+  );
+}
+
+// ============================================
+// OMS Action 4: Flag Exception
+// ============================================
+
+/**
+ * POST /oms/flag-exception
+ * 
+ * Flags an entity as having an exception.
+ * Emits: entity.exception_flagged
+ * 
+ * GOVERNANCE:
+ * - Single mutation, single event
+ * - No retry, no optimistic update
+ * - Backend is sole source of truth
+ */
+export async function flagException(
+  request: FlagExceptionRequest
+): Promise<OMSActionResponse> {
+  return postOMSAction<FlagExceptionRequest, OMSActionResponse>(
+    '/flag-exception',
+    request
+  );
+}
+
+// ============================================
+// OMS Action 5: Mark Ready for Handoff
+// ============================================
+
+/**
+ * POST /oms/mark-ready
+ * 
+ * Marks an entity as ready for handoff.
+ * Emits: entity.ready_for_handoff
+ * 
+ * GOVERNANCE:
+ * - Single mutation, single event
+ * - No retry, no optimistic update
+ * - Backend is sole source of truth
+ */
+export async function markReadyForHandoff(
+  request: MarkReadyForHandoffRequest
+): Promise<OMSActionResponse> {
+  return postOMSAction<MarkReadyForHandoffRequest, OMSActionResponse>(
+    '/mark-ready',
+    request
+  );
 }

@@ -160,3 +160,116 @@ export interface AsyncState<T> {
   loading: boolean;
   error: string | null;
 }
+
+// ============================================
+// Milestone 7: Platform Overview Metrics
+// ============================================
+
+/**
+ * System Pulse Metrics
+ * GET /metrics/system-pulse
+ * 
+ * At-a-glance vital signs showing the system is operational.
+ * All values are pre-computed by the API - no client-side calculation.
+ */
+export interface SystemPulseMetrics {
+  /** Total events in last 24 hours */
+  totalEvents24h: number;
+  /** Active organizations in last 7 days */
+  activeOrganizations7d: number;
+  /** Active users in last 7 days */
+  activeUsers7d: number;
+  /** Error events in last 24 hours */
+  errors24h: number;
+  /** Timestamp when metrics were computed */
+  computedAt: string;
+}
+
+/**
+ * Single time bucket for throughput data
+ */
+export interface ThroughputBucket {
+  /** ISO timestamp for the bucket start */
+  timestamp: string;
+  /** Event count for this bucket */
+  count: number;
+}
+
+/**
+ * Throughput Metrics
+ * GET /metrics/throughput?window=24h|7d
+ * 
+ * Volume and distribution of system activity.
+ * All values are pre-computed by the API - no client-side calculation.
+ */
+export interface ThroughputMetrics {
+  /** Events per time bucket (hourly for 24h, daily for 7d) */
+  buckets: ThroughputBucket[];
+  /** Breakdown by entity type */
+  byEntityType: Record<string, number>;
+  /** Total events in the window */
+  totalEvents: number;
+  /** Time window (24h or 7d) */
+  window: '24h' | '7d';
+  /** Timestamp when metrics were computed */
+  computedAt: string;
+}
+
+/**
+ * Latency / SLA Metrics
+ * GET /metrics/latency
+ * 
+ * Time-to-action and operational delays.
+ * All values are pre-computed by the API - no client-side calculation.
+ */
+export interface LatencyMetrics {
+  /** Average time to first follow-up in minutes */
+  avgTimeToFirstActivityMinutes: number | null;
+  /** P95 time to first follow-up in minutes */
+  p95TimeToFirstActivityMinutes: number | null;
+  /** Count of organizations with no follow-up within 24h */
+  stalledEntities: number;
+  /** Total organizations evaluated */
+  totalEvaluated: number;
+  /** Timestamp when metrics were computed */
+  computedAt: string;
+}
+
+/**
+ * Single day data point for trend
+ */
+export interface TrendDataPoint {
+  /** Date in YYYY-MM-DD format */
+  date: string;
+  /** Event count for this day */
+  count: number;
+}
+
+/**
+ * Trend Metrics
+ * GET /metrics/trend?window=7d
+ * 
+ * Directional movement of system activity over time.
+ * All values are pre-computed by the API - no client-side calculation.
+ */
+export interface TrendMetrics {
+  /** Daily event counts for the window */
+  dataPoints: TrendDataPoint[];
+  /** Trend direction based on comparison */
+  direction: 'up' | 'down' | 'flat';
+  /** Percentage change from previous period */
+  changePercent: number | null;
+  /** Timestamp when metrics were computed */
+  computedAt: string;
+}
+
+/**
+ * Combined Overview Dashboard Data
+ * Used by the overview dashboard hook.
+ */
+export interface OverviewDashboardData {
+  systemPulse: SystemPulseMetrics;
+  throughput: ThroughputMetrics;
+  latency: LatencyMetrics;
+  trend: TrendMetrics;
+}

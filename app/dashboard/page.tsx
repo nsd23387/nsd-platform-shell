@@ -1,7 +1,7 @@
 /**
  * Dashboard Index Page
  * 
- * Redirects to Executive Dashboard by default.
+ * Redirects to Overview Dashboard by default (Milestone 7).
  */
 
 'use client';
@@ -10,7 +10,7 @@ import { useEffect } from 'react';
 
 export default function DashboardIndex() {
   useEffect(() => {
-    window.location.href = '/dashboard/executive';
+    window.location.href = '/dashboard/overview';
   }, []);
 
   return (
@@ -23,7 +23,7 @@ export default function DashboardIndex() {
         color: '#6b7280',
       }}
     >
-      Redirecting to Executive Dashboard...
+      Redirecting to Overview Dashboard...
     </div>
   );
 }
