@@ -3,11 +3,16 @@
  * 
  * Card for displaying funnel conversion data.
  * Read-only visualization of conversion stages.
+ * 
+ * Updated to use design system tokens.
  */
 
 import React from 'react';
 import { DashboardCard, DashboardCardProps } from './DashboardCard';
 import type { FunnelStage } from '../../types/activity-spine';
+import { text, background, semantic, violet } from '../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
+import { space, radius, duration, easing } from '../../design/tokens/spacing';
 
 export interface FunnelCardProps extends Omit<DashboardCardProps, 'value' | 'children'> {
   stages: FunnelStage[];
@@ -26,19 +31,20 @@ export function FunnelCard({
       {overallConversion !== undefined && (
         <div
           style={{
-            fontSize: '24px',
-            fontWeight: 700,
-            color: '#111827',
-            marginBottom: '16px',
+            fontFamily: fontFamily.body,
+            fontSize: fontSize['3xl'],
+            fontWeight: fontWeight.semibold,
+            color: text.primary,
+            marginBottom: space['4'],
           }}
         >
           {(overallConversion * 100).toFixed(1)}%
           <span
             style={{
-              fontSize: '14px',
-              fontWeight: 400,
-              color: '#6b7280',
-              marginLeft: '8px',
+              fontSize: fontSize.base,
+              fontWeight: fontWeight.normal,
+              color: text.muted,
+              marginLeft: space['2'],
             }}
           >
             overall conversion
@@ -46,7 +52,7 @@ export function FunnelCard({
         </div>
       )}
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: space['2'] }}>
         {stages.map((stage, index) => {
           const widthPercent = maxCount > 0 ? (stage.count / maxCount) * 100 : 0;
           const isLast = index === stages.length - 1;
@@ -57,17 +63,18 @@ export function FunnelCard({
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  marginBottom: '4px',
-                  fontSize: '13px',
+                  marginBottom: space['1'],
+                  fontFamily: fontFamily.body,
+                  fontSize: fontSize.md,
                 }}
               >
-                <span style={{ color: '#374151', fontWeight: 500 }}>
+                <span style={{ color: text.secondary, fontWeight: fontWeight.medium }}>
                   {stage.stage}
                 </span>
-                <span style={{ color: '#6b7280' }}>
+                <span style={{ color: text.muted }}>
                   {stage.count.toLocaleString()}
                   {!isLast && stage.dropOffRate > 0 && (
-                    <span style={{ color: '#ef4444', marginLeft: '8px' }}>
+                    <span style={{ color: semantic.danger.base, marginLeft: space['2'] }}>
                       ↓ {(stage.dropOffRate * 100).toFixed(1)}%
                     </span>
                   )}
@@ -76,8 +83,8 @@ export function FunnelCard({
               <div
                 style={{
                   height: '24px',
-                  backgroundColor: '#f3f4f6',
-                  borderRadius: '4px',
+                  backgroundColor: background.muted,
+                  borderRadius: radius.DEFAULT,
                   overflow: 'hidden',
                 }}
               >
@@ -85,15 +92,16 @@ export function FunnelCard({
                   style={{
                     height: '100%',
                     width: `${widthPercent}%`,
-                    backgroundColor: '#3b82f6',
-                    borderRadius: '4px',
-                    transition: 'width 0.3s ease',
+                    backgroundColor: violet[500],
+                    borderRadius: radius.DEFAULT,
+                    transition: `width ${duration.slow} ${easing.DEFAULT}`,
                     display: 'flex',
                     alignItems: 'center',
-                    paddingLeft: '8px',
-                    color: '#ffffff',
-                    fontSize: '12px',
-                    fontWeight: 500,
+                    paddingLeft: space['2'],
+                    color: text.inverse,
+                    fontFamily: fontFamily.body,
+                    fontSize: fontSize.sm,
+                    fontWeight: fontWeight.medium,
                     minWidth: widthPercent > 20 ? 'auto' : '0',
                   }}
                 >

@@ -3,9 +3,25 @@
  * 
  * Landing page for the platform shell.
  * Provides navigation to dashboards.
+ * 
+ * Updated to use design system tokens.
  */
 
 import Link from 'next/link';
+import {
+  background,
+  text,
+  border,
+  violet,
+  semantic,
+} from '../design/tokens/colors';
+import {
+  fontFamily,
+  fontSize,
+  fontWeight,
+  lineHeight,
+} from '../design/tokens/typography';
+import { space, radius, duration, easing } from '../design/tokens/spacing';
 
 export default function Home() {
   return (
@@ -16,8 +32,8 @@ export default function Home() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '48px',
-        backgroundColor: '#f9fafb',
+        padding: space['12'],
+        backgroundColor: background.page,
       }}
     >
       <div
@@ -28,19 +44,23 @@ export default function Home() {
       >
         <h1
           style={{
-            fontSize: '36px',
-            fontWeight: 700,
-            color: '#111827',
-            marginBottom: '16px',
+            fontFamily: fontFamily.display,
+            fontSize: fontSize['6xl'],
+            fontWeight: fontWeight.semibold,
+            color: text.primary,
+            marginBottom: space['4'],
+            lineHeight: lineHeight.tight,
           }}
         >
           NSD Platform Shell
         </h1>
         <p
           style={{
-            fontSize: '18px',
-            color: '#6b7280',
-            marginBottom: '32px',
+            fontFamily: fontFamily.body,
+            fontSize: fontSize.xl,
+            color: text.muted,
+            marginBottom: space['8'],
+            lineHeight: lineHeight.relaxed,
           }}
         >
           Unified internal platform for the NSD Business Platform.
@@ -51,14 +71,15 @@ export default function Home() {
           href="/dashboard"
           style={{
             display: 'inline-block',
-            padding: '14px 32px',
-            backgroundColor: '#3b82f6',
-            color: '#ffffff',
-            fontSize: '16px',
-            fontWeight: 600,
-            borderRadius: '8px',
+            padding: `${space['3.5']} ${space['8']}`,
+            backgroundColor: violet[600],
+            color: text.inverse,
+            fontFamily: fontFamily.body,
+            fontSize: fontSize.lg,
+            fontWeight: fontWeight.medium,
+            borderRadius: radius.lg,
             textDecoration: 'none',
-            transition: 'background-color 0.2s',
+            transition: `background-color ${duration.normal} ${easing.DEFAULT}`,
           }}
         >
           View Dashboards →
@@ -67,10 +88,10 @@ export default function Home() {
 
       <div
         style={{
-          marginTop: '48px',
+          marginTop: space['12'],
           display: 'grid',
           gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: '16px',
+          gap: space['4'],
           maxWidth: '800px',
         }}
       >
@@ -88,22 +109,23 @@ export default function Home() {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              padding: '24px 16px',
-              backgroundColor: '#ffffff',
-              borderRadius: '12px',
-              border: '1px solid #e5e7eb',
+              padding: `${space['6']} ${space['4']}`,
+              backgroundColor: background.surface,
+              borderRadius: radius.xl,
+              border: `1px solid ${border.default}`,
               textDecoration: 'none',
-              transition: 'box-shadow 0.2s, transform 0.2s',
+              transition: `all ${duration.normal} ${easing.DEFAULT}`,
             }}
           >
-            <span style={{ fontSize: '32px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '32px', marginBottom: space['2'] }}>
               {dashboard.icon}
             </span>
             <span
               style={{
-                fontSize: '14px',
-                fontWeight: 500,
-                color: '#374151',
+                fontFamily: fontFamily.body,
+                fontSize: fontSize.base,
+                fontWeight: fontWeight.medium,
+                color: text.secondary,
               }}
             >
               {dashboard.name}
@@ -114,12 +136,13 @@ export default function Home() {
 
       <div
         style={{
-          marginTop: '48px',
-          padding: '16px 24px',
-          backgroundColor: '#fef3c7',
-          borderRadius: '8px',
-          fontSize: '14px',
-          color: '#92400e',
+          marginTop: space['12'],
+          padding: `${space['4']} ${space['6']}`,
+          backgroundColor: semantic.warning.light,
+          borderRadius: radius.lg,
+          fontFamily: fontFamily.body,
+          fontSize: fontSize.base,
+          color: semantic.warning.dark,
         }}
       >
         <strong>Read-Only Mode:</strong> All dashboards display analytics from

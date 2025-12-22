@@ -3,10 +3,24 @@
  * 
  * Header for dashboard pages with title and time period selector.
  * Read-only - no edit actions.
+ * 
+ * Updated to use design system tokens.
  */
 
 import React from 'react';
 import type { TimePeriod } from '../../types/activity-spine';
+import {
+  background,
+  text,
+  border,
+} from '../../design/tokens/colors';
+import {
+  fontFamily,
+  fontSize,
+  fontWeight,
+  lineHeight,
+} from '../../design/tokens/typography';
+import { space, radius, duration, easing } from '../../design/tokens/spacing';
 
 export interface DashboardHeaderProps {
   title: string;
@@ -20,44 +34,50 @@ const headerStyles: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'flex-start',
-  marginBottom: '32px',
-  paddingBottom: '24px',
-  borderBottom: '1px solid #e5e7eb',
+  marginBottom: space['8'],
+  paddingBottom: space['6'],
+  borderBottom: `1px solid ${border.default}`,
 };
 
 const titleStyles: React.CSSProperties = {
-  fontSize: '28px',
-  fontWeight: 700,
-  color: '#111827',
-  marginBottom: '4px',
+  fontFamily: fontFamily.display,
+  fontSize: fontSize['4xl'],
+  fontWeight: fontWeight.semibold,
+  color: text.primary,
+  marginBottom: space['1'],
+  lineHeight: lineHeight.snug,
 };
 
 const descriptionStyles: React.CSSProperties = {
-  fontSize: '14px',
-  color: '#6b7280',
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.base,
+  color: text.muted,
+  lineHeight: lineHeight.normal,
 };
 
 const controlsStyles: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: '16px',
+  gap: space['4'],
 };
 
 const periodButtonStyles = (isActive: boolean): React.CSSProperties => ({
-  padding: '8px 16px',
-  fontSize: '14px',
-  fontWeight: 500,
-  backgroundColor: isActive ? '#111827' : '#ffffff',
-  color: isActive ? '#ffffff' : '#374151',
-  border: '1px solid #e5e7eb',
-  borderRadius: '6px',
+  padding: `${space['2']} ${space['4']}`,
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.base,
+  fontWeight: fontWeight.medium,
+  backgroundColor: isActive ? text.primary : background.surface,
+  color: isActive ? text.inverse : text.secondary,
+  border: `1px solid ${border.default}`,
+  borderRadius: radius.md,
   cursor: 'pointer',
-  transition: 'all 0.2s',
+  transition: `all ${duration.normal} ${easing.DEFAULT}`,
 });
 
 const lastUpdatedStyles: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#9ca3af',
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.sm,
+  color: text.muted,
 };
 
 export function DashboardHeader({
@@ -79,7 +99,7 @@ export function DashboardHeader({
             Last updated: {lastUpdated}
           </span>
         )}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: space['2'] }}>
           <button
             style={periodButtonStyles(period === '7d')}
             onClick={() => onPeriodChange('7d')}

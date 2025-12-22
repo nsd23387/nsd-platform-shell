@@ -4,11 +4,26 @@
  * Shared layout for all dashboard pages.
  * Provides navigation between dashboards.
  * Read-only - no edit actions.
+ * 
+ * Updated to use design system tokens.
  */
 
 'use client';
 
 import React from 'react';
+import {
+  background,
+  text,
+  border,
+  violet,
+  semantic,
+} from '../../design/tokens/colors';
+import {
+  fontFamily,
+  fontSize,
+  fontWeight,
+} from '../../design/tokens/typography';
+import { space, radius, duration, easing } from '../../design/tokens/spacing';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -27,33 +42,41 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f9fafb' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: background.page }}>
       {/* Sidebar Navigation */}
       <aside
         style={{
           width: '240px',
-          backgroundColor: '#ffffff',
-          borderRight: '1px solid #e5e7eb',
-          padding: '24px 0',
+          backgroundColor: background.surface,
+          borderRight: `1px solid ${border.default}`,
+          padding: `${space['6']} 0`,
         }}
       >
         <div
           style={{
-            padding: '0 24px 24px',
-            borderBottom: '1px solid #e5e7eb',
-            marginBottom: '16px',
+            padding: `0 ${space['6']} ${space['6']}`,
+            borderBottom: `1px solid ${border.default}`,
+            marginBottom: space['4'],
           }}
         >
           <h2
             style={{
-              fontSize: '18px',
-              fontWeight: 700,
-              color: '#111827',
+              fontFamily: fontFamily.display,
+              fontSize: fontSize.xl,
+              fontWeight: fontWeight.semibold,
+              color: text.primary,
             }}
           >
             Dashboards
           </h2>
-          <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+          <p
+            style={{
+              fontFamily: fontFamily.body,
+              fontSize: fontSize.sm,
+              color: text.muted,
+              marginTop: space['1'],
+            }}
+          >
             Read-only analytics
           </p>
         </div>
@@ -68,15 +91,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
-                  padding: '12px 24px',
-                  fontSize: '14px',
-                  fontWeight: isActive ? 600 : 400,
-                  color: isActive ? '#111827' : '#6b7280',
-                  backgroundColor: isActive ? '#f3f4f6' : 'transparent',
+                  gap: space['3'],
+                  padding: `${space['3']} ${space['6']}`,
+                  fontFamily: fontFamily.body,
+                  fontSize: fontSize.base,
+                  fontWeight: isActive ? fontWeight.semibold : fontWeight.normal,
+                  color: isActive ? text.primary : text.muted,
+                  backgroundColor: isActive ? background.muted : 'transparent',
                   textDecoration: 'none',
-                  borderLeft: isActive ? '3px solid #3b82f6' : '3px solid transparent',
-                  transition: 'all 0.2s',
+                  borderLeft: isActive ? `3px solid ${violet[500]}` : '3px solid transparent',
+                  transition: `all ${duration.normal} ${easing.DEFAULT}`,
                 }}
               >
                 <span>{item.icon}</span>
@@ -89,23 +113,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div
           style={{
             position: 'absolute',
-            bottom: '24px',
+            bottom: space['6'],
             left: '0',
             right: '0',
-            padding: '0 24px',
+            padding: `0 ${space['6']}`,
           }}
         >
           <div
             style={{
-              padding: '12px',
-              backgroundColor: '#f0f9ff',
-              borderRadius: '8px',
-              fontSize: '12px',
-              color: '#0369a1',
+              padding: space['3'],
+              backgroundColor: semantic.info.light,
+              borderRadius: radius.lg,
+              fontFamily: fontFamily.body,
+              fontSize: fontSize.sm,
+              color: semantic.info.dark,
             }}
           >
             <strong>Read-Only Mode</strong>
-            <p style={{ marginTop: '4px', opacity: 0.8 }}>
+            <p style={{ marginTop: space['1'], opacity: 0.8 }}>
               Data sourced from Activity Spine
             </p>
           </div>
@@ -113,7 +138,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, padding: '32px', overflow: 'auto' }}>
+      <main style={{ flex: 1, padding: space['8'], overflow: 'auto' }}>
         {children}
       </main>
     </div>
