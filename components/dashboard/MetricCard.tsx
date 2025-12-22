@@ -3,10 +3,15 @@
  * 
  * Specialized card for displaying single metric values.
  * Read-only display with optional comparison data.
+ * 
+ * Updated to use design system tokens.
  */
 
 import React from 'react';
 import { DashboardCard, DashboardCardProps } from './DashboardCard';
+import { text, border } from '../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
+import { space } from '../../design/tokens/spacing';
 
 export interface MetricCardProps extends Omit<DashboardCardProps, 'children'> {
   unit?: string;
@@ -29,15 +34,16 @@ export function MetricCard({
       {comparison && (
         <div
           style={{
-            marginTop: '12px',
-            paddingTop: '12px',
-            borderTop: '1px solid #f3f4f6',
-            fontSize: '13px',
-            color: '#6b7280',
+            marginTop: space['3'],
+            paddingTop: space['3'],
+            borderTop: `1px solid ${border.subtle}`,
+            fontFamily: fontFamily.body,
+            fontSize: fontSize.md,
+            color: text.muted,
           }}
         >
           <span>{comparison.label}: </span>
-          <span style={{ fontWeight: 500, color: '#374151' }}>
+          <span style={{ fontWeight: fontWeight.medium, color: text.secondary }}>
             {comparison.value}
           </span>
         </div>

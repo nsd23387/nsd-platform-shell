@@ -3,10 +3,15 @@
  * 
  * Specialized card for displaying SLA compliance metrics.
  * Read-only with visual compliance indicator.
+ * 
+ * Updated to use design system tokens.
  */
 
 import React from 'react';
 import { DashboardCard, DashboardCardProps } from './DashboardCard';
+import { text, background, semantic } from '../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
+import { space, radius, duration, easing } from '../../design/tokens/spacing';
 
 export interface SLACardProps extends Omit<DashboardCardProps, 'value' | 'children'> {
   complianceRate: number;
@@ -16,9 +21,9 @@ export interface SLACardProps extends Omit<DashboardCardProps, 'value' | 'childr
 }
 
 function getComplianceColor(rate: number): string {
-  if (rate >= 0.95) return '#22c55e'; // green
-  if (rate >= 0.85) return '#f59e0b'; // amber
-  return '#ef4444'; // red
+  if (rate >= 0.95) return semantic.success.base;
+  if (rate >= 0.85) return semantic.warning.base;
+  return semantic.danger.base;
 }
 
 function getComplianceVariant(rate: number): 'success' | 'warning' | 'danger' {
@@ -42,16 +47,24 @@ export function SLACard({
     <DashboardCard {...props} variant={variant}>
       <div
         style={{
-          fontSize: '36px',
-          fontWeight: 700,
+          fontFamily: fontFamily.body,
+          fontSize: fontSize['6xl'],
+          fontWeight: fontWeight.semibold,
           color: color,
-          marginBottom: '8px',
+          marginBottom: space['2'],
         }}
       >
         {percentageDisplay}
       </div>
       
-      <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '16px' }}>
+      <div
+        style={{
+          fontFamily: fontFamily.body,
+          fontSize: fontSize.base,
+          color: text.muted,
+          marginBottom: space['4'],
+        }}
+      >
         {targetLabel}
       </div>
 
@@ -59,10 +72,10 @@ export function SLACard({
       <div
         style={{
           height: '8px',
-          backgroundColor: '#f3f4f6',
-          borderRadius: '4px',
+          backgroundColor: background.muted,
+          borderRadius: radius.DEFAULT,
           overflow: 'hidden',
-          marginBottom: '12px',
+          marginBottom: space['3'],
         }}
       >
         <div
@@ -70,8 +83,8 @@ export function SLACard({
             height: '100%',
             width: `${complianceRate * 100}%`,
             backgroundColor: color,
-            borderRadius: '4px',
-            transition: 'width 0.3s ease',
+            borderRadius: radius.DEFAULT,
+            transition: `width ${duration.slow} ${easing.DEFAULT}`,
           }}
         />
       </div>
@@ -81,15 +94,16 @@ export function SLACard({
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          fontSize: '13px',
-          color: '#6b7280',
+          fontFamily: fontFamily.body,
+          fontSize: fontSize.md,
+          color: text.muted,
         }}
       >
         <span>
-          <strong style={{ color: '#374151' }}>{total - breaches}</strong> compliant
+          <strong style={{ color: text.secondary }}>{total - breaches}</strong> compliant
         </span>
         <span>
-          <strong style={{ color: '#ef4444' }}>{breaches}</strong> breaches
+          <strong style={{ color: semantic.danger.base }}>{breaches}</strong> breaches
         </span>
       </div>
     </DashboardCard>

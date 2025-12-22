@@ -3,10 +3,15 @@
  * 
  * Card for displaying distribution data (e.g., stage distribution).
  * Read-only bar visualization.
+ * 
+ * Updated to use design system tokens.
  */
 
 import React from 'react';
 import { DashboardCard, DashboardCardProps } from './DashboardCard';
+import { text, background, chartColors } from '../../design/tokens/colors';
+import { fontFamily, fontSize } from '../../design/tokens/typography';
+import { space, radius, duration, easing } from '../../design/tokens/spacing';
 
 export interface DistributionItem {
   label: string;
@@ -19,15 +24,6 @@ export interface DistributionCardProps extends Omit<DashboardCardProps, 'value' 
   showPercentages?: boolean;
 }
 
-const defaultColors = [
-  '#3b82f6', // blue
-  '#10b981', // green
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#8b5cf6', // violet
-  '#06b6d4', // cyan
-];
-
 export function DistributionCard({
   items,
   showPercentages = true,
@@ -37,23 +33,24 @@ export function DistributionCard({
 
   return (
     <DashboardCard {...props}>
-      <div style={{ marginTop: '8px' }}>
+      <div style={{ marginTop: space['2'] }}>
         {items.map((item, index) => {
           const percentage = total > 0 ? (item.value / total) * 100 : 0;
-          const color = item.color || defaultColors[index % defaultColors.length];
+          const color = item.color || chartColors[index % chartColors.length];
 
           return (
-            <div key={item.label} style={{ marginBottom: '12px' }}>
+            <div key={item.label} style={{ marginBottom: space['3'] }}>
               <div
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  marginBottom: '4px',
-                  fontSize: '13px',
+                  marginBottom: space['1'],
+                  fontFamily: fontFamily.body,
+                  fontSize: fontSize.md,
                 }}
               >
-                <span style={{ color: '#374151' }}>{item.label}</span>
-                <span style={{ color: '#6b7280' }}>
+                <span style={{ color: text.secondary }}>{item.label}</span>
+                <span style={{ color: text.muted }}>
                   {item.value}
                   {showPercentages && ` (${percentage.toFixed(1)}%)`}
                 </span>
@@ -61,8 +58,8 @@ export function DistributionCard({
               <div
                 style={{
                   height: '8px',
-                  backgroundColor: '#f3f4f6',
-                  borderRadius: '4px',
+                  backgroundColor: background.muted,
+                  borderRadius: radius.DEFAULT,
                   overflow: 'hidden',
                 }}
               >
@@ -71,8 +68,8 @@ export function DistributionCard({
                     height: '100%',
                     width: `${percentage}%`,
                     backgroundColor: color,
-                    borderRadius: '4px',
-                    transition: 'width 0.3s ease',
+                    borderRadius: radius.DEFAULT,
+                    transition: `width ${duration.slow} ${easing.DEFAULT}`,
                   }}
                 />
               </div>

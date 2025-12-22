@@ -6,11 +6,16 @@
  * 
  * Read-only display - data comes from Activity Spine.
  * Does NOT include 'standard' or 'pending' items.
+ * 
+ * Updated to use design system tokens.
  */
 
 import React from 'react';
 import { DashboardCard, DashboardCardProps } from './DashboardCard';
 import type { MockupBreachItem } from '../../types/activity-spine';
+import { text, border, semantic, background } from '../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
+import { space, radius } from '../../design/tokens/spacing';
 
 export interface DetailedBreachListCardProps extends Omit<DashboardCardProps, 'value' | 'children'> {
   /** Only items with sla_status === 'breach' should be passed */
@@ -76,7 +81,7 @@ export function DetailedBreachListCard({
       emptyMessage={emptyMessage}
     >
       {!isEmpty && (
-        <div style={{ marginTop: '8px' }}>
+        <div style={{ marginTop: space['2'] }}>
           {/* Detailed Items View */}
           {hasDetailedItems ? (
             <>
@@ -84,12 +89,13 @@ export function DetailedBreachListCard({
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr auto auto',
-                  gap: '8px 16px',
-                  fontSize: '12px',
-                  color: '#6b7280',
-                  paddingBottom: '8px',
-                  borderBottom: '1px solid #f3f4f6',
-                  marginBottom: '8px',
+                  gap: `${space['2']} ${space['4']}`,
+                  fontFamily: fontFamily.body,
+                  fontSize: fontSize.sm,
+                  color: text.muted,
+                  paddingBottom: space['2'],
+                  borderBottom: `1px solid ${border.subtle}`,
+                  marginBottom: space['2'],
                 }}
               >
                 <span>Quote</span>
@@ -103,26 +109,28 @@ export function DetailedBreachListCard({
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '1fr auto auto',
-                    gap: '8px 16px',
-                    padding: '8px 0',
-                    borderBottom: '1px solid #f3f4f6',
+                    gap: `${space['2']} ${space['4']}`,
+                    padding: `${space['2']} 0`,
+                    borderBottom: `1px solid ${border.subtle}`,
                     alignItems: 'center',
                   }}
                 >
                   <div>
                     <div
                       style={{
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: '#374151',
+                        fontFamily: fontFamily.body,
+                        fontSize: fontSize.md,
+                        fontWeight: fontWeight.medium,
+                        color: text.secondary,
                       }}
                     >
                       {item.quoteId}
                     </div>
                     <div
                       style={{
-                        fontSize: '12px',
-                        color: '#6b7280',
+                        fontFamily: fontFamily.body,
+                        fontSize: fontSize.sm,
+                        color: text.muted,
                       }}
                     >
                       {item.quoteType}
@@ -130,20 +138,22 @@ export function DetailedBreachListCard({
                   </div>
                   <span
                     style={{
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: '#ef4444',
-                      backgroundColor: '#fef2f2',
-                      padding: '2px 8px',
-                      borderRadius: '4px',
+                      fontFamily: fontFamily.body,
+                      fontSize: fontSize.md,
+                      fontWeight: fontWeight.semibold,
+                      color: semantic.danger.dark,
+                      backgroundColor: semantic.danger.light,
+                      padding: `${space['0.5']} ${space['2']}`,
+                      borderRadius: radius.DEFAULT,
                     }}
                   >
                     {formatDuration(item.turnaroundMinutes)}
                   </span>
                   <span
                     style={{
-                      fontSize: '12px',
-                      color: '#6b7280',
+                      fontFamily: fontFamily.body,
+                      fontSize: fontSize.sm,
+                      color: text.muted,
                     }}
                   >
                     {formatDuration(item.elapsedSinceInquiryMinutes)}
@@ -154,9 +164,10 @@ export function DetailedBreachListCard({
               {hasMore && (
                 <div
                   style={{
-                    padding: '12px 0 0',
-                    fontSize: '12px',
-                    color: '#6b7280',
+                    padding: `${space['3']} 0 0`,
+                    fontFamily: fontFamily.body,
+                    fontSize: fontSize.sm,
+                    color: text.muted,
                     textAlign: 'center',
                   }}
                 >
@@ -166,16 +177,17 @@ export function DetailedBreachListCard({
 
               <div
                 style={{
-                  marginTop: '12px',
-                  paddingTop: '12px',
-                  borderTop: '1px solid #e5e7eb',
+                  marginTop: space['3'],
+                  paddingTop: space['3'],
+                  borderTop: `1px solid ${border.default}`,
                   display: 'flex',
                   justifyContent: 'space-between',
-                  fontSize: '13px',
+                  fontFamily: fontFamily.body,
+                  fontSize: fontSize.md,
                 }}
               >
-                <span style={{ color: '#6b7280' }}>Total Breaches</span>
-                <span style={{ fontWeight: 600, color: '#ef4444' }}>
+                <span style={{ color: text.muted }}>Total Breaches</span>
+                <span style={{ fontWeight: fontWeight.semibold, color: semantic.danger.base }}>
                   {filteredItems.length}
                 </span>
               </div>
@@ -190,19 +202,28 @@ export function DetailedBreachListCard({
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    padding: '8px 0',
-                    borderBottom: '1px solid #f3f4f6',
+                    padding: `${space['2']} 0`,
+                    borderBottom: `1px solid ${border.subtle}`,
                   }}
                 >
-                  <span style={{ fontSize: '14px', color: '#374151' }}>{type}</span>
                   <span
                     style={{
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      color: count > 0 ? '#ef4444' : '#6b7280',
-                      backgroundColor: count > 0 ? '#fef2f2' : '#f3f4f6',
-                      padding: '2px 10px',
-                      borderRadius: '12px',
+                      fontFamily: fontFamily.body,
+                      fontSize: fontSize.base,
+                      color: text.secondary,
+                    }}
+                  >
+                    {type}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: fontFamily.body,
+                      fontSize: fontSize.base,
+                      fontWeight: fontWeight.semibold,
+                      color: count > 0 ? semantic.danger.dark : text.muted,
+                      backgroundColor: count > 0 ? semantic.danger.light : background.muted,
+                      padding: `${space['0.5']} ${space['2.5']}`,
+                      borderRadius: radius.full,
                     }}
                   >
                     {count}
@@ -215,12 +236,28 @@ export function DetailedBreachListCard({
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  padding: '12px 0 0',
-                  fontWeight: 600,
+                  padding: `${space['3']} 0 0`,
+                  fontWeight: fontWeight.semibold,
                 }}
               >
-                <span style={{ fontSize: '14px', color: '#374151' }}>Total</span>
-                <span style={{ fontSize: '14px', color: '#ef4444' }}>{aggregateTotal}</span>
+                <span
+                  style={{
+                    fontFamily: fontFamily.body,
+                    fontSize: fontSize.base,
+                    color: text.secondary,
+                  }}
+                >
+                  Total
+                </span>
+                <span
+                  style={{
+                    fontFamily: fontFamily.body,
+                    fontSize: fontSize.base,
+                    color: semantic.danger.base,
+                  }}
+                >
+                  {aggregateTotal}
+                </span>
               </div>
             </>
           )}

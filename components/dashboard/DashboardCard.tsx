@@ -9,9 +9,25 @@
  * - Error state with retry option
  * - Empty state messaging
  * - Time window display
+ * 
+ * Updated to use design system tokens.
  */
 
 import React from 'react';
+import {
+  background,
+  text,
+  border,
+  cardVariants,
+  trendColors,
+} from '../../design/tokens/colors';
+import {
+  fontFamily,
+  fontSize,
+  fontWeight,
+  lineHeight,
+} from '../../design/tokens/typography';
+import { space, radius } from '../../design/tokens/spacing';
 
 // ============================================
 // Types
@@ -36,59 +52,66 @@ export interface DashboardCardProps {
 }
 
 // ============================================
-// Styles (inline for portability)
+// Styles (using design tokens)
 // ============================================
 
 const cardStyles: React.CSSProperties = {
-  backgroundColor: '#ffffff',
-  borderRadius: '12px',
-  padding: '24px',
-  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-  border: '1px solid #e5e7eb',
+  backgroundColor: background.surface,
+  borderRadius: radius.xl,
+  padding: space['6'],
+  border: `1px solid ${border.default}`,
   minHeight: '140px',
   display: 'flex',
   flexDirection: 'column',
 };
 
 const titleStyles: React.CSSProperties = {
-  fontSize: '14px',
-  fontWeight: 500,
-  color: '#6b7280',
-  marginBottom: '8px',
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.base,
+  fontWeight: fontWeight.medium,
+  color: text.muted,
+  marginBottom: space['2'],
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
+  lineHeight: lineHeight.normal,
 };
 
 const valueStyles: React.CSSProperties = {
-  fontSize: '32px',
-  fontWeight: 700,
-  color: '#111827',
-  marginBottom: '4px',
+  fontFamily: fontFamily.body,
+  fontSize: fontSize['5xl'],
+  fontWeight: fontWeight.semibold,
+  color: text.primary,
+  marginBottom: space['1'],
+  lineHeight: lineHeight.tight,
 };
 
 const subtitleStyles: React.CSSProperties = {
-  fontSize: '14px',
-  color: '#6b7280',
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.base,
+  color: text.muted,
+  lineHeight: lineHeight.normal,
 };
 
 const timeWindowStyles: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#9ca3af',
-  backgroundColor: '#f3f4f6',
-  padding: '2px 8px',
-  borderRadius: '4px',
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.sm,
+  color: text.muted,
+  backgroundColor: background.muted,
+  padding: `${space['0.5']} ${space['2']}`,
+  borderRadius: radius.DEFAULT,
 };
 
 const skeletonStyles: React.CSSProperties = {
-  backgroundColor: '#e5e7eb',
-  borderRadius: '4px',
+  backgroundColor: border.default,
+  borderRadius: radius.DEFAULT,
   animation: 'pulse 2s infinite',
 };
 
 const errorStyles: React.CSSProperties = {
-  color: '#dc2626',
-  fontSize: '14px',
+  color: text.primary,
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.base,
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
@@ -98,8 +121,9 @@ const errorStyles: React.CSSProperties = {
 };
 
 const emptyStyles: React.CSSProperties = {
-  color: '#9ca3af',
-  fontSize: '14px',
+  color: text.muted,
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.base,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -108,14 +132,16 @@ const emptyStyles: React.CSSProperties = {
 };
 
 const retryButtonStyles: React.CSSProperties = {
-  marginTop: '8px',
-  padding: '6px 12px',
-  fontSize: '12px',
-  backgroundColor: '#f3f4f6',
-  border: '1px solid #e5e7eb',
-  borderRadius: '6px',
+  marginTop: space['2'],
+  padding: `${space['1.5']} ${space['3']}`,
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.sm,
+  fontWeight: fontWeight.medium,
+  backgroundColor: background.muted,
+  border: `1px solid ${border.default}`,
+  borderRadius: radius.md,
   cursor: 'pointer',
-  color: '#374151',
+  color: text.secondary,
 };
 
 // ============================================
@@ -128,11 +154,7 @@ interface TrendBadgeProps {
 }
 
 function TrendBadge({ direction, value }: TrendBadgeProps) {
-  const colors = {
-    up: { bg: '#dcfce7', text: '#166534' },
-    down: { bg: '#fef2f2', text: '#dc2626' },
-    neutral: { bg: '#f3f4f6', text: '#6b7280' },
-  };
+  const colors = trendColors[direction];
 
   const arrows = {
     up: '↑',
@@ -145,13 +167,14 @@ function TrendBadge({ direction, value }: TrendBadgeProps) {
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '4px',
-        fontSize: '12px',
-        fontWeight: 500,
-        padding: '2px 8px',
-        borderRadius: '4px',
-        backgroundColor: colors[direction].bg,
-        color: colors[direction].text,
+        gap: space['1'],
+        fontFamily: fontFamily.body,
+        fontSize: fontSize.sm,
+        fontWeight: fontWeight.medium,
+        padding: `${space['0.5']} ${space['2']}`,
+        borderRadius: radius.DEFAULT,
+        backgroundColor: colors.bg,
+        color: colors.text,
       }}
     >
       {arrows[direction]} {value}
@@ -171,7 +194,7 @@ function CardSkeleton() {
           ...skeletonStyles,
           height: '32px',
           width: '60%',
-          marginBottom: '8px',
+          marginBottom: space['2'],
         }}
       />
       <div
@@ -190,16 +213,12 @@ function CardSkeleton() {
 // ============================================
 
 function getVariantStyles(variant: DashboardCardProps['variant']): React.CSSProperties {
-  switch (variant) {
-    case 'success':
-      return { borderLeft: '4px solid #22c55e' };
-    case 'warning':
-      return { borderLeft: '4px solid #f59e0b' };
-    case 'danger':
-      return { borderLeft: '4px solid #ef4444' };
-    default:
-      return {};
-  }
+  if (!variant || variant === 'default') return {};
+  return {
+    borderLeftWidth: '4px',
+    borderLeftStyle: 'solid',
+    borderLeftColor: cardVariants[variant],
+  };
 }
 
 // ============================================
@@ -260,7 +279,7 @@ export function DashboardCard({
             <div style={subtitleStyles}>
               {subtitle}
               {trend && (
-                <span style={{ marginLeft: '8px' }}>
+                <span style={{ marginLeft: space['2'] }}>
                   <TrendBadge direction={trend.direction} value={trend.value} />
                 </span>
               )}
