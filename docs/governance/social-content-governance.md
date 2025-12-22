@@ -376,7 +376,7 @@ This document must be approved before:
 - Any new team members are granted content creation access
 - Any new platforms are added to NSD's social presence
 
-**Approval Status:** Pending Review
+**Approval Status:** Approved
 
 ---
 
