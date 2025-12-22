@@ -22,7 +22,9 @@ import {
   DashboardSection,
   MetricCard,
   DistributionCard,
+  AccessDenied,
 } from '../../../components/dashboard';
+import { semantic, text } from '../../../design/tokens/colors';
 
 export default function MediaDashboard() {
   const [period, setPeriod] = useState<TimePeriod>('30d');
@@ -112,9 +114,9 @@ export default function MediaDashboard() {
           <DistributionCard
             title="Asset Status Distribution"
             items={[
-              { label: 'Approved', value: data?.approved ?? 0, color: '#22c55e' },
-              { label: 'Pending', value: data?.pending ?? 0, color: '#f59e0b' },
-              { label: 'Unused', value: data?.unusedApprovedAssets ?? 0, color: '#6b7280' },
+              { label: 'Approved', value: data?.approved ?? 0, color: semantic.success.base },
+              { label: 'Pending', value: data?.pending ?? 0, color: semantic.warning.base },
+              { label: 'Unused', value: data?.unusedApprovedAssets ?? 0, color: text.muted },
             ]}
             loading={loading}
             error={error}
@@ -160,26 +162,5 @@ export default function MediaDashboard() {
         </DashboardGrid>
       </DashboardSection>
     </DashboardGuard>
-  );
-}
-
-function AccessDenied() {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '400px',
-        color: '#6b7280',
-      }}
-    >
-      <span style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</span>
-      <h2 style={{ fontSize: '20px', color: '#374151', marginBottom: '8px' }}>
-        Access Denied
-      </h2>
-      <p>You do not have permission to view this dashboard.</p>
-    </div>
   );
 }

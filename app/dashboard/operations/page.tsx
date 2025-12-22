@@ -23,6 +23,7 @@ import {
   DashboardSection,
   MetricCard,
   DistributionCard,
+  AccessDenied,
 } from '../../../components/dashboard';
 
 export default function OperationsDashboard() {
@@ -177,26 +178,5 @@ export default function OperationsDashboard() {
         </DashboardSection>
       )}
     </DashboardGuard>
-  );
-}
-
-function AccessDenied() {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '400px',
-        color: '#6b7280',
-      }}
-    >
-      <span style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</span>
-      <h2 style={{ fontSize: '20px', color: '#374151', marginBottom: '8px' }}>
-        Access Denied
-      </h2>
-      <p>You do not have permission to view this dashboard.</p>
-    </div>
   );
 }

@@ -23,7 +23,9 @@ import {
   MetricCard,
   FunnelCard,
   DistributionCard,
+  AccessDenied,
 } from '../../../components/dashboard';
+import { semantic } from '../../../design/tokens/colors';
 
 export default function SalesDashboard() {
   const [period, setPeriod] = useState<TimePeriod>('30d');
@@ -35,7 +37,7 @@ export default function SalesDashboard() {
     .map((stage) => ({
       label: stage.stage,
       value: Math.round(stage.dropOffRate * 100),
-      color: stage.dropOffRate > 0.5 ? '#ef4444' : stage.dropOffRate > 0.3 ? '#f59e0b' : '#3b82f6',
+      color: stage.dropOffRate > 0.5 ? semantic.danger.base : stage.dropOffRate > 0.3 ? semantic.warning.base : semantic.info.base,
     })) ?? [];
 
   return (
@@ -153,26 +155,5 @@ export default function SalesDashboard() {
         </DashboardGrid>
       </DashboardSection>
     </DashboardGuard>
-  );
-}
-
-function AccessDenied() {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '400px',
-        color: '#6b7280',
-      }}
-    >
-      <span style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</span>
-      <h2 style={{ fontSize: '20px', color: '#374151', marginBottom: '8px' }}>
-        Access Denied
-      </h2>
-      <p>You do not have permission to view this dashboard.</p>
-    </div>
   );
 }

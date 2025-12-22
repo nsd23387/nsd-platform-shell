@@ -32,7 +32,11 @@ import {
   TieredSLADistributionCard,
   DetailedBreachListCard,
   SLA_TIER_COLORS,
+  AccessDenied,
 } from '../../../components/dashboard';
+import { background, text, border } from '../../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
+import { space, radius } from '../../../design/tokens/spacing';
 
 export default function DesignDashboard() {
   const [period, setPeriod] = useState<TimePeriod>('30d');
@@ -138,63 +142,30 @@ export default function DesignDashboard() {
           />
 
           {/* Tier Summary Cards */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: space['3'] }}>
             {/* Exceptional count */}
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                borderRadius: '8px',
-                padding: '16px',
-                border: '1px solid #e5e7eb',
-                borderLeft: `4px solid ${SLA_TIER_COLORS.exceptional}`,
-              }}
-              title="Mockups delivered within 2 hours"
-            >
-              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
-                Exceptional (≤ 2h)
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: SLA_TIER_COLORS.exceptional }}>
-                {loading ? '—' : (distribution?.exceptional ?? 0).toLocaleString()}
-              </div>
-            </div>
+            <TierSummaryCard
+              tier="Exceptional (≤ 2h)"
+              value={loading ? '—' : (distribution?.exceptional ?? 0).toLocaleString()}
+              color={SLA_TIER_COLORS.exceptional}
+              tooltip="Mockups delivered within 2 hours"
+            />
 
             {/* Standard count */}
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                borderRadius: '8px',
-                padding: '16px',
-                border: '1px solid #e5e7eb',
-                borderLeft: `4px solid ${SLA_TIER_COLORS.standard}`,
-              }}
-              title="Mockups delivered between 2 and 24 hours - acceptable performance"
-            >
-              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
-                Standard (2–24h)
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: SLA_TIER_COLORS.standard }}>
-                {loading ? '—' : (distribution?.standard ?? 0).toLocaleString()}
-              </div>
-            </div>
+            <TierSummaryCard
+              tier="Standard (2–24h)"
+              value={loading ? '—' : (distribution?.standard ?? 0).toLocaleString()}
+              color={SLA_TIER_COLORS.standard}
+              tooltip="Mockups delivered between 2 and 24 hours - acceptable performance"
+            />
 
             {/* Pending count */}
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                borderRadius: '8px',
-                padding: '16px',
-                border: '1px solid #e5e7eb',
-                borderLeft: `4px solid ${SLA_TIER_COLORS.pending}`,
-              }}
-              title="Mockups still in progress"
-            >
-              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
-                Pending
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: SLA_TIER_COLORS.pending }}>
-                {loading ? '—' : (distribution?.pending ?? data?.mockups.pendingMockups ?? 0).toLocaleString()}
-              </div>
-            </div>
+            <TierSummaryCard
+              tier="Pending"
+              value={loading ? '—' : (distribution?.pending ?? data?.mockups.pendingMockups ?? 0).toLocaleString()}
+              color={SLA_TIER_COLORS.pending}
+              tooltip="Mockups still in progress"
+            />
           </div>
         </DashboardGrid>
       </DashboardSection>
@@ -218,7 +189,7 @@ export default function DesignDashboard() {
           />
 
           {/* Breach Metrics */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: space['4'] }}>
             <MetricCard
               title="Breach Count"
               value={distribution?.breach ?? 0}
@@ -264,17 +235,17 @@ export default function DesignDashboard() {
       <DashboardSection title="SLA Tier Reference">
         <div
           style={{
-            backgroundColor: '#f9fafb',
-            borderRadius: '8px',
-            padding: '20px',
-            border: '1px solid #e5e7eb',
+            backgroundColor: background.muted,
+            borderRadius: radius.lg,
+            padding: space['5'],
+            border: `1px solid ${border.default}`,
           }}
         >
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: '16px',
+              gap: space['4'],
             }}
           >
             <TierReference
@@ -308,6 +279,58 @@ export default function DesignDashboard() {
   );
 }
 
+/**
+ * Tier Summary Card - compact card for tier counts
+ */
+function TierSummaryCard({
+  tier,
+  value,
+  color,
+  tooltip,
+}: {
+  tier: string;
+  value: string;
+  color: string;
+  tooltip: string;
+}) {
+  return (
+    <div
+      style={{
+        backgroundColor: background.surface,
+        borderRadius: radius.lg,
+        padding: space['4'],
+        border: `1px solid ${border.default}`,
+        borderLeft: `4px solid ${color}`,
+      }}
+      title={tooltip}
+    >
+      <div
+        style={{
+          fontFamily: fontFamily.body,
+          fontSize: fontSize.sm,
+          color: text.muted,
+          marginBottom: space['1'],
+        }}
+      >
+        {tier}
+      </div>
+      <div
+        style={{
+          fontFamily: fontFamily.body,
+          fontSize: fontSize['3xl'],
+          fontWeight: fontWeight.semibold,
+          color: color,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Tier Reference - legend item for SLA tiers
+ */
 function TierReference({
   tier,
   threshold,
@@ -320,47 +343,48 @@ function TierReference({
   description: string;
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: space['3'] }}>
       <div
         style={{
           width: '16px',
           height: '16px',
-          borderRadius: '4px',
+          borderRadius: radius.DEFAULT,
           backgroundColor: color,
           flexShrink: 0,
           marginTop: '2px',
         }}
       />
       <div>
-        <div style={{ fontWeight: 600, fontSize: '14px', color: '#374151' }}>
+        <div
+          style={{
+            fontFamily: fontFamily.body,
+            fontWeight: fontWeight.semibold,
+            fontSize: fontSize.base,
+            color: text.secondary,
+          }}
+        >
           {tier}
         </div>
-        <div style={{ fontSize: '13px', color: '#6b7280' }}>{threshold}</div>
-        <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>
+        <div
+          style={{
+            fontFamily: fontFamily.body,
+            fontSize: fontSize.md,
+            color: text.muted,
+          }}
+        >
+          {threshold}
+        </div>
+        <div
+          style={{
+            fontFamily: fontFamily.body,
+            fontSize: fontSize.sm,
+            color: text.placeholder,
+            marginTop: space['0.5'],
+          }}
+        >
           {description}
         </div>
       </div>
-    </div>
-  );
-}
-
-function AccessDenied() {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '400px',
-        color: '#6b7280',
-      }}
-    >
-      <span style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</span>
-      <h2 style={{ fontSize: '20px', color: '#374151', marginBottom: '8px' }}>
-        Access Denied
-      </h2>
-      <p>You do not have permission to view this dashboard.</p>
     </div>
   );
 }

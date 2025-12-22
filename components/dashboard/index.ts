@@ -37,3 +37,7 @@ export type { TieredSLADistributionCardProps } from './TieredSLADistributionCard
 
 export { DetailedBreachListCard } from './DetailedBreachListCard';
 export type { DetailedBreachListCardProps } from './DetailedBreachListCard';
+
+// Shared UI components
+export { AccessDenied } from './AccessDenied';
+export type { AccessDeniedProps } from './AccessDenied';
