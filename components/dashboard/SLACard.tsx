@@ -11,7 +11,7 @@ import React from 'react';
 import { DashboardCard, DashboardCardProps } from './DashboardCard';
 import { text, background, semantic } from '../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
-import { space, radius, duration, easing } from '../../design/tokens/spacing';
+import { space, radius, duration, easing, componentSpacing } from '../../design/tokens/spacing';
 
 export interface SLACardProps extends Omit<DashboardCardProps, 'value' | 'children'> {
   complianceRate: number;
@@ -68,10 +68,10 @@ export function SLACard({
         {targetLabel}
       </div>
 
-      {/* Compliance bar */}
+      {/* Compliance bar - normalized height */}
       <div
         style={{
-          height: '8px',
+          height: componentSpacing.progressBarHeight,
           backgroundColor: background.muted,
           borderRadius: radius.DEFAULT,
           overflow: 'hidden',
@@ -85,6 +85,7 @@ export function SLACard({
             backgroundColor: color,
             borderRadius: radius.DEFAULT,
             transition: `width ${duration.slow} ${easing.DEFAULT}`,
+            opacity: 0.9,
           }}
         />
       </div>

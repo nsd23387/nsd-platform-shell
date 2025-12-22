@@ -18,7 +18,7 @@ import { DashboardCard, DashboardCardProps } from './DashboardCard';
 import type { MockupSLADistribution } from '../../types/activity-spine';
 import { text, border, statusColors } from '../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
-import { space, radius, duration, easing } from '../../design/tokens/spacing';
+import { space, radius, duration, easing, componentSpacing } from '../../design/tokens/spacing';
 
 // ============================================
 // Semantic Colors for SLA Tiers
@@ -106,13 +106,13 @@ export function TieredSLADistributionCard({
     >
       {!isEmpty && (
         <div style={{ marginTop: space['2'] }}>
-          {/* Stacked Bar Visualization */}
+          {/* Stacked Bar Visualization - normalized height */}
           {showStackedBar && (
             <div style={{ marginBottom: space['5'] }}>
               <div
                 style={{
                   display: 'flex',
-                  height: '24px',
+                  height: componentSpacing.progressBarHeightLg,
                   borderRadius: radius.md,
                   overflow: 'hidden',
                   backgroundColor: border.subtle,
@@ -128,6 +128,7 @@ export function TieredSLADistributionCard({
                         backgroundColor: SLA_TIER_COLORS[tier.key],
                         transition: `width ${duration.slow} ${easing.DEFAULT}`,
                         cursor: 'help',
+                        opacity: tier.key === 'breach' ? 0.95 : 0.9,
                       }}
                     />
                   ) : null

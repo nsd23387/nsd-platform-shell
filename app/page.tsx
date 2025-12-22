@@ -5,6 +5,7 @@
  * Provides navigation to dashboards.
  * 
  * Updated to use design system tokens.
+ * M12-02: Visual polish - improved card density and refined icons.
  */
 
 import Link from 'next/link';
@@ -14,6 +15,7 @@ import {
   border,
   violet,
   semantic,
+  indigo,
 } from '../design/tokens/colors';
 import {
   fontFamily,
@@ -21,7 +23,76 @@ import {
   fontWeight,
   lineHeight,
 } from '../design/tokens/typography';
-import { space, radius, duration, easing } from '../design/tokens/spacing';
+import { space, radius, duration, easing, componentSpacing } from '../design/tokens/spacing';
+
+// ============================================
+// Refined Outline Icons (consistent style)
+// ============================================
+
+const iconStyle = {
+  width: 28,
+  height: 28,
+  strokeWidth: 1.5,
+  stroke: indigo[700],
+  fill: 'none',
+};
+
+const icons = {
+  executive: (
+    <svg {...iconStyle} viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 3v18h18" />
+      <path d="M18 17V9" />
+      <path d="M13 17V5" />
+      <path d="M8 17v-3" />
+    </svg>
+  ),
+  operations: (
+    <svg {...iconStyle} viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v4" />
+      <path d="M12 19v4" />
+      <path d="M4.22 4.22l2.83 2.83" />
+      <path d="M16.95 16.95l2.83 2.83" />
+      <path d="M1 12h4" />
+      <path d="M19 12h4" />
+      <path d="M4.22 19.78l2.83-2.83" />
+      <path d="M16.95 7.05l2.83-2.83" />
+    </svg>
+  ),
+  design: (
+    <svg {...iconStyle} viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="13.5" cy="6.5" r="2.5" />
+      <circle cx="6.5" cy="12" r="2.5" />
+      <circle cx="13.5" cy="17.5" r="2.5" />
+      <path d="M16 6.5h5" />
+      <path d="M9 12h12" />
+      <path d="M16 17.5h5" />
+      <path d="M3 6.5h5" />
+      <path d="M3 17.5h5" />
+    </svg>
+  ),
+  media: (
+    <svg {...iconStyle} viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
+    </svg>
+  ),
+  sales: (
+    <svg {...iconStyle} viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v20" />
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    </svg>
+  ),
+};
+
+const dashboards = [
+  { name: 'Executive', icon: icons.executive, href: '/dashboard/executive' },
+  { name: 'Operations', icon: icons.operations, href: '/dashboard/operations' },
+  { name: 'Design', icon: icons.design, href: '/dashboard/design' },
+  { name: 'Media', icon: icons.media, href: '/dashboard/media' },
+  { name: 'Sales', icon: icons.sales, href: '/dashboard/sales' },
+];
 
 export default function Home() {
   return (
@@ -86,22 +157,17 @@ export default function Home() {
         </Link>
       </div>
 
+      {/* App Registry Cards - increased density/spacing */}
       <div
         style={{
           marginTop: space['12'],
           display: 'grid',
           gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: space['4'],
-          maxWidth: '800px',
+          gap: componentSpacing.gridGapRelaxed,
+          maxWidth: '900px',
         }}
       >
-        {[
-          { name: 'Executive', icon: '📊', href: '/dashboard/executive' },
-          { name: 'Operations', icon: '⚙️', href: '/dashboard/operations' },
-          { name: 'Design', icon: '🎨', href: '/dashboard/design' },
-          { name: 'Media', icon: '📸', href: '/dashboard/media' },
-          { name: 'Sales', icon: '💰', href: '/dashboard/sales' },
-        ].map((dashboard) => (
+        {dashboards.map((dashboard) => (
           <Link
             key={dashboard.name}
             href={dashboard.href}
@@ -109,7 +175,7 @@ export default function Home() {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              padding: `${space['6']} ${space['4']}`,
+              padding: `${componentSpacing.cardPaddingRelaxed} ${space['5']}`,
               backgroundColor: background.surface,
               borderRadius: radius.xl,
               border: `1px solid ${border.default}`,
@@ -117,7 +183,15 @@ export default function Home() {
               transition: `all ${duration.normal} ${easing.DEFAULT}`,
             }}
           >
-            <span style={{ fontSize: '32px', marginBottom: space['2'] }}>
+            {/* Refined SVG icon */}
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: space['3'],
+              }}
+            >
               {dashboard.icon}
             </span>
             <span

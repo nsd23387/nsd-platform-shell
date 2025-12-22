@@ -11,7 +11,7 @@ import React from 'react';
 import { DashboardCard, DashboardCardProps } from './DashboardCard';
 import { text, background, chartColors } from '../../design/tokens/colors';
 import { fontFamily, fontSize } from '../../design/tokens/typography';
-import { space, radius, duration, easing } from '../../design/tokens/spacing';
+import { space, radius, duration, easing, componentSpacing } from '../../design/tokens/spacing';
 
 export interface DistributionItem {
   label: string;
@@ -55,9 +55,10 @@ export function DistributionCard({
                   {showPercentages && ` (${percentage.toFixed(1)}%)`}
                 </span>
               </div>
+              {/* Progress bar - normalized height */}
               <div
                 style={{
-                  height: '8px',
+                  height: componentSpacing.progressBarHeight,
                   backgroundColor: background.muted,
                   borderRadius: radius.DEFAULT,
                   overflow: 'hidden',
@@ -70,6 +71,7 @@ export function DistributionCard({
                     backgroundColor: color,
                     borderRadius: radius.DEFAULT,
                     transition: `width ${duration.slow} ${easing.DEFAULT}`,
+                    opacity: 0.9,
                   }}
                 />
               </div>

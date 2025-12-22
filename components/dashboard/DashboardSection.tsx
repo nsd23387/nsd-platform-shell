@@ -9,7 +9,7 @@
 import React from 'react';
 import { text } from '../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../design/tokens/typography';
-import { space } from '../../design/tokens/spacing';
+import { space, componentSpacing } from '../../design/tokens/spacing';
 
 export interface DashboardSectionProps {
   title: string;
@@ -19,8 +19,13 @@ export interface DashboardSectionProps {
 
 export function DashboardSection({ title, description, children }: DashboardSectionProps) {
   return (
-    <section style={{ marginBottom: space['8'] }}>
-      <div style={{ marginBottom: space['4'] }}>
+    <section
+      style={{
+        marginTop: componentSpacing.sectionTopMargin,
+        marginBottom: space['8'],
+      }}
+    >
+      <div style={{ marginBottom: componentSpacing.sectionHeaderMargin }}>
         <h2
           style={{
             fontFamily: fontFamily.display,

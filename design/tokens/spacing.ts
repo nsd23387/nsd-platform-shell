@@ -77,14 +77,24 @@ export const componentSpacing = {
   cardPadding: space['6'],
   /** Card internal padding (compact) */
   cardPaddingCompact: space['4'],
+  /** Card internal padding (relaxed - for registry cards) */
+  cardPaddingRelaxed: space['8'],
   /** Section header margin bottom */
   sectionHeaderMargin: space['4'],
+  /** Section top margin (editorial rhythm) */
+  sectionTopMargin: space['10'],
   /** Grid gap between cards */
   gridGap: space['6'],
+  /** Grid gap (relaxed - for registry cards) */
+  gridGapRelaxed: space['5'],
   /** Page padding (sides) */
   pageInlinePadding: space['8'],
   /** Page padding (top/bottom) */
   pageBlockPadding: space['8'],
+  /** Progress bar height (normalized across all SLA/distribution bars) */
+  progressBarHeight: '6px',
+  /** Progress bar height (prominent - for funnel/stacked bars) */
+  progressBarHeightLg: '20px',
 } as const;
 
 /**

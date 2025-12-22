@@ -12,7 +12,7 @@ import { DashboardCard, DashboardCardProps } from './DashboardCard';
 import type { FunnelStage } from '../../types/activity-spine';
 import { text, background, semantic, violet } from '../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
-import { space, radius, duration, easing } from '../../design/tokens/spacing';
+import { space, radius, duration, easing, componentSpacing } from '../../design/tokens/spacing';
 
 export interface FunnelCardProps extends Omit<DashboardCardProps, 'value' | 'children'> {
   stages: FunnelStage[];
@@ -80,9 +80,10 @@ export function FunnelCard({
                   )}
                 </span>
               </div>
+              {/* Funnel bar - normalized height */}
               <div
                 style={{
-                  height: '24px',
+                  height: componentSpacing.progressBarHeightLg,
                   backgroundColor: background.muted,
                   borderRadius: radius.DEFAULT,
                   overflow: 'hidden',
@@ -103,6 +104,7 @@ export function FunnelCard({
                     fontSize: fontSize.sm,
                     fontWeight: fontWeight.medium,
                     minWidth: widthPercent > 20 ? 'auto' : '0',
+                    opacity: 0.9,
                   }}
                 >
                   {widthPercent > 20 && `${(stage.conversionRate * 100).toFixed(0)}%`}
