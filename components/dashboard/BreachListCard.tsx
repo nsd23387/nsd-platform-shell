@@ -3,10 +3,15 @@
  * 
  * Card for displaying SLA breach breakdown by category.
  * Read-only list display.
+ * 
+ * Updated to use design system tokens.
  */
 
 import React from 'react';
 import { DashboardCard, DashboardCardProps } from './DashboardCard';
+import { text, border, semantic, background } from '../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
+import { space, radius } from '../../design/tokens/spacing';
 
 export interface BreachListCardProps extends Omit<DashboardCardProps, 'value' | 'children'> {
   breaches: Record<string, number>;
@@ -25,7 +30,7 @@ export function BreachListCard({
   return (
     <DashboardCard {...props} empty={isEmpty} emptyMessage={emptyMessage}>
       {!isEmpty && (
-        <div style={{ marginTop: '8px' }}>
+        <div style={{ marginTop: space['2'] }}>
           {entries.map(([type, count]) => (
             <div
               key={type}
@@ -33,19 +38,28 @@ export function BreachListCard({
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                padding: '8px 0',
-                borderBottom: '1px solid #f3f4f6',
+                padding: `${space['2']} 0`,
+                borderBottom: `1px solid ${border.subtle}`,
               }}
             >
-              <span style={{ fontSize: '14px', color: '#374151' }}>{type}</span>
               <span
                 style={{
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: count > 0 ? '#ef4444' : '#6b7280',
-                  backgroundColor: count > 0 ? '#fef2f2' : '#f3f4f6',
-                  padding: '2px 10px',
-                  borderRadius: '12px',
+                  fontFamily: fontFamily.body,
+                  fontSize: fontSize.base,
+                  color: text.secondary,
+                }}
+              >
+                {type}
+              </span>
+              <span
+                style={{
+                  fontFamily: fontFamily.body,
+                  fontSize: fontSize.base,
+                  fontWeight: fontWeight.semibold,
+                  color: count > 0 ? semantic.danger.dark : text.muted,
+                  backgroundColor: count > 0 ? semantic.danger.light : background.muted,
+                  padding: `${space['0.5']} ${space['2.5']}`,
+                  borderRadius: radius.full,
                 }}
               >
                 {count}
@@ -58,12 +72,28 @@ export function BreachListCard({
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              padding: '12px 0 0',
-              fontWeight: 600,
+              padding: `${space['3']} 0 0`,
+              fontWeight: fontWeight.semibold,
             }}
           >
-            <span style={{ fontSize: '14px', color: '#374151' }}>Total</span>
-            <span style={{ fontSize: '14px', color: '#111827' }}>{total}</span>
+            <span
+              style={{
+                fontFamily: fontFamily.body,
+                fontSize: fontSize.base,
+                color: text.secondary,
+              }}
+            >
+              Total
+            </span>
+            <span
+              style={{
+                fontFamily: fontFamily.body,
+                fontSize: fontSize.base,
+                color: text.primary,
+              }}
+            >
+              {total}
+            </span>
           </div>
         </div>
       )}

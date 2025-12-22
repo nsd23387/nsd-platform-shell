@@ -2,11 +2,15 @@
  * Dashboard Index Page
  * 
  * Redirects to Executive Dashboard by default.
+ * 
+ * Updated to use design system tokens.
  */
 
 'use client';
 
 import { useEffect } from 'react';
+import { text } from '../../design/tokens/colors';
+import { fontFamily, fontSize } from '../../design/tokens/typography';
 
 export default function DashboardIndex() {
   useEffect(() => {
@@ -20,7 +24,9 @@ export default function DashboardIndex() {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '400px',
-        color: '#6b7280',
+        fontFamily: fontFamily.body,
+        fontSize: fontSize.base,
+        color: text.muted,
       }}
     >
       Redirecting to Executive Dashboard...

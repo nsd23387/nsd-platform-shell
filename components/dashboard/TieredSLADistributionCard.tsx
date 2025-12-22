@@ -9,20 +9,25 @@
  * - Pending (no mockup) - gray
  * 
  * Data comes from Activity Spine - no local calculations.
+ * 
+ * Updated to use design system tokens.
  */
 
 import React from 'react';
 import { DashboardCard, DashboardCardProps } from './DashboardCard';
 import type { MockupSLADistribution } from '../../types/activity-spine';
+import { text, border, statusColors } from '../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
+import { space, radius, duration, easing } from '../../design/tokens/spacing';
 
 // ============================================
 // Semantic Colors for SLA Tiers
 // ============================================
 export const SLA_TIER_COLORS = {
-  exceptional: '#22c55e', // green - best performance
-  standard: '#eab308',    // yellow - acceptable
-  breach: '#ef4444',      // red - requires attention
-  pending: '#9ca3af',     // gray - in progress
+  exceptional: statusColors.exceptional.border,
+  standard: statusColors.standard.border,
+  breach: statusColors.breach.border,
+  pending: statusColors.pending.border,
 } as const;
 
 export const SLA_TIER_LABELS = {
@@ -100,17 +105,17 @@ export function TieredSLADistributionCard({
       emptyMessage="No SLA distribution data available"
     >
       {!isEmpty && (
-        <div style={{ marginTop: '8px' }}>
+        <div style={{ marginTop: space['2'] }}>
           {/* Stacked Bar Visualization */}
           {showStackedBar && (
-            <div style={{ marginBottom: '20px' }}>
+            <div style={{ marginBottom: space['5'] }}>
               <div
                 style={{
                   display: 'flex',
                   height: '24px',
-                  borderRadius: '6px',
+                  borderRadius: radius.md,
                   overflow: 'hidden',
-                  backgroundColor: '#f3f4f6',
+                  backgroundColor: border.subtle,
                 }}
               >
                 {tiers.map((tier) =>
@@ -121,7 +126,7 @@ export function TieredSLADistributionCard({
                       style={{
                         width: `${tier.percentage}%`,
                         backgroundColor: SLA_TIER_COLORS[tier.key],
-                        transition: 'width 0.3s ease',
+                        transition: `width ${duration.slow} ${easing.DEFAULT}`,
                         cursor: 'help',
                       }}
                     />
@@ -132,7 +137,7 @@ export function TieredSLADistributionCard({
           )}
 
           {/* Tier Breakdown */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: space['2.5'] }}>
             {tiers.map((tier) => (
               <div
                 key={tier.key}
@@ -143,39 +148,42 @@ export function TieredSLADistributionCard({
                 }}
                 title={SLA_TIER_TOOLTIPS[tier.key]}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: space['2'] }}>
                   {/* Color indicator */}
                   <div
                     style={{
                       width: '12px',
                       height: '12px',
-                      borderRadius: '3px',
+                      borderRadius: radius.sm,
                       backgroundColor: SLA_TIER_COLORS[tier.key],
                     }}
                   />
                   <span
                     style={{
-                      fontSize: '13px',
-                      color: '#374151',
+                      fontFamily: fontFamily.body,
+                      fontSize: fontSize.md,
+                      color: text.secondary,
                     }}
                   >
                     {SLA_TIER_LABELS[tier.key]}
                   </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: space['3'] }}>
                   <span
                     style={{
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: '#111827',
+                      fontFamily: fontFamily.body,
+                      fontSize: fontSize.md,
+                      fontWeight: fontWeight.semibold,
+                      color: text.primary,
                     }}
                   >
                     {tier.value.toLocaleString()}
                   </span>
                   <span
                     style={{
-                      fontSize: '12px',
-                      color: '#6b7280',
+                      fontFamily: fontFamily.body,
+                      fontSize: fontSize.sm,
+                      color: text.muted,
                       minWidth: '48px',
                       textAlign: 'right',
                     }}
@@ -190,16 +198,17 @@ export function TieredSLADistributionCard({
           {/* Total */}
           <div
             style={{
-              marginTop: '12px',
-              paddingTop: '12px',
-              borderTop: '1px solid #e5e7eb',
+              marginTop: space['3'],
+              paddingTop: space['3'],
+              borderTop: `1px solid ${border.default}`,
               display: 'flex',
               justifyContent: 'space-between',
-              fontSize: '13px',
+              fontFamily: fontFamily.body,
+              fontSize: fontSize.md,
             }}
           >
-            <span style={{ color: '#6b7280' }}>Total Evaluated</span>
-            <span style={{ fontWeight: 600, color: '#111827' }}>
+            <span style={{ color: text.muted }}>Total Evaluated</span>
+            <span style={{ fontWeight: fontWeight.semibold, color: text.primary }}>
               {total.toLocaleString()}
             </span>
           </div>
