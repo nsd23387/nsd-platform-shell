@@ -30,7 +30,9 @@ import type { BootstrapResponse } from '../types/bootstrap';
 // Configuration
 // ============================================
 
-const ODS_API_URL = process.env.NEXT_PUBLIC_ODS_API_URL || '/api/v1';
+const ODS_API_URL =
+  process.env.NEXT_PUBLIC_ODS_API_URL ||
+  '/functions/v1/ods-api';
 const ACTIVITY_SPINE_BASE_URL = process.env.NEXT_PUBLIC_ACTIVITY_SPINE_URL || '/api/activity-spine';
 
 interface SDKConfig {
