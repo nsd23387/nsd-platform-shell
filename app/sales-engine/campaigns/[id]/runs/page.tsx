@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { CampaignRun } from '../../../types/campaign';
 import { getCampaignRuns, getLatestRun } from '../../../lib/api';
+import { Icon } from '../../../../../design/components/Icon';
 import { background, text, border, violet, semantic } from '../../../../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../../../../design/tokens/typography';
 
@@ -53,66 +54,96 @@ export default function CampaignRunsPage() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: background.page, fontFamily: fontFamily.body }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
-        <div style={{ marginBottom: '24px' }}>
-          <Link href={`/sales-engine/campaigns/${campaignId}`} style={{ color: violet[500], textDecoration: 'none', fontSize: fontSize.sm }}>
-            ← Back to Campaign
+      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '48px 32px' }}>
+        <div style={{ marginBottom: '32px' }}>
+          <Link
+            href={`/sales-engine/campaigns/${campaignId}`}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: text.secondary, textDecoration: 'none', fontSize: fontSize.sm }}
+          >
+            <Icon name="arrow-left" size={16} color={text.secondary} />
+            Back to Campaign
           </Link>
         </div>
 
-        <h1 style={{ margin: '0 0 16px 0', fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: text.primary, fontFamily: fontFamily.heading }}>
-          📜 Run History
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '12px',
+            backgroundColor: violet[50],
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <Icon name="runs" size={24} color={violet[600]} />
+          </div>
+          <h1 style={{ margin: 0, fontSize: fontSize['4xl'], fontWeight: fontWeight.semibold, color: text.primary, fontFamily: fontFamily.display }}>
+            Run History
+          </h1>
+        </div>
 
         <div style={{
-          padding: '16px',
+          padding: '20px 24px',
           backgroundColor: background.muted,
-          borderRadius: '8px',
-          marginBottom: '32px',
+          borderRadius: '12px',
+          marginBottom: '40px',
           border: `1px solid ${border.subtle}`,
         }}>
-          <p style={{ margin: 0, color: text.muted, fontSize: fontSize.sm }}>
+          <p style={{ margin: 0, color: text.muted, fontSize: fontSize.sm, fontFamily: fontFamily.body }}>
             Run entries are immutable ledger records. No edit, retry, or delete actions are available.
           </p>
         </div>
 
         {error && (
-          <div style={{ padding: '16px', backgroundColor: semantic.danger.light, border: '1px solid #fecaca', borderRadius: '8px', marginBottom: '24px', color: semantic.danger.dark }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '16px 20px',
+            backgroundColor: semantic.danger.light,
+            border: '1px solid #fecaca',
+            borderRadius: '12px',
+            marginBottom: '32px',
+            color: semantic.danger.dark,
+          }}>
+            <Icon name="alert" size={20} color={semantic.danger.base} />
             {error}
           </div>
         )}
 
         {latestRun && (
           <div style={{
-            padding: '24px',
+            padding: '28px',
             backgroundColor: semantic.info.light,
-            borderRadius: '12px',
-            marginBottom: '32px',
+            borderRadius: '16px',
+            marginBottom: '40px',
             border: `1px solid ${semantic.info.base}`,
           }}>
-            <h3 style={{ margin: '0 0 16px 0', color: semantic.info.dark, fontSize: fontSize.base }}>Latest Run</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
+            <h3 style={{ margin: '0 0 20px 0', color: semantic.info.dark, fontSize: fontSize.base, fontFamily: fontFamily.body, fontWeight: fontWeight.semibold }}>
+              Latest Run
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px' }}>
               <div>
-                <p style={{ margin: 0, fontSize: fontSize.xs, color: semantic.info.dark }}>Status</p>
+                <p style={{ margin: 0, fontSize: fontSize.xs, color: semantic.info.dark, fontFamily: fontFamily.body }}>Status</p>
                 <StatusBadge status={latestRun.status} />
               </div>
               <div>
-                <p style={{ margin: 0, fontSize: fontSize.xs, color: semantic.info.dark }}>Started</p>
-                <p style={{ margin: '4px 0 0 0', color: text.primary, fontWeight: fontWeight.medium }}>
+                <p style={{ margin: 0, fontSize: fontSize.xs, color: semantic.info.dark, fontFamily: fontFamily.body }}>Started</p>
+                <p style={{ margin: '6px 0 0 0', color: text.primary, fontWeight: fontWeight.medium, fontFamily: fontFamily.body }}>
                   {new Date(latestRun.started_at).toLocaleString()}
                 </p>
               </div>
               <div>
-                <p style={{ margin: 0, fontSize: fontSize.xs, color: semantic.info.dark }}>Leads</p>
-                <p style={{ margin: '4px 0 0 0', color: text.primary, fontWeight: fontWeight.medium }}>{latestRun.leads_processed}</p>
+                <p style={{ margin: 0, fontSize: fontSize.xs, color: semantic.info.dark, fontFamily: fontFamily.body }}>Leads</p>
+                <p style={{ margin: '6px 0 0 0', color: text.primary, fontWeight: fontWeight.medium, fontFamily: fontFamily.body }}>{latestRun.leads_processed}</p>
               </div>
               <div>
-                <p style={{ margin: 0, fontSize: fontSize.xs, color: semantic.info.dark }}>Sent</p>
-                <p style={{ margin: '4px 0 0 0', color: text.primary, fontWeight: fontWeight.medium }}>{latestRun.emails_sent}</p>
+                <p style={{ margin: 0, fontSize: fontSize.xs, color: semantic.info.dark, fontFamily: fontFamily.body }}>Sent</p>
+                <p style={{ margin: '6px 0 0 0', color: text.primary, fontWeight: fontWeight.medium, fontFamily: fontFamily.body }}>{latestRun.emails_sent}</p>
               </div>
               <div>
-                <p style={{ margin: 0, fontSize: fontSize.xs, color: semantic.info.dark }}>Errors</p>
-                <p style={{ margin: '4px 0 0 0', color: latestRun.errors > 0 ? semantic.danger.base : text.primary, fontWeight: fontWeight.medium }}>
+                <p style={{ margin: 0, fontSize: fontSize.xs, color: semantic.info.dark, fontFamily: fontFamily.body }}>Errors</p>
+                <p style={{ margin: '6px 0 0 0', color: latestRun.errors > 0 ? semantic.danger.base : text.primary, fontWeight: fontWeight.medium, fontFamily: fontFamily.body }}>
                   {latestRun.errors}
                 </p>
               </div>
@@ -120,43 +151,45 @@ export default function CampaignRunsPage() {
           </div>
         )}
 
-        <div style={{ backgroundColor: background.surface, borderRadius: '16px', padding: '32px', border: `1px solid ${border.default}` }}>
-          <h2 style={{ margin: '0 0 24px 0', color: text.primary, fontSize: fontSize.xl }}>All Runs</h2>
+        <div style={{ backgroundColor: background.surface, borderRadius: '20px', padding: '32px', border: `1px solid ${border.subtle}` }}>
+          <h2 style={{ margin: '0 0 28px 0', color: text.primary, fontSize: fontSize.xl, fontFamily: fontFamily.display, fontWeight: fontWeight.medium }}>
+            All Runs
+          </h2>
 
           {runs.length === 0 ? (
-            <p style={{ color: text.muted, textAlign: 'center', padding: '48px' }}>No runs recorded yet.</p>
+            <p style={{ color: text.muted, textAlign: 'center', padding: '48px', fontFamily: fontFamily.body }}>No runs recorded yet.</p>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${border.default}` }}>
-                    <th style={{ textAlign: 'left', padding: '12px', color: text.muted, fontWeight: fontWeight.medium }}>Run ID</th>
-                    <th style={{ textAlign: 'left', padding: '12px', color: text.muted, fontWeight: fontWeight.medium }}>Status</th>
-                    <th style={{ textAlign: 'left', padding: '12px', color: text.muted, fontWeight: fontWeight.medium }}>Started</th>
-                    <th style={{ textAlign: 'right', padding: '12px', color: text.muted, fontWeight: fontWeight.medium }}>Leads</th>
-                    <th style={{ textAlign: 'right', padding: '12px', color: text.muted, fontWeight: fontWeight.medium }}>Sent</th>
-                    <th style={{ textAlign: 'right', padding: '12px', color: text.muted, fontWeight: fontWeight.medium }}>Errors</th>
-                    <th style={{ textAlign: 'left', padding: '12px', color: text.muted, fontWeight: fontWeight.medium }}>Triggered By</th>
+                    <th style={{ textAlign: 'left', padding: '14px', color: text.muted, fontWeight: fontWeight.medium, fontSize: fontSize.sm, fontFamily: fontFamily.body }}>Run ID</th>
+                    <th style={{ textAlign: 'left', padding: '14px', color: text.muted, fontWeight: fontWeight.medium, fontSize: fontSize.sm, fontFamily: fontFamily.body }}>Status</th>
+                    <th style={{ textAlign: 'left', padding: '14px', color: text.muted, fontWeight: fontWeight.medium, fontSize: fontSize.sm, fontFamily: fontFamily.body }}>Started</th>
+                    <th style={{ textAlign: 'right', padding: '14px', color: text.muted, fontWeight: fontWeight.medium, fontSize: fontSize.sm, fontFamily: fontFamily.body }}>Leads</th>
+                    <th style={{ textAlign: 'right', padding: '14px', color: text.muted, fontWeight: fontWeight.medium, fontSize: fontSize.sm, fontFamily: fontFamily.body }}>Sent</th>
+                    <th style={{ textAlign: 'right', padding: '14px', color: text.muted, fontWeight: fontWeight.medium, fontSize: fontSize.sm, fontFamily: fontFamily.body }}>Errors</th>
+                    <th style={{ textAlign: 'left', padding: '14px', color: text.muted, fontWeight: fontWeight.medium, fontSize: fontSize.sm, fontFamily: fontFamily.body }}>Triggered By</th>
                   </tr>
                 </thead>
                 <tbody>
                   {runs.map((run) => (
                     <tr key={run.id} style={{ borderBottom: `1px solid ${border.subtle}` }}>
-                      <td style={{ padding: '12px', color: text.secondary, fontFamily: 'monospace', fontSize: fontSize.xs }}>
+                      <td style={{ padding: '14px', color: text.secondary, fontFamily: 'monospace', fontSize: fontSize.xs }}>
                         {run.id.slice(0, 8)}...
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td style={{ padding: '14px' }}>
                         <StatusBadge status={run.status} />
                       </td>
-                      <td style={{ padding: '12px', color: text.secondary }}>
+                      <td style={{ padding: '14px', color: text.secondary, fontFamily: fontFamily.body }}>
                         {new Date(run.started_at).toLocaleString()}
                       </td>
-                      <td style={{ padding: '12px', color: text.secondary, textAlign: 'right' }}>{run.leads_processed}</td>
-                      <td style={{ padding: '12px', color: text.secondary, textAlign: 'right' }}>{run.emails_sent}</td>
-                      <td style={{ padding: '12px', color: run.errors > 0 ? semantic.danger.base : text.secondary, textAlign: 'right' }}>
+                      <td style={{ padding: '14px', color: text.secondary, textAlign: 'right', fontFamily: fontFamily.body }}>{run.leads_processed}</td>
+                      <td style={{ padding: '14px', color: text.secondary, textAlign: 'right', fontFamily: fontFamily.body }}>{run.emails_sent}</td>
+                      <td style={{ padding: '14px', color: run.errors > 0 ? semantic.danger.base : text.secondary, textAlign: 'right', fontFamily: fontFamily.body }}>
                         {run.errors}
                       </td>
-                      <td style={{ padding: '12px', color: text.muted, fontSize: fontSize.sm }}>
+                      <td style={{ padding: '14px', color: text.muted, fontSize: fontSize.sm, fontFamily: fontFamily.body }}>
                         {run.triggered_by || 'System'}
                       </td>
                     </tr>
@@ -176,13 +209,14 @@ function StatusBadge({ status }: { status: CampaignRun['status'] }) {
   return (
     <span style={{
       display: 'inline-block',
-      padding: '4px 10px',
+      padding: '6px 12px',
       backgroundColor: colors.bg,
       color: colors.text,
       border: `1px solid ${colors.border}`,
-      borderRadius: '4px',
-      fontSize: '12px',
-      fontWeight: 500,
+      borderRadius: '6px',
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+      fontFamily: fontFamily.body,
     }}>
       {status}
     </span>
