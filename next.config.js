@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Proxy Activity Spine API calls in development
+  allowedDevOrigins: ['*'],
   async rewrites() {
     return [
       {
