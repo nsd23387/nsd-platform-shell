@@ -1,0 +1,120 @@
+Replit Prompt — M67 Sales Engine UI (REVISED)
+
+You are implementing M67 – Sales Engine UI as a standalone frontend application.
+
+This application MUST be developed independently of the NSD Command Center.
+
+Core Principle
+
+The Sales Engine UI is a self-contained product UI that consumes only the governed M60 Campaign Management APIs (/api/v1/campaigns/*).
+Platform Shell (NSD Command Center) integration, routing, bootstrap, and feature visibility are explicitly OUT OF SCOPE and will be handled later in M68.
+
+Scope (M67 Only)
+
+Implement the following UI capabilities:
+
+M67-02 — Campaign Setup UI
+
+Create, edit, and manage campaigns in DRAFT state
+
+Uses:
+
+POST /api/v1/campaigns
+
+PATCH /api/v1/campaigns/:id
+
+No lifecycle transitions beyond DRAFT
+
+M67-03 — Campaign Approval UI
+
+Human-driven submission and approval flow
+
+Uses:
+
+POST /api/v1/campaigns/:id/submit
+
+POST /api/v1/campaigns/:id/approve
+
+UI must render governance flags:
+
+canEdit
+
+canSubmit
+
+canApprove
+
+isRunnable
+
+M67-04 — Campaign Execution UI (NON-EXECUTING)
+
+Display readiness and blocked state only
+
+NO execute, run, trigger, schedule, or cancel actions
+
+Must display:
+
+M65 blocking reasons
+
+Throughput constraints
+
+Explicitly communicate:
+
+“Passing readiness ≠ execution”
+
+M67-05 — Campaign Monitoring UI
+
+Read-only observability
+
+Uses:
+
+/metrics
+
+/metrics/history
+
+/runs
+
+/runs/latest
+
+/variants
+
+/throughput
+
+Explicit Non-Goals (Hard Constraints)
+
+❌ Do NOT integrate with NSD Command Center
+
+❌ Do NOT use /api/v1/me
+
+❌ Do NOT implement feature gating or RBAC logic
+
+❌ Do NOT parse JWTs
+
+❌ Do NOT add execution endpoints (none exist)
+
+❌ Do NOT reference quotes, OMS, or custom quote systems
+
+Technical Expectations
+
+Frontend-only application
+
+React-based SPA
+
+JWT is assumed to be provided externally (environment or dev token)
+
+All API calls go directly to /api/v1/campaigns/*
+
+No backend, no server, no database access
+
+Acceptance Criteria
+
+App can run independently in DEV with a provided token
+
+All UI states map correctly to M60 APIs
+
+No speculative or fabricated endpoints
+
+No execution authority introduced
+
+Fully compliant with Sales Engine UI Architecture Contract v1.1
+
+If a required capability cannot be implemented using the documented M60 APIs, STOP and report the gap instead of inventing endpoints.

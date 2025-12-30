@@ -1,0 +1,254 @@
+✅ Replit Acceptance Checklist — M67: Sales Engine UI
+
+Scope: M67-02 → M67-05
+Applies to: Standalone Sales Engine UI (NOT NSD Command Center)
+Contract: SALES_ENGINE_UI_ARCHITECTURE_CONTRACT.md v1.1
+API Authority: M60 only (/api/v1/campaigns/*)
+
+1. Architectural Compliance (NON-NEGOTIABLE)
+1.1 Standalone App Integrity
+
+ Sales Engine UI runs independently (no NSD Command Center dependency)
+
+ No imports, references, or assumptions about:
+
+/api/v1/me
+
+feature_visibility
+
+Shell routing
+
+Shell navigation
+
+ App can be started directly with a provided JWT
+
+FAIL if any Shell coupling exists
+
+1.2 API Surface Enforcement (M60 Only)
+
+ All API calls are under /api/v1/campaigns/*
+
+ No calls to:
+
+/api/campaigns/* (legacy)
+
+/api/sales-engine/*
+
+/execute, /run, /trigger, /schedule
+
+ No speculative endpoints exist in code
+
+FAIL if any non-M60 endpoint is referenced
+
+2. M67-02 — Campaign Setup UI (DRAFT Only)
+2.1 Create Campaign
+
+ Uses POST /api/v1/campaigns
+
+ Campaign is always created in DRAFT state
+
+ UI does not allow status override
+
+ Success state renders campaign detail view
+
+2.2 Edit Campaign
+
+ Uses PATCH /api/v1/campaigns/:id
+
+ Edit controls are enabled only if canEdit === true
+
+ Status field is never editable in UI
+
+ PATCH is blocked or disabled if not in DRAFT
+
+FAIL if UI allows editing outside DRAFT
+
+3. M67-03 — Campaign Approval UI (Human-Only)
+3.1 Submit for Review
+
+ Uses POST /api/v1/campaigns/:id/submit
+
+ Button enabled only if canSubmit === true
+
+ UI reflects transition to PENDING_REVIEW
+
+ No auto-submit behavior
+
+3.2 Approve Campaign
+
+ Uses POST /api/v1/campaigns/:id/approve
+
+ Button enabled only if canApprove === true
+
+ UI reflects transition to RUNNABLE
+
+ Explicit human confirmation required
+
+FAIL if approval is automatic or implicit
+
+4. M67-04 — Execution UI (NON-EXECUTING)
+
+⚠️ CRITICAL SAFETY AREA
+
+4.1 No Execution Capability
+
+ No buttons labeled Execute / Run / Trigger / Start
+
+ No API calls attempt execution (none exist)
+
+ UI explicitly states:
+
+“Passing readiness does not execute the campaign”
+
+4.2 Readiness Visibility
+
+ UI displays readiness status as informational
+
+ UI displays all M65 blocking reasons when present:
+
+MISSING_HUMAN_APPROVAL
+
+PERSISTENCE_ERRORS
+
+NO_LEADS_PERSISTED
+
+KILL_SWITCH_ENABLED
+
+SMARTLEAD_NOT_CONFIGURED
+
+INSUFFICIENT_CREDITS
+
+FAIL if UI implies execution is possible
+
+5. M67-05 — Monitoring & Observability UI (READ-ONLY)
+5.1 Metrics
+
+ Uses GET /api/v1/campaigns/:id/metrics
+
+ Uses GET /api/v1/campaigns/:id/metrics/history
+
+ Metrics are rendered exactly as returned
+
+ No derived calculations in UI
+
+5.2 Run Summaries
+
+ Uses GET /api/v1/campaigns/:id/runs
+
+ Uses GET /api/v1/campaigns/:id/runs/latest
+
+ Runs are treated as immutable ledger entries
+
+ No edit, retry, or delete affordances
+
+5.3 Throughput Visibility
+
+ Uses GET /api/v1/campaigns/:id/throughput
+
+ Displays throughput limits clearly
+
+ Displays block reasons when applicable:
+
+DAILY_LIMIT_EXCEEDED
+
+HOURLY_LIMIT_EXCEEDED
+
+MAILBOX_LIMIT_EXCEEDED
+
+CONFIG_INACTIVE
+
+NO_CONFIG_FOUND
+
+FAIL if UI mutates or infers data
+
+6. Governance Metadata Rendering (MANDATORY)
+
+For GET /api/v1/campaigns/:id response:
+
+ UI consumes and respects:
+
+canEdit
+
+canSubmit
+
+canApprove
+
+isRunnable
+
+ UI does NOT recompute or override these flags
+
+ UI disables controls strictly based on flags
+
+FAIL if UI reimplements governance logic
+
+7. Explicit Prohibitions Check
+
+The following MUST NOT exist anywhere in the codebase:
+
+ Supabase client or imports
+
+ Edge function calls
+
+ Service role keys
+
+ JWT parsing logic
+
+ RBAC logic beyond API flags
+
+ Quotes / OMS / Custom Quote references
+
+ Scheduling logic
+
+ Background jobs or polling loops for execution
+
+FAIL if any prohibited pattern exists
+
+8. UX & Design Consistency
+
+ Clean, minimalist UI
+
+ Clear lifecycle state labeling:
+
+DRAFT
+
+PENDING_REVIEW
+
+RUNNABLE
+
+ARCHIVED
+
+ Disabled states are visually obvious
+
+ Errors are rendered using canonical error codes
+
+ Empty states are handled gracefully
+
+9. Environment & Safety
+
+ App runs in DEV without prod dependencies
+
+ No environment switching logic in UI
+
+ Token is injected externally (env or dev config)
+
+ No secrets stored in UI
+
+10. Final Approval Gate
+
+M67 is considered ACCEPTED only if:
+
+ All checklist items above pass
+
+ No speculative endpoints exist
+
+ No execution authority exists
+
+ Contract v1.1 is fully respected
+
+ Reviewer confirms this is Sales Engine UI only
+
+Once accepted:
+
+✅ M67 is complete
+
+⏭ M68 (Shell integration) may begin
