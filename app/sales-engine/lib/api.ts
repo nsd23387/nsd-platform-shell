@@ -9,6 +9,10 @@ import type {
   CampaignVariant,
   ThroughputConfig,
   CampaignStatus,
+  DashboardReadiness,
+  DashboardThroughput,
+  SystemNotice,
+  RecentRunOutcome,
 } from '../types/campaign';
 
 const API_BASE = '/api/v1/campaigns';
@@ -114,4 +118,20 @@ export async function getCampaignVariants(id: string): Promise<CampaignVariant[]
 
 export async function getCampaignThroughput(id: string): Promise<ThroughputConfig> {
   return apiRequest<ThroughputConfig>(`/${id}/throughput`);
+}
+
+export async function getDashboardReadiness(): Promise<DashboardReadiness> {
+  return apiRequest<DashboardReadiness>('/readiness');
+}
+
+export async function getDashboardThroughput(): Promise<DashboardThroughput> {
+  return apiRequest<DashboardThroughput>('/throughput');
+}
+
+export async function getSystemNotices(): Promise<SystemNotice[]> {
+  return apiRequest<SystemNotice[]>('/notices');
+}
+
+export async function getRecentRuns(): Promise<RecentRunOutcome[]> {
+  return apiRequest<RecentRunOutcome[]>('/runs/recent');
 }
