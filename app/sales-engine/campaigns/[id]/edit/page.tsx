@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { ICP, PersonalizationStrategy } from '../../types/campaign';
-import { createCampaign } from '../../lib/api';
-import { AICampaignGenerator, ICPEditor, PersonalizationEditor } from '../../components';
+import type { CampaignDetail, ICP, PersonalizationStrategy } from '../../../types/campaign';
+import { getCampaign, updateCampaign } from '../../../lib/api';
+import { StatusBadge, AICampaignGenerator, ICPEditor, PersonalizationEditor } from '../../../components';
 
 const defaultICP: ICP = {
   keywords: [],
@@ -24,29 +24,49 @@ const defaultPersonalization: PersonalizationStrategy = {
   customFields: {},
 };
 
-export default function NewCampaignPage() {
+export default function CampaignEditPage() {
+  const params = useParams();
   const router = useRouter();
+  const campaignId = params.id as string;
+
+  const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [icp, setIcp] = useState<ICP>(defaultICP);
   const [personalization, setPersonalization] = useState<PersonalizationStrategy>(defaultPersonalization);
-  const [activeSection, setActiveSection] = useState<'basics' | 'ai' | 'icp' | 'personalization'>('basics');
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<'basics' | 'ai' | 'icp' | 'personalization'>('basics');
 
-  async function handleCreate() {
-    if (!name.trim()) {
-      setError('Campaign name is required');
-      return;
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await getCampaign(campaignId);
+        setCampaign(data);
+        setName(data.name);
+        setDescription(data.description || '');
+        setIcp(data.icp || defaultICP);
+        setPersonalization(data.personalization || defaultPersonalization);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load campaign');
+      } finally {
+        setLoading(false);
+      }
     }
-    setIsLoading(true);
+    load();
+  }, [campaignId]);
+
+  async function handleSave() {
+    setSaving(true);
     setError(null);
     try {
-      const campaign = await createCampaign({ name, description, icp, personalization });
-      router.push(`/sales-engine/campaigns/${campaign.id}`);
+      await updateCampaign(campaignId, { name, description, icp, personalization });
+      router.push(`/sales-engine/campaigns/${campaignId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create campaign');
-      setIsLoading(false);
+      setError(err instanceof Error ? err.message : 'Failed to save');
+      setSaving(false);
     }
   }
 
@@ -54,6 +74,46 @@ export default function NewCampaignPage() {
     setIcp(generatedICP);
     setPersonalization(generatedPersonalization);
     setActiveSection('icp');
+  }
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#9ca3af' }}>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!campaign) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', padding: '32px' }}>
+        <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+          <p style={{ color: '#ef4444' }}>{error || 'Campaign not found'}</p>
+          <Link href="/sales-engine" style={{ color: '#e879f9' }}>← Back</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!campaign.canEdit) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', padding: '32px' }}>
+        <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+          <div style={{ padding: '24px', backgroundColor: '#1f1f1f', borderRadius: '12px', border: '1px solid #fbbf24' }}>
+            <h2 style={{ color: '#fbbf24', marginBottom: '12px' }}>Cannot Edit</h2>
+            <p style={{ color: '#9ca3af' }}>
+              This campaign is in {campaign.status} state and cannot be edited.
+            </p>
+            <Link
+              href={`/sales-engine/campaigns/${campaignId}`}
+              style={{ display: 'inline-block', marginTop: '16px', color: '#e879f9' }}
+            >
+              ← Back to Campaign
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const sections = [
@@ -67,33 +127,35 @@ export default function NewCampaignPage() {
     <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
         <div style={{ marginBottom: '24px' }}>
-          <Link href="/sales-engine" style={{ color: '#e879f9', textDecoration: 'none', fontSize: '14px' }}>
-            ← Back to Campaigns
+          <Link href={`/sales-engine/campaigns/${campaignId}`} style={{ color: '#e879f9', textDecoration: 'none', fontSize: '14px' }}>
+            ← Back to Campaign
           </Link>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600, color: '#fff' }}>Create New Campaign</h1>
-            <p style={{ margin: '8px 0 0 0', color: '#9ca3af' }}>
-              New campaigns are created in DRAFT state. Configure targeting and personalization.
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600, color: '#fff' }}>Edit Campaign</h1>
+              <StatusBadge status={campaign.status} />
+            </div>
+            <p style={{ margin: '8px 0 0 0', color: '#9ca3af' }}>Configure your campaign targeting and personalization</p>
           </div>
           <button
-            onClick={handleCreate}
-            disabled={isLoading || !name.trim()}
+            onClick={handleSave}
+            disabled={saving}
             style={{
               padding: '12px 32px',
               fontSize: '16px',
               fontWeight: 600,
-              backgroundColor: name.trim() && !isLoading ? '#e879f9' : '#4b5563',
-              color: name.trim() && !isLoading ? '#0f0f0f' : '#9ca3af',
+              backgroundColor: '#e879f9',
+              color: '#0f0f0f',
               border: 'none',
               borderRadius: '8px',
-              cursor: name.trim() && !isLoading ? 'pointer' : 'not-allowed',
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.7 : 1,
             }}
           >
-            {isLoading ? 'Creating...' : 'Create Campaign'}
+            {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
 
@@ -140,7 +202,6 @@ export default function NewCampaignPage() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g., Q1 Retail Outreach"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
@@ -161,7 +222,6 @@ export default function NewCampaignPage() {
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the campaign goals and target audience..."
                   rows={4}
                   style={{
                     width: '100%',

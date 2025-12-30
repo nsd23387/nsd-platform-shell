@@ -1,0 +1,143 @@
+🔹 Replit Prompt — M67 Sales Engine UI (Authoritative)
+
+You are building the Sales Engine Application UI, not the NSD Platform Shell or Command Center.
+
+This is a standalone React application whose sole purpose is to manage campaigns via the governed M60 API surface.
+
+⚠️ Do NOT reuse or extend the NSD Command Center dashboard patterns. Treat this as a clean product UI.
+
+Scope (Non-Negotiable)
+
+Build a standalone Sales Engine app
+
+Consume ONLY /api/v1/campaigns/* APIs
+
+Implement end-to-end campaign lifecycle UI
+
+No dashboards, no app registry, no shell behavior
+
+No quotes domain
+
+No execution triggers
+
+Required Pages (Must Implement All)
+
+Campaign List
+
+Create Campaign (DRAFT)
+
+Campaign Overview
+
+Edit Campaign (DRAFT-only)
+
+Submit for Review
+
+Approval UI
+
+Monitoring (metrics, runs, throughput)
+
+Governance Rules (Must Enforce)
+
+Render governance flags exactly:
+
+canEdit
+
+canSubmit
+
+canApprove
+
+isRunnable
+
+UI must never infer permissions
+
+/submit and /approve are WRITE lifecycle actions, not execution
+
+NO EXECUTE ENDPOINTS EXIST
+
+Readiness visibility ≠ execution
+
+Explicit Prohibitions
+
+❌ No /api/v1/me
+
+❌ No app registry
+
+❌ No dashboards
+
+❌ No quotes APIs
+
+❌ No execution buttons
+
+❌ No scheduling
+
+❌ No shell navigation assumptions
+
+Design & UX
+
+Use NSD design tokens
+
+Minimal, whitespace-first
+
+Flat components
+
+No glow/neon effects
+
+Status-driven affordances only
+
+Deliverables
+
+Fully navigable Sales Engine UI
+
+Correct routing per page map
+
+All campaign lifecycle flows implemented
+
+Ready for STAGING API wiring (M68)
+
+3️⃣ Why Replit Built the Wrong Thing (Root Cause)
+
+Yes — connecting to the platform shell repo absolutely caused this.
+
+What Happened
+
+Replit saw:
+
+/api/v1/me
+
+dashboards
+
+app registry
+
+read-only posture
+
+It inferred:
+
+“We are extending the Command Center”
+
+Why That’s Dangerous
+
+Shell repos bias toward:
+
+aggregation
+
+read-only views
+
+feature gating
+
+Sales Engine requires:
+
+domain workflows
+
+lifecycle transitions
+
+human-in-the-loop actions
+
+Prevention Going Forward
+
+M67 work must:
+
+Live in its own app context
+
+Reference Sales Engine contract only
+
+Ignore Shell concerns until M68

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+type RouteContext = { params: Promise<{ id: string }> };
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: RouteContext
 ) {
-  const campaignId = params.id;
+  const { id: campaignId } = await context.params;
 
   const runs = [
     {
@@ -16,6 +18,7 @@ export async function GET(
       leads_processed: 250,
       emails_sent: 248,
       errors: 2,
+      triggered_by: 'Scheduler',
     },
     {
       id: 'run-002',
@@ -26,6 +29,7 @@ export async function GET(
       leads_processed: 200,
       emails_sent: 200,
       errors: 0,
+      triggered_by: 'Scheduler',
     },
     {
       id: 'run-003',
@@ -36,6 +40,7 @@ export async function GET(
       leads_processed: 150,
       emails_sent: 142,
       errors: 8,
+      triggered_by: 'Manual - john.smith@neonsignsdepot.com',
     },
   ];
 

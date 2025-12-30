@@ -3,37 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type {
-  CampaignDetail,
-  CampaignMetrics,
-  MetricsHistoryEntry,
-  CampaignRun,
-  CampaignVariant,
-  ThroughputConfig,
-} from '../../types/campaign';
-import {
-  getCampaign,
-  getCampaignMetrics,
-  getCampaignMetricsHistory,
-  getCampaignRuns,
-  getLatestRun,
-  getCampaignVariants,
-  getCampaignThroughput,
-  updateCampaign,
-  submitCampaign,
-  approveCampaign,
-} from '../../lib/api';
-import {
-  StatusBadge,
-  CampaignForm,
-  GovernanceActions,
-  ReadinessDisplay,
-  MetricsDisplay,
-  RunsDisplay,
-  VariantsDisplay,
-} from '../../components';
-
-type TabType = 'overview' | 'edit' | 'monitoring';
+import type { CampaignDetail } from '../../types/campaign';
+import { getCampaign, submitCampaign } from '../../lib/api';
+import { StatusBadge } from '../../components';
 
 export default function CampaignDetailPage() {
   const params = useParams();
@@ -41,16 +13,10 @@ export default function CampaignDetailPage() {
   const campaignId = params.id as string;
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
-  const [metrics, setMetrics] = useState<CampaignMetrics | null>(null);
-  const [metricsHistory, setMetricsHistory] = useState<MetricsHistoryEntry[]>([]);
-  const [runs, setRuns] = useState<CampaignRun[]>([]);
-  const [latestRun, setLatestRun] = useState<CampaignRun | null>(null);
-  const [variants, setVariants] = useState<CampaignVariant[]>([]);
-  const [throughput, setThroughput] = useState<ThroughputConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -59,23 +25,6 @@ export default function CampaignDetailPage() {
       try {
         const campaignData = await getCampaign(campaignId);
         setCampaign(campaignData);
-
-        const [metricsData, historyData, runsData, latestRunData, variantsData, throughputData] =
-          await Promise.allSettled([
-            getCampaignMetrics(campaignId),
-            getCampaignMetricsHistory(campaignId),
-            getCampaignRuns(campaignId),
-            getLatestRun(campaignId),
-            getCampaignVariants(campaignId),
-            getCampaignThroughput(campaignId),
-          ]);
-
-        if (metricsData.status === 'fulfilled') setMetrics(metricsData.value);
-        if (historyData.status === 'fulfilled') setMetricsHistory(historyData.value);
-        if (runsData.status === 'fulfilled') setRuns(runsData.value);
-        if (latestRunData.status === 'fulfilled') setLatestRun(latestRunData.value);
-        if (variantsData.status === 'fulfilled') setVariants(variantsData.value);
-        if (throughputData.status === 'fulfilled') setThroughput(throughputData.value);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load campaign');
       } finally {
@@ -85,48 +34,36 @@ export default function CampaignDetailPage() {
     loadData();
   }, [campaignId]);
 
-  async function handleUpdate(data: { name?: string; description?: string }) {
-    if (!campaign?.canEdit) return;
-    setIsUpdating(true);
-    try {
-      const updated = await updateCampaign(campaignId, data);
-      setCampaign({ ...campaign, ...updated });
-      setActiveTab('overview');
-    } catch (err) {
-      throw err;
-    } finally {
-      setIsUpdating(false);
-    }
-  }
-
-  async function handleSubmit() {
+  async function handleSubmitForReview() {
     if (!campaign?.canSubmit) return;
-    const updated = await submitCampaign(campaignId);
-    setCampaign({ ...campaign, ...updated, canEdit: false, canSubmit: false });
-  }
-
-  async function handleApprove() {
-    if (!campaign?.canApprove) return;
-    const updated = await approveCampaign(campaignId);
-    setCampaign({ ...campaign, ...updated, canApprove: false, isRunnable: true });
+    setSubmitting(true);
+    try {
+      const updated = await submitCampaign(campaignId);
+      setCampaign({ ...campaign, ...updated, status: 'PENDING_REVIEW', canEdit: false, canSubmit: false, canApprove: true });
+      setShowSubmitConfirm(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#6b7280' }}>Loading campaign...</p>
+      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#9ca3af' }}>Loading campaign...</p>
       </div>
     );
   }
 
   if (error || !campaign) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', padding: '32px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', padding: '32px' }}>
         <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-          <div style={{ padding: '24px', backgroundColor: '#fef2f2', borderRadius: '8px', marginBottom: '24px' }}>
-            <p style={{ margin: 0, color: '#b91c1c' }}>{error || 'Campaign not found'}</p>
+          <div style={{ padding: '24px', backgroundColor: '#7f1d1d', borderRadius: '8px', marginBottom: '24px' }}>
+            <p style={{ margin: 0, color: '#fecaca' }}>{error || 'Campaign not found'}</p>
           </div>
-          <Link href="/sales-engine" style={{ color: '#4f46e5', textDecoration: 'none' }}>
+          <Link href="/sales-engine" style={{ color: '#e879f9', textDecoration: 'none' }}>
             ← Back to Campaigns
           </Link>
         </div>
@@ -134,87 +71,282 @@ export default function CampaignDetailPage() {
     );
   }
 
+  const navLinks = [
+    { href: `/sales-engine/campaigns/${campaignId}/edit`, label: 'Edit Campaign', icon: '✏️', show: campaign.canEdit },
+    { href: `/sales-engine/campaigns/${campaignId}/review`, label: 'Review & Approve', icon: '✓', show: campaign.status === 'PENDING_REVIEW' },
+    { href: `/sales-engine/campaigns/${campaignId}/metrics`, label: 'Metrics', icon: '📊', show: true },
+    { href: `/sales-engine/campaigns/${campaignId}/runs`, label: 'Run History', icon: '📜', show: true },
+    { href: `/sales-engine/campaigns/${campaignId}/variants`, label: 'Variants', icon: '🎨', show: true },
+    { href: `/sales-engine/campaigns/${campaignId}/safety`, label: 'Safety', icon: '🛡️', show: true },
+  ];
+
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', padding: '32px' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
         <div style={{ marginBottom: '24px' }}>
-          <Link href="/sales-engine" style={{ fontSize: '14px', color: '#4f46e5', textDecoration: 'none' }}>
+          <Link href="/sales-engine" style={{ fontSize: '14px', color: '#e879f9', textDecoration: 'none' }}>
             ← Back to Campaigns
           </Link>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-              <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600, color: '#111827' }}>
+              <h1 style={{ margin: 0, fontSize: '32px', fontWeight: 600, color: '#fff' }}>
                 {campaign.name}
               </h1>
               <StatusBadge status={campaign.status} />
             </div>
             {campaign.description && (
-              <p style={{ margin: 0, fontSize: '14px', color: '#6b7280' }}>{campaign.description}</p>
+              <p style={{ margin: 0, fontSize: '16px', color: '#9ca3af', maxWidth: '600px' }}>
+                {campaign.description}
+              </p>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            {campaign.canEdit && (
+              <Link
+                href={`/sales-engine/campaigns/${campaignId}/edit`}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: 'transparent',
+                  color: '#e879f9',
+                  border: '2px solid #e879f9',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: 500,
+                }}
+              >
+                Edit Campaign
+              </Link>
+            )}
+            {campaign.canSubmit && (
+              <button
+                onClick={() => setShowSubmitConfirm(true)}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#e879f9',
+                  color: '#0f0f0f',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Submit for Review
+              </button>
             )}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid #e5e7eb', paddingBottom: '16px' }}>
-          {(['overview', 'edit', 'monitoring'] as TabType[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              disabled={tab === 'edit' && !campaign.canEdit}
+        {campaign.isRunnable && (
+          <div style={{
+            padding: '20px',
+            backgroundColor: '#14532d',
+            borderRadius: '12px',
+            border: '2px solid #22c55e',
+            marginBottom: '32px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '24px' }}>✅</span>
+              <div>
+                <p style={{ margin: 0, color: '#86efac', fontWeight: 600, fontSize: '16px' }}>
+                  This campaign is runnable but NOT executing.
+                </p>
+                <p style={{ margin: '4px 0 0 0', color: '#bbf7d0', fontSize: '14px' }}>
+                  Execution is managed externally via NSD Command Center (M68).
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showSubmitConfirm && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+          }}>
+            <div style={{
+              backgroundColor: '#1a1a1a',
+              padding: '32px',
+              borderRadius: '16px',
+              maxWidth: '500px',
+              border: '1px solid #e879f9',
+            }}>
+              <h3 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '20px' }}>Submit for Review?</h3>
+              <p style={{ margin: '0 0 24px 0', color: '#9ca3af' }}>
+                Once submitted, the campaign will move to PENDING_REVIEW and cannot be edited until rejected.
+              </p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setShowSubmitConfirm(false)}
+                  disabled={submitting}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: 'transparent',
+                    color: '#9ca3af',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitForReview}
+                  disabled={submitting}
+                  style={{
+                    padding: '10px 24px',
+                    backgroundColor: '#e879f9',
+                    color: '#0f0f0f',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: submitting ? 'not-allowed' : 'pointer',
+                    opacity: submitting ? 0.7 : 1,
+                    fontWeight: 600,
+                  }}
+                >
+                  {submitting ? 'Submitting...' : 'Yes, Submit'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '32px' }}>
+          {navLinks.filter(link => link.show).map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
               style={{
-                padding: '8px 16px',
-                fontSize: '14px',
-                fontWeight: 500,
-                backgroundColor: activeTab === tab ? '#4f46e5' : 'transparent',
-                color: activeTab === tab ? '#fff' : tab === 'edit' && !campaign.canEdit ? '#9ca3af' : '#374151',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: tab === 'edit' && !campaign.canEdit ? 'not-allowed' : 'pointer',
+                padding: '20px',
+                backgroundColor: '#1a1a1a',
+                borderRadius: '12px',
+                border: '1px solid #333',
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                transition: 'border-color 0.2s',
               }}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
+              <span style={{ fontSize: '24px' }}>{link.icon}</span>
+              <span style={{ color: '#fff', fontWeight: 500 }}>{link.label}</span>
+            </Link>
           ))}
         </div>
 
-        {activeTab === 'overview' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <GovernanceActions campaign={campaign} onSubmit={handleSubmit} onApprove={handleApprove} />
-            <ReadinessDisplay campaign={campaign} throughput={throughput || undefined} />
-          </div>
-        )}
-
-        {activeTab === 'edit' && (
-          <div style={{ maxWidth: '600px', backgroundColor: '#fff', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#111827' }}>
-              Edit Campaign
-            </h2>
-            {campaign.status !== 'DRAFT' && (
-              <div style={{ padding: '12px 16px', backgroundColor: '#fef3c7', borderRadius: '6px', marginBottom: '16px' }}>
-                <p style={{ margin: 0, fontSize: '13px', color: '#92400e' }}>
-                  Only DRAFT campaigns can be edited. This campaign is in {campaign.status} state.
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          <div style={{
+            padding: '24px',
+            backgroundColor: '#1a1a1a',
+            borderRadius: '16px',
+            border: '1px solid #333',
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '18px' }}>Campaign Details</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Created</p>
+                <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                  {new Date(campaign.created_at).toLocaleString()}
                 </p>
               </div>
-            )}
-            <CampaignForm
-              campaign={campaign}
-              onSubmit={handleUpdate}
-              onCancel={() => setActiveTab('overview')}
-              isLoading={isUpdating}
-            />
+              <div>
+                <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Last Updated</p>
+                <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                  {new Date(campaign.updated_at).toLocaleString()}
+                </p>
+              </div>
+              {campaign.submittedBy && (
+                <div>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Submitted By</p>
+                  <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                    {campaign.submittedBy}
+                    {campaign.submittedAt && ` on ${new Date(campaign.submittedAt).toLocaleDateString()}`}
+                  </p>
+                </div>
+              )}
+              {campaign.approvedBy && (
+                <div>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Approved By</p>
+                  <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                    {campaign.approvedBy}
+                    {campaign.approvedAt && ` on ${new Date(campaign.approvedAt).toLocaleDateString()}`}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        )}
 
-        {activeTab === 'monitoring' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {metrics && <MetricsDisplay metrics={metrics} history={metricsHistory} />}
-            <RunsDisplay runs={runs} latestRun={latestRun} />
-            <VariantsDisplay variants={variants} />
+          <div style={{
+            padding: '24px',
+            backgroundColor: '#1a1a1a',
+            borderRadius: '16px',
+            border: '1px solid #333',
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '18px' }}>Governance</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <GovernanceFlag label="Can Edit" value={campaign.canEdit} />
+              <GovernanceFlag label="Can Submit" value={campaign.canSubmit} />
+              <GovernanceFlag label="Can Approve" value={campaign.canApprove} />
+              <GovernanceFlag label="Is Runnable" value={campaign.isRunnable} />
+            </div>
+          </div>
+        </div>
+
+        {campaign.icp && (
+          <div style={{
+            marginTop: '24px',
+            padding: '24px',
+            backgroundColor: '#1a1a1a',
+            borderRadius: '16px',
+            border: '1px solid #333',
+          }}>
+            <h3 style={{ margin: '0 0 20px 0', color: '#fff', fontSize: '18px' }}>ICP Summary</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Industries</p>
+                <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                  {campaign.icp.industries.join(', ') || 'Not specified'}
+                </p>
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Company Size</p>
+                <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                  {campaign.icp.employeeSize.min} - {campaign.icp.employeeSize.max} employees
+                </p>
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Target Roles</p>
+                <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                  {campaign.icp.roles.join(', ') || 'Not specified'}
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function GovernanceFlag({ label, value }: { label: string; value: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <span style={{
+        display: 'inline-block',
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        backgroundColor: value ? '#22c55e' : '#6b7280',
+      }} />
+      <span style={{ color: value ? '#d1d5db' : '#6b7280', fontSize: '14px' }}>{label}</span>
     </div>
   );
 }
