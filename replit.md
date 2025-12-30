@@ -93,9 +93,12 @@ Mock campaign management APIs at `/api/v1/campaigns/*`:
 ## M67 Sales Engine UI
 
 ### Visual Design
-- Dark theme (#0f0f0f background)
-- Neon magenta accents (#e879f9)
-- Clean, premium feel matching neonsignsdepot.com branding
+- Light theme matching NSD Command Center design system
+- Soft white backgrounds: page (#fafafa), surface (#ffffff)
+- Deep indigo text (#1e1e4a)
+- Violet accents (#8b5cf6) for interactive elements
+- Magenta CTAs (#ec4899) for primary actions
+- Clean, professional feel for enterprise campaign management
 
 ### Routes
 | Route | Feature |
@@ -154,11 +157,17 @@ Throughput blocks:
 - `NO_CONFIG_FOUND`
 
 ## Recent Changes
+- December 30, 2025: M67 Sales Engine UI Light Theme Update
+  - Converted entire UI from dark theme to light theme matching NSD Command Center
+  - Applied design tokens: background.page (#fafafa), background.surface (#ffffff), text.primary (#1e1e4a)
+  - Updated all pages: index, new, detail, edit, review, metrics, runs, variants, safety
+  - Updated all components: StatusBadge, ICPEditor, PersonalizationEditor, AICampaignGenerator
+  - Violet accents (#8b5cf6) for filters, tabs, badges
+  - Magenta CTAs (#ec4899) for primary actions
 - December 30, 2025: M67 Sales Engine UI Full Implementation
   - Created separate route pages: /edit, /review, /metrics, /runs, /variants, /safety
   - Implemented AICampaignGenerator, ICPEditor, PersonalizationEditor components
   - Full ICP structure with keywords, locations, industries, employee size, roles, pain points, value propositions
-  - Dark theme with neon magenta accents
   - Actor attribution (submittedBy, approvedBy) for audit trail
   - All M65/throughput blocking reasons displayed verbatim
   - Updated mock APIs with full data

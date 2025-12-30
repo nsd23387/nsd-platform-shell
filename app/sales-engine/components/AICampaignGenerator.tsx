@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import type { ICP, PersonalizationStrategy } from '../types/campaign';
+import { background, text, border, violet, magenta } from '../../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
 
 interface AICampaignGeneratorProps {
   onGenerate: (icp: ICP, personalization: PersonalizationStrategy) => void;
@@ -62,19 +64,20 @@ export function AICampaignGenerator({ onGenerate, isLoading }: AICampaignGenerat
     <div
       style={{
         padding: '24px',
-        backgroundColor: '#2e1065',
+        backgroundColor: violet[50],
         borderRadius: '12px',
-        border: '2px solid #e879f9',
+        border: `2px solid ${violet[300]}`,
+        fontFamily: fontFamily.body,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
         <span style={{ fontSize: '24px' }}>✨</span>
-        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#e879f9' }}>
+        <h3 style={{ margin: 0, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: violet[700] }}>
           AI Campaign Generator
         </h3>
       </div>
 
-      <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#c4b5fd' }}>
+      <p style={{ margin: '0 0 16px 0', fontSize: fontSize.sm, color: violet[600] }}>
         Describe your target audience and campaign goals. AI will generate ICP targeting, 
         keywords, pain points, and personalization strategy.
       </p>
@@ -88,19 +91,19 @@ export function AICampaignGenerator({ onGenerate, isLoading }: AICampaignGenerat
         style={{
           width: '100%',
           padding: '12px 14px',
-          fontSize: '14px',
-          border: '1px solid #7c3aed',
+          fontSize: fontSize.sm,
+          border: `1px solid ${violet[300]}`,
           borderRadius: '8px',
           outline: 'none',
           resize: 'vertical',
           boxSizing: 'border-box',
-          backgroundColor: '#1a1a1a',
-          color: '#fff',
+          backgroundColor: background.surface,
+          color: text.primary,
         }}
       />
 
       <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '12px', color: '#a78bfa' }}>
+        <span style={{ fontSize: fontSize.xs, color: violet[500] }}>
           AI-generated content is editable after generation
         </span>
         <button
@@ -108,10 +111,10 @@ export function AICampaignGenerator({ onGenerate, isLoading }: AICampaignGenerat
           disabled={!prompt.trim() || generating || isLoading}
           style={{
             padding: '10px 24px',
-            fontSize: '14px',
-            fontWeight: 600,
-            backgroundColor: prompt.trim() && !generating ? '#e879f9' : '#4b5563',
-            color: prompt.trim() && !generating ? '#0f0f0f' : '#9ca3af',
+            fontSize: fontSize.sm,
+            fontWeight: fontWeight.semibold,
+            backgroundColor: prompt.trim() && !generating ? magenta[500] : border.default,
+            color: prompt.trim() && !generating ? text.inverse : text.muted,
             border: 'none',
             borderRadius: '8px',
             cursor: prompt.trim() && !generating ? 'pointer' : 'not-allowed',

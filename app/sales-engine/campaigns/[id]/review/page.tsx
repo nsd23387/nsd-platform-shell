@@ -6,6 +6,8 @@ import Link from 'next/link';
 import type { CampaignDetail } from '../../../types/campaign';
 import { getCampaign, approveCampaign } from '../../../lib/api';
 import { StatusBadge, ICPEditor, PersonalizationEditor } from '../../../components';
+import { background, text, border, violet, semantic } from '../../../../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../../../../design/tokens/typography';
 
 const defaultICP = {
   keywords: [],
@@ -64,18 +66,18 @@ export default function CampaignReviewPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#9ca3af' }}>Loading...</p>
+      <div style={{ minHeight: '100vh', backgroundColor: background.page, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: fontFamily.body }}>
+        <p style={{ color: text.muted }}>Loading...</p>
       </div>
     );
   }
 
   if (!campaign) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', padding: '32px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: background.page, padding: '32px', fontFamily: fontFamily.body }}>
         <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-          <p style={{ color: '#ef4444' }}>{error || 'Campaign not found'}</p>
-          <Link href="/sales-engine" style={{ color: '#e879f9' }}>← Back</Link>
+          <p style={{ color: semantic.danger.base }}>{error || 'Campaign not found'}</p>
+          <Link href="/sales-engine" style={{ color: violet[500] }}>← Back</Link>
         </div>
       </div>
     );
@@ -83,16 +85,16 @@ export default function CampaignReviewPage() {
 
   if (campaign.status !== 'PENDING_REVIEW') {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', padding: '32px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: background.page, padding: '32px', fontFamily: fontFamily.body }}>
         <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-          <div style={{ padding: '24px', backgroundColor: '#1f1f1f', borderRadius: '12px', border: '1px solid #fbbf24' }}>
-            <h2 style={{ color: '#fbbf24', marginBottom: '12px' }}>Not Pending Review</h2>
-            <p style={{ color: '#9ca3af' }}>
+          <div style={{ padding: '24px', backgroundColor: semantic.warning.light, borderRadius: '12px', border: `1px solid ${semantic.warning.base}` }}>
+            <h2 style={{ color: semantic.warning.dark, marginBottom: '12px' }}>Not Pending Review</h2>
+            <p style={{ color: text.secondary }}>
               This campaign is in {campaign.status} state. Only campaigns in PENDING_REVIEW can be reviewed here.
             </p>
             <Link
               href={`/sales-engine/campaigns/${campaignId}`}
-              style={{ display: 'inline-block', marginTop: '16px', color: '#e879f9' }}
+              style={{ display: 'inline-block', marginTop: '16px', color: violet[500] }}
             >
               ← Back to Campaign
             </Link>
@@ -103,10 +105,10 @@ export default function CampaignReviewPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: background.page, fontFamily: fontFamily.body }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px' }}>
         <div style={{ marginBottom: '24px' }}>
-          <Link href={`/sales-engine/campaigns/${campaignId}`} style={{ color: '#e879f9', textDecoration: 'none', fontSize: '14px' }}>
+          <Link href={`/sales-engine/campaigns/${campaignId}`} style={{ color: violet[500], textDecoration: 'none', fontSize: fontSize.sm }}>
             ← Back to Campaign
           </Link>
         </div>
@@ -114,12 +116,12 @@ export default function CampaignReviewPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-              <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600, color: '#fff' }}>Review Campaign</h1>
+              <h1 style={{ margin: 0, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: text.primary, fontFamily: fontFamily.heading }}>Review Campaign</h1>
               <StatusBadge status={campaign.status} />
             </div>
-            <h2 style={{ margin: 0, fontSize: '20px', color: '#d1d5db' }}>{campaign.name}</h2>
+            <h2 style={{ margin: 0, fontSize: fontSize.xl, color: text.secondary }}>{campaign.name}</h2>
             {campaign.submittedBy && (
-              <p style={{ margin: '8px 0 0 0', color: '#9ca3af', fontSize: '14px' }}>
+              <p style={{ margin: '8px 0 0 0', color: text.muted, fontSize: fontSize.sm }}>
                 Submitted by {campaign.submittedBy} {campaign.submittedAt && `on ${new Date(campaign.submittedAt).toLocaleDateString()}`}
               </p>
             )}
@@ -130,10 +132,10 @@ export default function CampaignReviewPage() {
               onClick={() => setShowConfirm(true)}
               style={{
                 padding: '14px 32px',
-                fontSize: '16px',
-                fontWeight: 600,
-                backgroundColor: '#22c55e',
-                color: '#fff',
+                fontSize: fontSize.base,
+                fontWeight: fontWeight.semibold,
+                backgroundColor: semantic.success.base,
+                color: text.inverse,
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer',
@@ -145,7 +147,7 @@ export default function CampaignReviewPage() {
         </div>
 
         {error && (
-          <div style={{ padding: '16px', backgroundColor: '#7f1d1d', borderRadius: '8px', marginBottom: '24px', color: '#fecaca' }}>
+          <div style={{ padding: '16px', backgroundColor: semantic.danger.light, border: '1px solid #fecaca', borderRadius: '8px', marginBottom: '24px', color: semantic.danger.dark }}>
             {error}
           </div>
         )}
@@ -154,21 +156,22 @@ export default function CampaignReviewPage() {
           <div style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.8)',
+            backgroundColor: 'rgba(0,0,0,0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 50,
           }}>
             <div style={{
-              backgroundColor: '#1a1a1a',
+              backgroundColor: background.surface,
               padding: '32px',
               borderRadius: '16px',
               maxWidth: '500px',
-              border: '1px solid #22c55e',
+              border: `1px solid ${semantic.success.base}`,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             }}>
-              <h3 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '20px' }}>Confirm Approval</h3>
-              <p style={{ margin: '0 0 24px 0', color: '#9ca3af' }}>
+              <h3 style={{ margin: '0 0 16px 0', color: text.primary, fontSize: fontSize.xl }}>Confirm Approval</h3>
+              <p style={{ margin: '0 0 24px 0', color: text.secondary }}>
                 Are you sure you want to approve this campaign? Once approved, it will transition to RUNNABLE state.
               </p>
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
@@ -178,8 +181,8 @@ export default function CampaignReviewPage() {
                   style={{
                     padding: '10px 20px',
                     backgroundColor: 'transparent',
-                    color: '#9ca3af',
-                    border: '1px solid #333',
+                    color: text.secondary,
+                    border: `1px solid ${border.default}`,
                     borderRadius: '8px',
                     cursor: 'pointer',
                   }}
@@ -191,8 +194,8 @@ export default function CampaignReviewPage() {
                   disabled={approving}
                   style={{
                     padding: '10px 24px',
-                    backgroundColor: '#22c55e',
-                    color: '#fff',
+                    backgroundColor: semantic.success.base,
+                    color: text.inverse,
                     border: 'none',
                     borderRadius: '8px',
                     cursor: approving ? 'not-allowed' : 'pointer',
@@ -206,18 +209,18 @@ export default function CampaignReviewPage() {
           </div>
         )}
 
-        <div style={{ backgroundColor: '#1a1a1a', borderRadius: '16px', padding: '32px', border: '1px solid #333', marginBottom: '24px' }}>
-          <h3 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '18px' }}>Campaign Details</h3>
-          <p style={{ margin: 0, color: '#d1d5db' }}>{campaign.description || 'No description provided'}</p>
+        <div style={{ backgroundColor: background.surface, borderRadius: '16px', padding: '32px', border: `1px solid ${border.default}`, marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 16px 0', color: text.primary, fontSize: fontSize.lg }}>Campaign Details</h3>
+          <p style={{ margin: 0, color: text.secondary }}>{campaign.description || 'No description provided'}</p>
         </div>
 
-        <div style={{ backgroundColor: '#1a1a1a', borderRadius: '16px', padding: '32px', border: '1px solid #333', marginBottom: '24px' }}>
-          <h3 style={{ margin: '0 0 24px 0', color: '#fff', fontSize: '18px' }}>ICP & Targeting (Read-Only)</h3>
+        <div style={{ backgroundColor: background.surface, borderRadius: '16px', padding: '32px', border: `1px solid ${border.default}`, marginBottom: '24px' }}>
+          <h3 style={{ margin: '0 0 24px 0', color: text.primary, fontSize: fontSize.lg }}>ICP & Targeting (Read-Only)</h3>
           <ICPEditor icp={campaign.icp || defaultICP} onChange={() => {}} disabled />
         </div>
 
-        <div style={{ backgroundColor: '#1a1a1a', borderRadius: '16px', padding: '32px', border: '1px solid #333' }}>
-          <h3 style={{ margin: '0 0 24px 0', color: '#fff', fontSize: '18px' }}>Personalization (Read-Only)</h3>
+        <div style={{ backgroundColor: background.surface, borderRadius: '16px', padding: '32px', border: `1px solid ${border.default}` }}>
+          <h3 style={{ margin: '0 0 24px 0', color: text.primary, fontSize: fontSize.lg }}>Personalization (Read-Only)</h3>
           <PersonalizationEditor personalization={campaign.personalization || defaultPersonalization} onChange={() => {}} disabled />
         </div>
       </div>
