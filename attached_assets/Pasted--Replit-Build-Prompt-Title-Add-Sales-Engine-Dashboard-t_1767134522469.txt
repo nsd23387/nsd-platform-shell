@@ -1,0 +1,243 @@
+✅ Replit Build Prompt
+
+Title: Add Sales Engine Dashboard to Homepage (Read-Only, Governed)
+
+CONTEXT (DO NOT SKIP)
+
+You are working inside the NSD Sales Engine UI (M67).
+This UI is read-only except for explicitly governed actions and must only consume M60 Campaign Management APIs.
+
+You are NOT building:
+
+Executive dashboards
+
+Business-wide KPIs
+
+Revenue or order metrics
+
+Any automation or execution logic
+
+You ARE building:
+
+A Sales Engine–scoped dashboard
+
+Focused on campaign health, readiness, throughput, and recent outcomes
+
+Fully read-only
+
+Rendered on the Sales Engine homepage
+
+No new backend logic.
+No new API endpoints.
+No calculations in the UI.
+
+OBJECTIVE
+
+Add a Sales Engine Dashboard to the homepage of the existing Sales Engine UI, positioned above the campaign list, providing operators immediate visibility into:
+
+Campaign health
+
+Readiness blockers
+
+Throughput utilization
+
+Recent run outcomes
+
+System notices
+
+This dashboard must not duplicate the NSD Command Center.
+
+DASHBOARD STRUCTURE (REQUIRED)
+1️⃣ Campaign Health Summary (Top Row – KPI Cards)
+
+Purpose: Quick state awareness
+
+Display the following counts:
+
+Total Campaigns
+
+Draft
+
+Pending Review
+
+Runnable
+
+Archived
+
+Rules
+
+Read-only
+
+No click-to-execute
+
+Clicking a count may filter the campaign list only
+
+2️⃣ Readiness & Safety Blockers Panel
+
+Purpose: Explain why campaigns cannot run
+
+Display grouped counts by blocker reason:
+
+Missing human approval
+
+Kill switch active
+
+No leads persisted
+
+Throughput limit reached
+
+Smartlead not configured
+
+Insufficient credits
+
+Rules
+
+Use blocker codes returned by API verbatim
+
+No inference logic in UI
+
+No “fix” buttons
+
+3️⃣ Throughput Utilization Snapshot
+
+Purpose: Capacity awareness
+
+Display:
+
+Daily send cap (configured vs remaining)
+
+Active campaigns contributing to throughput
+
+Blocked-by-throughput count
+
+Rules
+
+All values must come from backend
+
+UI must not compute percentages
+
+Display only what API provides
+
+4️⃣ Recent Campaign Run Outcomes
+
+Purpose: Operational feedback loop
+
+For last N runs (or per campaign latest run), show:
+
+Campaign name
+
+Last run timestamp
+
+Leads attempted
+
+Leads sent
+
+Leads blocked
+
+Run status (SUCCESS | PARTIAL | BLOCKED)
+
+Rules
+
+Read-only table or cards
+
+No replay / rerun buttons
+
+No drill-downs beyond campaign detail page
+
+5️⃣ System Notices (Non-Interactive)
+
+Purpose: Governance visibility
+
+Examples:
+
+Kill switch enabled
+
+Analytics lag detected
+
+Smartlead quota warning
+
+Rules
+
+Informational only
+
+No dismiss / action buttons
+
+Render exactly as returned
+
+UI PLACEMENT (MANDATORY)
+Sales Engine Home
+├── Sales Engine Dashboard (NEW)
+│   ├── Campaign Health Summary
+│   ├── Readiness Blockers
+│   ├── Throughput Snapshot
+│   ├── Recent Run Outcomes
+│   └── System Notices
+└── Campaign List (Existing)
+
+
+Dashboard must appear above the campaign table
+
+Use existing design system (spacing, typography, cards)
+
+Maintain Neon Signs Depot brand alignment (clean, high-contrast, minimal)
+
+API CONSUMPTION RULES (CRITICAL)
+
+Only call M60 APIs
+
+No direct DB access
+
+No ODS access
+
+No Smartlead direct calls
+
+No derived metrics in frontend
+
+No side effects
+
+If required data does not exist in API response:
+➡️ Display nothing (do not guess or compute)
+
+GOVERNANCE CONSTRAINTS (HARD FAIL IF VIOLATED)
+
+❌ No execution triggers
+
+❌ No approval actions
+
+❌ No automation
+
+❌ No revenue or order metrics
+
+❌ No cross-domain aggregation
+
+❌ No duplication of Command Center KPIs
+
+ACCEPTANCE CHECKLIST
+
+ Dashboard renders on Sales Engine homepage
+
+ All data is read-only
+
+ All metrics sourced from M60 APIs
+
+ No UI-side calculations
+
+ No execution or mutation paths
+
+ Matches existing design language
+
+ Campaign list remains unchanged
+
+ Safe to deploy to STAGING
+
+📊 UI → API Mapping Table (Visualization Aid)
+Dashboard Section	UI Element	API Source (M60)	Notes
+Campaign Health	Total / Draft / Review / Runnable counts	GET /api/v1/campaigns	Filter by status server-side
+Readiness Blockers	Blocker reason counts	GET /api/v1/campaigns/readiness	Render codes verbatim
+Throughput Snapshot	Cap / remaining / blocked	GET /api/v1/campaigns/throughput	No UI math
+Recent Runs	Latest run summary	GET /api/v1/campaigns/:id/runs/latest	Read-only
+System Notices	Warnings / flags	GET /api/v1/system/notices	Informational only
+🧭 Architectural Note (For Replit)
+
+This dashboard is Sales Engine–scoped operational visibility, not an executive KPI surface.
+Do not introduce abstractions that would move this toward a Command Center.
