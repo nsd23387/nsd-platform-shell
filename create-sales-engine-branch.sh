@@ -131,8 +131,10 @@ git add package.json
 git add package-lock.json
 git add tsconfig.json
 git add next.config.js
-git add next-env.d.ts
+git add -f next-env.d.ts
 git add replit.md
+git add .gitignore
+git add .eslintrc.json
 
 # === COMMIT ===
 git commit -m "M67 Sales Engine UI - standalone branch
