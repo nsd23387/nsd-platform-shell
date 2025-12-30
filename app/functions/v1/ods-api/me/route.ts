@@ -20,6 +20,10 @@ export async function GET() {
       'dashboard:design:view',
       'dashboard:media:view',
       'dashboard:sales:view',
+      'campaign:create',
+      'campaign:edit',
+      'campaign:submit',
+      'campaign:approve',
     ],
     environment: {
       name: 'development' as const,
@@ -31,7 +35,19 @@ export async function GET() {
       design_dashboard: true,
       media_dashboard: true,
       sales_dashboard: true,
+      sales_engine: true,
     },
+    modules: [
+      {
+        id: 'sales-engine',
+        label: 'Sales Engine',
+        description: 'Campaign lifecycle management',
+        icon: 'campaign',
+        route: '/command-center/sales-engine',
+        featureFlag: 'sales_engine',
+        enabled: true,
+      },
+    ],
   };
 
   return NextResponse.json(mockBootstrapResponse);

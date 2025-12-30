@@ -39,6 +39,20 @@ export interface BootstrapEnvironment {
 }
 
 /**
+ * App Registry Module Definition
+ * Used for lazy-loaded Command Center modules
+ */
+export interface AppRegistryModule {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  route: string;
+  featureFlag?: string;
+  enabled: boolean;
+}
+
+/**
  * Complete bootstrap response from /api/v1/me
  * 
  * This response is the ONLY authority for:
@@ -47,6 +61,7 @@ export interface BootstrapEnvironment {
  * - Roles (as strings, not interpreted)
  * - Permissions (as strings, not interpreted)
  * - Feature visibility flags
+ * - Enabled modules
  */
 export interface BootstrapResponse {
   user: BootstrapUser;
@@ -55,6 +70,7 @@ export interface BootstrapResponse {
   permissions: string[];
   environment: BootstrapEnvironment;
   feature_visibility: Record<string, boolean>;
+  modules?: AppRegistryModule[];
 }
 
 /**
@@ -88,4 +104,10 @@ export interface BootstrapContextValue extends BootstrapState {
    * No inference, no default logic.
    */
   isFeatureVisible: (feature: string) => boolean;
+
+  /**
+   * Check if a module is enabled.
+   * Reads from bootstrap.modules array.
+   */
+  isModuleEnabled?: (moduleId: string) => boolean;
 }
