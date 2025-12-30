@@ -17,7 +17,7 @@ Unified internal platform shell for the NSD Business Platform with read-only Act
 │   ├── functions/v1/       # Mock API routes for development
 │   └── sales-engine/       # M67 Sales Engine UI (standalone)
 │       ├── campaigns/      # Campaign pages
-│       │   ├── new/        # Create campaign
+│       │   ├── new/        # Create campaign (multi-step wizard)
 │       │   └── [id]/       # Campaign detail
 │       │       ├── edit/   # Campaign builder
 │       │       ├── review/ # Approval workflow
@@ -26,6 +26,7 @@ Unified internal platform shell for the NSD Business Platform with read-only Act
 │       │       ├── variants/# Personalization variants
 │       │       └── safety/ # Throughput & blocking
 │       ├── components/     # Sales Engine components
+│       │   ├── wizard/     # Multi-step wizard components
 │       │   ├── AICampaignGenerator.tsx
 │       │   ├── ICPEditor.tsx
 │       │   ├── PersonalizationEditor.tsx
@@ -36,7 +37,7 @@ Unified internal platform shell for the NSD Business Platform with read-only Act
 │   └── dashboard/          # Dashboard-specific components
 ├── contexts/               # React contexts (BootstrapContext)
 ├── design/                 # Design system
-│   ├── components/         # Shared UI components
+│   ├── components/         # Shared UI components (Icon.tsx)
 │   ├── patterns/           # UI patterns
 │   └── tokens/             # Design tokens (colors, spacing, typography)
 ├── hooks/                  # Custom React hooks
@@ -100,11 +101,21 @@ Mock campaign management APIs at `/api/v1/campaigns/*`:
 - Magenta CTAs (#ec4899) for primary actions
 - Clean, professional feel for enterprise campaign management
 
+### Typography
+- **Headings**: Poppins (Google Font) - display font for titles, headers
+- **Body/UI**: Inter (Google Font) - body text, form elements, buttons
+- Font variables: `--font-display` (Poppins), `--font-body` (Inter)
+
+### Icons
+- Minimalist SVG icons via `design/components/Icon.tsx`
+- 25+ icons: campaign, metrics, runs, variants, safety, AI, edit, review, target, message, etc.
+- NO emojis - brand-aligned minimalist icons only
+
 ### Routes
 | Route | Feature |
 |-------|---------|
 | `/sales-engine` | Campaign Index (list all campaigns) |
-| `/sales-engine/campaigns/new` | Campaign Builder (create DRAFT) |
+| `/sales-engine/campaigns/new` | Campaign Builder (5-step wizard) |
 | `/sales-engine/campaigns/:id` | Campaign Overview |
 | `/sales-engine/campaigns/:id/edit` | Edit DRAFT (ICP, Personalization) |
 | `/sales-engine/campaigns/:id/review` | Review & Approve (PENDING_REVIEW) |
@@ -114,11 +125,22 @@ Mock campaign management APIs at `/api/v1/campaigns/*`:
 | `/sales-engine/campaigns/:id/safety` | Throughput & Blocking Reasons |
 
 ### Key Components
+- **Icon**: Centralized SVG icon component with 25+ minimalist icons
+- **WizardContext**: Multi-step wizard state management
+- **WizardProgress**: Visual step indicator for campaign creation
 - **AICampaignGenerator**: Auto-generates ICP targeting and personalization
 - **ICPEditor**: Tag-based editor for keywords, industries, roles, locations, pain points, value propositions
 - **PersonalizationEditor**: Tone of voice, CTA, USP management
 - **StatusBadge**: Campaign status display (DRAFT, PENDING_REVIEW, RUNNABLE, ARCHIVED)
 - **BlockingReasons**: Surfaces M65 blocking codes verbatim
+
+### Multi-Step Campaign Wizard
+5-step wizard for campaign creation:
+1. **Basics** - Campaign name and description
+2. **AI Assist** - AI-powered ICP and personalization generation
+3. **ICP** - Ideal Customer Profile targeting configuration
+4. **Personalization** - Tone, CTA, USP settings
+5. **Review** - Final review before saving as DRAFT
 
 ### ICP Structure
 ```typescript
@@ -157,6 +179,14 @@ Throughput blocks:
 - `NO_CONFIG_FOUND`
 
 ## Recent Changes
+- December 30, 2025: M67 Premium UX & Brand Alignment
+  - Integrated Poppins (headings) and Inter (body) fonts via next/font/google
+  - Created Icon component with 25+ minimalist SVG icons
+  - Replaced ALL emojis with brand-aligned icons across 10+ pages
+  - Built multi-step campaign wizard with WizardContext, WizardProgress
+  - 5 wizard steps: Basics → AI Assist → ICP → Personalization → Review
+  - Enhanced UX with generous whitespace, improved spacing, premium feel
+  - Updated edit page with tabbed navigation using icons
 - December 30, 2025: M67 Sales Engine UI Light Theme Update
   - Converted entire UI from dark theme to light theme matching NSD Command Center
   - Applied design tokens: background.page (#fafafa), background.surface (#ffffff), text.primary (#1e1e4a)
