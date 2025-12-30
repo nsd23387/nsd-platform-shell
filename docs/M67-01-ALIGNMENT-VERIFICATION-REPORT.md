@@ -1,10 +1,10 @@
 # M67-01 Alignment Verification Report
 
 > **Document:** Alignment Verification Report  
-> **Target:** `docs/SALES_ENGINE_UI_ARCHITECTURE_CONTRACT.md` v1.0  
+> **Target:** `docs/SALES_ENGINE_UI_ARCHITECTURE_CONTRACT.md` v1.1  
 > **Authoritative Source:** `nsd-sales-engine: UI-Facing Contract Extract` (2024-12-30)  
 > **Verification Date:** 2024-12-30  
-> **Status:** ❌ **FAIL — CRITICAL MISMATCHES DETECTED**
+> **Status:** ✅ **PASS**
 
 ---
 
@@ -12,445 +12,322 @@
 
 | Verdict | Status |
 |---------|--------|
-| **Overall Alignment** | ❌ **FAIL** |
-| **Critical Issues** | 4 |
-| **High Issues** | 3 |
-| **Medium Issues** | 2 |
+| **Overall Alignment** | ✅ **PASS** |
+| **Critical Issues** | 0 |
+| **High Issues** | 0 |
+| **Medium Issues** | 0 |
+| **Notes** | 3 (acknowledged, non-blocking) |
 
 ### Summary Statement
 
-The drafted `SALES_ENGINE_UI_ARCHITECTURE_CONTRACT.md` contains **critical mismatches** with the authoritative M60 UI-Facing Contract Extract. The contract was drafted with **speculative assumptions** about a "quotes" domain that **do not exist** in the actual M60 API surface.
+The revised `SALES_ENGINE_UI_ARCHITECTURE_CONTRACT.md` v1.1 is **fully aligned** with the authoritative M60 UI-Facing Contract Extract (2024-12-30).
 
-**The contract MUST be revised before M67-01 can be approved.**
-
----
-
-## 2. Confirmed Matches (What Aligns)
-
-Despite the API surface mismatches, the following architectural principles are correctly stated:
-
-### 2.1 Authority Boundaries ✅ ALIGNED
-
-| Assertion in Contract | M60 Extract Evidence | Status |
-|-----------------------|----------------------|--------|
-| UI has zero execution authority | M60 §3: "No Execution Triggers — UI cannot start/stop/trigger campaign runs" | ✅ CORRECT |
-| UI has zero approval authority | M60 §2.5: Approval happens via governed `/approve` endpoint only | ✅ CORRECT |
-| UI has zero lifecycle authority | M60 §2.5: Status transitions via `/submit` and `/approve` only | ✅ CORRECT |
-| All execution decisions remain server-side | M60 §1.3: "NO EXECUTE ENDPOINTS EXIST IN M60 API" | ✅ CORRECT |
-| Platform Shell enforces access, not behavior | M60 §3: "Business rules live server-side only" | ✅ CORRECT |
-
-### 2.2 Forbidden Patterns ✅ ALIGNED
-
-| Contract Prohibition | M60 Extract Confirmation | Status |
-|----------------------|--------------------------|--------|
-| No Direct ODS Access | M60 §3: "No Direct Database Logic — All DB access through storage layer" | ✅ ALIGNED |
-| No Orchestration Logic | M60 §3: "No Orchestration — UI does not coordinate multi-step processes" | ✅ ALIGNED |
-| No Policy Duplication | M60 §3: "No Policy Duplication — Business rules live server-side only" | ✅ ALIGNED |
-| No Bypassing Gates | M60 §3: "No Bypassing Gates — Cannot circumvent approval/readiness/throughput" | ✅ ALIGNED |
-| No AI Logic | M60 §3: "No AI — No AI/ML logic in API layer" | ✅ ALIGNED |
-
-### 2.3 Safety Gate Principles ✅ ALIGNED (Structurally)
-
-| Contract Claim | M60 Extract Evidence | Status |
-|----------------|----------------------|--------|
-| Kill switch enforcement | M60 §2.1: `killSwitchEnabled: boolean` blocks runs | ✅ ALIGNED |
-| Human approval required | M60 §2.2: `approvals.humanApproved === true` required | ✅ ALIGNED |
-| Readiness ≠ Execution | M60 §2.3: "Passing Readiness ≠ Execution; outbound requires separate action" | ✅ ALIGNED |
-
-### 2.4 Environment & Auth Model ✅ ALIGNED
-
-| Contract Claim | M60 Extract Evidence | Status |
-|----------------|----------------------|--------|
-| Auth handled at platform layer | M60 §5: "No explicit auth middleware visible; assumed handled at platform layer" | ✅ ALIGNED |
-| Legacy endpoints blocked | M60 §5: "Legacy API Surface... should be blocked at platform shell level" | ✅ ALIGNED |
+**M67-01 may be formally approved and handed to Replit for M67-02.**
 
 ---
 
-## 3. Mismatches (Critical Failures)
+## 2. Confirmed Matches
 
-### 3.1 CRITICAL: Wrong API Namespace ❌
+### 2.1 API Surface Alignment ✅ PASS
 
-| Aspect | Contract States | M60 Extract States | Severity |
-|--------|-----------------|-------------------|----------|
-| **API Namespace** | `/api/sales-engine/quotes/*` | `/api/v1/campaigns/*` | 🔴 CRITICAL |
-| **Domain Entity** | "quotes" | "campaigns" | 🔴 CRITICAL |
+#### Base Namespace
 
-**Impact:** Every endpoint listed in Section 5 of the contract is WRONG.
+| M60 Extract | Contract (Section 5.1) | Status |
+|-------------|------------------------|--------|
+| `/api/v1/campaigns` | `/api/v1/campaigns` | ✅ MATCH |
 
-**Evidence from M60 Extract:**
-> "The governed UI-facing API is registered via registerCampaignManagementApi() in server/api/campaignManagementApi.ts. All routes are versioned under /api/v1/campaigns."
+#### Read APIs (8 Endpoints)
 
-**Required Fix:** Complete rewrite of Section 5 with correct namespace and entity.
+| # | M60 Extract | Contract (Section 5.2) | Status |
+|---|-------------|------------------------|--------|
+| 1 | `GET /api/v1/campaigns` | `GET /api/v1/campaigns` | ✅ MATCH |
+| 2 | `GET /api/v1/campaigns/:id` | `GET /api/v1/campaigns/:id` | ✅ MATCH |
+| 3 | `GET /api/v1/campaigns/:id/metrics` | `GET /api/v1/campaigns/:id/metrics` | ✅ MATCH |
+| 4 | `GET /api/v1/campaigns/:id/metrics/history` | `GET /api/v1/campaigns/:id/metrics/history` | ✅ MATCH |
+| 5 | `GET /api/v1/campaigns/:id/runs` | `GET /api/v1/campaigns/:id/runs` | ✅ MATCH |
+| 6 | `GET /api/v1/campaigns/:id/runs/latest` | `GET /api/v1/campaigns/:id/runs/latest` | ✅ MATCH |
+| 7 | `GET /api/v1/campaigns/:id/variants` | `GET /api/v1/campaigns/:id/variants` | ✅ MATCH |
+| 8 | `GET /api/v1/campaigns/:id/throughput` | `GET /api/v1/campaigns/:id/throughput` | ✅ MATCH |
 
----
+**Endpoint Count:** M60 specifies 8 Read APIs. Contract documents 8 Read APIs. ✅ MATCH
 
-### 3.2 CRITICAL: Wrong Read APIs ❌
+#### Write APIs (4 Endpoints)
 
-| Contract Lists | M60 Extract Provides |
-|----------------|----------------------|
-| `GET /api/sales-engine/quotes` | `GET /api/v1/campaigns` |
-| `GET /api/sales-engine/quotes/:id` | `GET /api/v1/campaigns/:id` |
-| `GET /api/sales-engine/quotes/:id/status` | ❌ **DOES NOT EXIST** |
-| `GET /api/sales-engine/quotes/:id/history` | ❌ **DOES NOT EXIST** |
-| `GET /api/sales-engine/config/options` | ❌ **DOES NOT EXIST** |
-| *(missing)* | `GET /api/v1/campaigns/:id/metrics` |
-| *(missing)* | `GET /api/v1/campaigns/:id/metrics/history` |
-| *(missing)* | `GET /api/v1/campaigns/:id/runs` |
-| *(missing)* | `GET /api/v1/campaigns/:id/runs/latest` |
-| *(missing)* | `GET /api/v1/campaigns/:id/variants` |
-| *(missing)* | `GET /api/v1/campaigns/:id/throughput` |
+| # | M60 Extract | Contract (Section 5.3) | Status |
+|---|-------------|------------------------|--------|
+| 1 | `POST /api/v1/campaigns` (always DRAFT) | `POST /api/v1/campaigns` (always DRAFT) | ✅ MATCH |
+| 2 | `PATCH /api/v1/campaigns/:id` (DRAFT only) | `PATCH /api/v1/campaigns/:id` (DRAFT only) | ✅ MATCH |
+| 3 | `POST /api/v1/campaigns/:id/submit` (requires submittedBy) | `POST /api/v1/campaigns/:id/submit` (requires submittedBy) | ✅ MATCH |
+| 4 | `POST /api/v1/campaigns/:id/approve` (requires approvedBy) | `POST /api/v1/campaigns/:id/approve` (requires approvedBy) | ✅ MATCH |
 
-**Correct M60 Read APIs (8 endpoints):**
+**Endpoint Count:** M60 specifies 4 Write APIs. Contract documents 4 Write APIs. ✅ MATCH
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/v1/campaigns` | List all campaigns, optional `?status=` filter |
-| GET | `/api/v1/campaigns/:id` | Campaign details with governance metadata |
-| GET | `/api/v1/campaigns/:id/metrics` | Latest campaign metrics snapshot (M56) |
-| GET | `/api/v1/campaigns/:id/metrics/history` | Historical metrics snapshots |
-| GET | `/api/v1/campaigns/:id/runs` | Campaign run summaries (M59) |
-| GET | `/api/v1/campaigns/:id/runs/latest` | Most recent run summary |
-| GET | `/api/v1/campaigns/:id/variants` | Personalization variants (M57) |
-| GET | `/api/v1/campaigns/:id/throughput` | Active throughput configuration (M58) |
+**Classification:** Contract correctly identifies `/submit` and `/approve` as lifecycle transitions (WRITE), NOT execution triggers. ✅ CORRECT
 
-**Required Fix:** Replace Section 5.2 entirely with correct M60 Read APIs.
+#### Execute APIs (NONE)
 
----
+| M60 Extract | Contract (Section 5.4) | Status |
+|-------------|------------------------|--------|
+| "NO EXECUTE ENDPOINTS EXIST IN M60 API" | "⚠️ NO EXECUTE ENDPOINTS EXIST IN THE M60 API" | ✅ MATCH |
 
-### 3.3 CRITICAL: Wrong Write APIs ❌
+#### Forbidden Execute Patterns
 
-| Contract Lists | M60 Extract Provides |
-|----------------|----------------------|
-| `POST /api/sales-engine/quotes` | `POST /api/v1/campaigns` |
-| `PATCH /api/sales-engine/quotes/:id` | `PATCH /api/v1/campaigns/:id` |
-| `POST /api/sales-engine/quotes/:id/items` | ❌ **DOES NOT EXIST** |
-| `PATCH /api/sales-engine/quotes/:id/items/:itemId` | ❌ **DOES NOT EXIST** |
-| `DELETE /api/sales-engine/quotes/:id/items/:itemId` | ❌ **DOES NOT EXIST** |
-| *(missing — in Write, not Execute)* | `POST /api/v1/campaigns/:id/submit` |
-| *(missing — in Write, not Execute)* | `POST /api/v1/campaigns/:id/approve` |
+| M60 Extract | Contract (Section 5.4) | Status |
+|-------------|------------------------|--------|
+| `POST /api/v1/campaigns/:id/execute` → 404 | Listed as forbidden, returns 404 | ✅ MATCH |
+| `POST /api/v1/campaigns/:id/run` → 404 | Listed as forbidden, returns 404 | ✅ MATCH |
+| `POST /api/v1/campaigns/:id/trigger` → 404 | Listed as forbidden, returns 404 | ✅ MATCH |
+| `POST /api/v1/campaigns/:id/schedule` → 404 | Listed as forbidden, returns 404 | ✅ MATCH |
+| `PATCH /api/v1/campaigns/:id/runs/:runId` → 404 | Listed as forbidden, returns 404 | ✅ MATCH |
+| `DELETE /api/v1/campaigns/:id/runs/:runId` → 404 | Listed as forbidden, returns 404 | ✅ MATCH |
 
-**Correct M60 Write APIs (4 endpoints):**
-
-| Method | Path | Purpose | Constraints |
-|--------|------|---------|-------------|
-| POST | `/api/v1/campaigns` | Create new campaign | Always DRAFT status |
-| PATCH | `/api/v1/campaigns/:id` | Update campaign config | DRAFT only; no status change |
-| POST | `/api/v1/campaigns/:id/submit` | Submit for review | Requires `submittedBy`; DRAFT → PENDING_REVIEW |
-| POST | `/api/v1/campaigns/:id/approve` | Approve campaign | Requires `approvedBy`; PENDING_REVIEW → RUNNABLE |
-
-**Classification Note:** M60 classifies `/submit` and `/approve` as **WRITE Operations** (state transitions), NOT Execute APIs. This is correct because they are lifecycle transitions, not execution triggers.
-
-**Required Fix:** Replace Section 5.3 entirely with correct M60 Write APIs.
+**Forbidden Pattern Count:** M60 specifies 6 forbidden patterns. Contract documents 6 forbidden patterns. ✅ MATCH
 
 ---
 
-### 3.4 CRITICAL: Execute APIs Are FORBIDDEN ❌
+### 2.2 Authority Boundaries ✅ PASS
 
-| Contract Lists | M60 Extract States |
-|----------------|-------------------|
-| `POST /api/sales-engine/quotes/:id/submit` | ⚠️ This is a WRITE, not Execute |
-| `POST /api/sales-engine/quotes/:id/approve` | ⚠️ This is a WRITE, not Execute |
-| `POST /api/sales-engine/quotes/:id/execute` | 🔴 **EXPLICITLY FORBIDDEN — Returns 404** |
-| `POST /api/sales-engine/quotes/:id/cancel` | ❌ **DOES NOT EXIST** |
-
-**M60 Extract Explicitly States:**
-
-> "⚠️ NO EXECUTE ENDPOINTS EXIST IN M60 API"
->
-> "The M60 API explicitly does NOT expose any execution triggers."
-
-**Prohibited Execute Patterns (verified by test coverage):**
-
-| Pattern | Status |
-|---------|--------|
-| `POST /api/v1/campaigns/:id/execute` | Returns 404 |
-| `POST /api/v1/campaigns/:id/run` | Returns 404 |
-| `POST /api/v1/campaigns/:id/trigger` | Returns 404 |
-| `POST /api/v1/campaigns/:id/schedule` | Returns 404 |
-| `PATCH /api/v1/campaigns/:id/runs/:runId` | Returns 404 |
-| `DELETE /api/v1/campaigns/:id/runs/:runId` | Returns 404 |
-
-**This is the most critical mismatch.** The contract implies the UI can call `/execute`, but M60 **explicitly prohibits** any execution endpoints. This would create a false expectation that execution is possible via UI.
-
-**Required Fix:** 
-1. Remove Section 5.4 "Execute APIs" entirely
-2. Add explicit prohibition: "NO EXECUTE ENDPOINTS EXIST"
-3. Clarify that `/submit` and `/approve` are WRITE operations (lifecycle transitions), not execution triggers
-4. Add M60's prohibited patterns list to Section 6
+| Assertion | M60 Extract Evidence | Contract Section | Status |
+|-----------|---------------------|------------------|--------|
+| UI has zero execution authority | "No Execution Triggers — UI cannot start/stop/trigger" | §3.3, §5.4 | ✅ ALIGNED |
+| UI has zero approval authority | Approval via `/approve` endpoint only | §3.3 | ✅ ALIGNED |
+| UI has zero lifecycle authority | State transitions via `/submit`, `/approve` only | §5.3 | ✅ ALIGNED |
+| All execution decisions remain server-side | "Passing Readiness ≠ Execution" | §8.3 | ✅ ALIGNED |
+| Platform Shell enforces access, not behavior | "Business rules live server-side only" | §3.1, §3.2 | ✅ ALIGNED |
 
 ---
 
-### 3.5 HIGH: Governance Metadata Not Documented ⚠️
+### 2.3 Forbidden Patterns Consistency ✅ PASS
 
-M60 Extract specifies that `GET /api/v1/campaigns/:id` returns governance metadata:
-
-> "Get campaign details with governance metadata (canEdit, canSubmit, canApprove, isRunnable)"
-
-The contract does not specify that UI must render these governance flags. This is important for UI to correctly enable/disable affordances.
-
-**Required Fix:** Add governance metadata response shape to contract.
-
----
-
-### 3.6 HIGH: Lifecycle States Incorrect ⚠️
-
-| Contract Implies | M60 Extract States |
-|------------------|-------------------|
-| `DRAFT` → `APPROVED` | `DRAFT` → `PENDING_REVIEW` → `APPROVED/RUNNABLE` |
-| Direct approval | Two-step: submit then approve |
-
-**M60 Lifecycle (from §2.5):**
-
-| Status | Mutability | Governance |
-|--------|------------|------------|
-| `DRAFT` | Fully editable | canEdit: true, canSubmit: true |
-| `PENDING_REVIEW` | Immutable config | canEdit: false, canApprove: true |
-| `APPROVED` / `RUNNABLE` | Immutable | Triggers blocked |
-| `ARCHIVED` | Immutable | Preserved for learning |
-
-**Required Fix:** Document correct lifecycle states in contract.
+| M60 Prohibition | Contract Section | Status |
+|-----------------|------------------|--------|
+| No Orchestration | §6.1.3 (no state machine) | ✅ ALIGNED |
+| No Execution Triggers | §5.4, §6.1.3 | ✅ ALIGNED |
+| No Scheduling | §5.4 (forbidden pattern) | ✅ ALIGNED |
+| No Policy Duplication | §6.1.3, §8.2 | ✅ ALIGNED |
+| No AI | Not applicable to UI contract | ✅ N/A |
+| No Mutation Beyond Services | §6.1.1 (no direct DB) | ✅ ALIGNED |
+| No Direct Database Logic | §6.1.1 | ✅ ALIGNED |
+| No Bypassing Gates | §8.2, §8.3, §8.4, §8.5 | ✅ ALIGNED |
+| No Direct ODS Access | §6.1.1 | ✅ ALIGNED |
+| No Lifecycle Logic in UI | §3.3, §6.1.3 | ✅ ALIGNED |
+| No Raw Pipeline Triggers | §5.4, §6.1.6 (legacy blocked) | ✅ ALIGNED |
 
 ---
 
-### 3.7 HIGH: M65/M66 Readiness Conditions Not Fully Documented ⚠️
+### 2.4 Governance Metadata ✅ PASS
 
-M60 Extract §2.2 specifies ALL readiness conditions:
+| M60 Extract | Contract (Section 5.2) | Status |
+|-------------|------------------------|--------|
+| `canEdit` | Documented, UI must use | ✅ MATCH |
+| `canSubmit` | Documented, UI must use | ✅ MATCH |
+| `canApprove` | Documented, UI must use | ✅ MATCH |
+| `isRunnable` | Documented, UI must use | ✅ MATCH |
 
-| Rule | Condition | Block Reason |
-|------|-----------|--------------|
-| Human Approval | `approvals.humanApproved === true` | `MISSING_HUMAN_APPROVAL` |
-| Zero Persistence Errors | `persistenceSummary.persistenceErrors === 0` | `PERSISTENCE_ERRORS` |
-| Leads Persisted | `persistenceSummary.leadsPersisted > 0` | `NO_LEADS_PERSISTED` |
-| Kill Switch OFF | `safetyChecks.killSwitchEnabled === false` | `KILL_SWITCH_ENABLED` |
-| Smartlead Configured | `safetyChecks.smartleadConfigured === true` | `SMARTLEAD_NOT_CONFIGURED` |
-| Credit Balance OK | `safetyChecks.creditBalanceSufficient === true` | `INSUFFICIENT_CREDITS` |
-
-The contract mentions kill switch and approval but omits other blocking reasons.
-
-**Required Fix:** Document all M65 blocking reasons that UI may need to display.
+Contract states: "UI MUST render these flags and enable/disable actions accordingly. UI MUST NOT compute these values locally." ✅ CORRECT
 
 ---
 
-### 3.8 MEDIUM: Throughput Validation Not Mentioned ⚠️
+### 2.5 Lifecycle States ✅ PASS
 
-M60 Extract §2.4 documents throughput validation with specific block reasons:
-- `DAILY_LIMIT_EXCEEDED`
-- `HOURLY_LIMIT_EXCEEDED`
-- `MAILBOX_LIMIT_EXCEEDED`
-- `CONFIG_INACTIVE`
-- `NO_CONFIG_FOUND`
-
-The contract does not mention throughput constraints.
-
-**Required Fix:** Add throughput visibility endpoint and potential error responses.
+| M60 Extract | Contract (Section 5.3) | Status |
+|-------------|------------------------|--------|
+| `DRAFT` (fully editable) | `DRAFT` (canEdit: true, canSubmit: true) | ✅ MATCH |
+| `PENDING_REVIEW` (immutable config) | `PENDING_REVIEW` (canEdit: false, canApprove: true) | ✅ MATCH |
+| `APPROVED` / `RUNNABLE` (immutable) | `APPROVED` / `RUNNABLE` (ICP/name frozen) | ✅ MATCH |
+| `ARCHIVED` (immutable, preserved) | `ARCHIVED` (immutable, preserved for learning) | ✅ MATCH |
 
 ---
 
-### 3.9 MEDIUM: Legacy Endpoint Blocking Not Explicit ⚠️
+### 2.6 M65 Readiness Blocking Reasons ✅ PASS
 
-M60 Extract §5 notes:
-> "Legacy API Surface: /api/campaigns/* (non-versioned) endpoints exist in routes.ts but are NOT part of M60 governed access; these should be blocked at platform shell level"
+| M60 Extract | Contract (Section 8.2) | Status |
+|-------------|------------------------|--------|
+| `MISSING_HUMAN_APPROVAL` | ✅ Listed | ✅ MATCH |
+| `PERSISTENCE_ERRORS` | ✅ Listed | ✅ MATCH |
+| `NO_LEADS_PERSISTED` | ✅ Listed | ✅ MATCH |
+| `KILL_SWITCH_ENABLED` | ✅ Listed | ✅ MATCH |
+| `SMARTLEAD_NOT_CONFIGURED` | ✅ Listed | ✅ MATCH |
+| `INSUFFICIENT_CREDITS` | ✅ Listed | ✅ MATCH |
 
-The contract should explicitly list legacy patterns to block.
+**Count:** M60 specifies 6 blocking reasons. Contract documents 6 blocking reasons. ✅ MATCH
 
-**Required Fix:** Add legacy endpoint patterns to forbidden patterns list.
+Contract states: "UI displays results but cannot bypass or recompute." ✅ CORRECT
+
+---
+
+### 2.7 Throughput Block Reasons ✅ PASS
+
+| M60 Extract | Contract (Section 8.4) | Status |
+|-------------|------------------------|--------|
+| `DAILY_LIMIT_EXCEEDED` | ✅ Listed | ✅ MATCH |
+| `HOURLY_LIMIT_EXCEEDED` | ✅ Listed | ✅ MATCH |
+| `MAILBOX_LIMIT_EXCEEDED` | ✅ Listed | ✅ MATCH |
+| `CONFIG_INACTIVE` | ✅ Listed | ✅ MATCH |
+| `NO_CONFIG_FOUND` | ✅ Listed | ✅ MATCH |
+
+**Count:** M60 specifies 5 throughput block reasons. Contract documents 5 throughput block reasons. ✅ MATCH
+
+---
+
+### 2.8 Legacy Endpoint Blocking ✅ PASS
+
+| M60 Extract | Contract (Section 6.1.6) | Status |
+|-------------|--------------------------|--------|
+| `/api/campaigns/*` (non-versioned) NOT part of M60 | "Legacy `/api/campaigns/*` ... MUST be blocked at the Platform Shell level" | ✅ MATCH |
+
+Contract explicitly states: "Only `/api/v1/campaigns/*` endpoints are permitted." ✅ CORRECT
+
+---
+
+### 2.9 Environment & Auth Model ✅ PASS
+
+| M60 Extract | Contract (Section 7) | Status |
+|-------------|----------------------|--------|
+| Auth handled at platform layer | §7.2: Platform Shell injects auth | ✅ ALIGNED |
+| Environment handling | §7.1: Platform Shell injects environment | ✅ ALIGNED |
+
+---
+
+### 2.10 Observability Boundaries ✅ PASS
+
+| M60 Extract | Contract (Section 9) | Status |
+|-------------|----------------------|--------|
+| Metrics read-only | §9.2: Read-only access | ✅ ALIGNED |
+| Run summaries read-only | §9.2: "immutable ledger" | ✅ ALIGNED |
+| Run summary fields documented | §9.2: All fields listed | ✅ ALIGNED |
+| No run modification | §9.3: "Runs are immutable; no PATCH/DELETE exists" | ✅ ALIGNED |
+
+---
+
+### 2.11 Kill Switch / Execution Boundary ✅ PASS
+
+| M60 Extract Principle | Contract | Status |
+|-----------------------|----------|--------|
+| Kill switch blocks runs | §8.3: Kill switch documented | ✅ ALIGNED |
+| "Passing Readiness ≠ Execution" | §8.3: "Passing readiness validation does NOT trigger execution" | ✅ EXACT MATCH |
+| Execution gated separately | §5.4: "Execution happens entirely outside the M60 API surface" | ✅ ALIGNED |
+
+---
+
+## 3. Mismatches
+
+**None identified.** All critical, high, and medium checks pass.
 
 ---
 
 ## 4. Speculation / Assumptions Detected
 
-### 4.1 Fabricated API Surface 🔴 CRITICAL
+**None detected.** 
 
-The entire Section 5 of the contract appears to be **speculative/fabricated**:
-
-| Speculated | Reality |
-|------------|---------|
-| "quotes" domain | "campaigns" domain |
-| `/api/sales-engine/*` namespace | `/api/v1/*` namespace |
-| Item sub-resources | Do not exist |
-| Execute endpoints | Explicitly forbidden |
-| Cancel endpoint | Does not exist |
-
-**Assessment:** Section 5 must be completely rewritten based on M60 extract.
-
----
-
-### 4.2 Response Schema Assumptions ⚠️
-
-The contract includes example response schemas:
-
-```json
-{
-  "error": {
-    "code": "APPROVAL_REQUIRED",
-    "approver_roles": ["sales_manager", "sales_director"]
-  }
-}
-```
-
-M60 Extract does not specify this exact schema. The actual governance metadata includes:
-- `canEdit`, `canSubmit`, `canApprove`, `isRunnable`
-
-**Assessment:** Response schemas should be based on M60 extract, not assumed.
-
----
-
-### 4.3 No Unauthorized Future APIs ✅
-
-The contract does not assume APIs beyond its (incorrect) M60 interpretation. The architectural posture of "only M60 APIs" is correct, even though the specific APIs listed are wrong.
+The contract v1.1:
+- Uses only endpoints from M60 extract
+- Documents only blocking reasons from M60 extract
+- Does not assume future APIs
+- Does not include response schemas not in M60 extract
+- References M60 source files correctly
 
 ---
 
 ## 5. Required Changes Before Approval
 
-### 5.1 BLOCKING — Must Fix Before Approval
-
-| ID | Change Required | Section | Severity |
-|----|-----------------|---------|----------|
-| **FIX-001** | Change API namespace from `/api/sales-engine/quotes` to `/api/v1/campaigns` | 5.x | 🔴 CRITICAL |
-| **FIX-002** | Replace Section 5.2 Read APIs with correct 8 M60 endpoints | 5.2 | 🔴 CRITICAL |
-| **FIX-003** | Replace Section 5.3 Write APIs with correct 4 M60 endpoints | 5.3 | 🔴 CRITICAL |
-| **FIX-004** | Remove Section 5.4 Execute APIs — NO EXECUTE ENDPOINTS EXIST | 5.4 | 🔴 CRITICAL |
-| **FIX-005** | Add explicit prohibition of execute patterns from M60 §1.3 | 6.x | 🔴 CRITICAL |
-| **FIX-006** | Clarify `/submit` and `/approve` are WRITE operations (lifecycle), not execution | 5.3 | 🔴 CRITICAL |
-| **FIX-007** | Document correct lifecycle states (DRAFT → PENDING_REVIEW → RUNNABLE) | 5.3 | 🟠 HIGH |
-| **FIX-008** | Document governance metadata response (canEdit, canSubmit, canApprove, isRunnable) | 5.2 | 🟠 HIGH |
-| **FIX-009** | Document all M65 blocking reasons from M60 §2.2 | 8.x | 🟠 HIGH |
-
-### 5.2 Recommended Improvements
-
-| ID | Improvement | Section | Priority |
-|----|-------------|---------|----------|
-| REC-001 | Add throughput visibility endpoint and error codes | 5.2, 8.x | 🟡 MEDIUM |
-| REC-002 | Add legacy endpoint patterns to forbidden list | 6.x | 🟡 MEDIUM |
-| REC-003 | Add M58 throughput, M57 variants, M56 metrics terminology | 5.2 | 🟢 LOW |
-| REC-004 | Reference actual source files from M60 extract | 11.x | 🟢 LOW |
+**None required.** The contract is fully aligned.
 
 ---
 
 ## 6. Approval Recommendation
 
-### Verdict: ❌ **BLOCK — DO NOT APPROVE**
+### Verdict: ✅ **APPROVE**
 
 | Option | Conditions | Recommendation |
 |--------|------------|----------------|
-| **APPROVE** | — | ❌ NOT POSSIBLE — Critical mismatches |
-| **APPROVE WITH CONDITIONS** | — | ❌ NOT POSSIBLE — Errors too severe |
-| **BLOCK** | Contract must be revised | ✅ **REQUIRED** |
+| **APPROVE** | Contract fully aligned with M60 extract | ✅ **RECOMMENDED** |
+| APPROVE WITH CONDITIONS | — | Not needed |
+| BLOCK | — | Not needed |
 
-### Rationale
+### Approval Statement
 
-The contract's API surface (Section 5) is **entirely incorrect**. It describes a "quotes" API that does not exist. More critically, it implies execution endpoints exist when M60 **explicitly prohibits** them. This could lead to:
+The `docs/SALES_ENGINE_UI_ARCHITECTURE_CONTRACT.md` v1.1:
 
-1. **Implementation Failure** — Replit cannot implement against non-existent endpoints
-2. **Security Expectations Violation** — Contract implies `/execute` is gated; M60 says it's forbidden
-3. **Architectural Confusion** — Wrong domain entity (quotes vs campaigns)
-4. **Lifecycle Misunderstanding** — Wrong state machine
+1. ✅ Correctly documents the M60 API surface (8 Read, 4 Write, 0 Execute)
+2. ✅ Correctly categorizes `/submit` and `/approve` as lifecycle transitions (WRITE), not execution
+3. ✅ Explicitly prohibits all 6 forbidden execute patterns
+4. ✅ Documents all 6 M65 blocking reasons
+5. ✅ Documents all 5 throughput block reasons
+6. ✅ Requires legacy endpoint blocking (`/api/campaigns/*`)
+7. ✅ Requires governance metadata usage (`canEdit`, `canSubmit`, `canApprove`, `isRunnable`)
+8. ✅ Correctly states "Passing Readiness ≠ Execution"
+9. ✅ Documents correct lifecycle (DRAFT → PENDING_REVIEW → RUNNABLE → ARCHIVED)
+10. ✅ Contains no speculative or assumed APIs
 
-### Required Actions
-
-1. **REVISE CONTRACT** — Fix all items in Section 5.1 (BLOCKING)
-2. **RE-SUBMIT** — New version for re-verification
-3. **RE-VERIFY** — This report must be re-run against revised contract
-4. **THEN APPROVE** — Only after PASS status
-
----
-
-## 7. Correct API Surface (For Reference)
-
-The following is the correct M60 API surface that should replace Section 5:
-
-### 7.1 Read APIs (8 endpoints)
-
-| Method | Path | Purpose | Source |
-|--------|------|---------|--------|
-| GET | `/api/v1/campaigns` | List campaigns, optional `?status=` filter | M60 §1.1 |
-| GET | `/api/v1/campaigns/:id` | Campaign details with governance metadata | M60 §1.1 |
-| GET | `/api/v1/campaigns/:id/metrics` | Latest metrics snapshot (M56) | M60 §1.1 |
-| GET | `/api/v1/campaigns/:id/metrics/history` | Historical metrics | M60 §1.1 |
-| GET | `/api/v1/campaigns/:id/runs` | Run summaries (M59) | M60 §1.1 |
-| GET | `/api/v1/campaigns/:id/runs/latest` | Most recent run | M60 §1.1 |
-| GET | `/api/v1/campaigns/:id/variants` | Personalization variants (M57) | M60 §1.1 |
-| GET | `/api/v1/campaigns/:id/throughput` | Throughput config (M58) | M60 §1.1 |
-
-### 7.2 Write APIs (4 endpoints)
-
-| Method | Path | Purpose | Constraints |
-|--------|------|---------|-------------|
-| POST | `/api/v1/campaigns` | Create campaign | Always DRAFT |
-| PATCH | `/api/v1/campaigns/:id` | Update config | DRAFT only |
-| POST | `/api/v1/campaigns/:id/submit` | Submit for review | DRAFT → PENDING_REVIEW |
-| POST | `/api/v1/campaigns/:id/approve` | Approve campaign | PENDING_REVIEW → RUNNABLE |
-
-### 7.3 Execute APIs
-
-**⚠️ NO EXECUTE ENDPOINTS EXIST IN M60 API**
-
-The following patterns are **explicitly forbidden** and return 404:
-
-| Forbidden Pattern |
-|-------------------|
-| `POST /api/v1/campaigns/:id/execute` |
-| `POST /api/v1/campaigns/:id/run` |
-| `POST /api/v1/campaigns/:id/trigger` |
-| `POST /api/v1/campaigns/:id/schedule` |
-| `PATCH /api/v1/campaigns/:id/runs/:runId` |
-| `DELETE /api/v1/campaigns/:id/runs/:runId` |
+**The contract is ready for approval signatures.**
 
 ---
 
-## 8. Verification Checklist
+## 7. Verification Checklist
 
-### Completed Checks
+### All Checks Passed ✅
 
-| Check | Result | Evidence |
-|-------|--------|----------|
-| Authority Boundaries | ✅ PASS | Contract correctly states UI has no execution authority |
-| Forbidden Patterns (principles) | ✅ PASS | Aligned with M60 §3 non-goals |
-| Environment Model | ✅ PASS | Auth at platform layer acknowledged |
-| Kill Switch Concept | ✅ PASS | Contract mentions kill switch correctly |
-
-### Failed Checks
-
-| Check | Result | Evidence |
-|-------|--------|----------|
-| API Namespace | ❌ FAIL | Wrong namespace (`/api/sales-engine/` vs `/api/v1/`) |
-| Read API Endpoints | ❌ FAIL | 5 wrong endpoints vs 8 correct ones |
-| Write API Endpoints | ❌ FAIL | 5 wrong endpoints vs 4 correct ones |
-| Execute API Endpoints | ❌ FAIL | 4 listed vs 0 allowed (all forbidden) |
-| Lifecycle States | ❌ FAIL | Missing PENDING_REVIEW state |
-| Governance Metadata | ❌ FAIL | Not documented |
-| M65 Blocking Reasons | ❌ FAIL | Incomplete list |
+| # | Check | Result |
+|---|-------|--------|
+| 1 | API Namespace | ✅ `/api/v1/campaigns` |
+| 2 | Read API Endpoints (8) | ✅ All 8 match |
+| 3 | Write API Endpoints (4) | ✅ All 4 match |
+| 4 | Execute APIs (0) | ✅ None, correctly documented |
+| 5 | Forbidden Execute Patterns (6) | ✅ All 6 listed |
+| 6 | Lifecycle States | ✅ DRAFT → PENDING_REVIEW → RUNNABLE → ARCHIVED |
+| 7 | Governance Metadata | ✅ canEdit, canSubmit, canApprove, isRunnable |
+| 8 | M65 Blocking Reasons (6) | ✅ All 6 documented |
+| 9 | Throughput Block Reasons (5) | ✅ All 5 documented |
+| 10 | Legacy Endpoint Blocking | ✅ `/api/campaigns/*` blocked |
+| 11 | Authority Boundaries | ✅ UI has no execution/approval authority |
+| 12 | Environment Model | ✅ Shell injects, UI opaque |
+| 13 | Auth Model | ✅ Shell injects, UI opaque |
+| 14 | Observability | ✅ Read-only, immutable runs |
+| 15 | Kill Switch | ✅ Documented, cannot bypass |
+| 16 | "Readiness ≠ Execution" | ✅ Explicitly stated |
+| 17 | No Speculation | ✅ No assumed/future APIs |
 
 ---
 
-## 9. Document Control
+## 8. Notes (Non-Blocking)
+
+The following are acknowledged notes from the M60 extract, correctly reflected in the contract:
+
+| ID | Note | Contract Handling |
+|----|------|-------------------|
+| N-001 | Auth middleware not visible in M60 | §11.1: Acknowledged, handled at platform layer |
+| N-002 | Kill switch storage not visible | §11.1: Acknowledged, platform-level config |
+| N-003 | Rate limiter not in versioned namespace | §11.1: Acknowledged, not in M60 scope |
+
+These are informational and do not affect alignment.
+
+---
+
+## 9. Next Steps
+
+| Step | Owner | Status |
+|------|-------|--------|
+| 1. Mark M67-01 as APPROVED | Architecture Team | ⏳ Ready |
+| 2. Collect approval signatures | Platform Owner | ⏳ Ready |
+| 3. Hand off to Replit for M67-02 | Platform Owner | ⏳ After signatures |
+
+---
+
+## Document Control
 
 | Attribute | Value |
 |-----------|-------|
-| **Report ID** | M67-01-ALIGN-002 |
-| **Report Version** | 2.0 |
-| **Target Document** | `docs/SALES_ENGINE_UI_ARCHITECTURE_CONTRACT.md` v1.0 |
+| **Report ID** | M67-01-ALIGN-003 |
+| **Report Version** | 3.0 (Final) |
+| **Target Document** | `docs/SALES_ENGINE_UI_ARCHITECTURE_CONTRACT.md` v1.1 |
 | **Source Document** | `nsd-sales-engine: UI-Facing Contract Extract` (2024-12-30) |
-| **Verification Status** | ❌ FAIL |
+| **Verification Status** | ✅ **PASS** |
 | **Auditor** | Architecture Auditor |
 | **Date** | 2024-12-30 |
 
 ---
 
-## 10. Next Steps
-
-| Step | Owner | Timeline |
-|------|-------|----------|
-| 1. Revise contract with FIX-001 through FIX-009 | Architecture Author | Immediate |
-| 2. Re-submit revised contract for verification | Architecture Author | After revision |
-| 3. Re-run this alignment verification | Architecture Auditor | Upon re-submission |
-| 4. Issue PASS or FAIL on revised contract | Architecture Auditor | Same day |
-| 5. Collect approval signatures (if PASS) | Platform Owner | After PASS |
-| 6. Hand off to Replit for M67-02 | Platform Owner | After signatures |
-
----
-
 **END OF REPORT**
 
-*This report identifies critical mismatches between the drafted contract and the authoritative M60 extract. The contract must be revised before approval.*
+*M67-01 alignment verification complete. Contract approved for signature collection.*
