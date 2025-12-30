@@ -152,3 +152,46 @@ export interface AIGeneratedContent {
   generatedAt: string;
   prompt?: string;
 }
+
+export interface DashboardReadiness {
+  total_campaigns: number;
+  by_status: Record<CampaignStatus, number>;
+  blockers: Record<BlockingReason, number>;
+  blocked_count: number;
+  ready_count: number;
+}
+
+export interface DashboardThroughput {
+  daily_limit: number;
+  daily_used: number;
+  daily_remaining: number;
+  hourly_limit: number;
+  hourly_used: number;
+  hourly_remaining: number;
+  active_campaigns_count: number;
+  blocked_by_throughput_count: number;
+  last_reset: string;
+  is_throttled: boolean;
+}
+
+export type NoticeType = 'INFO' | 'WARNING' | 'ERROR';
+
+export interface SystemNotice {
+  id: string;
+  type: NoticeType;
+  code: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface RecentRunOutcome {
+  id: string;
+  campaign_id: string;
+  campaign_name: string;
+  status: 'COMPLETED' | 'PARTIAL' | 'BLOCKED' | 'FAILED';
+  started_at: string;
+  completed_at?: string;
+  leads_attempted: number;
+  leads_sent: number;
+  leads_blocked: number;
+}

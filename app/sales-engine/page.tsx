@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { Campaign, CampaignStatus } from './types/campaign';
 import { listCampaigns } from './lib/api';
-import { StatusBadge } from './components';
+import { StatusBadge, SalesEngineDashboard } from './components';
 import { Icon } from '../../design/components/Icon';
 import { background, text, border, violet, magenta } from '../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
@@ -84,6 +84,8 @@ export default function SalesEnginePage() {
             New Campaign
           </Link>
         </div>
+
+        <SalesEngineDashboard onStatusFilter={setStatusFilter} />
 
         <div style={{ marginBottom: '32px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {statusFilters.map((filter) => (
