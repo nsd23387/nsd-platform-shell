@@ -1,0 +1,215 @@
+1️⃣ Sales Engine Page Map (Authoritative for M67)
+
+This is the minimum complete UI surface required to satisfy M67-02 → M67-05.
+
+Important framing:
+This is a standalone Sales Engine Application UI, not a dashboard shell.
+
+Route Map
+/sales-engine
+└── /campaigns
+    ├── /               → Campaign List
+    ├── /new            → Create Campaign (DRAFT)
+    └── /:id
+        ├── /overview   → Campaign Overview (read-only summary)
+        ├── /edit       → Edit Campaign (DRAFT only)
+        ├── /review     → Submit for Review (DRAFT → PENDING_REVIEW)
+        ├── /approve    → Approval UI (PENDING_REVIEW → RUNNABLE)
+        └── /monitor    → Monitoring (metrics, runs, throughput)
+
+Page-by-Page Functional Expectations
+1. Campaign List — /campaigns
+
+Purpose: Primary entry point
+
+API
+
+GET /api/v1/campaigns?status=
+
+UI Requirements
+
+Table or list of campaigns
+
+Columns:
+
+Name
+
+Status (DRAFT / PENDING_REVIEW / RUNNABLE / ARCHIVED)
+
+Last updated
+
+Row click → campaign detail
+
+“Create Campaign” CTA
+
+Constraints
+
+No calculations
+
+Status is rendered verbatim
+
+No execution controls
+
+2. Create Campaign — /campaigns/new
+
+Purpose: Create DRAFT campaign
+
+API
+
+POST /api/v1/campaigns
+
+UI Requirements
+
+Campaign name
+
+ICP inputs (as defined by API contract)
+
+Save → creates campaign in DRAFT
+
+Constraints
+
+Always DRAFT
+
+No submit/approve here
+
+No implicit transitions
+
+3. Campaign Overview — /campaigns/:id/overview
+
+Purpose: Read-only summary
+
+API
+
+GET /api/v1/campaigns/:id
+
+UI Requirements
+
+Campaign metadata
+
+Governance flags:
+
+canEdit
+
+canSubmit
+
+canApprove
+
+isRunnable
+
+Status badge
+
+CTA buttons enabled/disabled strictly by flags
+
+Constraints
+
+Flags control UI state
+
+UI does not infer permissions
+
+4. Edit Campaign — /campaigns/:id/edit
+
+Purpose: Modify DRAFT campaign
+
+API
+
+PATCH /api/v1/campaigns/:id
+
+UI Requirements
+
+Editable form (same fields as creation)
+
+Save button
+
+Disabled if canEdit === false
+
+Constraints
+
+Only allowed in DRAFT
+
+No status change here
+
+If not editable → read-only view
+
+5. Submit for Review — /campaigns/:id/review
+
+Purpose: DRAFT → PENDING_REVIEW
+
+API
+
+POST /api/v1/campaigns/:id/submit
+
+UI Requirements
+
+Confirmation dialog
+
+Explicit human action
+
+Display consequences:
+
+Campaign becomes immutable
+
+Success → status updates
+
+Constraints
+
+No automation
+
+Must pass submittedBy
+
+No approval logic here
+
+6. Approval UI — /campaigns/:id/approve
+
+Purpose: Human approval
+
+API
+
+POST /api/v1/campaigns/:id/approve
+
+UI Requirements
+
+Read-only campaign summary
+
+Explicit approval confirmation
+
+Warning text (irreversible)
+
+Constraints
+
+Only when canApprove === true
+
+No batch approval
+
+No execution trigger
+
+7. Monitoring — /campaigns/:id/monitor
+
+Purpose: Observability only
+
+APIs
+
+GET /api/v1/campaigns/:id/metrics
+
+GET /api/v1/campaigns/:id/metrics/history
+
+GET /api/v1/campaigns/:id/runs
+
+GET /api/v1/campaigns/:id/throughput
+
+UI Requirements
+
+Metrics snapshot
+
+Run ledger (immutable)
+
+Throughput config visibility
+
+Blocking reasons displayed verbatim
+
+Constraints
+
+Read-only
+
+No retry / cancel / rerun
+
+“Readiness ≠ Execution” explicitly stated

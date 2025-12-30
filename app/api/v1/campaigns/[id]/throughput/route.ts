@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+type RouteContext = { params: Promise<{ id: string }> };
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: RouteContext
 ) {
-  const campaignId = params.id;
+  const { id: campaignId } = await context.params;
 
   const throughput = {
     campaign_id: campaignId,
@@ -15,6 +17,7 @@ export async function GET(
     current_hourly_usage: 32,
     is_blocked: false,
     block_reason: null,
+    last_reset: new Date(Date.now() - 3600000).toISOString(),
   };
 
   return NextResponse.json(throughput);

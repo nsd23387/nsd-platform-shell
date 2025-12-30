@@ -1,23 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const mockCampaigns: Record<string, any> = {
-  'camp-001': {
-    id: 'camp-001',
-    status: 'DRAFT',
-    canEdit: true,
-    canSubmit: true,
-    canApprove: false,
-    isRunnable: false,
-  },
-};
+type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: RouteContext
 ) {
-  const campaignId = params.id;
+  const { id: campaignId } = await context.params;
 
-  if (campaignId === 'camp-001' || campaignId.startsWith('camp-')) {
+  if (campaignId.startsWith('camp-')) {
     return NextResponse.json({
       id: campaignId,
       name: 'Campaign',
@@ -25,6 +16,8 @@ export async function POST(
       status: 'PENDING_REVIEW',
       created_at: '2025-01-15T10:00:00Z',
       updated_at: new Date().toISOString(),
+      submittedBy: 'current.user@neonsignsdepot.com',
+      submittedAt: new Date().toISOString(),
       canEdit: false,
       canSubmit: false,
       canApprove: true,

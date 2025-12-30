@@ -1,0 +1,170 @@
+'use client';
+
+import { useState } from 'react';
+import type { PersonalizationStrategy } from '../types/campaign';
+
+interface PersonalizationEditorProps {
+  personalization: PersonalizationStrategy;
+  onChange: (personalization: PersonalizationStrategy) => void;
+  disabled?: boolean;
+}
+
+const toneOptions: { value: PersonalizationStrategy['toneOfVoice']; label: string; description: string }[] = [
+  { value: 'professional', label: 'Professional', description: 'Formal, business-focused communication' },
+  { value: 'friendly', label: 'Friendly', description: 'Warm, approachable but still professional' },
+  { value: 'casual', label: 'Casual', description: 'Relaxed, conversational style' },
+  { value: 'authoritative', label: 'Authoritative', description: 'Expert, confident, industry-leading' },
+];
+
+export function PersonalizationEditor({ personalization, onChange, disabled }: PersonalizationEditorProps) {
+  const [newUSP, setNewUSP] = useState('');
+
+  function updateField<K extends keyof PersonalizationStrategy>(field: K, value: PersonalizationStrategy[K]) {
+    onChange({ ...personalization, [field]: value });
+  }
+
+  function addUSP() {
+    if (!newUSP.trim()) return;
+    onChange({
+      ...personalization,
+      uniqueSellingPoints: [...personalization.uniqueSellingPoints, newUSP.trim()],
+    });
+    setNewUSP('');
+  }
+
+  function removeUSP(index: number) {
+    onChange({
+      ...personalization,
+      uniqueSellingPoints: personalization.uniqueSellingPoints.filter((_, i) => i !== index),
+    });
+  }
+
+  const sectionStyle = {
+    marginBottom: '24px',
+    padding: '20px',
+    backgroundColor: '#1f1f1f',
+    borderRadius: '8px',
+    border: '1px solid #333',
+  };
+
+  const labelStyle = {
+    display: 'block',
+    marginBottom: '8px',
+    fontSize: '14px',
+    fontWeight: 600 as const,
+    color: '#d1d5db',
+  };
+
+  const inputStyle = {
+    padding: '10px 14px',
+    fontSize: '14px',
+    border: '1px solid #4b5563',
+    borderRadius: '6px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+    backgroundColor: '#0f0f0f',
+    color: '#fff',
+  };
+
+  return (
+    <div>
+      <div style={sectionStyle}>
+        <label style={labelStyle}>Tone of Voice</label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+          {toneOptions.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => !disabled && updateField('toneOfVoice', option.value)}
+              disabled={disabled}
+              style={{
+                padding: '16px',
+                backgroundColor: personalization.toneOfVoice === option.value ? '#701a75' : '#0f0f0f',
+                color: personalization.toneOfVoice === option.value ? '#f5d0fe' : '#9ca3af',
+                border: `2px solid ${personalization.toneOfVoice === option.value ? '#e879f9' : '#333'}`,
+                borderRadius: '8px',
+                textAlign: 'left',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: '4px' }}>{option.label}</div>
+              <div style={{ fontSize: '12px', opacity: 0.8 }}>{option.description}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={sectionStyle}>
+        <label style={labelStyle}>Primary Call-to-Action</label>
+        <input
+          type="text"
+          value={personalization.primaryCTA}
+          onChange={(e) => updateField('primaryCTA', e.target.value)}
+          disabled={disabled}
+          placeholder="e.g., Get a Free Quote, Schedule a Demo"
+          style={inputStyle}
+        />
+      </div>
+
+      <div style={sectionStyle}>
+        <label style={labelStyle}>Unique Selling Points</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+          {personalization.uniqueSellingPoints.map((usp, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 16px',
+                backgroundColor: '#2e1065',
+                borderRadius: '8px',
+                border: '1px solid #7c3aed',
+              }}
+            >
+              <span style={{ color: '#e879f9', fontWeight: 600 }}>{i + 1}</span>
+              <span style={{ flex: 1, fontSize: '14px', color: '#e9d5ff' }}>{usp}</span>
+              {!disabled && (
+                <button
+                  onClick={() => removeUSP(i)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c084fc', fontSize: '18px' }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {!disabled && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="text"
+              value={newUSP}
+              onChange={(e) => setNewUSP(e.target.value)}
+              placeholder="Add a unique selling point"
+              style={{ ...inputStyle, flex: 1 }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') addUSP();
+              }}
+            />
+            <button
+              onClick={addUSP}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#e879f9',
+                color: '#0f0f0f',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              Add
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -16,8 +16,20 @@ Unified internal platform shell for the NSD Business Platform with read-only Act
 │   ├── dashboard/          # Dashboard pages (executive, operations, design, media, sales)
 │   ├── functions/v1/       # Mock API routes for development
 │   └── sales-engine/       # M67 Sales Engine UI (standalone)
-│       ├── campaigns/      # Campaign pages (list, detail, new)
+│       ├── campaigns/      # Campaign pages
+│       │   ├── new/        # Create campaign
+│       │   └── [id]/       # Campaign detail
+│       │       ├── edit/   # Campaign builder
+│       │       ├── review/ # Approval workflow
+│       │       ├── metrics/# Performance metrics
+│       │       ├── runs/   # Run history
+│       │       ├── variants/# Personalization variants
+│       │       └── safety/ # Throughput & blocking
 │       ├── components/     # Sales Engine components
+│       │   ├── AICampaignGenerator.tsx
+│       │   ├── ICPEditor.tsx
+│       │   ├── PersonalizationEditor.tsx
+│       │   └── ...
 │       ├── lib/            # API client
 │       └── types/          # Campaign types
 ├── components/             # React components
@@ -79,24 +91,77 @@ Mock campaign management APIs at `/api/v1/campaigns/*`:
 - `GET /api/v1/campaigns/:id/throughput` - Throughput config
 
 ## M67 Sales Engine UI
-Standalone campaign management UI accessible at `/sales-engine`. Features:
-- **M67-02**: Campaign Setup (create/edit DRAFT campaigns)
-- **M67-03**: Campaign Approval (submit/approve workflow)
-- **M67-04**: Execution Readiness (display only, NO execution)
-- **M67-05**: Monitoring (metrics, runs, throughput - read-only)
 
-Key constraints:
+### Visual Design
+- Dark theme (#0f0f0f background)
+- Neon magenta accents (#e879f9)
+- Clean, premium feel matching neonsignsdepot.com branding
+
+### Routes
+| Route | Feature |
+|-------|---------|
+| `/sales-engine` | Campaign Index (list all campaigns) |
+| `/sales-engine/campaigns/new` | Campaign Builder (create DRAFT) |
+| `/sales-engine/campaigns/:id` | Campaign Overview |
+| `/sales-engine/campaigns/:id/edit` | Edit DRAFT (ICP, Personalization) |
+| `/sales-engine/campaigns/:id/review` | Review & Approve (PENDING_REVIEW) |
+| `/sales-engine/campaigns/:id/metrics` | Performance Metrics |
+| `/sales-engine/campaigns/:id/runs` | Run History (read-only ledger) |
+| `/sales-engine/campaigns/:id/variants` | Personalization Variants |
+| `/sales-engine/campaigns/:id/safety` | Throughput & Blocking Reasons |
+
+### Key Components
+- **AICampaignGenerator**: Auto-generates ICP targeting and personalization
+- **ICPEditor**: Tag-based editor for keywords, industries, roles, locations, pain points, value propositions
+- **PersonalizationEditor**: Tone of voice, CTA, USP management
+- **StatusBadge**: Campaign status display (DRAFT, PENDING_REVIEW, RUNNABLE, ARCHIVED)
+- **BlockingReasons**: Surfaces M65 blocking codes verbatim
+
+### ICP Structure
+```typescript
+interface ICP {
+  keywords: string[];
+  locations: Location[];  // country, state, city
+  industries: string[];
+  employeeSize: { min: number; max: number };
+  roles: string[];
+  painPoints: string[];
+  valuePropositions: string[];
+}
+```
+
+### Key Constraints
 - Uses only M60 Campaign APIs (`/api/v1/campaigns/*`)
-- NO execution capability (explicitly forbidden)
+- **NO execution capability** (explicitly forbidden)
 - Governance flags (canEdit, canSubmit, canApprove, isRunnable) from API
 - No NSD Command Center integration (handled separately in M68)
+- Actor attribution: submittedBy, approvedBy fields for audit trail
+
+### Blocking Reason Codes
+M65 reasons displayed verbatim:
+- `MISSING_HUMAN_APPROVAL`
+- `PERSISTENCE_ERRORS`
+- `NO_LEADS_PERSISTED`
+- `KILL_SWITCH_ENABLED`
+- `SMARTLEAD_NOT_CONFIGURED`
+- `INSUFFICIENT_CREDITS`
+
+Throughput blocks:
+- `DAILY_LIMIT_EXCEEDED`
+- `HOURLY_LIMIT_EXCEEDED`
+- `MAILBOX_LIMIT_EXCEEDED`
+- `CONFIG_INACTIVE`
+- `NO_CONFIG_FOUND`
 
 ## Recent Changes
-- December 30, 2025: M67 Sales Engine UI Implementation
-  - Created standalone Sales Engine UI at `/sales-engine`
-  - Implemented M67-02 through M67-05 features
-  - Created mock Campaign APIs for development
-  - No execution capability (by design)
+- December 30, 2025: M67 Sales Engine UI Full Implementation
+  - Created separate route pages: /edit, /review, /metrics, /runs, /variants, /safety
+  - Implemented AICampaignGenerator, ICPEditor, PersonalizationEditor components
+  - Full ICP structure with keywords, locations, industries, employee size, roles, pain points, value propositions
+  - Dark theme with neon magenta accents
+  - Actor attribution (submittedBy, approvedBy) for audit trail
+  - All M65/throughput blocking reasons displayed verbatim
+  - Updated mock APIs with full data
 - December 30, 2025: Initial Replit environment setup
   - Configured Next.js to allow all dev origins for Replit proxy
   - Created mock bootstrap API for development

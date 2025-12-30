@@ -1,5 +1,33 @@
 export type CampaignStatus = 'DRAFT' | 'PENDING_REVIEW' | 'RUNNABLE' | 'ARCHIVED';
 
+export interface Location {
+  country: string;
+  state?: string;
+  city?: string;
+}
+
+export interface EmployeeSizeRange {
+  min: number;
+  max: number;
+}
+
+export interface ICP {
+  keywords: string[];
+  locations: Location[];
+  industries: string[];
+  employeeSize: EmployeeSizeRange;
+  roles: string[];
+  painPoints: string[];
+  valuePropositions: string[];
+}
+
+export interface PersonalizationStrategy {
+  toneOfVoice: 'professional' | 'casual' | 'friendly' | 'authoritative';
+  primaryCTA: string;
+  uniqueSellingPoints: string[];
+  customFields: Record<string, string>;
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -11,16 +39,26 @@ export interface Campaign {
   canSubmit: boolean;
   canApprove: boolean;
   isRunnable: boolean;
+  icp?: ICP;
+  personalization?: PersonalizationStrategy;
+  submittedBy?: string;
+  submittedAt?: string;
+  approvedBy?: string;
+  approvedAt?: string;
 }
 
 export interface CampaignCreatePayload {
   name: string;
   description?: string;
+  icp?: ICP;
+  personalization?: PersonalizationStrategy;
 }
 
 export interface CampaignUpdatePayload {
   name?: string;
   description?: string;
+  icp?: ICP;
+  personalization?: PersonalizationStrategy;
 }
 
 export type BlockingReason =
@@ -44,8 +82,11 @@ export interface CampaignMetrics {
   emails_sent: number;
   emails_opened: number;
   emails_replied: number;
+  emails_bounced: number;
+  emails_unsubscribed: number;
   open_rate: number;
   reply_rate: number;
+  bounce_rate: number;
   last_updated: string;
 }
 
@@ -54,17 +95,19 @@ export interface MetricsHistoryEntry {
   emails_sent: number;
   emails_opened: number;
   emails_replied: number;
+  emails_bounced: number;
 }
 
 export interface CampaignRun {
   id: string;
   campaign_id: string;
-  status: 'COMPLETED' | 'FAILED' | 'PARTIAL';
+  status: 'COMPLETED' | 'FAILED' | 'PARTIAL' | 'IN_PROGRESS';
   started_at: string;
   completed_at?: string;
   leads_processed: number;
   emails_sent: number;
   errors: number;
+  triggered_by: string;
 }
 
 export interface CampaignVariant {
@@ -73,6 +116,11 @@ export interface CampaignVariant {
   subject_line: string;
   body_preview: string;
   weight: number;
+  performance?: {
+    sent: number;
+    opened: number;
+    replied: number;
+  };
 }
 
 export interface ThroughputConfig {
@@ -84,13 +132,23 @@ export interface ThroughputConfig {
   current_hourly_usage: number;
   is_blocked: boolean;
   block_reason?: ThroughputBlockCode;
+  last_reset: string;
 }
 
 export interface ReadinessStatus {
   is_ready: boolean;
   blocking_reasons: BlockingReason[];
+  throughput_blocked: boolean;
+  throughput_block_reason?: ThroughputBlockCode;
 }
 
 export interface CampaignDetail extends Campaign {
   readiness?: ReadinessStatus;
+}
+
+export interface AIGeneratedContent {
+  icp: ICP;
+  personalization: PersonalizationStrategy;
+  generatedAt: string;
+  prompt?: string;
 }
