@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import type { ICP, Location } from '../types/campaign';
+import { background, text, border, violet, semantic } from '../../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
 
 interface ICPEditorProps {
   icp: ICP;
@@ -45,43 +47,44 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
   const sectionStyle = {
     marginBottom: '24px',
     padding: '20px',
-    backgroundColor: '#1f1f1f',
+    backgroundColor: background.muted,
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: `1px solid ${border.subtle}`,
   };
 
   const labelStyle = {
-    display: 'block',
+    display: 'block' as const,
     marginBottom: '8px',
-    fontSize: '14px',
-    fontWeight: 600 as const,
-    color: '#d1d5db',
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: text.secondary,
   };
 
   const tagStyle = {
-    display: 'inline-flex',
-    alignItems: 'center',
+    display: 'inline-flex' as const,
+    alignItems: 'center' as const,
     gap: '6px',
     padding: '6px 12px',
-    backgroundColor: '#312e81',
-    color: '#c7d2fe',
+    backgroundColor: violet[100],
+    color: violet[700],
     borderRadius: '16px',
-    fontSize: '13px',
+    fontSize: fontSize.sm,
     margin: '4px',
+    border: `1px solid ${violet[200]}`,
   };
 
   const inputStyle = {
     padding: '8px 12px',
-    fontSize: '14px',
-    border: '1px solid #4b5563',
+    fontSize: fontSize.sm,
+    border: `1px solid ${border.default}`,
     borderRadius: '6px',
     outline: 'none',
-    backgroundColor: '#0f0f0f',
-    color: '#fff',
+    backgroundColor: background.surface,
+    color: text.primary,
   };
 
   return (
-    <div>
+    <div style={{ fontFamily: fontFamily.body }}>
       <div style={sectionStyle}>
         <label style={labelStyle}>Keywords</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '12px' }}>
@@ -91,7 +94,7 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
               {!disabled && (
                 <button
                   onClick={() => removeFromArray('keywords', i)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a5b4fc', fontSize: '14px' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: violet[500], fontSize: '14px' }}
                 >
                   ×
                 </button>
@@ -116,7 +119,7 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
             />
             <button
               onClick={() => { addToArray('keywords', newKeyword); setNewKeyword(''); }}
-              style={{ padding: '8px 16px', backgroundColor: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              style={{ padding: '8px 16px', backgroundColor: violet[500], color: text.inverse, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: fontWeight.medium }}
             >
               Add
             </button>
@@ -128,12 +131,12 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
         <label style={labelStyle}>Industries</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '12px' }}>
           {icp.industries.map((ind, i) => (
-            <span key={i} style={{ ...tagStyle, backgroundColor: '#14532d', color: '#86efac' }}>
+            <span key={i} style={{ ...tagStyle, backgroundColor: semantic.success.light, color: semantic.success.dark, border: `1px solid ${semantic.success.base}` }}>
               {ind}
               {!disabled && (
                 <button
                   onClick={() => removeFromArray('industries', i)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#4ade80', fontSize: '14px' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: semantic.success.base, fontSize: '14px' }}
                 >
                   ×
                 </button>
@@ -158,7 +161,7 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
             />
             <button
               onClick={() => { addToArray('industries', newIndustry); setNewIndustry(''); }}
-              style={{ padding: '8px 16px', backgroundColor: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              style={{ padding: '8px 16px', backgroundColor: semantic.success.base, color: text.inverse, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: fontWeight.medium }}
             >
               Add
             </button>
@@ -170,7 +173,7 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
         <label style={labelStyle}>Employee Size Range</label>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           <div>
-            <span style={{ fontSize: '12px', color: '#9ca3af' }}>Min</span>
+            <span style={{ fontSize: fontSize.xs, color: text.muted }}>Min</span>
             <input
               type="number"
               value={icp.employeeSize.min}
@@ -179,9 +182,9 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
               style={{ ...inputStyle, width: '100px', marginLeft: '8px' }}
             />
           </div>
-          <span style={{ color: '#6b7280' }}>to</span>
+          <span style={{ color: text.muted }}>to</span>
           <div>
-            <span style={{ fontSize: '12px', color: '#9ca3af' }}>Max</span>
+            <span style={{ fontSize: fontSize.xs, color: text.muted }}>Max</span>
             <input
               type="number"
               value={icp.employeeSize.max}
@@ -197,12 +200,12 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
         <label style={labelStyle}>Target Roles</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '12px' }}>
           {icp.roles.map((role, i) => (
-            <span key={i} style={{ ...tagStyle, backgroundColor: '#78350f', color: '#fde68a' }}>
+            <span key={i} style={{ ...tagStyle, backgroundColor: semantic.warning.light, color: semantic.warning.dark, border: `1px solid ${semantic.warning.base}` }}>
               {role}
               {!disabled && (
                 <button
                   onClick={() => removeFromArray('roles', i)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fbbf24', fontSize: '14px' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: semantic.warning.base, fontSize: '14px' }}
                 >
                   ×
                 </button>
@@ -227,7 +230,7 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
             />
             <button
               onClick={() => { addToArray('roles', newRole); setNewRole(''); }}
-              style={{ padding: '8px 16px', backgroundColor: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              style={{ padding: '8px 16px', backgroundColor: semantic.warning.base, color: text.inverse, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: fontWeight.medium }}
             >
               Add
             </button>
@@ -239,13 +242,13 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
         <label style={labelStyle}>Pain Points</label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
           {icp.painPoints.map((pp, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: '#450a0a', borderRadius: '6px', border: '1px solid #7f1d1d' }}>
-              <span style={{ color: '#fca5a5' }}>•</span>
-              <span style={{ flex: 1, fontSize: '14px', color: '#fecaca' }}>{pp}</span>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: semantic.danger.light, borderRadius: '6px', border: `1px solid #fecaca` }}>
+              <span style={{ color: semantic.danger.base }}>•</span>
+              <span style={{ flex: 1, fontSize: fontSize.sm, color: semantic.danger.dark }}>{pp}</span>
               {!disabled && (
                 <button
                   onClick={() => removeFromArray('painPoints', i)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', fontSize: '14px' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: semantic.danger.base, fontSize: '14px' }}
                 >
                   ×
                 </button>
@@ -270,7 +273,7 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
             />
             <button
               onClick={() => { addToArray('painPoints', newPainPoint); setNewPainPoint(''); }}
-              style={{ padding: '8px 16px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              style={{ padding: '8px 16px', backgroundColor: semantic.danger.base, color: text.inverse, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: fontWeight.medium }}
             >
               Add
             </button>
@@ -282,13 +285,13 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
         <label style={labelStyle}>Value Propositions</label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
           {icp.valuePropositions.map((vp, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: '#052e16', borderRadius: '6px', border: '1px solid #166534' }}>
-              <span style={{ color: '#4ade80' }}>✓</span>
-              <span style={{ flex: 1, fontSize: '14px', color: '#86efac' }}>{vp}</span>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: semantic.success.light, borderRadius: '6px', border: `1px solid ${semantic.success.base}` }}>
+              <span style={{ color: semantic.success.base }}>✓</span>
+              <span style={{ flex: 1, fontSize: fontSize.sm, color: semantic.success.dark }}>{vp}</span>
               {!disabled && (
                 <button
                   onClick={() => removeFromArray('valuePropositions', i)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#22c55e', fontSize: '14px' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: semantic.success.base, fontSize: '14px' }}
                 >
                   ×
                 </button>
@@ -313,7 +316,7 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
             />
             <button
               onClick={() => { addToArray('valuePropositions', newValueProp); setNewValueProp(''); }}
-              style={{ padding: '8px 16px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              style={{ padding: '8px 16px', backgroundColor: semantic.success.base, color: text.inverse, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: fontWeight.medium }}
             >
               Add
             </button>
@@ -325,14 +328,14 @@ export function ICPEditor({ icp, onChange, disabled }: ICPEditorProps) {
         <label style={labelStyle}>Target Locations</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
           {icp.locations.map((loc, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: '#0c4a6e', borderRadius: '6px', border: '1px solid #0369a1' }}>
-              <span style={{ fontSize: '14px', color: '#7dd3fc' }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: semantic.info.light, borderRadius: '6px', border: `1px solid ${semantic.info.base}` }}>
+              <span style={{ fontSize: fontSize.sm, color: semantic.info.dark }}>
                 📍 {loc.city ? `${loc.city}, ` : ''}{loc.state ? `${loc.state}, ` : ''}{loc.country}
               </span>
               {!disabled && (
                 <button
                   onClick={() => removeLocation(i)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#38bdf8', fontSize: '14px' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: semantic.info.base, fontSize: '14px' }}
                 >
                   ×
                 </button>
@@ -362,12 +365,12 @@ function LocationAdder({ onAdd }: { onAdd: (loc: Location) => void }) {
 
   const inputStyle = {
     padding: '8px 12px',
-    fontSize: '14px',
-    border: '1px solid #4b5563',
+    fontSize: fontSize.sm,
+    border: `1px solid ${border.default}`,
     borderRadius: '6px',
     outline: 'none',
-    backgroundColor: '#0f0f0f',
-    color: '#fff',
+    backgroundColor: background.surface,
+    color: text.primary,
   };
 
   return (
@@ -395,7 +398,7 @@ function LocationAdder({ onAdd }: { onAdd: (loc: Location) => void }) {
       />
       <button
         onClick={handleAdd}
-        style={{ padding: '8px 16px', backgroundColor: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+        style={{ padding: '8px 16px', backgroundColor: semantic.info.base, color: text.inverse, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: fontWeight.medium }}
       >
         Add Location
       </button>

@@ -6,6 +6,8 @@ import Link from 'next/link';
 import type { CampaignDetail } from '../../types/campaign';
 import { getCampaign, submitCampaign } from '../../lib/api';
 import { StatusBadge } from '../../components';
+import { background, text, border, violet, magenta, semantic } from '../../../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 
 export default function CampaignDetailPage() {
   const params = useParams();
@@ -50,20 +52,20 @@ export default function CampaignDetailPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#9ca3af' }}>Loading campaign...</p>
+      <div style={{ minHeight: '100vh', backgroundColor: background.page, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: fontFamily.body }}>
+        <p style={{ color: text.muted }}>Loading campaign...</p>
       </div>
     );
   }
 
   if (error || !campaign) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', padding: '32px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: background.page, padding: '32px', fontFamily: fontFamily.body }}>
         <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-          <div style={{ padding: '24px', backgroundColor: '#7f1d1d', borderRadius: '8px', marginBottom: '24px' }}>
-            <p style={{ margin: 0, color: '#fecaca' }}>{error || 'Campaign not found'}</p>
+          <div style={{ padding: '24px', backgroundColor: semantic.danger.light, borderRadius: '8px', marginBottom: '24px', border: '1px solid #fecaca' }}>
+            <p style={{ margin: 0, color: semantic.danger.dark }}>{error || 'Campaign not found'}</p>
           </div>
-          <Link href="/sales-engine" style={{ color: '#e879f9', textDecoration: 'none' }}>
+          <Link href="/sales-engine" style={{ color: violet[500], textDecoration: 'none' }}>
             ← Back to Campaigns
           </Link>
         </div>
@@ -81,10 +83,10 @@ export default function CampaignDetailPage() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: background.page, fontFamily: fontFamily.body }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
         <div style={{ marginBottom: '24px' }}>
-          <Link href="/sales-engine" style={{ fontSize: '14px', color: '#e879f9', textDecoration: 'none' }}>
+          <Link href="/sales-engine" style={{ fontSize: fontSize.sm, color: violet[500], textDecoration: 'none' }}>
             ← Back to Campaigns
           </Link>
         </div>
@@ -92,13 +94,13 @@ export default function CampaignDetailPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-              <h1 style={{ margin: 0, fontSize: '32px', fontWeight: 600, color: '#fff' }}>
+              <h1 style={{ margin: 0, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: text.primary, fontFamily: fontFamily.heading }}>
                 {campaign.name}
               </h1>
               <StatusBadge status={campaign.status} />
             </div>
             {campaign.description && (
-              <p style={{ margin: 0, fontSize: '16px', color: '#9ca3af', maxWidth: '600px' }}>
+              <p style={{ margin: 0, fontSize: fontSize.base, color: text.secondary, maxWidth: '600px' }}>
                 {campaign.description}
               </p>
             )}
@@ -111,11 +113,11 @@ export default function CampaignDetailPage() {
                 style={{
                   padding: '12px 24px',
                   backgroundColor: 'transparent',
-                  color: '#e879f9',
-                  border: '2px solid #e879f9',
+                  color: violet[500],
+                  border: `2px solid ${violet[500]}`,
                   borderRadius: '8px',
                   textDecoration: 'none',
-                  fontWeight: 500,
+                  fontWeight: fontWeight.medium,
                 }}
               >
                 Edit Campaign
@@ -126,11 +128,11 @@ export default function CampaignDetailPage() {
                 onClick={() => setShowSubmitConfirm(true)}
                 style={{
                   padding: '12px 24px',
-                  backgroundColor: '#e879f9',
-                  color: '#0f0f0f',
+                  backgroundColor: magenta[500],
+                  color: text.inverse,
                   border: 'none',
                   borderRadius: '8px',
-                  fontWeight: 600,
+                  fontWeight: fontWeight.semibold,
                   cursor: 'pointer',
                 }}
               >
@@ -143,18 +145,18 @@ export default function CampaignDetailPage() {
         {campaign.isRunnable && (
           <div style={{
             padding: '20px',
-            backgroundColor: '#14532d',
+            backgroundColor: semantic.success.light,
             borderRadius: '12px',
-            border: '2px solid #22c55e',
+            border: `2px solid ${semantic.success.base}`,
             marginBottom: '32px',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <span style={{ fontSize: '24px' }}>✅</span>
               <div>
-                <p style={{ margin: 0, color: '#86efac', fontWeight: 600, fontSize: '16px' }}>
+                <p style={{ margin: 0, color: semantic.success.dark, fontWeight: fontWeight.semibold, fontSize: fontSize.base }}>
                   This campaign is runnable but NOT executing.
                 </p>
-                <p style={{ margin: '4px 0 0 0', color: '#bbf7d0', fontSize: '14px' }}>
+                <p style={{ margin: '4px 0 0 0', color: semantic.success.dark, fontSize: fontSize.sm }}>
                   Execution is managed externally via NSD Command Center (M68).
                 </p>
               </div>
@@ -166,21 +168,22 @@ export default function CampaignDetailPage() {
           <div style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.8)',
+            backgroundColor: 'rgba(0,0,0,0.5)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 50,
           }}>
             <div style={{
-              backgroundColor: '#1a1a1a',
+              backgroundColor: background.surface,
               padding: '32px',
               borderRadius: '16px',
               maxWidth: '500px',
-              border: '1px solid #e879f9',
+              border: `1px solid ${border.default}`,
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             }}>
-              <h3 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '20px' }}>Submit for Review?</h3>
-              <p style={{ margin: '0 0 24px 0', color: '#9ca3af' }}>
+              <h3 style={{ margin: '0 0 16px 0', color: text.primary, fontSize: fontSize.xl }}>Submit for Review?</h3>
+              <p style={{ margin: '0 0 24px 0', color: text.secondary }}>
                 Once submitted, the campaign will move to PENDING_REVIEW and cannot be edited until rejected.
               </p>
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
@@ -190,8 +193,8 @@ export default function CampaignDetailPage() {
                   style={{
                     padding: '10px 20px',
                     backgroundColor: 'transparent',
-                    color: '#9ca3af',
-                    border: '1px solid #333',
+                    color: text.secondary,
+                    border: `1px solid ${border.default}`,
                     borderRadius: '8px',
                     cursor: 'pointer',
                   }}
@@ -203,13 +206,13 @@ export default function CampaignDetailPage() {
                   disabled={submitting}
                   style={{
                     padding: '10px 24px',
-                    backgroundColor: '#e879f9',
-                    color: '#0f0f0f',
+                    backgroundColor: magenta[500],
+                    color: text.inverse,
                     border: 'none',
                     borderRadius: '8px',
                     cursor: submitting ? 'not-allowed' : 'pointer',
                     opacity: submitting ? 0.7 : 1,
-                    fontWeight: 600,
+                    fontWeight: fontWeight.semibold,
                   }}
                 >
                   {submitting ? 'Submitting...' : 'Yes, Submit'}
@@ -226,9 +229,9 @@ export default function CampaignDetailPage() {
               href={link.href}
               style={{
                 padding: '20px',
-                backgroundColor: '#1a1a1a',
+                backgroundColor: background.surface,
                 borderRadius: '12px',
-                border: '1px solid #333',
+                border: `1px solid ${border.default}`,
                 textDecoration: 'none',
                 display: 'flex',
                 alignItems: 'center',
@@ -237,7 +240,7 @@ export default function CampaignDetailPage() {
               }}
             >
               <span style={{ fontSize: '24px' }}>{link.icon}</span>
-              <span style={{ color: '#fff', fontWeight: 500 }}>{link.label}</span>
+              <span style={{ color: text.primary, fontWeight: fontWeight.medium }}>{link.label}</span>
             </Link>
           ))}
         </div>
@@ -245,28 +248,28 @@ export default function CampaignDetailPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
           <div style={{
             padding: '24px',
-            backgroundColor: '#1a1a1a',
+            backgroundColor: background.surface,
             borderRadius: '16px',
-            border: '1px solid #333',
+            border: `1px solid ${border.default}`,
           }}>
-            <h3 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '18px' }}>Campaign Details</h3>
+            <h3 style={{ margin: '0 0 16px 0', color: text.primary, fontSize: fontSize.lg }}>Campaign Details</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Created</p>
-                <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>Created</p>
+                <p style={{ margin: '4px 0 0 0', color: text.secondary }}>
                   {new Date(campaign.created_at).toLocaleString()}
                 </p>
               </div>
               <div>
-                <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Last Updated</p>
-                <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>Last Updated</p>
+                <p style={{ margin: '4px 0 0 0', color: text.secondary }}>
                   {new Date(campaign.updated_at).toLocaleString()}
                 </p>
               </div>
               {campaign.submittedBy && (
                 <div>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Submitted By</p>
-                  <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                  <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>Submitted By</p>
+                  <p style={{ margin: '4px 0 0 0', color: text.secondary }}>
                     {campaign.submittedBy}
                     {campaign.submittedAt && ` on ${new Date(campaign.submittedAt).toLocaleDateString()}`}
                   </p>
@@ -274,8 +277,8 @@ export default function CampaignDetailPage() {
               )}
               {campaign.approvedBy && (
                 <div>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Approved By</p>
-                  <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                  <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>Approved By</p>
+                  <p style={{ margin: '4px 0 0 0', color: text.secondary }}>
                     {campaign.approvedBy}
                     {campaign.approvedAt && ` on ${new Date(campaign.approvedAt).toLocaleDateString()}`}
                   </p>
@@ -286,11 +289,11 @@ export default function CampaignDetailPage() {
 
           <div style={{
             padding: '24px',
-            backgroundColor: '#1a1a1a',
+            backgroundColor: background.surface,
             borderRadius: '16px',
-            border: '1px solid #333',
+            border: `1px solid ${border.default}`,
           }}>
-            <h3 style={{ margin: '0 0 16px 0', color: '#fff', fontSize: '18px' }}>Governance</h3>
+            <h3 style={{ margin: '0 0 16px 0', color: text.primary, fontSize: fontSize.lg }}>Governance</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <GovernanceFlag label="Can Edit" value={campaign.canEdit} />
               <GovernanceFlag label="Can Submit" value={campaign.canSubmit} />
@@ -304,27 +307,27 @@ export default function CampaignDetailPage() {
           <div style={{
             marginTop: '24px',
             padding: '24px',
-            backgroundColor: '#1a1a1a',
+            backgroundColor: background.surface,
             borderRadius: '16px',
-            border: '1px solid #333',
+            border: `1px solid ${border.default}`,
           }}>
-            <h3 style={{ margin: '0 0 20px 0', color: '#fff', fontSize: '18px' }}>ICP Summary</h3>
+            <h3 style={{ margin: '0 0 20px 0', color: text.primary, fontSize: fontSize.lg }}>ICP Summary</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
               <div>
-                <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Industries</p>
-                <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>Industries</p>
+                <p style={{ margin: '4px 0 0 0', color: text.secondary }}>
                   {campaign.icp.industries.join(', ') || 'Not specified'}
                 </p>
               </div>
               <div>
-                <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Company Size</p>
-                <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>Company Size</p>
+                <p style={{ margin: '4px 0 0 0', color: text.secondary }}>
                   {campaign.icp.employeeSize.min} - {campaign.icp.employeeSize.max} employees
                 </p>
               </div>
               <div>
-                <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Target Roles</p>
-                <p style={{ margin: '4px 0 0 0', color: '#d1d5db' }}>
+                <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>Target Roles</p>
+                <p style={{ margin: '4px 0 0 0', color: text.secondary }}>
                   {campaign.icp.roles.join(', ') || 'Not specified'}
                 </p>
               </div>
@@ -344,9 +347,9 @@ function GovernanceFlag({ label, value }: { label: string; value: boolean }) {
         width: '8px',
         height: '8px',
         borderRadius: '50%',
-        backgroundColor: value ? '#22c55e' : '#6b7280',
+        backgroundColor: value ? '#10b981' : '#d4d4d4',
       }} />
-      <span style={{ color: value ? '#d1d5db' : '#6b7280', fontSize: '14px' }}>{label}</span>
+      <span style={{ color: value ? '#1e1e4a' : '#737373', fontSize: '14px' }}>{label}</span>
     </div>
   );
 }

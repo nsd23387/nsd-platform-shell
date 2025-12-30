@@ -5,6 +5,8 @@ import Link from 'next/link';
 import type { Campaign, CampaignStatus } from './types/campaign';
 import { listCampaigns } from './lib/api';
 import { StatusBadge } from './components';
+import { background, text, border, violet, magenta } from '../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
 
 const statusFilters: { value: CampaignStatus | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All' },
@@ -38,14 +40,14 @@ export default function SalesEnginePage() {
   }, [statusFilter]);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', padding: '32px' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: background.page, padding: '32px', fontFamily: fontFamily.body }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '32px', fontWeight: 700, color: '#fff' }}>
+            <h1 style={{ margin: 0, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold, color: text.primary, fontFamily: fontFamily.heading }}>
               Sales Engine
             </h1>
-            <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: '#9ca3af' }}>
+            <p style={{ margin: '8px 0 0 0', fontSize: fontSize.sm, color: text.secondary }}>
               Campaign Lifecycle Management
             </p>
           </div>
@@ -56,10 +58,10 @@ export default function SalesEnginePage() {
               alignItems: 'center',
               gap: '8px',
               padding: '12px 24px',
-              backgroundColor: '#e879f9',
-              color: '#0f0f0f',
-              fontSize: '14px',
-              fontWeight: 600,
+              backgroundColor: magenta[500],
+              color: text.inverse,
+              fontSize: fontSize.sm,
+              fontWeight: fontWeight.semibold,
               borderRadius: '8px',
               textDecoration: 'none',
             }}
@@ -75,11 +77,11 @@ export default function SalesEnginePage() {
               onClick={() => setStatusFilter(filter.value)}
               style={{
                 padding: '10px 20px',
-                fontSize: '14px',
-                fontWeight: 500,
-                backgroundColor: statusFilter === filter.value ? '#e879f9' : 'transparent',
-                color: statusFilter === filter.value ? '#0f0f0f' : '#d1d5db',
-                border: `1px solid ${statusFilter === filter.value ? '#e879f9' : '#333'}`,
+                fontSize: fontSize.sm,
+                fontWeight: fontWeight.medium,
+                backgroundColor: statusFilter === filter.value ? violet[500] : 'transparent',
+                color: statusFilter === filter.value ? text.inverse : text.secondary,
+                border: `1px solid ${statusFilter === filter.value ? violet[500] : border.default}`,
                 borderRadius: '8px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
@@ -92,12 +94,12 @@ export default function SalesEnginePage() {
 
         {loading && (
           <div style={{ textAlign: 'center', padding: '48px' }}>
-            <p style={{ color: '#9ca3af' }}>Loading campaigns...</p>
+            <p style={{ color: text.muted }}>Loading campaigns...</p>
           </div>
         )}
 
         {error && (
-          <div style={{ padding: '16px', backgroundColor: '#7f1d1d', borderRadius: '8px', color: '#fecaca', marginBottom: '24px' }}>
+          <div style={{ padding: '16px', backgroundColor: '#fef2f2', borderRadius: '8px', color: '#b91c1c', marginBottom: '24px', border: '1px solid #fecaca' }}>
             {error}
           </div>
         )}
@@ -106,11 +108,11 @@ export default function SalesEnginePage() {
           <div style={{
             textAlign: 'center',
             padding: '48px',
-            backgroundColor: '#1a1a1a',
+            backgroundColor: background.surface,
             borderRadius: '12px',
-            border: '1px solid #333',
+            border: `1px solid ${border.default}`,
           }}>
-            <p style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#9ca3af' }}>
+            <p style={{ margin: '0 0 16px 0', fontSize: fontSize.base, color: text.muted }}>
               No campaigns found.
             </p>
             <Link
@@ -118,10 +120,10 @@ export default function SalesEnginePage() {
               style={{
                 display: 'inline-flex',
                 padding: '12px 24px',
-                backgroundColor: '#e879f9',
-                color: '#0f0f0f',
-                fontSize: '14px',
-                fontWeight: 600,
+                backgroundColor: magenta[500],
+                color: text.inverse,
+                fontSize: fontSize.sm,
+                fontWeight: fontWeight.semibold,
                 borderRadius: '8px',
                 textDecoration: 'none',
               }}
@@ -142,11 +144,11 @@ export default function SalesEnginePage() {
         <div style={{
           marginTop: '32px',
           padding: '16px 20px',
-          backgroundColor: '#1a1a1a',
+          backgroundColor: background.muted,
           borderRadius: '8px',
-          border: '1px solid #333',
+          border: `1px solid ${border.subtle}`,
         }}>
-          <p style={{ margin: 0, fontSize: '13px', color: '#9ca3af' }}>
+          <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>
             Sales Engine UI (M67) operates independently using M60 Campaign Management APIs. 
             No execution capability. Command Center integration in M68.
           </p>
@@ -163,35 +165,35 @@ function CampaignListItem({ campaign }: { campaign: Campaign }) {
       style={{
         display: 'block',
         padding: '20px 24px',
-        backgroundColor: '#1a1a1a',
+        backgroundColor: background.surface,
         borderRadius: '12px',
-        border: '1px solid #333',
+        border: `1px solid ${border.default}`,
         textDecoration: 'none',
-        transition: 'border-color 0.2s',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#fff' }}>
+            <h3 style={{ margin: 0, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: text.primary }}>
               {campaign.name}
             </h3>
             <StatusBadge status={campaign.status} />
           </div>
           {campaign.description && (
-            <p style={{ margin: 0, fontSize: '14px', color: '#9ca3af' }}>
+            <p style={{ margin: 0, fontSize: fontSize.sm, color: text.secondary }}>
               {campaign.description}
             </p>
           )}
         </div>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '6px' }}>
-            {campaign.canEdit && <GovernanceIcon label="Edit" color="#22c55e" />}
+            {campaign.canEdit && <GovernanceIcon label="Edit" color="#10b981" />}
             {campaign.canSubmit && <GovernanceIcon label="Submit" color="#3b82f6" />}
             {campaign.canApprove && <GovernanceIcon label="Approve" color="#f59e0b" />}
-            {campaign.isRunnable && <GovernanceIcon label="Runnable" color="#e879f9" />}
+            {campaign.isRunnable && <GovernanceIcon label="Runnable" color={violet[500]} />}
           </div>
-          <span style={{ color: '#e879f9', fontSize: '20px' }}>→</span>
+          <span style={{ color: violet[500], fontSize: '20px' }}>→</span>
         </div>
       </div>
     </Link>

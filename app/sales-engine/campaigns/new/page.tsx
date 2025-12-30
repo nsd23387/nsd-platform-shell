@@ -6,6 +6,8 @@ import Link from 'next/link';
 import type { ICP, PersonalizationStrategy } from '../../types/campaign';
 import { createCampaign } from '../../lib/api';
 import { AICampaignGenerator, ICPEditor, PersonalizationEditor } from '../../components';
+import { background, text, border, violet, magenta } from '../../../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 
 const defaultICP: ICP = {
   keywords: [],
@@ -64,18 +66,20 @@ export default function NewCampaignPage() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: background.page, fontFamily: fontFamily.body }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
         <div style={{ marginBottom: '24px' }}>
-          <Link href="/sales-engine" style={{ color: '#e879f9', textDecoration: 'none', fontSize: '14px' }}>
+          <Link href="/sales-engine" style={{ color: violet[500], textDecoration: 'none', fontSize: fontSize.sm }}>
             ← Back to Campaigns
           </Link>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600, color: '#fff' }}>Create New Campaign</h1>
-            <p style={{ margin: '8px 0 0 0', color: '#9ca3af' }}>
+            <h1 style={{ margin: 0, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: text.primary, fontFamily: fontFamily.heading }}>
+              Create New Campaign
+            </h1>
+            <p style={{ margin: '8px 0 0 0', color: text.secondary, fontSize: fontSize.sm }}>
               New campaigns are created in DRAFT state. Configure targeting and personalization.
             </p>
           </div>
@@ -84,10 +88,10 @@ export default function NewCampaignPage() {
             disabled={isLoading || !name.trim()}
             style={{
               padding: '12px 32px',
-              fontSize: '16px',
-              fontWeight: 600,
-              backgroundColor: name.trim() && !isLoading ? '#e879f9' : '#4b5563',
-              color: name.trim() && !isLoading ? '#0f0f0f' : '#9ca3af',
+              fontSize: fontSize.base,
+              fontWeight: fontWeight.semibold,
+              backgroundColor: name.trim() && !isLoading ? magenta[500] : border.default,
+              color: name.trim() && !isLoading ? text.inverse : text.muted,
               border: 'none',
               borderRadius: '8px',
               cursor: name.trim() && !isLoading ? 'pointer' : 'not-allowed',
@@ -98,22 +102,22 @@ export default function NewCampaignPage() {
         </div>
 
         {error && (
-          <div style={{ padding: '16px', backgroundColor: '#7f1d1d', borderRadius: '8px', marginBottom: '24px', color: '#fecaca' }}>
+          <div style={{ padding: '16px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', marginBottom: '24px', color: '#b91c1c' }}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '32px', borderBottom: '1px solid #333', paddingBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '32px', borderBottom: `1px solid ${border.default}`, paddingBottom: '16px' }}>
           {sections.map((section) => (
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id as typeof activeSection)}
               style={{
                 padding: '12px 24px',
-                fontSize: '14px',
-                fontWeight: 500,
-                backgroundColor: activeSection === section.id ? '#e879f9' : 'transparent',
-                color: activeSection === section.id ? '#0f0f0f' : '#9ca3af',
+                fontSize: fontSize.sm,
+                fontWeight: fontWeight.medium,
+                backgroundColor: activeSection === section.id ? violet[500] : 'transparent',
+                color: activeSection === section.id ? text.inverse : text.secondary,
                 border: 'none',
                 borderRadius: '8px',
                 cursor: 'pointer',
@@ -128,12 +132,12 @@ export default function NewCampaignPage() {
           ))}
         </div>
 
-        <div style={{ backgroundColor: '#1a1a1a', borderRadius: '16px', padding: '32px', border: '1px solid #333' }}>
+        <div style={{ backgroundColor: background.surface, borderRadius: '16px', padding: '32px', border: `1px solid ${border.default}` }}>
           {activeSection === 'basics' && (
             <div>
-              <h2 style={{ margin: '0 0 24px 0', color: '#fff', fontSize: '20px' }}>Campaign Basics</h2>
+              <h2 style={{ margin: '0 0 24px 0', color: text.primary, fontSize: fontSize.xl }}>Campaign Basics</h2>
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', color: '#d1d5db', fontSize: '14px', fontWeight: 500 }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: text.secondary, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>
                   Campaign Name *
                 </label>
                 <input
@@ -144,18 +148,18 @@ export default function NewCampaignPage() {
                   style={{
                     width: '100%',
                     padding: '12px 16px',
-                    fontSize: '16px',
-                    backgroundColor: '#0f0f0f',
-                    border: '1px solid #333',
+                    fontSize: fontSize.base,
+                    backgroundColor: background.surface,
+                    border: `1px solid ${border.default}`,
                     borderRadius: '8px',
-                    color: '#fff',
+                    color: text.primary,
                     outline: 'none',
                     boxSizing: 'border-box',
                   }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', color: '#d1d5db', fontSize: '14px', fontWeight: 500 }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: text.secondary, fontSize: fontSize.sm, fontWeight: fontWeight.medium }}>
                   Description
                 </label>
                 <textarea
@@ -166,11 +170,11 @@ export default function NewCampaignPage() {
                   style={{
                     width: '100%',
                     padding: '12px 16px',
-                    fontSize: '16px',
-                    backgroundColor: '#0f0f0f',
-                    border: '1px solid #333',
+                    fontSize: fontSize.base,
+                    backgroundColor: background.surface,
+                    border: `1px solid ${border.default}`,
                     borderRadius: '8px',
-                    color: '#fff',
+                    color: text.primary,
                     outline: 'none',
                     resize: 'vertical',
                     boxSizing: 'border-box',
@@ -182,15 +186,15 @@ export default function NewCampaignPage() {
 
           {activeSection === 'ai' && (
             <div>
-              <h2 style={{ margin: '0 0 24px 0', color: '#fff', fontSize: '20px' }}>AI Campaign Generator</h2>
+              <h2 style={{ margin: '0 0 24px 0', color: text.primary, fontSize: fontSize.xl }}>AI Campaign Generator</h2>
               <AICampaignGenerator onGenerate={handleAIGenerate} />
             </div>
           )}
 
           {activeSection === 'icp' && (
             <div>
-              <h2 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '20px' }}>ICP & Targeting</h2>
-              <p style={{ margin: '0 0 24px 0', color: '#9ca3af', fontSize: '14px' }}>
+              <h2 style={{ margin: '0 0 8px 0', color: text.primary, fontSize: fontSize.xl }}>ICP & Targeting</h2>
+              <p style={{ margin: '0 0 24px 0', color: text.secondary, fontSize: fontSize.sm }}>
                 Define your Ideal Customer Profile to target the right prospects
               </p>
               <ICPEditor icp={icp} onChange={setIcp} />
@@ -199,8 +203,8 @@ export default function NewCampaignPage() {
 
           {activeSection === 'personalization' && (
             <div>
-              <h2 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '20px' }}>Personalization Strategy</h2>
-              <p style={{ margin: '0 0 24px 0', color: '#9ca3af', fontSize: '14px' }}>
+              <h2 style={{ margin: '0 0 8px 0', color: text.primary, fontSize: fontSize.xl }}>Personalization Strategy</h2>
+              <p style={{ margin: '0 0 24px 0', color: text.secondary, fontSize: fontSize.sm }}>
                 Customize how your outreach communicates with prospects
               </p>
               <PersonalizationEditor personalization={personalization} onChange={setPersonalization} />

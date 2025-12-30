@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { CampaignVariant } from '../../../types/campaign';
 import { getCampaignVariants } from '../../../lib/api';
+import { background, text, border, violet, semantic } from '../../../../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../../../../design/tokens/typography';
 
 export default function CampaignVariantsPage() {
   const params = useParams();
@@ -31,39 +33,39 @@ export default function CampaignVariantsPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#9ca3af' }}>Loading variants...</p>
+      <div style={{ minHeight: '100vh', backgroundColor: background.page, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: fontFamily.body }}>
+        <p style={{ color: text.muted }}>Loading variants...</p>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0f0f0f' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: background.page, fontFamily: fontFamily.body }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '32px' }}>
         <div style={{ marginBottom: '24px' }}>
-          <Link href={`/sales-engine/campaigns/${campaignId}`} style={{ color: '#e879f9', textDecoration: 'none', fontSize: '14px' }}>
+          <Link href={`/sales-engine/campaigns/${campaignId}`} style={{ color: violet[500], textDecoration: 'none', fontSize: fontSize.sm }}>
             ← Back to Campaign
           </Link>
         </div>
 
-        <h1 style={{ margin: '0 0 16px 0', fontSize: '28px', fontWeight: 600, color: '#fff' }}>
+        <h1 style={{ margin: '0 0 16px 0', fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: text.primary, fontFamily: fontFamily.heading }}>
           🎨 Personalization Variants
         </h1>
 
         <div style={{
           padding: '16px',
-          backgroundColor: '#1a1a1a',
+          backgroundColor: background.muted,
           borderRadius: '8px',
           marginBottom: '32px',
-          border: '1px solid #333',
+          border: `1px solid ${border.subtle}`,
         }}>
-          <p style={{ margin: 0, color: '#9ca3af', fontSize: '14px' }}>
+          <p style={{ margin: 0, color: text.muted, fontSize: fontSize.sm }}>
             Variants are read-only. Email templates and weights are configured during campaign setup.
           </p>
         </div>
 
         {error && (
-          <div style={{ padding: '16px', backgroundColor: '#7f1d1d', borderRadius: '8px', marginBottom: '24px', color: '#fecaca' }}>
+          <div style={{ padding: '16px', backgroundColor: semantic.danger.light, border: '1px solid #fecaca', borderRadius: '8px', marginBottom: '24px', color: semantic.danger.dark }}>
             {error}
           </div>
         )}
@@ -71,12 +73,12 @@ export default function CampaignVariantsPage() {
         {variants.length === 0 ? (
           <div style={{
             padding: '48px',
-            backgroundColor: '#1a1a1a',
+            backgroundColor: background.surface,
             borderRadius: '16px',
             textAlign: 'center',
-            border: '1px solid #333',
+            border: `1px solid ${border.default}`,
           }}>
-            <p style={{ color: '#6b7280' }}>No variants configured for this campaign.</p>
+            <p style={{ color: text.muted }}>No variants configured for this campaign.</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -85,9 +87,9 @@ export default function CampaignVariantsPage() {
                 key={variant.id}
                 style={{
                   padding: '24px',
-                  backgroundColor: '#1a1a1a',
+                  backgroundColor: background.surface,
                   borderRadius: '12px',
-                  border: '1px solid #333',
+                  border: `1px solid ${border.default}`,
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
@@ -98,59 +100,60 @@ export default function CampaignVariantsPage() {
                       justifyContent: 'center',
                       width: '32px',
                       height: '32px',
-                      backgroundColor: '#e879f9',
-                      color: '#0f0f0f',
+                      backgroundColor: violet[500],
+                      color: text.inverse,
                       borderRadius: '50%',
-                      fontWeight: 700,
-                      fontSize: '14px',
+                      fontWeight: fontWeight.bold,
+                      fontSize: fontSize.sm,
                     }}>
                       {String.fromCharCode(65 + index)}
                     </span>
-                    <h3 style={{ margin: 0, color: '#fff', fontSize: '18px' }}>{variant.name}</h3>
+                    <h3 style={{ margin: 0, color: text.primary, fontSize: fontSize.lg }}>{variant.name}</h3>
                   </div>
                   <span style={{
                     padding: '6px 14px',
-                    backgroundColor: '#3730a3',
-                    color: '#c7d2fe',
+                    backgroundColor: violet[50],
+                    color: violet[700],
                     borderRadius: '16px',
-                    fontSize: '13px',
-                    fontWeight: 500,
+                    fontSize: fontSize.sm,
+                    fontWeight: fontWeight.medium,
+                    border: `1px solid ${violet[200]}`,
                   }}>
                     Weight: {variant.weight}%
                   </span>
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#9ca3af' }}>Subject Line</p>
-                  <p style={{ margin: 0, padding: '12px', backgroundColor: '#0f0f0f', borderRadius: '6px', color: '#e879f9', fontSize: '15px' }}>
+                  <p style={{ margin: '0 0 4px 0', fontSize: fontSize.xs, color: text.muted }}>Subject Line</p>
+                  <p style={{ margin: 0, padding: '12px', backgroundColor: background.muted, borderRadius: '6px', color: violet[700], fontSize: fontSize.base }}>
                     {variant.subject_line}
                   </p>
                 </div>
 
                 <div style={{ marginBottom: '16px' }}>
-                  <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#9ca3af' }}>Body Preview</p>
-                  <p style={{ margin: 0, padding: '12px', backgroundColor: '#0f0f0f', borderRadius: '6px', color: '#d1d5db', fontSize: '14px', fontStyle: 'italic' }}>
+                  <p style={{ margin: '0 0 4px 0', fontSize: fontSize.xs, color: text.muted }}>Body Preview</p>
+                  <p style={{ margin: 0, padding: '12px', backgroundColor: background.muted, borderRadius: '6px', color: text.secondary, fontSize: fontSize.sm, fontStyle: 'italic' }}>
                     {variant.body_preview}
                   </p>
                 </div>
 
                 {variant.performance && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', paddingTop: '16px', borderTop: '1px solid #333' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', paddingTop: '16px', borderTop: `1px solid ${border.default}` }}>
                     <div>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Sent</p>
-                      <p style={{ margin: '4px 0 0 0', fontSize: '20px', fontWeight: 600, color: '#3b82f6' }}>
+                      <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>Sent</p>
+                      <p style={{ margin: '4px 0 0 0', fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: semantic.info.base }}>
                         {variant.performance.sent}
                       </p>
                     </div>
                     <div>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Opened</p>
-                      <p style={{ margin: '4px 0 0 0', fontSize: '20px', fontWeight: 600, color: '#22c55e' }}>
+                      <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>Opened</p>
+                      <p style={{ margin: '4px 0 0 0', fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: semantic.success.base }}>
                         {variant.performance.opened}
                       </p>
                     </div>
                     <div>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>Replied</p>
-                      <p style={{ margin: '4px 0 0 0', fontSize: '20px', fontWeight: 600, color: '#e879f9' }}>
+                      <p style={{ margin: 0, fontSize: fontSize.xs, color: text.muted }}>Replied</p>
+                      <p style={{ margin: '4px 0 0 0', fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: violet[500] }}>
                         {variant.performance.replied}
                       </p>
                     </div>

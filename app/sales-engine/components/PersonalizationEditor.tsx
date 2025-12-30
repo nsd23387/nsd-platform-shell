@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import type { PersonalizationStrategy } from '../types/campaign';
+import { background, text, border, violet, magenta } from '../../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
 
 interface PersonalizationEditorProps {
   personalization: PersonalizationStrategy;
@@ -42,33 +44,33 @@ export function PersonalizationEditor({ personalization, onChange, disabled }: P
   const sectionStyle = {
     marginBottom: '24px',
     padding: '20px',
-    backgroundColor: '#1f1f1f',
+    backgroundColor: background.muted,
     borderRadius: '8px',
-    border: '1px solid #333',
+    border: `1px solid ${border.subtle}`,
   };
 
   const labelStyle = {
-    display: 'block',
+    display: 'block' as const,
     marginBottom: '8px',
-    fontSize: '14px',
-    fontWeight: 600 as const,
-    color: '#d1d5db',
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: text.secondary,
   };
 
   const inputStyle = {
     padding: '10px 14px',
-    fontSize: '14px',
-    border: '1px solid #4b5563',
+    fontSize: fontSize.sm,
+    border: `1px solid ${border.default}`,
     borderRadius: '6px',
     outline: 'none',
     width: '100%',
     boxSizing: 'border-box' as const,
-    backgroundColor: '#0f0f0f',
-    color: '#fff',
+    backgroundColor: background.surface,
+    color: text.primary,
   };
 
   return (
-    <div>
+    <div style={{ fontFamily: fontFamily.body }}>
       <div style={sectionStyle}>
         <label style={labelStyle}>Tone of Voice</label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
@@ -79,17 +81,17 @@ export function PersonalizationEditor({ personalization, onChange, disabled }: P
               disabled={disabled}
               style={{
                 padding: '16px',
-                backgroundColor: personalization.toneOfVoice === option.value ? '#701a75' : '#0f0f0f',
-                color: personalization.toneOfVoice === option.value ? '#f5d0fe' : '#9ca3af',
-                border: `2px solid ${personalization.toneOfVoice === option.value ? '#e879f9' : '#333'}`,
+                backgroundColor: personalization.toneOfVoice === option.value ? violet[100] : background.surface,
+                color: personalization.toneOfVoice === option.value ? violet[700] : text.secondary,
+                border: `2px solid ${personalization.toneOfVoice === option.value ? violet[500] : border.default}`,
                 borderRadius: '8px',
-                textAlign: 'left',
+                textAlign: 'left' as const,
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
               }}
             >
-              <div style={{ fontWeight: 600, marginBottom: '4px' }}>{option.label}</div>
-              <div style={{ fontSize: '12px', opacity: 0.8 }}>{option.description}</div>
+              <div style={{ fontWeight: fontWeight.semibold, marginBottom: '4px' }}>{option.label}</div>
+              <div style={{ fontSize: fontSize.xs, opacity: 0.8 }}>{option.description}</div>
             </button>
           ))}
         </div>
@@ -118,17 +120,17 @@ export function PersonalizationEditor({ personalization, onChange, disabled }: P
                 alignItems: 'center',
                 gap: '12px',
                 padding: '12px 16px',
-                backgroundColor: '#2e1065',
+                backgroundColor: violet[50],
                 borderRadius: '8px',
-                border: '1px solid #7c3aed',
+                border: `1px solid ${violet[200]}`,
               }}
             >
-              <span style={{ color: '#e879f9', fontWeight: 600 }}>{i + 1}</span>
-              <span style={{ flex: 1, fontSize: '14px', color: '#e9d5ff' }}>{usp}</span>
+              <span style={{ color: violet[500], fontWeight: fontWeight.semibold }}>{i + 1}</span>
+              <span style={{ flex: 1, fontSize: fontSize.sm, color: violet[700] }}>{usp}</span>
               {!disabled && (
                 <button
                   onClick={() => removeUSP(i)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c084fc', fontSize: '18px' }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: violet[400], fontSize: '18px' }}
                 >
                   ×
                 </button>
@@ -152,12 +154,12 @@ export function PersonalizationEditor({ personalization, onChange, disabled }: P
               onClick={addUSP}
               style={{
                 padding: '10px 20px',
-                backgroundColor: '#e879f9',
-                color: '#0f0f0f',
+                backgroundColor: magenta[500],
+                color: text.inverse,
                 border: 'none',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                fontWeight: 600,
+                fontWeight: fontWeight.semibold,
               }}
             >
               Add
