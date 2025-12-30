@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Create orphan branch for Sales Engine UI only
-git checkout --orphan sales-engine-ui-only
+git checkout --orphan sales-engine-ui-v1
 
 # Remove all files from staging
 git rm -rf --cached .
@@ -48,4 +48,4 @@ git add replit.md
 # Commit
 git commit -m "M67 Sales Engine UI - standalone branch"
 
-echo "Branch 'sales-engine-ui-only' created successfully!"
+echo "Branch 'sales-engine-ui-v1' created successfully!"
