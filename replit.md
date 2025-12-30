@@ -1,7 +1,7 @@
 # NSD Platform Shell
 
 ## Overview
-Unified internal platform shell for the NSD Business Platform with read-only Activity Spine dashboards. This is a Next.js 14 application providing analytics dashboard views.
+Unified internal platform shell for the NSD Business Platform with read-only Activity Spine dashboards. This is a Next.js 14 application providing analytics dashboard views and the NSD Command Center.
 
 ## Tech Stack
 - **Framework**: Next.js 14
@@ -12,27 +12,17 @@ Unified internal platform shell for the NSD Business Platform with read-only Act
 ## Project Structure
 ```
 ├── app/                    # Next.js App Router pages
+│   ├── (command-center)/   # Command Center route group
+│   │   └── command-center/ # Command Center pages
+│   │       ├── layout.tsx  # Shared CC layout with header/nav
+│   │       ├── page.tsx    # CC home with module cards
+│   │       └── sales-engine/ # Sales Engine module (M67)
+│   │           ├── page.tsx
+│   │           └── campaigns/
 │   ├── api/v1/campaigns/   # Mock Campaign API routes (M60)
 │   ├── dashboard/          # Dashboard pages (executive, operations, design, media, sales)
 │   ├── functions/v1/       # Mock API routes for development
-│   └── sales-engine/       # M67 Sales Engine UI (standalone)
-│       ├── campaigns/      # Campaign pages
-│       │   ├── new/        # Create campaign (multi-step wizard)
-│       │   └── [id]/       # Campaign detail
-│       │       ├── edit/   # Campaign builder
-│       │       ├── review/ # Approval workflow
-│       │       ├── metrics/# Performance metrics
-│       │       ├── runs/   # Run history
-│       │       ├── variants/# Personalization variants
-│       │       └── safety/ # Throughput & blocking
-│       ├── components/     # Sales Engine components
-│       │   ├── wizard/     # Multi-step wizard components
-│       │   ├── AICampaignGenerator.tsx
-│       │   ├── ICPEditor.tsx
-│       │   ├── PersonalizationEditor.tsx
-│       │   └── ...
-│       ├── lib/            # API client
-│       └── types/          # Campaign types
+│   └── sales-engine/       # DEPRECATED - Redirects to Command Center
 ├── components/             # React components
 │   └── dashboard/          # Dashboard-specific components
 ├── contexts/               # React contexts (BootstrapContext)
@@ -69,12 +59,17 @@ npm run start -- -p 5000 -H 0.0.0.0
 - Bootstrap context for user/permissions
 - Activity Spine integration (mocked for development)
 - Design system with tokens
-- **M67 Sales Engine UI** (standalone campaign management)
+- **NSD Command Center** (unified platform shell)
+- **M67 Sales Engine UI** (campaign management module within Command Center)
 
 ## Mock APIs
 
 ### Bootstrap API
-A mock API route at `/functions/v1/ods-api/me` provides bootstrap data for development.
+A mock API route at `/functions/v1/ods-api/me` provides bootstrap data for development, including:
+- User identity and organization
+- Roles and permissions
+- Feature visibility flags (including `sales_engine`)
+- Enabled modules list
 
 ### Campaign API (M60)
 Mock campaign management APIs at `/api/v1/campaigns/*`:
@@ -90,6 +85,29 @@ Mock campaign management APIs at `/api/v1/campaigns/*`:
 - `GET /api/v1/campaigns/:id/runs/latest` - Latest run
 - `GET /api/v1/campaigns/:id/variants` - Personalization variants
 - `GET /api/v1/campaigns/:id/throughput` - Throughput config
+
+## NSD Command Center
+
+### Overview
+The Command Center is a unified platform shell for managing NSD business operations. It provides a consistent navigation experience across all modules.
+
+### Routes
+| Route | Feature |
+|-------|---------|
+| `/command-center` | Command Center Home (module cards) |
+| `/command-center/sales-engine` | Sales Engine (campaign list) |
+| `/command-center/sales-engine/campaigns/new` | Create Campaign (5-step wizard) |
+| `/command-center/sales-engine/campaigns/:id` | Campaign Overview |
+| `/command-center/sales-engine/campaigns/:id/edit` | Edit DRAFT |
+| `/command-center/sales-engine/campaigns/:id/review` | Review & Approve |
+| `/command-center/sales-engine/campaigns/:id/metrics` | Performance Metrics |
+| `/command-center/sales-engine/campaigns/:id/runs` | Run History |
+| `/command-center/sales-engine/campaigns/:id/variants` | Personalization Variants |
+| `/command-center/sales-engine/campaigns/:id/safety` | Throughput & Blocking |
+
+### App Registry
+Modules are registered via the Bootstrap API and displayed based on feature flags:
+- `sales_engine` - Enables Sales Engine module
 
 ## M67 Sales Engine UI
 
@@ -110,19 +128,6 @@ Mock campaign management APIs at `/api/v1/campaigns/*`:
 - Minimalist SVG icons via `design/components/Icon.tsx`
 - 25+ icons: campaign, metrics, runs, variants, safety, AI, edit, review, target, message, etc.
 - NO emojis - brand-aligned minimalist icons only
-
-### Routes
-| Route | Feature |
-|-------|---------|
-| `/sales-engine` | Campaign Index (list all campaigns) |
-| `/sales-engine/campaigns/new` | Campaign Builder (5-step wizard) |
-| `/sales-engine/campaigns/:id` | Campaign Overview |
-| `/sales-engine/campaigns/:id/edit` | Edit DRAFT (ICP, Personalization) |
-| `/sales-engine/campaigns/:id/review` | Review & Approve (PENDING_REVIEW) |
-| `/sales-engine/campaigns/:id/metrics` | Performance Metrics |
-| `/sales-engine/campaigns/:id/runs` | Run History (read-only ledger) |
-| `/sales-engine/campaigns/:id/variants` | Personalization Variants |
-| `/sales-engine/campaigns/:id/safety` | Throughput & Blocking Reasons |
 
 ### Key Components
 - **Icon**: Centralized SVG icon component with 25+ minimalist icons
@@ -159,7 +164,6 @@ interface ICP {
 - Uses only M60 Campaign APIs (`/api/v1/campaigns/*`)
 - **NO execution capability** (explicitly forbidden)
 - Governance flags (canEdit, canSubmit, canApprove, isRunnable) from API
-- No NSD Command Center integration (handled separately in M68)
 - Actor attribution: submittedBy, approvedBy fields for audit trail
 
 ### Blocking Reason Codes
@@ -178,7 +182,47 @@ Throughput blocks:
 - `CONFIG_INACTIVE`
 - `NO_CONFIG_FOUND`
 
+## Deprecation: Legacy Sales Engine Routes
+
+### Status: DEPRECATED
+The standalone `/sales-engine/*` routes are deprecated and will be removed in a future release.
+
+### Migration
+All legacy routes now redirect to Command Center equivalents:
+- `/sales-engine` → `/command-center/sales-engine`
+- `/sales-engine/campaigns/new` → `/command-center/sales-engine/campaigns/new`
+- `/sales-engine/campaigns/:id/*` → `/command-center/sales-engine/campaigns/:id/*`
+
+### Deprecation Timeline
+1. **Current**: All legacy routes redirect to Command Center
+2. **Next Release**: Monitor telemetry for legacy route usage
+3. **Future**: Remove redirect stubs when usage drops to zero
+
+### Files to Remove (Post-Deprecation)
+```
+app/sales-engine/page.tsx (redirect stub)
+app/sales-engine/campaigns/new/page.tsx (redirect stub)
+app/sales-engine/campaigns/[id]/page.tsx (redirect stub)
+app/sales-engine/campaigns/[id]/edit/page.tsx (redirect stub)
+app/sales-engine/campaigns/[id]/review/page.tsx (redirect stub)
+app/sales-engine/campaigns/[id]/metrics/page.tsx (redirect stub)
+app/sales-engine/campaigns/[id]/runs/page.tsx (redirect stub)
+app/sales-engine/campaigns/[id]/variants/page.tsx (redirect stub)
+app/sales-engine/campaigns/[id]/safety/page.tsx (redirect stub)
+```
+
+Shared components in `app/sales-engine/components/`, `app/sales-engine/lib/`, and `app/sales-engine/types/` are still used by Command Center pages and should be retained.
+
 ## Recent Changes
+- December 30, 2025: Sales Engine Migration to Command Center
+  - Created NSD Command Center route group at `app/(command-center)/command-center/`
+  - Migrated all Sales Engine pages to Command Center structure
+  - Added Command Center home page with module cards
+  - Integrated FeatureGuard for module visibility
+  - Added redirect stubs for backwards compatibility
+  - Updated bootstrap types with AppRegistryModule
+  - Updated mock API with sales_engine feature flag
+  - **DEPRECATED**: Legacy /sales-engine routes now redirect to Command Center
 - December 30, 2025: M67 Premium UX & Brand Alignment
   - Integrated Poppins (headings) and Inter (body) fonts via next/font/google
   - Created Icon component with 25+ minimalist SVG icons
