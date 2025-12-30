@@ -5,7 +5,7 @@
 
 set -e
 
-BRANCH_NAME="m67-sales-engine-ui"
+BRANCH_NAME="sales-engine-ui-v2"
 
 echo "Creating clean branch: $BRANCH_NAME"
 
