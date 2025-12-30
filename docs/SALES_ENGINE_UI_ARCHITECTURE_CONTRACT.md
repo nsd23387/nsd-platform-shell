@@ -1,10 +1,10 @@
 # Sales Engine UI Architecture Contract
 
-> **Version:** 1.0  
+> **Version:** 1.1  
 > **Status:** Pending Approval (M67-01)  
 > **Classification:** Architecture Contract — Governance Controlled  
 > **Milestone:** M67-01 — Sales Engine UI Architecture Contract  
-> **Date:** 2024  
+> **Date:** 2024-12-30  
 > **Owner:** Platform Architecture Team
 
 ---
@@ -69,9 +69,7 @@ This contract builds upon and must not contradict:
 | Contract | Relevance |
 |----------|-----------|
 | **M13 — Platform Shell UX Specification** | Read-only semantics, navigation model |
-| **M14 — OMS UX Specification** | Order lifecycle boundaries |
-| **M28-01 — Custom Quote UX** | Quote creation and configuration |
-| **M60 — Sales Engine API Contract** | Allowed API surface (UI-facing extract) |
+| **M60 — Sales Engine API Contract** | Allowed API surface (UI-facing extract, 2024-12-30) |
 | **M65 — Approval Gate Contract** | Human approval requirements |
 | **M66 — Execution Safety Contract** | Kill switch and execution boundaries |
 | **Environment Matrix** | DEV/STAGING/PROD isolation rules |
@@ -148,7 +146,7 @@ The Platform Shell is the **sole mediator** between the UI and the Sales Engine.
 | **Expose M60 API Surface** | Proxy or re-expose only documented M60 endpoints | API surface audit |
 | **Inject Authentication** | Attach Bearer token from authenticated session | Auth header verification |
 | **Inject Environment** | Set environment identifier (DEV/STAGING/PROD) server-side | Environment header verification |
-| **Enforce Endpoint Allowlist** | Block requests to non-M60 endpoints | Allowlist enforcement |
+| **Enforce Endpoint Allowlist** | Block requests to non-M60 endpoints (including legacy `/api/campaigns/*`) | Allowlist enforcement |
 | **Prevent Secret Leakage** | Never expose service role keys to client | Secret audit |
 | **Log API Interactions** | Record all UI → API calls for audit | Log verification |
 | **Handle Auth Failures** | Return standardized 401/403 responses | Error handling audit |
@@ -156,17 +154,17 @@ The Platform Shell is the **sole mediator** between the UI and the Sales Engine.
 
 ### 3.2 nsd-sales-engine Responsibilities
 
-The Sales Engine is the **sole authority** for business logic, approval, and execution.
+The Sales Engine is the **sole authority** for business logic, approval, and readiness validation.
 
 | Responsibility | Implementation | Verification |
 |----------------|----------------|--------------|
-| **Expose M60 API Surface** | Provide documented read/write/execute endpoints | API contract audit |
+| **Expose M60 API Surface** | Provide documented read/write endpoints only | API contract audit |
 | **Enforce M65 Approval Gates** | Require human approval for gated actions | Gate verification |
 | **Enforce M66 Execution Safety** | Implement kill switch and execution boundaries | Safety verification |
 | **Validate All Inputs** | Never trust UI-provided data without validation | Input validation audit |
 | **Enforce Authorization** | Verify permissions for every request | Auth enforcement audit |
-| **Return Canonical State** | Provide authoritative state to UI | State consistency audit |
-| **Audit All Mutations** | Log all write/execute actions with actor attribution | Audit log verification |
+| **Return Canonical State** | Provide authoritative state including governance metadata | State consistency audit |
+| **Audit All Mutations** | Log all write actions with actor attribution | Audit log verification |
 | **Enforce Environment Isolation** | Respect environment boundaries in all operations | Isolation verification |
 
 ### 3.3 UI Responsibilities
@@ -176,14 +174,15 @@ The UI is a **stateless rendering layer** with no business authority.
 | Responsibility | Implementation | Verification |
 |----------------|----------------|--------------|
 | **Render Returned State** | Display state exactly as returned by API | UI audit |
+| **Render Governance Metadata** | Use `canEdit`, `canSubmit`, `canApprove`, `isRunnable` to enable/disable actions | UI audit |
 | **Collect User Input** | Capture and forward user input to API | Input handling audit |
 | **Display Confirmations** | Show success/error messages from API responses | Confirmation audit |
-| **Display Warnings** | Surface warnings from API (e.g., gate requirements) | Warning audit |
+| **Display Warnings** | Surface warnings and blocking reasons from API | Warning audit |
 | **No State Computation** | Never calculate, derive, or infer business state | Code review |
 | **No Auth Logic** | Never parse, validate, or interpret tokens | Code review |
 | **No Environment Logic** | Never branch on environment or select environment | Code review |
 | **No Approval Logic** | Never implement approval workflows | Code review |
-| **No Execution Logic** | Never implement execution logic | Code review |
+| **No Execution Logic** | Never implement execution triggers | Code review |
 
 ---
 
@@ -215,8 +214,8 @@ The following sequence defines the ONLY valid interaction pattern:
      │                         │                             │
      │                         │                             │ 7. Validate Auth
      │                         │                             │ 8. Enforce Gates (M65)
-     │                         │                             │ 9. Check Kill Switch (M66)
-     │                         │                             │ 10. Execute Logic
+     │                         │                             │ 9. Validate Readiness
+     │                         │                             │ 10. Process Request
      │                         │                             │ 11. Return State
      │                         │                             │
      │                         │ 12. Response                │
@@ -234,11 +233,11 @@ The following sequence defines the ONLY valid interaction pattern:
 
 | Rule | Requirement | Violation Response |
 |------|-------------|-------------------|
-| **Endpoint Format** | UI calls relative endpoints only (e.g., `/api/sales-engine/quotes`) | Code review rejection |
+| **Endpoint Format** | UI calls relative endpoints only (e.g., `/api/v1/campaigns`) | Code review rejection |
 | **No Absolute URLs** | UI never constructs URLs to external services | Code review rejection |
 | **No Query String Auth** | Auth tokens never appear in query strings | Security rejection |
 | **No Body Auth** | Auth tokens never appear in request bodies | Security rejection |
-| **Content-Type** | Always `application/json` for POST/PUT/PATCH | API validation |
+| **Content-Type** | Always `application/json` for POST/PATCH | API validation |
 | **No Custom Headers** | UI does not add custom headers (Shell adds required headers) | Code review rejection |
 
 ### 4.3 Response Handling Rules
@@ -248,7 +247,7 @@ The following sequence defines the ONLY valid interaction pattern:
 | **Render As-Is** | UI displays returned data without transformation (except formatting) | Code review rejection |
 | **No State Derivation** | UI does not compute additional state from responses | Code review rejection |
 | **Error Display** | UI displays error messages from API verbatim | UX audit |
-| **Warning Display** | UI surfaces all warnings from API responses | UX audit |
+| **Warning Display** | UI surfaces all warnings and blocking reasons from API responses | UX audit |
 | **No Retry Logic** | UI does not implement automatic retry (user-initiated only) | Code review rejection |
 | **No Caching** | UI does not cache Sales Engine responses | Code review rejection |
 
@@ -256,12 +255,14 @@ The following sequence defines the ONLY valid interaction pattern:
 
 | Interaction | Allowed | Forbidden |
 |-------------|---------|-----------|
-| **Read quote list** | ✅ | — |
-| **Read quote detail** | ✅ | — |
-| **Create draft quote** | ✅ (if M60 allows) | — |
-| **Update draft configuration** | ✅ (if M60 allows) | — |
-| **Submit for approval** | ✅ (API handles gate) | UI implements approval logic |
-| **Execute approved quote** | ✅ (API handles execution) | UI implements execution logic |
+| **Read campaign list** | ✅ | — |
+| **Read campaign detail** | ✅ | — |
+| **Read campaign metrics/runs/variants/throughput** | ✅ | — |
+| **Create draft campaign** | ✅ | — |
+| **Update draft configuration** | ✅ (DRAFT status only) | — |
+| **Submit for approval** | ✅ (API handles lifecycle) | UI implements approval logic |
+| **Approve campaign** | ✅ (API handles lifecycle) | UI implements approval logic |
+| **Execute/run/trigger campaign** | — | ❌ **Forbidden — No endpoints exist** |
 | **Override approval** | — | ❌ Forbidden |
 | **Bypass kill switch** | — | ❌ Forbidden |
 | **Direct DB query** | — | ❌ Forbidden |
@@ -273,21 +274,39 @@ The following sequence defines the ONLY valid interaction pattern:
 
 ### 5.1 API Surface Principle
 
-> **The UI may ONLY call endpoints explicitly documented in the M60 UI-Facing Contract Extract.**
+> **The UI may ONLY call endpoints explicitly documented in the M60 UI-Facing Contract Extract (2024-12-30).**
 
-Endpoints not listed in M60 are **forbidden** regardless of their existence in the Sales Engine.
+**Base Namespace:** `/api/v1/campaigns`
 
-### 5.2 Read APIs
+Endpoints not listed below are **forbidden** regardless of their existence in the Sales Engine.
+
+### 5.2 Read APIs (8 Endpoints)
 
 Read APIs return current state. UI renders returned data without modification.
 
-| Endpoint Pattern | Purpose | UI Behavior |
-|------------------|---------|-------------|
-| `GET /api/sales-engine/quotes` | List quotes | Render list as returned |
-| `GET /api/sales-engine/quotes/:id` | Quote detail | Render detail as returned |
-| `GET /api/sales-engine/quotes/:id/status` | Quote lifecycle status | Render status as returned |
-| `GET /api/sales-engine/quotes/:id/history` | Quote audit history | Render history as returned |
-| `GET /api/sales-engine/config/options` | Available configuration options | Populate UI selectors |
+| Method | Endpoint | Purpose | UI Behavior |
+|--------|----------|---------|-------------|
+| GET | `/api/v1/campaigns` | List all campaigns | Render list as returned; supports `?status=` filter |
+| GET | `/api/v1/campaigns/:id` | Campaign details with governance metadata | Render detail; use governance flags for action enablement |
+| GET | `/api/v1/campaigns/:id/metrics` | Latest campaign metrics snapshot (M56) | Render metrics as returned |
+| GET | `/api/v1/campaigns/:id/metrics/history` | Historical metrics snapshots | Render history as returned |
+| GET | `/api/v1/campaigns/:id/runs` | Campaign run summaries (M59) | Render run list as returned |
+| GET | `/api/v1/campaigns/:id/runs/latest` | Most recent run summary | Render latest run as returned |
+| GET | `/api/v1/campaigns/:id/variants` | Personalization variants (M57) | Render variants as returned |
+| GET | `/api/v1/campaigns/:id/throughput` | Active throughput configuration (M58) | Render throughput config as returned |
+
+#### Governance Metadata (Required UI Handling)
+
+The `GET /api/v1/campaigns/:id` response includes governance metadata that UI **MUST** use:
+
+| Field | Type | UI Requirement |
+|-------|------|----------------|
+| `canEdit` | boolean | Enable/disable edit controls |
+| `canSubmit` | boolean | Enable/disable submit action |
+| `canApprove` | boolean | Enable/disable approve action |
+| `isRunnable` | boolean | Display runnable status indicator |
+
+UI MUST render these flags and enable/disable actions accordingly. UI MUST NOT compute these values locally.
 
 #### Read API Guarantees
 
@@ -298,76 +317,58 @@ Read APIs return current state. UI renders returned data without modification.
 | **Environment-Scoped** | Results are scoped to injected environment |
 | **Permission-Filtered** | Results filtered by user permissions |
 
-### 5.3 Write APIs (DRAFT/Config Only)
+### 5.3 Write APIs (4 Endpoints)
 
-Write APIs mutate draft state only. UI collects input and submits; API validates and persists.
+Write APIs mutate state. UI collects input and submits; API validates, enforces lifecycle, and persists.
 
-| Endpoint Pattern | Purpose | UI Behavior | Constraints |
-|------------------|---------|-------------|-------------|
-| `POST /api/sales-engine/quotes` | Create draft quote | Submit form data | Draft state only |
-| `PATCH /api/sales-engine/quotes/:id` | Update draft quote | Submit changes | Draft state only |
-| `POST /api/sales-engine/quotes/:id/items` | Add line item | Submit item data | Draft state only |
-| `PATCH /api/sales-engine/quotes/:id/items/:itemId` | Update line item | Submit changes | Draft state only |
-| `DELETE /api/sales-engine/quotes/:id/items/:itemId` | Remove line item | Confirm and submit | Draft state only |
+| Method | Endpoint | Purpose | Constraints |
+|--------|----------|---------|-------------|
+| POST | `/api/v1/campaigns` | Create new campaign | Always created in `DRAFT` status; enforced at API layer |
+| PATCH | `/api/v1/campaigns/:id` | Update campaign configuration | Only `DRAFT` campaigns; `status` field cannot be changed via this endpoint |
+| POST | `/api/v1/campaigns/:id/submit` | Submit campaign for review | Requires `submittedBy` actor ID; transitions `DRAFT` → `PENDING_REVIEW` |
+| POST | `/api/v1/campaigns/:id/approve` | Approve campaign | Requires `approvedBy` actor ID; transitions `PENDING_REVIEW` → `RUNNABLE` |
 
 #### Write API Constraints
 
 | Constraint | Description | Enforcement |
 |------------|-------------|-------------|
-| **Draft Only** | Write APIs only modify quotes in DRAFT state | Server-side validation |
-| **No State Transition** | Write APIs do not change lifecycle state | Server-side enforcement |
-| **Validation Required** | All inputs validated server-side | API contract |
+| **DRAFT Only for Edits** | PATCH only works on campaigns in `DRAFT` status | Server-side validation |
+| **No Direct Status Change** | Status cannot be modified via PATCH; only via `/submit` and `/approve` | Server-side enforcement |
+| **Actor Attribution Required** | `/submit` requires `submittedBy`; `/approve` requires `approvedBy` | Server-side validation |
 | **Audit Logged** | All writes logged with actor attribution | Server-side logging |
 
-### 5.4 Execute APIs
+#### Campaign Lifecycle States
 
-Execute APIs trigger state transitions and business actions. These are protected by M65/M66 safety gates.
+| Status | Mutability | Governance Flags |
+|--------|------------|------------------|
+| `DRAFT` | Fully editable | `canEdit: true`, `canSubmit: true` |
+| `PENDING_REVIEW` | Immutable configuration | `canEdit: false`, `canApprove: true` |
+| `APPROVED` / `RUNNABLE` | Immutable | ICP and name frozen; execution gated separately |
+| `ARCHIVED` | Immutable | Preserved for learning |
 
-| Endpoint Pattern | Purpose | UI Behavior | Safety Gates |
-|------------------|---------|-------------|--------------|
-| `POST /api/sales-engine/quotes/:id/submit` | Submit for approval | Show confirmation, submit | M65 gate check |
-| `POST /api/sales-engine/quotes/:id/approve` | Approve quote (if authorized) | Show confirmation, submit | M65 approval required |
-| `POST /api/sales-engine/quotes/:id/execute` | Execute approved quote | Show confirmation, submit | M66 kill switch check |
-| `POST /api/sales-engine/quotes/:id/cancel` | Cancel quote | Show confirmation, submit | Audit logged |
+**Note:** `/submit` and `/approve` are **lifecycle transition endpoints**, NOT execution triggers. They change campaign status but do not trigger outbound execution.
 
-#### Execute API Safety Model
+### 5.4 Execute APIs — NONE EXIST
 
-| Safety Layer | Description | UI Visibility |
-|--------------|-------------|---------------|
-| **M65 Approval Gate** | Certain actions require human approval | API returns `approval_required: true` |
-| **M66 Kill Switch** | Execution can be halted system-wide | API returns `execution_disabled: true` |
-| **M66 Per-Quote Block** | Individual quotes can be execution-blocked | API returns `quote_blocked: true` |
-| **Actor Attribution** | All executions logged with user identity | Transparent to UI |
+> **⚠️ NO EXECUTE ENDPOINTS EXIST IN THE M60 API**
 
-#### Execute API Response Model
+The M60 API explicitly does **NOT** expose any execution triggers. The following patterns are **explicitly prohibited** and return 404:
 
-The API returns explicit gate status. UI MUST render this status.
+| Forbidden Pattern | Status |
+|-------------------|--------|
+| `POST /api/v1/campaigns/:id/execute` | Returns 404 |
+| `POST /api/v1/campaigns/:id/run` | Returns 404 |
+| `POST /api/v1/campaigns/:id/trigger` | Returns 404 |
+| `POST /api/v1/campaigns/:id/schedule` | Returns 404 |
+| `PATCH /api/v1/campaigns/:id/runs/:runId` | Returns 404 |
+| `DELETE /api/v1/campaigns/:id/runs/:runId` | Returns 404 |
 
-```json
-{
-  "success": false,
-  "error": {
-    "code": "APPROVAL_REQUIRED",
-    "message": "This action requires approval from a Sales Manager.",
-    "approval_required": true,
-    "approver_roles": ["sales_manager", "sales_director"]
-  }
-}
-```
+**UI MUST NOT:**
+- Attempt to call any execute/run/trigger endpoints
+- Display execute/run buttons that imply direct execution capability
+- Implement any client-side execution logic
 
-```json
-{
-  "success": false,
-  "error": {
-    "code": "EXECUTION_DISABLED",
-    "message": "Quote execution is temporarily disabled.",
-    "execution_disabled": true,
-    "kill_switch_active": true
-  }
-}
-```
-
-UI MUST display these messages verbatim. UI MUST NOT attempt to work around these responses.
+**Execution happens entirely outside the M60 API surface.** Passing readiness validation does NOT trigger execution; outbound delivery requires separate gated operations not exposed to UI.
 
 ---
 
@@ -401,9 +402,9 @@ The following patterns are **unconditionally forbidden**. Violations block merge
 
 | Pattern | Reason | Detection |
 |---------|--------|-----------|
-| `if (quote.status === 'approved')` with execution logic | Approval logic in UI | Code review |
-| SLA calculation functions | Business logic in UI | Code review |
-| Pricing calculation functions | Business logic in UI | Code review |
+| `if (campaign.status === 'RUNNABLE')` with execution logic | Execution logic in UI | Code review |
+| Throughput calculation functions | Business logic in UI | Code review |
+| Readiness validation functions | Business logic in UI | Code review |
 | State machine implementation | Lifecycle logic in UI | Code review |
 | Permission inference logic | Auth logic in UI | Code review |
 
@@ -426,14 +427,23 @@ The following patterns are **unconditionally forbidden**. Violations block merge
 | Role hierarchy implementation | RBAC logic in UI | Code review |
 | `setAuthToken()` or equivalent | Token management | Code review |
 
+#### 6.1.6 Legacy Endpoint Access
+
+| Pattern | Reason | Detection |
+|---------|--------|-----------|
+| `fetch('/api/campaigns/*')` | Legacy non-versioned API | Static analysis |
+| Any call to `/api/campaigns/` (without `/v1/`) | Not part of M60 governed access | Code review |
+
+**Only `/api/v1/campaigns/*` endpoints are permitted.** Legacy `/api/campaigns/*` (non-versioned) endpoints exist in the backend but are **NOT part of M60 governed access** and MUST be blocked at the Platform Shell level.
+
 ### 6.2 Conditional Prohibitions
 
 These patterns are forbidden in specific contexts.
 
 | Pattern | Context | Allowed Alternative |
 |---------|---------|---------------------|
-| `localStorage.setItem('quote_*')` | Persisting business state | Use API for state persistence |
-| `sessionStorage.setItem('quote_*')` | Persisting business state | Use API for state persistence |
+| `localStorage.setItem('campaign_*')` | Persisting business state | Use API for state persistence |
+| `sessionStorage.setItem('campaign_*')` | Persisting business state | Use API for state persistence |
 | `setInterval()` for polling | Auto-refresh | User-initiated refresh only |
 | `setTimeout()` for retry | Automatic retry | User-initiated retry only |
 | Optimistic UI updates | Assuming mutation success | Wait for API confirmation |
@@ -451,12 +461,13 @@ Reviewers MUST verify the following before approving any Sales Engine UI PR:
 - [ ] No direct ODS/PostgREST access
 - [ ] No service role key references
 - [ ] No hardcoded secrets or tokens
+- [ ] No legacy endpoint calls (`/api/campaigns/*` without `/v1/`)
 
 ### Logic Boundaries
 - [ ] No approval workflow logic
-- [ ] No execution logic
+- [ ] No execution/run/trigger logic
 - [ ] No state machine implementation
-- [ ] No SLA/pricing calculations
+- [ ] No readiness/throughput calculations
 - [ ] No permission inference
 
 ### Environment & Auth
@@ -466,15 +477,17 @@ Reviewers MUST verify the following before approving any Sales Engine UI PR:
 - [ ] No token management logic
 
 ### API Interaction
-- [ ] Only documented M60 endpoints called
+- [ ] Only documented M60 endpoints called (`/api/v1/campaigns/*`)
 - [ ] Relative endpoint URLs only
 - [ ] No custom auth headers
 - [ ] Responses rendered without transformation
+- [ ] Governance metadata (`canEdit`, `canSubmit`, `canApprove`, `isRunnable`) used correctly
 
 ### Safety Boundaries
-- [ ] M65 gate responses displayed verbatim
+- [ ] M65 blocking reasons displayed verbatim
 - [ ] M66 kill switch responses displayed verbatim
 - [ ] No workarounds for blocked actions
+- [ ] No execute/run/trigger buttons or actions
 ```
 
 ---
@@ -558,7 +571,7 @@ Safety is enforced at multiple layers. No single layer failure compromises safet
 ┌─────────────────────────────────────────────────────────────────────┐
 │ LAYER 1: UI CANNOT                                                  │
 │ • Implement approval logic                                          │
-│ • Implement execution logic                                         │
+│ • Implement execution logic (no endpoints exist)                    │
 │ • Bypass API responses                                              │
 │ • Access backend directly                                           │
 └─────────────────────────────────────────────────────────────────────┘
@@ -566,7 +579,8 @@ Safety is enforced at multiple layers. No single layer failure compromises safet
                                ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ LAYER 2: PLATFORM SHELL ENFORCES                                    │
-│ • Endpoint allowlist (M60 only)                                     │
+│ • Endpoint allowlist (M60 /api/v1/campaigns/* only)                 │
+│ • Legacy endpoint blocking (/api/campaigns/* blocked)               │
 │ • Auth injection (no token leakage)                                 │
 │ • Environment injection (no selection)                              │
 │ • Request logging (audit trail)                                     │
@@ -575,38 +589,37 @@ Safety is enforced at multiple layers. No single layer failure compromises safet
                                ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ LAYER 3: SALES ENGINE ENFORCES                                      │
-│ • M65 approval gates (server-side)                                  │
+│ • M65 readiness validation (server-side)                            │
 │ • M66 kill switch (server-side)                                     │
+│ • Throughput validation (server-side)                               │
 │ • Permission validation (server-side)                               │
 │ • Input validation (server-side)                                    │
 │ • Audit logging (server-side)                                       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 8.2 M65 Approval Gate Preservation
+### 8.2 M65 Readiness Validation (Server-Enforced)
 
-The M65 Approval Gate Contract defines actions requiring human approval. UI preserves these gates by:
+The M65 Approval Gate Contract defines readiness conditions that are **enforced entirely server-side**. UI displays results but cannot bypass or recompute.
 
-| Guarantee | Implementation |
-|-----------|----------------|
-| **No Approval UI** | UI does not implement approval workflows |
-| **Gate Response Display** | UI displays "approval required" messages from API |
-| **No Bypass Attempt** | UI does not retry or work around approval requirements |
-| **Approver Visibility** | UI displays required approver roles from API response |
-| **Status Polling** | UI may poll for approval status (read-only) |
+#### Blocking Reasons (UI Must Display)
 
-#### Approval Flow (UI Perspective)
+The following blocking reasons may be returned by the API. UI MUST display these verbatim:
 
-```
-1. User clicks "Submit for Approval"
-2. UI calls POST /api/sales-engine/quotes/:id/submit
-3. API returns { approval_required: true, message: "..." }
-4. UI displays message and approval status
-5. UI does NOT implement approval logic
-6. User with approval authority uses separate approval surface
-7. UI polls for status update (optional)
-8. Once approved, UI displays updated status
-```
+| Block Reason Code | Meaning |
+|-------------------|---------|
+| `MISSING_HUMAN_APPROVAL` | Campaign requires human approval before proceeding |
+| `PERSISTENCE_ERRORS` | Data persistence errors exist; cannot proceed |
+| `NO_LEADS_PERSISTED` | No leads have been persisted; nothing to process |
+| `KILL_SWITCH_ENABLED` | System-wide kill switch is currently enabled |
+| `SMARTLEAD_NOT_CONFIGURED` | Smartlead integration not configured |
+| `INSUFFICIENT_CREDITS` | Insufficient credit balance for operation |
+
+**UI Behavior:**
+- Display blocking reason messages verbatim from API
+- Disable affected actions based on API response
+- Do NOT attempt to recompute readiness locally
+- Do NOT implement workarounds for blocked states
 
 ### 8.3 M66 Kill Switch Preservation
 
@@ -614,45 +627,44 @@ The M66 Execution Safety Contract defines execution boundaries. UI preserves the
 
 | Guarantee | Implementation |
 |-----------|----------------|
-| **No Execution Logic** | UI does not implement execution workflows |
-| **Kill Switch Response Display** | UI displays "execution disabled" messages from API |
+| **No Execution Logic** | UI has no execution endpoints to call |
+| **Kill Switch Response Display** | UI displays blocking reason when `KILL_SWITCH_ENABLED` |
 | **No Bypass Attempt** | UI does not retry or work around kill switch |
-| **Graceful Degradation** | UI remains functional when execution is disabled |
-| **No Execution State** | UI does not track execution progress locally |
+| **Graceful Degradation** | UI remains functional when kill switch is active |
 
-#### Kill Switch Response Handling
+**Key Principle:** Passing readiness validation does NOT trigger execution. Outbound delivery requires separate gated operations that are NOT exposed via the M60 API.
 
-When kill switch is active, API returns:
+### 8.4 Throughput Validation (Server-Enforced)
 
-```json
-{
-  "success": false,
-  "error": {
-    "code": "EXECUTION_DISABLED",
-    "message": "Quote execution is temporarily disabled. Please contact your administrator.",
-    "kill_switch_active": true,
-    "disabled_reason": "System maintenance in progress"
-  }
-}
-```
+Throughput limits are validated server-side. UI may display throughput configuration via `GET /api/v1/campaigns/:id/throughput` but cannot modify or bypass limits.
 
-UI MUST:
-- Display the `message` field verbatim
-- Display the `disabled_reason` if provided
-- Disable execution-related UI affordances
-- NOT attempt workarounds or retries
+#### Throughput Block Reasons (UI Must Display)
 
-### 8.4 Safety Violation Response
+| Block Reason Code | Meaning |
+|-------------------|---------|
+| `DAILY_LIMIT_EXCEEDED` | Daily send limit has been reached |
+| `HOURLY_LIMIT_EXCEEDED` | Hourly send limit has been reached |
+| `MAILBOX_LIMIT_EXCEEDED` | Per-mailbox limit has been reached |
+| `CONFIG_INACTIVE` | Throughput configuration is inactive |
+| `NO_CONFIG_FOUND` | No throughput configuration exists |
 
-If UI detects safety-related error responses, it MUST:
+**UI Behavior:**
+- Render throughput configuration as returned by API
+- Display throughput block reasons verbatim
+- Do NOT calculate throughput limits locally
+- Do NOT implement client-side rate limiting logic
+
+### 8.5 Safety Violation Response
+
+If UI receives safety-related error responses, it MUST:
 
 | Response Code | UI Behavior |
 |---------------|-------------|
-| `APPROVAL_REQUIRED` | Display message, disable action, show approval status |
-| `EXECUTION_DISABLED` | Display message, disable execution UI |
-| `QUOTE_BLOCKED` | Display message, show block reason |
-| `PERMISSION_DENIED` | Display message, disable action |
-| `KILL_SWITCH_ACTIVE` | Display message, disable all executions |
+| `MISSING_HUMAN_APPROVAL` | Display message, disable action, show approval status |
+| `KILL_SWITCH_ENABLED` | Display message, indicate system-wide block |
+| `PERSISTENCE_ERRORS` | Display message, indicate data issue |
+| `INSUFFICIENT_CREDITS` | Display message, indicate credit issue |
+| Any throughput block | Display message, show limit reached |
 
 UI MUST NOT:
 - Retry blocked requests automatically
@@ -666,16 +678,31 @@ UI MUST NOT:
 
 ### 9.1 Observability Principle
 
-> **UI may observe Sales Engine metrics. UI may NOT modify, annotate, or influence observability data.**
+> **UI may observe Sales Engine metrics via M60 read endpoints. UI may NOT modify, annotate, or influence observability data.**
 
 ### 9.2 Allowed Observability Access
 
-| Access | Purpose | Constraints |
-|--------|---------|-------------|
-| Quote status display | Show current lifecycle state | Read-only |
-| Quote history display | Show audit trail | Read-only, append-only view |
-| SLA status display | Show compliance indicators | Read-only, API-provided values |
-| Error display | Show API error messages | Read-only, verbatim display |
+| Endpoint | Purpose | Constraints |
+|----------|---------|-------------|
+| `GET /api/v1/campaigns/:id/metrics` | View latest metrics snapshot | Read-only |
+| `GET /api/v1/campaigns/:id/metrics/history` | View historical metrics | Read-only |
+| `GET /api/v1/campaigns/:id/runs` | View run summaries | Read-only, immutable ledger |
+| `GET /api/v1/campaigns/:id/runs/latest` | View most recent run | Read-only |
+| `GET /api/v1/campaigns/:id/throughput` | View throughput configuration | Read-only |
+
+#### Run Summary Schema (Read-Only)
+
+Run summaries are an **immutable ledger** (one row per run, never updated):
+
+| Field | Description |
+|-------|-------------|
+| `runStartedAt` | Timestamp when run started |
+| `runEndedAt` | Timestamp when run ended |
+| `runOutcome` | Outcome status |
+| `leadsAttempted` | Number of leads attempted |
+| `leadsSent` | Number of leads successfully sent |
+| `leadsBlocked` | Number of leads blocked |
+| `throughputLimitHit` | Whether throughput limit was hit |
 
 ### 9.3 Forbidden Observability Access
 
@@ -686,27 +713,18 @@ UI MUST NOT:
 | Metric annotation | UI cannot modify metrics |
 | Alert triggering | UI cannot raise alerts |
 | Dashboard modification | UI cannot change dashboard definitions |
+| Run modification | Runs are immutable; no PATCH/DELETE exists |
 
 ### 9.4 Observability Response Handling
 
-API may return observability metadata. UI renders this without modification:
+UI renders observability data without modification or derivation:
 
-```json
-{
-  "quote": { ... },
-  "observability": {
-    "sla_status": "on_track",
-    "last_activity": "2024-01-15T10:30:00Z",
-    "activity_count": 12
-  }
-}
-```
-
-UI displays these values. UI does NOT:
-- Calculate SLA status
-- Compute activity counts
-- Derive time-based metrics
-- Infer status from other fields
+- Display metrics values as returned
+- Display run summaries as returned
+- Display throughput configuration as returned
+- Do NOT calculate derived metrics
+- Do NOT compute trend analysis
+- Do NOT infer status from other fields
 
 ---
 
@@ -730,7 +748,8 @@ This contract is **governance-controlled**. Changes require:
 
 | Version | Date | Change | Approver |
 |---------|------|--------|----------|
-| 1.0 | 2024 | Initial contract (M67-01) | Pending |
+| 1.0 | 2024-12-30 | Initial contract (M67-01) | — |
+| 1.1 | 2024-12-30 | Revised to align with M60 UI-Facing Contract Extract (2024-12-30) | Pending |
 
 ### 10.3 Enforcement Review
 
@@ -747,8 +766,8 @@ This contract is subject to periodic enforcement review:
 
 | Violation Severity | Response |
 |--------------------|----------|
-| **Critical** (direct DB access, secret exposure) | Immediate rollback, security incident |
-| **High** (approval/execution logic in UI) | Block merge, mandatory remediation |
+| **Critical** (direct DB access, secret exposure, execution logic) | Immediate rollback, security incident |
+| **High** (approval logic in UI, legacy endpoint access) | Block merge, mandatory remediation |
 | **Medium** (environment branching, auth logic) | Block merge, required fix |
 | **Low** (response transformation, caching) | Flag for fix, may merge with ticket |
 
@@ -769,45 +788,33 @@ Exceptions are **discouraged** and should be rare.
 
 ## 11. Appendix: Ambiguities / Open Questions
 
-The following items require clarification before or during implementation:
+### 11.1 Notes from M60 Extract
 
-### 11.1 Open Questions from M60 Extract
+| ID | Note | Status |
+|----|------|--------|
+| N-001 | Auth/Roles: No explicit auth middleware visible in M60 API registration; assumed handled at platform layer | Acknowledged |
+| N-002 | Kill Switch Persistence: Kill switch state storage location not visible in extraction; assumed platform-level configuration | Acknowledged |
+| N-003 | Rate Limiting: `getRateLimiterStats()` exposed via `/api/system/rate-limiter` but not in versioned API namespace | Not in M60 scope |
 
-| ID | Question | Status | Resolution Owner |
-|----|----------|--------|------------------|
-| OQ-001 | Are bulk operations (multi-quote actions) in scope for M60? | Open | Sales Engine Team |
-| OQ-002 | What is the polling interval for approval status? | Open | Platform Team |
-| OQ-003 | Are quote attachments/files in scope for M60? | Open | Sales Engine Team |
-| OQ-004 | What quote configuration options are exposed via API? | Open | Sales Engine Team |
-| OQ-005 | Is quote cloning/duplication an M60 operation? | Open | Sales Engine Team |
+### 11.2 Integration Clarifications
 
-### 11.2 Integration Ambiguities
+| ID | Clarification | Resolution |
+|----|---------------|------------|
+| IC-001 | Legacy endpoints blocked | Platform Shell MUST block `/api/campaigns/*` (non-versioned); only `/api/v1/campaigns/*` permitted |
+| IC-002 | Governance metadata required | UI MUST use `canEdit`, `canSubmit`, `canApprove`, `isRunnable` from campaign detail response |
+| IC-003 | No execute endpoints | UI MUST NOT display execute/run/trigger actions; no such endpoints exist |
 
-| ID | Ambiguity | Impact | Mitigation |
-|----|-----------|--------|------------|
-| IA-001 | Exact M60 endpoint paths not finalized | UI cannot implement until resolved | Block on M60 finalization |
-| IA-002 | Error response schema not standardized | UI error handling may be inconsistent | Define error schema in M60 |
-| IA-003 | Pagination model not specified | Large quote lists may have UX issues | Define pagination in M60 |
-| IA-004 | Real-time updates not addressed | UI may show stale data | Document refresh model |
+### 11.3 M60 Source References
 
-### 11.3 Safety Boundary Clarifications Needed
-
-| ID | Clarification Needed | Status |
-|----|----------------------|--------|
-| SB-001 | Exact M65 gate trigger conditions | Pending M65 finalization |
-| SB-002 | M66 kill switch activation criteria | Pending M66 finalization |
-| SB-003 | Per-environment kill switch behavior | Pending M66 finalization |
-| SB-004 | Approval timeout/expiration handling | Pending M65 finalization |
-
-### 11.4 Resolution Process
-
-Open questions and ambiguities will be resolved as follows:
-
-1. **M67-02 Planning** — Review open questions, prioritize resolution
-2. **M60 Finalization** — Resolve API surface questions
-3. **M65/M66 Finalization** — Resolve safety gate questions
-4. **Contract Amendment** — Update this contract with resolutions
-5. **Implementation Start** — M67-02+ may begin after resolutions
+| Purpose | Source Path |
+|---------|-------------|
+| M60 Campaign Management API | `server/api/campaignManagementApi.ts` |
+| Outbound Readiness Evaluator | `pipeline/outbound/outboundReadinessEvaluator.ts` |
+| Throughput Validator | `server/services/throughputValidator.ts` |
+| Campaign Run Orchestrator | `pipeline/campaigns/campaignRunOrchestrator.ts` |
+| Shared SDK Entities | `shared-sdk/contracts/entities/` |
+| Schema Definitions | `shared/schema.ts` |
+| API Tests (Contract Verification) | `server/__tests__/campaignManagementApi.test.ts` |
 
 ---
 
@@ -816,11 +823,12 @@ Open questions and ambiguities will be resolved as follows:
 | Attribute | Value |
 |-----------|-------|
 | **Document ID** | M67-01-ARCH-CONTRACT |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Status** | Pending Approval |
 | **Classification** | Governance Controlled |
 | **Owner** | Platform Architecture Team |
-| **Last Updated** | 2024 |
+| **Last Updated** | 2024-12-30 |
+| **Alignment Source** | M60 UI-Facing Contract Extract (2024-12-30) |
 
 ### Approval Signatures
 
@@ -838,15 +846,17 @@ Open questions and ambiguities will be resolved as follows:
 | Term | Definition |
 |------|------------|
 | **M60** | Sales Engine API Contract — defines allowed UI-facing endpoints |
-| **M65** | Approval Gate Contract — defines human approval requirements |
+| **M65** | Approval Gate Contract — defines human approval and readiness requirements |
 | **M66** | Execution Safety Contract — defines kill switch and execution boundaries |
 | **M67** | Sales Engine UI milestone series |
-| **Kill Switch** | Server-side mechanism to halt all executions immediately |
-| **Approval Gate** | Server-side requirement for human approval before action proceeds |
+| **Kill Switch** | Server-side mechanism to halt all outbound operations immediately |
+| **Readiness Validation** | Server-side check of all conditions before outbound is possible |
+| **Throughput Validation** | Server-side enforcement of send rate limits |
 | **Platform Shell** | The UI container and API mediation layer |
 | **ODS** | Operational Data Store — backend database |
 | **Edge Function** | Supabase serverless function |
 | **Bootstrap** | Initial application load providing identity and permissions |
+| **Governance Metadata** | API-provided flags (`canEdit`, `canSubmit`, `canApprove`, `isRunnable`) |
 
 ---
 
