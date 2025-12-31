@@ -214,8 +214,8 @@ function BootstrapLoading() {
 }
 
 function BootstrapError({ error }: { error: string }) {
-  const is401 = error.includes('401') || error.toLowerCase().includes('unauthorized');
-
+  // M67.9-01: No authentication assumed - Vercel Password Protection handles access
+  // Show generic error message without auth-specific messaging
   return (
     <div
       style={{
@@ -228,9 +228,7 @@ function BootstrapError({ error }: { error: string }) {
         padding: '24px',
       }}
     >
-      <span style={{ fontSize: '48px', marginBottom: '16px' }}>
-        {is401 ? '🔐' : '⚠️'}
-      </span>
+      <span style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</span>
       <h1
         style={{
           fontSize: '24px',
@@ -239,7 +237,7 @@ function BootstrapError({ error }: { error: string }) {
           marginBottom: '8px',
         }}
       >
-        {is401 ? 'Authentication Required' : 'Unable to Load'}
+        Unable to Load
       </h1>
       <p
         style={{
@@ -249,22 +247,18 @@ function BootstrapError({ error }: { error: string }) {
           maxWidth: '400px',
         }}
       >
-        {is401
-          ? 'Please sign in to access the NSD Command Center.'
-          : 'Failed to initialize the application. Please try again later.'}
+        Failed to initialize the application. Please try again later.
       </p>
-      {!is401 && (
-        <p
-          style={{
-            color: '#9ca3af',
-            fontSize: '12px',
-            marginTop: '16px',
-            fontFamily: 'monospace',
-          }}
-        >
-          {error}
-        </p>
-      )}
+      <p
+        style={{
+          color: '#9ca3af',
+          fontSize: '12px',
+          marginTop: '16px',
+          fontFamily: 'monospace',
+        }}
+      >
+        {error}
+      </p>
     </div>
   );
 }

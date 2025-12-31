@@ -77,12 +77,15 @@ function buildHeaders(): HeadersInit {
 // =============================================================================
 
 const MOCK_DASHBOARD_READINESS: DashboardReadiness = {
+  total: 0,
   draft: 0,
   pendingReview: 0,
   runnable: 0,
   running: 0,
   completed: 0,
   failed: 0,
+  archived: 0,
+  blockers: [],
 };
 
 const MOCK_DASHBOARD_THROUGHPUT: DashboardThroughput = {

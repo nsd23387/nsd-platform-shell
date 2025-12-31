@@ -98,21 +98,22 @@ function getAuthToken(): string | undefined {
 
 // =============================================================================
 // M67.9-01 MOCK DATA FOR API-DISABLED MODE
+// 
+// SECURITY NOTE: This application is an internal tool.
+// Access control is handled via Vercel Password Protection.
+// No application-level authentication is implemented.
+// The mock data below is for UI rendering only - no user assumed.
 // =============================================================================
 
 const MOCK_BOOTSTRAP_RESPONSE: BootstrapResponse = {
-  user: {
-    id: 'mock-user',
-    email: 'preview@example.com',
-    name: 'Preview User',
+  user: null as unknown as BootstrapResponse['user'], // No user assumed - Vercel Password Protection handles access
+  organization: null as unknown as BootstrapResponse['organization'],
+  roles: [],
+  permissions: [],
+  environment: {
+    name: 'production',
+    api_version: 'v1',
   },
-  organization: {
-    id: 'mock-org',
-    name: 'Preview Organization',
-  },
-  roles: ['viewer'],
-  permissions: ['read:campaigns'],
-  environment: 'preview',
   feature_visibility: {
     sales_engine: true,
     campaigns: true,
@@ -223,11 +224,9 @@ async function fetchFromActivitySpine<T>(
     console.log(`[SDK] API mode disabled - returning mock response for ${endpoint}`);
     return {
       data: {} as T,
-      meta: {
-        timestamp: new Date().toISOString(),
-        source: 'mock',
-      },
-    } as ActivitySpineResponse<T>;
+      timestamp: new Date().toISOString(),
+      orgId: 'mock-org',
+    };
   }
 
   const url = new URL(`${sdkConfig.activitySpineUrl}${endpoint}`, window.location.origin);

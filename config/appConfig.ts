@@ -10,6 +10,11 @@
  * - No secrets or real API keys.
  * - All network calls disabled when API mode is disabled.
  * - This milestone is hosting-only - does NOT enable M68 functionality.
+ * 
+ * SECURITY NOTE:
+ * This application is deployed as an internal tool.
+ * Access control is handled via Vercel Password Protection (not application-level auth).
+ * No code assumes a logged-in user.
  */
 
 // =============================================================================

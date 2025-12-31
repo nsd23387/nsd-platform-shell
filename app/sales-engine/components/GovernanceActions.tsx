@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { CampaignDetail } from '../types/campaign';
+import { isReadOnly, getDisabledMessage } from '../../../config/appConfig';
 
 interface GovernanceActionsProps {
   campaign: CampaignDetail;
@@ -14,7 +15,11 @@ export function GovernanceActions({ campaign, onSubmit, onApprove }: GovernanceA
   const [isApproving, setIsApproving] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'submit' | 'approve' | null>(null);
 
+  // M67.9-01: All actions disabled in read-only mode
+  const actionsDisabled = isReadOnly;
+
   async function handleSubmit() {
+    if (actionsDisabled) return;
     setIsSubmitting(true);
     try {
       await onSubmit();
@@ -25,6 +30,7 @@ export function GovernanceActions({ campaign, onSubmit, onApprove }: GovernanceA
   }
 
   async function handleApprove() {
+    if (actionsDisabled) return;
     setIsApproving(true);
     try {
       await onApprove();
@@ -53,6 +59,22 @@ export function GovernanceActions({ campaign, onSubmit, onApprove }: GovernanceA
       >
         Campaign Actions
       </h4>
+
+      {/* M67.9-01: Read-only mode notice */}
+      {actionsDisabled && (
+        <div
+          style={{
+            padding: '12px 16px',
+            backgroundColor: '#FEF3C7',
+            borderRadius: '6px',
+            marginBottom: '16px',
+            fontSize: '13px',
+            color: '#92400E',
+          }}
+        >
+          {getDisabledMessage('general')}
+        </div>
+      )}
 
       {confirmAction === 'submit' && (
         <div
@@ -154,36 +176,36 @@ export function GovernanceActions({ campaign, onSubmit, onApprove }: GovernanceA
 
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         <button
-          onClick={() => setConfirmAction('submit')}
-          disabled={!campaign.canSubmit || isSubmitting}
-          title={!campaign.canSubmit ? 'Cannot submit in current state' : 'Submit for review'}
+          onClick={() => !actionsDisabled && setConfirmAction('submit')}
+          disabled={actionsDisabled || !campaign.canSubmit || isSubmitting}
+          title={actionsDisabled ? getDisabledMessage('submit') : (!campaign.canSubmit ? 'Cannot submit in current state' : 'Submit for review')}
           style={{
             padding: '10px 20px',
             fontSize: '14px',
             fontWeight: 500,
-            backgroundColor: campaign.canSubmit ? '#f59e0b' : '#e5e7eb',
-            color: campaign.canSubmit ? '#fff' : '#9ca3af',
+            backgroundColor: !actionsDisabled && campaign.canSubmit ? '#f59e0b' : '#e5e7eb',
+            color: !actionsDisabled && campaign.canSubmit ? '#fff' : '#9ca3af',
             border: 'none',
             borderRadius: '6px',
-            cursor: campaign.canSubmit ? 'pointer' : 'not-allowed',
+            cursor: !actionsDisabled && campaign.canSubmit ? 'pointer' : 'not-allowed',
           }}
         >
           Submit for Review
         </button>
 
         <button
-          onClick={() => setConfirmAction('approve')}
-          disabled={!campaign.canApprove || isApproving}
-          title={!campaign.canApprove ? 'Cannot approve in current state' : 'Approve campaign'}
+          onClick={() => !actionsDisabled && setConfirmAction('approve')}
+          disabled={actionsDisabled || !campaign.canApprove || isApproving}
+          title={actionsDisabled ? getDisabledMessage('approve') : (!campaign.canApprove ? 'Cannot approve in current state' : 'Approve campaign')}
           style={{
             padding: '10px 20px',
             fontSize: '14px',
             fontWeight: 500,
-            backgroundColor: campaign.canApprove ? '#10b981' : '#e5e7eb',
-            color: campaign.canApprove ? '#fff' : '#9ca3af',
+            backgroundColor: !actionsDisabled && campaign.canApprove ? '#10b981' : '#e5e7eb',
+            color: !actionsDisabled && campaign.canApprove ? '#fff' : '#9ca3af',
             border: 'none',
             borderRadius: '6px',
-            cursor: campaign.canApprove ? 'pointer' : 'not-allowed',
+            cursor: !actionsDisabled && campaign.canApprove ? 'pointer' : 'not-allowed',
           }}
         >
           Approve Campaign
