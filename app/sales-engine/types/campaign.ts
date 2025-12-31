@@ -1,4 +1,25 @@
+/**
+ * Campaign Types - Target-State Architecture
+ * 
+ * Type definitions for the Sales Engine UI.
+ * Updated to support governance-first, read-only architecture.
+ */
+
+/**
+ * Legacy campaign status from backend.
+ * Note: UI should map these to CampaignGovernanceState for display.
+ */
 export type CampaignStatus = 'DRAFT' | 'PENDING_REVIEW' | 'RUNNABLE' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'ARCHIVED';
+
+/**
+ * Provenance type for data records.
+ */
+export type ProvenanceType = 'CANONICAL' | 'LEGACY_OBSERVED';
+
+/**
+ * Confidence classification for metrics.
+ */
+export type MetricConfidence = 'SAFE' | 'CONDITIONAL' | 'BLOCKED';
 
 export interface Campaign {
   id: string;
@@ -11,6 +32,10 @@ export interface Campaign {
   canSubmit: boolean;
   canApprove: boolean;
   isRunnable: boolean;
+  // Provenance fields
+  provenance?: ProvenanceType;
+  source_system?: string;
+  is_canonical?: boolean;
 }
 
 export interface CampaignICP {
@@ -28,6 +53,9 @@ export interface CampaignPersonalization {
   usp?: string;
 }
 
+/**
+ * @deprecated Campaign creation is not supported in read-only UI.
+ */
 export interface CampaignCreatePayload {
   name: string;
   description?: string;
@@ -35,6 +63,9 @@ export interface CampaignCreatePayload {
   personalization?: CampaignPersonalization;
 }
 
+/**
+ * @deprecated Campaign updates are not supported in read-only UI.
+ */
 export interface CampaignUpdatePayload {
   name?: string;
   description?: string;
@@ -66,6 +97,10 @@ export interface CampaignMetrics {
   open_rate: number;
   reply_rate: number;
   last_updated: string;
+  // Confidence metadata
+  confidence?: MetricConfidence;
+  validation_status?: string;
+  provenance?: ProvenanceType;
 }
 
 export interface MetricsHistoryEntry {
@@ -73,6 +108,7 @@ export interface MetricsHistoryEntry {
   emails_sent: number;
   emails_opened: number;
   emails_replied: number;
+  confidence?: MetricConfidence;
 }
 
 export interface CampaignRun {
@@ -90,6 +126,8 @@ export interface CampaignRun {
     leads_count: number;
     created_at: string;
   };
+  // Provenance
+  provenance?: ProvenanceType;
 }
 
 export interface CampaignVariant {
@@ -114,6 +152,10 @@ export interface ThroughputConfig {
 export interface ReadinessStatus {
   is_ready: boolean;
   blocking_reasons: BlockingReason[];
+  last_checked?: string;
+  mailbox_healthy?: boolean;
+  deliverability_score?: number;
+  kill_switch_enabled?: boolean;
 }
 
 export interface CampaignDetail extends Campaign {
@@ -161,18 +203,24 @@ export interface RecentRunOutcome {
   leadsSent: number;
   leadsBlocked: number;
   completedAt: string;
+  provenance?: ProvenanceType;
 }
 
+/**
+ * Needs attention items with governance-first actions.
+ * Updated: Removed "Start Run" action per target-state constraints.
+ */
 export interface NeedsAttentionItem {
   id: string;
   campaignId: string;
   campaignName: string;
-  reason: 'in_review_stale' | 'approved_not_started' | 'run_failed';
+  reason: 'pending_approval_stale' | 'approved_not_observed' | 'execution_failed' | 'blocked';
   status: CampaignStatus;
   lastUpdated: string;
   primaryAction: {
     label: string;
     href: string;
+    type: 'view' | 'review'; // Actions are read-only navigation only
   };
 }
 
@@ -186,3 +234,52 @@ export interface UserBootstrap {
     [key: string]: boolean | undefined;
   };
 }
+
+/**
+ * Qualified lead record.
+ * Per target-state constraints: Lead views must only show records in
+ * "lead-ready/qualified" canonical state.
+ */
+export interface QualifiedLead {
+  id: string;
+  organization_id: string;
+  contact_id: string;
+  email: string; // Must be valid, non-filler email
+  qualification_state: 'qualified' | 'mql' | 'sql';
+  provenance: ProvenanceType;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Contact record (distinct from Lead).
+ * Per target-state constraints: Do not treat "contact with email" as a Lead.
+ */
+export interface ContactObserved {
+  id: string;
+  organization_id: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  title?: string;
+  provenance: ProvenanceType;
+  observed_at: string;
+}
+
+/**
+ * Learning signal metadata.
+ */
+export interface LearningSignal {
+  id: string;
+  name: string;
+  type: 'reply_outcome' | 'bounce' | 'open_rate' | 'click_rate' | 'engagement' | 'other';
+  collected: boolean;
+  eligibleForLearning: boolean;
+  excludedFromAutomation: boolean;
+  reason?: string;
+}
+
+/**
+ * Autonomy levels (L0-L2 only per constraints).
+ */
+export type AutonomyLevel = 'L0' | 'L1' | 'L2';
