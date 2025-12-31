@@ -23,6 +23,17 @@ const statusColors: Record<CampaignRun['status'], { bg: string; text: string }> 
  * - Uses "Qualified Leads Processed" terminology
  * - Includes provenance indicators
  * - Emphasizes read-only observability
+ * 
+ * LEAD MODEL DISTINCTION:
+ * - "Qualified Leads" shown here represent records that passed lead qualification
+ *   checks (valid email, qualification state) at execution time
+ * - This is distinct from "Contacts Observed" which shows all contacts regardless
+ *   of email validity or qualification status
+ * - The leads_processed count comes directly from the backend execution record
+ *   and is not filtered client-side
+ * 
+ * See: isQualifiedLead() and isValidLeadEmail() in campaign-state.ts for
+ * the qualification logic documentation.
  */
 export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
   return (

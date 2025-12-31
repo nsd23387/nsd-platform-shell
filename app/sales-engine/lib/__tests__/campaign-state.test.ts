@@ -2,6 +2,11 @@
  * Campaign State Machine - Unit Tests
  * 
  * Tests for the deterministic campaign state mapping functions.
+ * 
+ * Key test cases:
+ * - Provenance precedence (explicit field > is_canonical > source_system > default)
+ * - Readiness level computed from backend payload, NOT governance state
+ * - Confidence derived from actual metadata only
  */
 
 import { describe, it, expect } from 'vitest';
@@ -11,6 +16,7 @@ import {
   getGovernanceStateStyle,
   deriveProvenance,
   deriveConfidence,
+  computeReadinessLevel,
   isValidLeadEmail,
   isQualifiedLead,
   getPrimaryAction,
@@ -121,28 +127,157 @@ describe('getGovernanceStateStyle', () => {
 });
 
 describe('deriveProvenance', () => {
-  it('should return CANONICAL when is_canonical is true', () => {
-    expect(deriveProvenance({ is_canonical: true })).toBe('CANONICAL');
+  describe('Precedence order (CRITICAL)', () => {
+    it('should honor explicit provenance=CANONICAL first, ignoring heuristics', () => {
+      // Even if other heuristics suggest LEGACY_OBSERVED, explicit provenance wins
+      expect(deriveProvenance({ 
+        provenance: 'CANONICAL',
+        is_canonical: false, // would suggest LEGACY_OBSERVED
+        observed_via: 'legacy-system' // would suggest LEGACY_OBSERVED
+      })).toBe('CANONICAL');
+    });
+
+    it('should honor explicit provenance=LEGACY_OBSERVED first, ignoring heuristics', () => {
+      // Even if other heuristics suggest CANONICAL, explicit provenance wins
+      expect(deriveProvenance({ 
+        provenance: 'LEGACY_OBSERVED',
+        is_canonical: true, // would suggest CANONICAL
+        source_system: 'ods-primary' // would suggest CANONICAL
+      })).toBe('LEGACY_OBSERVED');
+    });
+
+    it('should use is_canonical when provenance is not present', () => {
+      expect(deriveProvenance({ is_canonical: true })).toBe('CANONICAL');
+      expect(deriveProvenance({ is_canonical: false })).toBe('LEGACY_OBSERVED');
+    });
+
+    it('should use source_system heuristic only when provenance and is_canonical are absent', () => {
+      expect(deriveProvenance({ source_system: 'ods-primary' })).toBe('CANONICAL');
+      expect(deriveProvenance({ source_system: 'canonical-db' })).toBe('CANONICAL');
+      expect(deriveProvenance({ source_system: 'primary-source' })).toBe('CANONICAL');
+    });
+
+    it('should return LEGACY_OBSERVED when observed_via is present (fallback)', () => {
+      expect(deriveProvenance({ observed_via: 'legacy-system' })).toBe('LEGACY_OBSERVED');
+    });
+
+    it('should default to LEGACY_OBSERVED when no indicators present (safest default)', () => {
+      expect(deriveProvenance({})).toBe('LEGACY_OBSERVED');
+    });
   });
 
-  it('should return LEGACY_OBSERVED when is_canonical is false', () => {
-    expect(deriveProvenance({ is_canonical: false })).toBe('LEGACY_OBSERVED');
+  describe('Canonical records not overridden by heuristics', () => {
+    it('should not downgrade explicit CANONICAL to LEGACY_OBSERVED', () => {
+      expect(deriveProvenance({ 
+        provenance: 'CANONICAL',
+        source_system: 'unknown-system'
+      })).toBe('CANONICAL');
+    });
+
+    it('should preserve CANONICAL from is_canonical even with unknown source', () => {
+      expect(deriveProvenance({ 
+        is_canonical: true,
+        source_system: 'random-legacy'
+      })).toBe('CANONICAL');
+    });
   });
 
-  it('should return CANONICAL when source_system contains "ods"', () => {
-    expect(deriveProvenance({ source_system: 'ods-primary' })).toBe('CANONICAL');
+  describe('Legacy backward compatibility', () => {
+    it('should return CANONICAL when is_canonical is true', () => {
+      expect(deriveProvenance({ is_canonical: true })).toBe('CANONICAL');
+    });
+
+    it('should return LEGACY_OBSERVED when is_canonical is false', () => {
+      expect(deriveProvenance({ is_canonical: false })).toBe('LEGACY_OBSERVED');
+    });
+
+    it('should return CANONICAL when source_system contains "ods"', () => {
+      expect(deriveProvenance({ source_system: 'ods-primary' })).toBe('CANONICAL');
+    });
+
+    it('should return CANONICAL when source_system contains "canonical"', () => {
+      expect(deriveProvenance({ source_system: 'canonical-db' })).toBe('CANONICAL');
+    });
+  });
+});
+
+describe('computeReadinessLevel', () => {
+  describe('UNKNOWN when data is missing or incomplete', () => {
+    it('should return UNKNOWN when payload is null', () => {
+      expect(computeReadinessLevel(null)).toBe('UNKNOWN');
+    });
+
+    it('should return UNKNOWN when payload is undefined', () => {
+      expect(computeReadinessLevel(undefined)).toBe('UNKNOWN');
+    });
+
+    it('should return UNKNOWN when is_ready is not provided', () => {
+      expect(computeReadinessLevel({})).toBe('UNKNOWN');
+    });
+
+    it('should return UNKNOWN when is_ready=true but mailbox_healthy is missing', () => {
+      // Cannot confirm ready without all required checks
+      expect(computeReadinessLevel({ is_ready: true })).toBe('UNKNOWN');
+    });
   });
 
-  it('should return CANONICAL when source_system contains "canonical"', () => {
-    expect(deriveProvenance({ source_system: 'canonical-db' })).toBe('CANONICAL');
+  describe('NOT_READY when blocking reasons exist', () => {
+    it('should return NOT_READY when blocking_reasons has items', () => {
+      expect(computeReadinessLevel({ 
+        blocking_reasons: ['MISSING_HUMAN_APPROVAL'] 
+      })).toBe('NOT_READY');
+    });
+
+    it('should return NOT_READY even if is_ready is true but has blocking reasons', () => {
+      expect(computeReadinessLevel({ 
+        is_ready: true,
+        mailbox_healthy: true,
+        blocking_reasons: ['KILL_SWITCH_ENABLED'] 
+      })).toBe('NOT_READY');
+    });
   });
 
-  it('should return LEGACY_OBSERVED when observed_via is present', () => {
-    expect(deriveProvenance({ observed_via: 'legacy-system' })).toBe('LEGACY_OBSERVED');
+  describe('NOT_READY when kill switch enabled', () => {
+    it('should return NOT_READY when kill_switch_enabled is true', () => {
+      expect(computeReadinessLevel({ 
+        kill_switch_enabled: true 
+      })).toBe('NOT_READY');
+    });
   });
 
-  it('should default to LEGACY_OBSERVED when no indicators present', () => {
-    expect(deriveProvenance({})).toBe('LEGACY_OBSERVED');
+  describe('READY only when explicitly confirmed', () => {
+    it('should return READY when is_ready=true and mailbox_healthy is provided', () => {
+      expect(computeReadinessLevel({ 
+        is_ready: true,
+        mailbox_healthy: true 
+      })).toBe('READY');
+    });
+
+    it('should return READY with full valid payload', () => {
+      expect(computeReadinessLevel({ 
+        is_ready: true,
+        mailbox_healthy: true,
+        deliverability_score: 97,
+        kill_switch_enabled: false,
+        blocking_reasons: []
+      })).toBe('READY');
+    });
+  });
+
+  describe('NOT_READY when is_ready explicitly false', () => {
+    it('should return NOT_READY when is_ready is explicitly false', () => {
+      expect(computeReadinessLevel({ is_ready: false })).toBe('NOT_READY');
+    });
+  });
+
+  describe('Readiness is independent of governance state', () => {
+    // These tests document the architectural constraint that readiness
+    // and governance state are orthogonal concerns
+    it('should not infer READY from governance approval', () => {
+      // A campaign can be "approved" but still have UNKNOWN readiness
+      // This test documents that we don't pass governance state to this function
+      expect(computeReadinessLevel({})).toBe('UNKNOWN');
+    });
   });
 });
 

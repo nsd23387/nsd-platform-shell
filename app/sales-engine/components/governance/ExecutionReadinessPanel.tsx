@@ -1,14 +1,24 @@
 'use client';
 
+/**
+ * ExecutionReadinessPanel - Displays execution readiness status.
+ * 
+ * CRITICAL ARCHITECTURAL NOTES:
+ * 1. Readiness is INDEPENDENT of governance state
+ * 2. Missing data is displayed as UNKNOWN, never inferred as READY
+ * 3. Only backend-provided fields are used - no hardcoding or inference
+ * 4. This is observability only - no execution triggers
+ */
+
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import type { ReadinessLevel } from '../../lib/campaign-state';
 
 interface ExecutionReadinessData {
-  // Mailbox health
-  mailboxHealthy: boolean;
+  // Mailbox health - undefined means not validated
+  mailboxHealthy?: boolean;
   mailboxHealthStatus?: string;
   
-  // Deliverability
+  // Deliverability - undefined means not validated, NO HARDCODING
   deliverabilityScore?: number;
   deliverabilityThreshold: number; // >=95 required
   
@@ -16,13 +26,13 @@ interface ExecutionReadinessData {
   currentThroughput?: number;
   maxThroughput?: number;
   
-  // Kill switch
+  // Kill switch - defaults to false if not provided
   killSwitchEnabled: boolean;
   
-  // Last check timestamp
+  // Last check timestamp - undefined means never checked
   lastReadinessCheck?: string;
   
-  // Overall readiness
+  // Overall readiness - computed from backend data, NOT governance state
   readinessLevel: ReadinessLevel;
   blockingReasons: string[];
 }
@@ -38,21 +48,23 @@ const READINESS_STYLES: Record<ReadinessLevel, { bg: string; text: string; borde
   UNKNOWN: { bg: '#F3F4F6', text: '#6B7280', border: '#D1D5DB', icon: '?' },
 };
 
-/**
- * ExecutionReadinessPanel - Displays execution readiness status.
- * 
- * Read-only panel showing:
- * - Mailbox health status
- * - Deliverability threshold (>=95)
- * - Throughput limits (current vs max)
- * - Kill switch state (default OFF)
- * - Last readiness check timestamp
- * 
- * Per target-state constraints, this is observability only - no execution triggers.
- */
+const READINESS_MESSAGES: Record<ReadinessLevel, string> = {
+  READY: 'System ready for execution (observed externally)',
+  NOT_READY: 'System not ready - see blocking reasons below',
+  UNKNOWN: 'Readiness unknown - validation not yet performed',
+};
+
 export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadinessProps) {
   const readinessStyle = READINESS_STYLES[data.readinessLevel];
-  const deliverabilityOk = (data.deliverabilityScore ?? 0) >= data.deliverabilityThreshold;
+  
+  // Compute deliverability status - UNKNOWN if not provided
+  const deliverabilityStatus = getDeliverabilityStatus(
+    data.deliverabilityScore,
+    data.deliverabilityThreshold
+  );
+
+  // Compute mailbox status - UNKNOWN if not provided
+  const mailboxStatus = getMailboxStatus(data.mailboxHealthy, data.mailboxHealthStatus);
 
   return (
     <div
@@ -110,9 +122,7 @@ export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadin
                 opacity: 0.9,
               }}
             >
-              {data.readinessLevel === 'READY' && 'System ready for execution (observed externally)'}
-              {data.readinessLevel === 'NOT_READY' && 'System not ready - see blocking reasons'}
-              {data.readinessLevel === 'UNKNOWN' && 'Readiness status unknown'}
+              {READINESS_MESSAGES[data.readinessLevel]}
             </p>
           </div>
         </div>
@@ -146,18 +156,15 @@ export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadin
           {/* Mailbox Health */}
           <StatusItem
             label="Mailbox Health"
-            value={data.mailboxHealthStatus || (data.mailboxHealthy ? 'Healthy' : 'Unhealthy')}
-            status={data.mailboxHealthy ? 'ok' : 'error'}
+            value={mailboxStatus.label}
+            status={mailboxStatus.status}
           />
 
           {/* Deliverability */}
           <StatusItem
             label="Deliverability"
-            value={data.deliverabilityScore !== undefined 
-              ? `${data.deliverabilityScore}% (threshold: ${data.deliverabilityThreshold}%)`
-              : 'Unknown'
-            }
-            status={data.deliverabilityScore === undefined ? 'unknown' : deliverabilityOk ? 'ok' : 'error'}
+            value={deliverabilityStatus.label}
+            status={deliverabilityStatus.status}
           />
 
           {/* Throughput */}
@@ -165,7 +172,7 @@ export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadin
             label="Throughput"
             value={data.currentThroughput !== undefined && data.maxThroughput !== undefined
               ? `${data.currentThroughput} / ${data.maxThroughput}`
-              : 'Not configured'
+              : 'Unknown (Not Configured)'
             }
             status={data.currentThroughput !== undefined ? 'ok' : 'unknown'}
           />
@@ -202,10 +209,38 @@ export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadin
             <ul style={{ margin: 0, padding: '0 0 0 18px', fontSize: '13px', color: '#991B1B' }}>
               {data.blockingReasons.map((reason, idx) => (
                 <li key={idx} style={{ marginBottom: '4px' }}>
-                  {reason.replace(/_/g, ' ')}
+                  {reason}
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* UNKNOWN state explanation */}
+        {data.readinessLevel === 'UNKNOWN' && (
+          <div
+            style={{
+              padding: '14px 16px',
+              backgroundColor: '#F3F4F6',
+              borderRadius: NSD_RADIUS.md,
+              marginBottom: '16px',
+            }}
+          >
+            <h5
+              style={{
+                margin: '0 0 8px 0',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#4B5563',
+              }}
+            >
+              Why is this Unknown?
+            </h5>
+            <p style={{ margin: 0, fontSize: '13px', color: '#6B7280', lineHeight: 1.5 }}>
+              Readiness validation has not been performed or the backend has not provided complete
+              readiness data. This is distinct from &quot;Not Ready&quot; - it means the system state is
+              uncertain. Contact the backend team if validation should have occurred.
+            </p>
           </div>
         )}
 
@@ -220,10 +255,10 @@ export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadin
           }}
         >
           <span>
-            Last checked:{' '}
+            Last validated:{' '}
             {data.lastReadinessCheck
               ? new Date(data.lastReadinessCheck).toLocaleString()
-              : 'Never'}
+              : 'Never (Not Yet Validated)'}
           </span>
           {onViewDetails && (
             <button
@@ -255,11 +290,67 @@ export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadin
             color: '#1E40AF',
           }}
         >
-          <strong>Note:</strong> Readiness status is observational. Execution is managed by backend systems.
+          <strong>Note:</strong> Readiness status is observational and computed from backend validation.
+          It is independent of governance approval state. Execution is managed by backend systems.
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Get deliverability status display values.
+ * Returns UNKNOWN if score is not provided - never infer "OK".
+ */
+function getDeliverabilityStatus(
+  score: number | undefined,
+  threshold: number
+): { label: string; status: 'ok' | 'error' | 'unknown' } {
+  if (score === undefined) {
+    return {
+      label: 'Unknown (Not Validated)',
+      status: 'unknown',
+    };
+  }
+  
+  const meetsThreshold = score >= threshold;
+  return {
+    label: `${score}% (threshold: ${threshold}%)`,
+    status: meetsThreshold ? 'ok' : 'error',
+  };
+}
+
+/**
+ * Get mailbox health status display values.
+ * Returns UNKNOWN if health is not provided - never infer "Healthy".
+ */
+function getMailboxStatus(
+  healthy: boolean | undefined,
+  statusOverride?: string
+): { label: string; status: 'ok' | 'error' | 'unknown' } {
+  // If explicit status override is provided, use it
+  if (statusOverride) {
+    if (healthy === true) {
+      return { label: statusOverride, status: 'ok' };
+    }
+    if (healthy === false) {
+      return { label: statusOverride, status: 'error' };
+    }
+    return { label: statusOverride, status: 'unknown' };
+  }
+
+  // Determine from healthy boolean
+  if (healthy === undefined) {
+    return {
+      label: 'Unknown (Not Validated)',
+      status: 'unknown',
+    };
+  }
+  
+  return {
+    label: healthy ? 'Healthy' : 'Unhealthy',
+    status: healthy ? 'ok' : 'error',
+  };
 }
 
 function StatusItem({

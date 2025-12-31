@@ -1,9 +1,21 @@
 'use client';
 
+/**
+ * Campaign Detail Page - Target-State Architecture
+ * 
+ * IMPORTANT ARCHITECTURAL NOTES:
+ * 1. This page is READ-ONLY. No mutations are performed.
+ * 2. Governance State and Readiness Level are ORTHOGONAL:
+ *    - Governance: approval workflow stage
+ *    - Readiness: system capability (from backend readiness check)
+ * 3. Missing data is shown as UNKNOWN, never inferred as READY/SAFE.
+ * 4. Confidence is derived from actual backend metadata, not hardcoded.
+ */
+
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { PageHeader, SectionCard, Button } from '../../components/ui';
+import { PageHeader, SectionCard } from '../../components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import type {
@@ -22,14 +34,13 @@ import {
   getLatestRun,
   getCampaignVariants,
   getCampaignThroughput,
-  READ_ONLY_MESSAGE,
 } from '../../lib/api';
 import {
   mapToGovernanceState,
+  computeReadinessLevel,
+  deriveConfidence,
   type CampaignGovernanceState,
   type ReadinessLevel,
-  type AutonomyLevel,
-  deriveConfidence,
 } from '../../lib/campaign-state';
 import {
   CampaignStateBadge,
@@ -37,8 +48,8 @@ import {
   ExecutionReadinessPanel,
   LearningSignalsPanel,
   GovernanceActionsPanel,
-  ConfidenceBadge,
 } from '../../components/governance';
+import { MetricsDisplay } from '../../components/MetricsDisplay';
 
 type TabType = 'overview' | 'readiness' | 'monitoring' | 'learning';
 
@@ -67,6 +78,7 @@ export default function CampaignDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
   // Derive governance state from backend data
+  // NOTE: This is INDEPENDENT of readiness level
   const governanceState: CampaignGovernanceState = campaign
     ? mapToGovernanceState(
         campaign.status,
@@ -193,7 +205,6 @@ export default function CampaignDetailPage() {
           <ReadinessTab
             campaign={campaign}
             throughput={throughput}
-            governanceState={governanceState}
           />
         )}
 
@@ -305,38 +316,67 @@ function OverviewTab({
   );
 }
 
+/**
+ * ReadinessTab - Displays execution readiness status
+ * 
+ * CRITICAL: Readiness is computed from backend readiness payload ONLY.
+ * It is NOT derived from governance state. A campaign can be APPROVED_READY
+ * but still have readiness UNKNOWN if backend has not validated readiness.
+ */
 function ReadinessTab({
   campaign,
   throughput,
-  governanceState,
 }: {
   campaign: CampaignDetail;
   throughput: ThroughputConfig | null;
-  governanceState: CampaignGovernanceState;
 }) {
-  // Build readiness data from campaign and throughput info
-  const readinessLevel: ReadinessLevel = 
-    governanceState === 'BLOCKED' ? 'NOT_READY' :
-    governanceState === 'APPROVED_READY' || governanceState === 'EXECUTED_READ_ONLY' ? 'READY' :
-    'UNKNOWN';
+  // Compute readiness level from backend readiness payload ONLY
+  // DO NOT use governance state to infer readiness
+  const readinessLevel: ReadinessLevel = computeReadinessLevel(campaign.readiness);
 
+  // Build readiness data from ACTUAL backend fields only
+  // No hardcoding or inference - if data is missing, show UNKNOWN
   const readinessData = {
-    mailboxHealthy: !campaign.readiness?.blocking_reasons.includes('SMARTLEAD_NOT_CONFIGURED'),
-    mailboxHealthStatus: campaign.readiness?.blocking_reasons.includes('SMARTLEAD_NOT_CONFIGURED') 
-      ? 'Not Configured' 
-      : 'Healthy',
-    deliverabilityScore: throughput ? 95 : undefined, // TODO: Get from actual backend field
+    // Use actual backend mailbox_healthy field, default to undefined (unknown)
+    mailboxHealthy: campaign.readiness?.mailbox_healthy,
+    mailboxHealthStatus: campaign.readiness?.mailbox_healthy === undefined
+      ? 'Unknown (Not Validated)'
+      : campaign.readiness.mailbox_healthy
+        ? 'Healthy'
+        : 'Unhealthy',
+    
+    // Use actual backend deliverability_score - NO HARDCODING
+    deliverabilityScore: campaign.readiness?.deliverability_score,
     deliverabilityThreshold: 95,
+    
+    // Throughput from actual backend data
     currentThroughput: throughput?.current_daily_usage,
     maxThroughput: throughput?.daily_limit,
-    killSwitchEnabled: campaign.readiness?.blocking_reasons.includes('KILL_SWITCH_ENABLED') || false,
-    lastReadinessCheck: campaign.updated_at,
+    
+    // Use actual backend kill_switch_enabled field
+    killSwitchEnabled: campaign.readiness?.kill_switch_enabled ?? false,
+    
+    // Use actual last_checked timestamp from backend
+    lastReadinessCheck: campaign.readiness?.last_checked,
+    
+    // Readiness level computed from backend data, not governance state
     readinessLevel,
-    blockingReasons: campaign.readiness?.blocking_reasons.map(r => r.replace(/_/g, ' ')) || [],
+    
+    // Blocking reasons from backend
+    blockingReasons: campaign.readiness?.blocking_reasons?.map(r => r.replace(/_/g, ' ')) || [],
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Readiness vs Governance State explanation */}
+      <div style={{ padding: '14px 20px', backgroundColor: '#FEF3C7', borderRadius: NSD_RADIUS.md }}>
+        <p style={{ margin: 0, fontSize: '13px', color: '#92400E' }}>
+          <strong>Note:</strong> Readiness status is determined by backend validation checks and is independent
+          of governance approval state. A campaign may be approved but still show &quot;Unknown&quot; readiness if
+          validation has not been performed.
+        </p>
+      </div>
+
       <ExecutionReadinessPanel data={readinessData} />
 
       {/* Throughput details */}
@@ -374,6 +414,13 @@ function ReadinessTab({
   );
 }
 
+/**
+ * MonitoringTab - Displays metrics and run history
+ * 
+ * CRITICAL: Confidence is derived from ACTUAL backend metadata only.
+ * No hardcoded confidence values. If metadata is missing, metrics are
+ * shown as "Observed (Unclassified)" with CONDITIONAL confidence.
+ */
 function MonitoringTab({
   campaign,
   metrics,
@@ -393,38 +440,20 @@ function MonitoringTab({
       <div style={{ padding: '14px 20px', backgroundColor: '#EFF6FF', borderRadius: NSD_RADIUS.md }}>
         <p style={{ margin: 0, fontSize: '13px', color: '#1E40AF' }}>
           <strong>Observability Mode:</strong> This view displays execution outcomes observed from backend systems.
-          The UI does not trigger or control execution.
+          The UI does not trigger or control execution. Metrics confidence is determined by backend validation status.
         </p>
       </div>
 
-      {/* Metrics with confidence badges */}
-      {metrics && (
+      {/* Metrics using MetricsDisplay component with actual backend data */}
+      {metrics ? (
+        <MetricsDisplay metrics={metrics} history={metricsHistory} />
+      ) : (
         <SectionCard title="Performance Metrics" icon="metrics" iconColor={NSD_COLORS.secondary}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-            <MetricCard
-              label="Emails Sent"
-              value={metrics.emails_sent}
-              confidence={deriveConfidence({ validation_status: 'validated' })}
-            />
-            <MetricCard
-              label="Open Rate"
-              value={`${(metrics.open_rate * 100).toFixed(1)}%`}
-              confidence={deriveConfidence({ validation_status: 'validated' })}
-            />
-            <MetricCard
-              label="Reply Rate"
-              value={`${(metrics.reply_rate * 100).toFixed(1)}%`}
-              confidence={deriveConfidence({ validation_status: 'pending' })}
-            />
-            <MetricCard
-              label="Total Qualified Leads"
-              value={metrics.total_leads}
-              confidence={deriveConfidence({ validation_status: 'validated' })}
-            />
+          <div style={{ padding: '24px', textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.muted }}>
+              No metrics data available. Metrics will appear once execution has been observed.
+            </p>
           </div>
-          <p style={{ margin: '16px 0 0 0', fontSize: '12px', color: NSD_COLORS.text.muted }}>
-            Last updated: {new Date(metrics.last_updated).toLocaleString()}
-          </p>
         </SectionCard>
       )}
 
@@ -475,6 +504,7 @@ function MonitoringTab({
 
 function LearningTab({ campaignId }: { campaignId: string }) {
   // Sample learning signals - in production, these would come from the backend
+  // NOTE: This is placeholder data for UI demonstration purposes
   const sampleSignals = [
     { id: '1', name: 'Reply Outcome', type: 'reply_outcome' as const, collected: true, eligibleForLearning: true, excludedFromAutomation: false },
     { id: '2', name: 'Bounce Detection', type: 'bounce' as const, collected: true, eligibleForLearning: true, excludedFromAutomation: false },
@@ -488,28 +518,6 @@ function LearningTab({ campaignId }: { campaignId: string }) {
       autonomyLevel="L1"
       campaignId={campaignId}
     />
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  confidence,
-}: {
-  label: string;
-  value: number | string;
-  confidence: ReturnType<typeof deriveConfidence>;
-}) {
-  return (
-    <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-        <span style={{ fontSize: '12px', color: NSD_COLORS.text.muted }}>{label}</span>
-        <ConfidenceBadge confidence={confidence} size="sm" />
-      </div>
-      <div style={{ fontSize: '24px', fontWeight: 700, color: confidence === 'BLOCKED' ? NSD_COLORS.text.muted : NSD_COLORS.primary }}>
-        {typeof value === 'number' ? value.toLocaleString() : value}
-      </div>
-    </div>
   );
 }
 

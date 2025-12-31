@@ -17,8 +17,17 @@ interface MetricsDisplayProps {
  * - Shows confidence classification for each metric
  * - Uses "Qualified Leads" terminology
  * - Displays provenance indicator
+ * 
+ * IMPORTANT: Confidence is derived from ACTUAL backend metadata only.
+ * - If metrics.confidence or metrics.validation_status is present, use it
+ * - If not present, default to CONDITIONAL (uncertain) - never assume SAFE
+ * - If BLOCKED, metrics are visually muted
+ * 
+ * This ensures we never display "Safe" confidence without explicit backend validation.
  */
 export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
+  // Derive confidence from ACTUAL backend metadata
+  // deriveConfidence returns CONDITIONAL if no explicit validation metadata exists
   const metricConfidence = deriveConfidence({
     validation_status: metrics.validation_status,
     confidence: metrics.confidence,
@@ -28,6 +37,9 @@ export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
   const metricProvenance = deriveProvenance({
     provenance: metrics.provenance,
   });
+
+  // Check if we have explicit validation metadata
+  const hasExplicitConfidence = !!(metrics.confidence || metrics.validation_status);
 
   return (
     <div
@@ -90,6 +102,23 @@ export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
       <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>
         Last updated: {new Date(metrics.last_updated).toLocaleString()}
       </p>
+
+      {/* Show notice when confidence metadata is missing */}
+      {!hasExplicitConfidence && (
+        <div
+          style={{
+            marginTop: '16px',
+            padding: '10px 14px',
+            backgroundColor: '#FEF3C7',
+            borderRadius: NSD_RADIUS.sm,
+            fontSize: '12px',
+            color: '#92400E',
+          }}
+        >
+          <strong>Observed (Unclassified):</strong> These metrics do not have explicit validation metadata
+          from the backend. Confidence is shown as &quot;Conditional&quot; until validation is performed.
+        </div>
+      )}
 
       {history && history.length > 0 && (
         <div style={{ marginTop: '24px' }}>

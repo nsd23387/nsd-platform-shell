@@ -8,6 +8,12 @@
  * - UI is read-only; execution is observed, not initiated
  * - States reflect governance/approval stages, not execution triggers
  * - Provenance must be explicitly tracked (Canonical vs Legacy)
+ * 
+ * IMPORTANT DISTINCTION:
+ * - Governance State: Reflects approval/workflow stage (DRAFT, PENDING_APPROVAL, etc.)
+ * - Readiness Level: Reflects system capability to execute (READY, NOT_READY, UNKNOWN)
+ * These are ORTHOGONAL. A campaign can be APPROVED_READY but still NOT_READY or UNKNOWN
+ * for execution if readiness checks have not passed or have not been performed.
  */
 
 /**
@@ -43,11 +49,18 @@ export type ProvenanceType = 'CANONICAL' | 'LEGACY_OBSERVED';
 /**
  * Confidence classification for metrics.
  * Determines how metrics should be displayed and whether they're actionable.
+ * 
+ * IMPORTANT: Never display SAFE without explicit backend validation metadata.
+ * If metadata is missing or uncertain, default to UNCLASSIFIED (treated as CONDITIONAL).
  */
 export type MetricConfidence = 'SAFE' | 'CONDITIONAL' | 'BLOCKED';
 
 /**
  * Readiness status for execution readiness panel.
+ * 
+ * IMPORTANT: This is INDEPENDENT of CampaignGovernanceState.
+ * A campaign can be APPROVED_READY but have readiness level UNKNOWN or NOT_READY
+ * if the backend has not provided explicit readiness validation.
  */
 export type ReadinessLevel = 'READY' | 'NOT_READY' | 'UNKNOWN';
 
@@ -71,6 +84,19 @@ export interface CampaignGovernanceMetadata {
 }
 
 /**
+ * Readiness payload from backend.
+ * All fields are optional - if not provided, readiness is UNKNOWN.
+ */
+export interface BackendReadinessPayload {
+  is_ready?: boolean;
+  blocking_reasons?: string[];
+  last_checked?: string;
+  mailbox_healthy?: boolean;
+  deliverability_score?: number;
+  kill_switch_enabled?: boolean;
+}
+
+/**
  * Deterministic mapping from legacy backend status to target-state governance state.
  * 
  * Rules:
@@ -80,6 +106,9 @@ export interface CampaignGovernanceMetadata {
  * - RUNNING/COMPLETED/FAILED -> EXECUTED_READ_ONLY (observability only)
  * - ARCHIVED -> EXECUTED_READ_ONLY (historical, read-only)
  * - If blocking reasons present -> BLOCKED (regardless of backend status)
+ * 
+ * NOTE: This function maps GOVERNANCE state only. It does NOT imply READINESS.
+ * A campaign with APPROVED_READY governance state may still have UNKNOWN readiness.
  * 
  * @param legacyStatus - Backend status value
  * @param blockingReasons - List of blocking reasons from readiness check
@@ -118,6 +147,59 @@ export function mapToGovernanceState(
       // Unknown status treated as blocked for safety
       return 'BLOCKED';
   }
+}
+
+/**
+ * Compute readiness level from backend readiness payload.
+ * 
+ * CRITICAL: This function does NOT use governance state to infer readiness.
+ * Readiness is determined ONLY by explicit backend readiness data.
+ * 
+ * Rules:
+ * 1. If payload is null/undefined -> UNKNOWN
+ * 2. If blocking_reasons has items -> NOT_READY
+ * 3. If kill_switch_enabled is true -> NOT_READY
+ * 4. If is_ready is explicitly true AND all required fields are present -> READY
+ * 5. Otherwise -> UNKNOWN
+ * 
+ * @param readiness - Backend readiness payload (may be partial or absent)
+ * @returns Readiness level
+ */
+export function computeReadinessLevel(
+  readiness: BackendReadinessPayload | null | undefined
+): ReadinessLevel {
+  // No readiness data provided -> UNKNOWN
+  if (!readiness) {
+    return 'UNKNOWN';
+  }
+
+  // Blocking reasons present -> NOT_READY
+  if (readiness.blocking_reasons && readiness.blocking_reasons.length > 0) {
+    return 'NOT_READY';
+  }
+
+  // Kill switch enabled -> NOT_READY
+  if (readiness.kill_switch_enabled === true) {
+    return 'NOT_READY';
+  }
+
+  // Check if backend explicitly says ready
+  if (readiness.is_ready === true) {
+    // Verify required fields are present for a valid READY determination
+    // If any required field is missing, we cannot confirm readiness
+    if (readiness.mailbox_healthy === undefined) {
+      return 'UNKNOWN'; // Cannot confirm ready without mailbox health
+    }
+    return 'READY';
+  }
+
+  // is_ready explicitly false -> NOT_READY
+  if (readiness.is_ready === false) {
+    return 'NOT_READY';
+  }
+
+  // is_ready not provided, no blocking reasons, but we can't confirm readiness
+  return 'UNKNOWN';
 }
 
 /**
@@ -210,8 +292,15 @@ export function getProvenanceStyle(provenance: ProvenanceType): {
 /**
  * Derive provenance from backend record metadata.
  * 
- * TODO: This should be replaced with explicit backend field when available.
- * Current implementation uses heuristics based on existing stable fields.
+ * PRECEDENCE ORDER (critical for correctness):
+ * 1. record.provenance - Explicit provenance field takes absolute precedence
+ * 2. record.is_canonical === true/false - Explicit canonical flag
+ * 3. Trusted source_system values (allowlist) - FALLBACK ONLY
+ * 4. LEGACY_OBSERVED - Default when uncertain (safer for governance)
+ * 
+ * IMPORTANT: Heuristics (steps 3-4) are FALLBACK ONLY.
+ * Always prefer explicit backend-provided provenance fields.
+ * If the backend provides record.provenance, trust it unconditionally.
  * 
  * @param record - Record with optional provenance metadata
  * @returns Provenance type
@@ -222,7 +311,13 @@ export function deriveProvenance(record: {
   is_canonical?: boolean;
   provenance?: ProvenanceType;
 }): ProvenanceType {
-  // Explicit canonical flag takes precedence
+  // STEP 1: Explicit provenance field takes ABSOLUTE precedence
+  // If the backend provides this, trust it unconditionally
+  if (record.provenance === 'CANONICAL' || record.provenance === 'LEGACY_OBSERVED') {
+    return record.provenance;
+  }
+
+  // STEP 2: Explicit is_canonical boolean flag
   if (record.is_canonical === true) {
     return 'CANONICAL';
   }
@@ -230,25 +325,32 @@ export function deriveProvenance(record: {
     return 'LEGACY_OBSERVED';
   }
 
-  // Check source_system field
+  // STEP 3 (FALLBACK): Check source_system against trusted allowlist
+  // This is a heuristic and should only be used when explicit fields are absent
   if (record.source_system) {
-    const canonicalSources = ['ods', 'canonical', 'primary'];
-    if (canonicalSources.some(s => record.source_system?.toLowerCase().includes(s))) {
+    // Trusted canonical source identifiers (explicit allowlist)
+    const TRUSTED_CANONICAL_SOURCES = ['ods', 'canonical', 'primary'];
+    const sourceSystemLower = record.source_system.toLowerCase();
+    if (TRUSTED_CANONICAL_SOURCES.some(s => sourceSystemLower.includes(s))) {
       return 'CANONICAL';
     }
   }
 
-  // Check observed_via field
+  // STEP 4 (FALLBACK): Check observed_via indicates legacy observation
   if (record.observed_via) {
     return 'LEGACY_OBSERVED';
   }
 
-  // Default to legacy if uncertain (safer for governance)
+  // STEP 5: Default to LEGACY_OBSERVED when uncertain
+  // This is the safest default for governance - treat as unverified
   return 'LEGACY_OBSERVED';
 }
 
 /**
  * Derive confidence from metric metadata.
+ * 
+ * CRITICAL: Never return SAFE without explicit validation metadata from backend.
+ * If metadata is missing, return CONDITIONAL (uncertain) not SAFE.
  * 
  * @param metric - Metric with optional confidence metadata
  * @returns Confidence classification
@@ -267,7 +369,7 @@ export function deriveConfidence(metric: {
     }
   }
 
-  // Check validation status
+  // Check validation status (explicit backend field)
   if (metric.validation_status === 'validated' || metric.is_validated === true) {
     return 'SAFE';
   }
@@ -278,17 +380,31 @@ export function deriveConfidence(metric: {
     return 'BLOCKED';
   }
 
-  // Check provenance mismatch
+  // Check provenance - legacy observed data is conditionally trusted
   if (metric.provenance === 'LEGACY_OBSERVED') {
     return 'CONDITIONAL';
   }
 
-  // Default to conditional if uncertain
+  // NO EXPLICIT VALIDATION METADATA FOUND
+  // Default to CONDITIONAL (uncertain), NOT SAFE
+  // This ensures we never show "Safe" without backend confirmation
   return 'CONDITIONAL';
 }
 
 /**
  * Check if an email is a valid lead email (not a filler/placeholder).
+ * 
+ * IMPORTANT: This function is intended for use with QUALIFIED LEAD views ONLY.
+ * "Contacts Observed" views should NOT filter by email validity - they display
+ * all observed contact records regardless of email status.
+ * 
+ * Use this function when:
+ * - Filtering leads for the "Qualified Leads" view
+ * - Validating lead eligibility
+ * 
+ * Do NOT use this function when:
+ * - Displaying "Contacts Observed" (all contacts should be shown)
+ * - Showing raw contact data for observability
  */
 export function isValidLeadEmail(email: string | null | undefined): boolean {
   if (!email) return false;
@@ -311,6 +427,16 @@ export function isValidLeadEmail(email: string | null | undefined): boolean {
  * Determine if a record qualifies as a lead (not just a contact).
  * 
  * Per constraints: Lead views must only show records in "lead-ready/qualified" state.
+ * 
+ * IMPORTANT DISTINCTION:
+ * - "Qualified Leads" view: Use this function. Only shows records that pass all checks.
+ * - "Contacts Observed" view: Do NOT use this function. Shows all observed contacts,
+ *   even those without valid emails or qualification status.
+ * 
+ * This distinction ensures:
+ * - Lead counts are accurate (only truly qualified leads)
+ * - Contact observability is complete (all data visible)
+ * - UI does not conflate contacts with qualified leads
  */
 export function isQualifiedLead(record: {
   email?: string | null;
@@ -318,12 +444,12 @@ export function isQualifiedLead(record: {
   is_qualified?: boolean;
   qualification_state?: string;
 }): boolean {
-  // Must have valid email
+  // Must have valid email - filters out placeholder/filler emails
   if (!isValidLeadEmail(record.email)) {
     return false;
   }
 
-  // Check explicit qualification flags
+  // Check explicit qualification flags from backend
   if (record.is_qualified === true) {
     return true;
   }
@@ -343,6 +469,7 @@ export function isQualifiedLead(record: {
   }
 
   // Default to false if uncertain (conservative for governance)
+  // We never assume a record is a qualified lead without explicit backend confirmation
   return false;
 }
 
