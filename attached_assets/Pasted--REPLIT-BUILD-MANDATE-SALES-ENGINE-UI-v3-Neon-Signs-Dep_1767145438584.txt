@@ -1,0 +1,290 @@
+🔒 REPLIT BUILD MANDATE — SALES ENGINE UI v3
+
+Neon Signs Depot | Target-State Aligned | Governance-Safe
+
+You are implementing Sales Engine UI v3.
+This iteration must complete the end-to-end Sales Engine user journey using existing backend capabilities only, while strictly adhering to the Sales Engine UI Architecture Contract (M67-01) and M60 UI Enablement constraints.
+
+This is not a redesign for aesthetics alone.
+This is a Sales Operator Command Interface.
+
+1️⃣ PRIMARY OBJECTIVES (NON-NEGOTIABLE)
+v3 must:
+
+Expose all Sales Engine capabilities already implemented in backend
+
+Provide a clear human mental model for campaign lifecycle and responsibility
+
+Introduce a Sales Engine Home Dashboard for situational awareness
+
+Correct UX semantics and status language globally
+
+Align visuals with NeonSignsDepot.com brand
+
+Preserve strict governance boundaries (no execution logic in UI)
+
+2️⃣ BEFORE / AFTER PAGE MAP (REQUIRED)
+🔴 CURRENT (v2) PAGE MAP
+/sales-engine
+ ├── /campaigns
+ │    ├── list
+ │    ├── create
+ │    ├── edit
+ │    └── details
+ ├── /approvals
+ ├── /execution
+ └── /monitoring
+
+🟢 REQUIRED (v3) PAGE MAP
+/sales-engine
+ ├── /home                        ← NEW (Sales Engine Dashboard)
+ │    ├── Aggregate metrics
+ │    ├── Campaign state overview
+ │    ├── Attention required panel
+ │    └── Recent activity summary
+ │
+ ├── /campaigns
+ │    ├── list
+ │    ├── create
+ │    │    ├── AI Draft Generator (NEW)
+ │    │    └── Manual Edit Mode
+ │    ├── edit
+ │    └── details
+ │         ├── Configuration snapshot
+ │         ├── ICP hash & metadata
+ │         ├── Approval history
+ │         └── Readiness indicators
+ │
+ ├── /approvals
+ │    └── Human approval with responsibility confirmation
+ │
+ ├── /execution
+ │    └── Explicit launch confirmation (human-initiated only)
+ │
+ └── /monitoring
+      ├── Metrics snapshots
+      ├── Run summaries
+      ├── Throughput visibility
+      └── Learning indicators (read-only)
+
+
+⚠️ Do not add routes outside this map.
+
+3️⃣ SALES ENGINE HOME DASHBOARD (NEW — REQUIRED)
+Purpose
+
+Provide situational awareness, not configuration.
+
+Must Display (Read-Only):
+
+Total campaigns by status
+
+Campaigns requiring attention
+
+Recently executed campaigns
+
+Aggregate metrics (from M56/M59):
+
+Leads created
+
+Replies received
+
+Campaigns approved
+
+Campaigns executed
+
+Must NOT:
+
+Execute campaigns
+
+Edit campaigns
+
+Override approvals
+
+This page is allowed under target architecture.
+
+4️⃣ GLOBAL STATUS LANGUAGE REWRITE (CRITICAL)
+Internal Status → UI Label Mapping
+Backend Status	UI Label (v3)
+DRAFT	Draft
+REVIEW	Pending Review
+APPROVED	Approved
+RUNNABLE	Approved & Ready ← REQUIRED CHANGE
+ARCHIVED	Archived
+Rules
+
+Backend enums remain unchanged
+
+UI must never display “Runnable”
+
+“Approved & Ready” must appear consistently:
+
+Lists
+
+Detail views
+
+Badges
+
+Filters
+
+Empty states
+
+5️⃣ CAMPAIGN SETUP UI (EXPAND — DO NOT SIMPLIFY)
+Add AI Campaign Draft Generator
+
+Primary CTA: “Generate Draft with AI”
+
+AI output must:
+
+Populate ICP fields
+
+Suggest keywords & locations
+
+Include rationale text
+
+Human must be able to edit everything
+
+Required Disclaimers
+
+“AI suggestions are advisory only. Human review is required.”
+
+Required Visibility
+
+ICP normalization preview
+
+Keyword deduplication
+
+Location scope clarity
+
+6️⃣ APPROVAL UX (HUMAN AUTHORITY ENFORCEMENT)
+
+Approval is not a button — it is responsibility.
+
+Required Approval Modal
+
+Must show:
+
+Campaign summary snapshot
+
+ICP hash
+
+Throughput caps
+
+Confirmation language:
+
+“By approving, you confirm this campaign complies with sourcing, budget, and governance rules.”
+
+Approval must feel deliberate and accountable.
+
+7️⃣ EXECUTION UX (SAFETY FIRST)
+Before Execution, UI Must Show:
+
+Approval confirmation
+
+Readiness indicators
+
+Throughput limits
+
+Last validation timestamp
+
+Execution CTA Language
+
+Use:
+
+“Launch Campaign”
+Not:
+
+Execute
+
+Run
+
+Start
+
+Execution is always human-initiated.
+
+8️⃣ MONITORING & METRICS UX
+Group metrics into:
+
+Yield (leads, replies, conversions)
+
+Efficiency (reuse, dedupe)
+
+Quality (AI vs Human agreement)
+
+Safety (rate limits, blocks)
+
+Metrics must tell a story, not just show numbers.
+
+9️⃣ VISUAL & BRAND ALIGNMENT (MANDATORY)
+Align with NeonSignsDepot.com
+
+Clean, modern, confident
+
+High whitespace
+
+Minimal borders
+
+Purposeful color usage
+
+Design Rules
+
+No neon effects
+
+No decorative animations
+
+Color indicates state or action only
+
+Typography hierarchy must be clear
+
+This should feel like a premium internal control room, not a generic SaaS admin panel.
+
+🔟 SALES ENGINE UX SUCCESS CHECKLIST (USE THIS)
+
+v3 is complete only if all are true:
+
+ Sales Engine Home Dashboard exists
+
+ “Runnable” never appears in UI
+
+ “Approved & Ready” used consistently
+
+ AI Campaign Generator is present and usable
+
+ Human approval requires explicit confirmation
+
+ Execution is gated, intentional, and safe
+
+ Monitoring shows grouped, meaningful metrics
+
+ UI teaches the system as it’s used
+
+ No backend logic in frontend
+
+ No contract violations (M60 / M67-01)
+
+🔚 FINAL CONSTRAINTS
+
+Do not invent APIs
+
+Do not bypass governance
+
+Do not simplify away responsibility
+
+Do not assume user knowledge
+
+This UI must earn trust, not just function.
+
+✅ Deliverables for v3
+
+Updated Sales Engine UI with new Home Dashboard
+
+Global status language rewrite
+
+AI campaign drafting surfaced
+
+Brand-aligned visual refinements
+
+Screenshots or walkthrough demonstrating end-to-end journey
+
+This is a convergence build.
+Make the Sales Engine UI match the sophistication of the system behind it.
