@@ -8,7 +8,7 @@ import { NavBar, PageHeader } from '../components/ui';
 import { listCampaigns, getDashboardThroughput } from '../lib/api';
 import type { Campaign, DashboardThroughput } from '../types/campaign';
 
-export default function ExecutionPage() {
+export default function RunsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [throughput, setThroughput] = useState<DashboardThroughput | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,21 +35,21 @@ export default function ExecutionPage() {
     <div style={{ minHeight: '100vh', backgroundColor: '#fafafa' }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '40px 32px' }}>
         <PageHeader
-          title="Execution"
-          description="Observe approved campaigns ready for execution"
+          title="Run Observability"
+          description="View approved campaigns and observe execution status"
         />
 
-        <NavBar active="execution" />
+        <NavBar active="runs" />
 
-        <div style={{ backgroundColor: '#fef2f2', borderRadius: '12px', padding: '20px', marginBottom: '24px', border: '1px solid #fecaca' }}>
+        <div style={{ backgroundColor: '#EFF6FF', borderRadius: '12px', padding: '20px', marginBottom: '24px', border: '1px solid #BFDBFE' }}>
           <div style={{ display: 'flex', gap: '16px' }}>
-            <Icon name="shield" size={24} color="#dc2626" />
+            <Icon name="info" size={24} color="#1E40AF" />
             <div>
-              <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 600, color: '#991b1b' }}>
-                Execution Not Available
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 600, color: '#1E40AF' }}>
+                Read-Only Observability
               </h3>
-              <p style={{ margin: 0, fontSize: '14px', color: '#b91c1c' }}>
-                Campaign execution is managed externally by the execution engine. This UI provides read-only visibility into campaigns that are approved and ready for execution. Execution triggers are handled by the backend system.
+              <p style={{ margin: 0, fontSize: '14px', color: '#1E40AF' }}>
+                This UI observes campaign execution status. Execution is managed by backend systems. State transitions shown here reflect backend state and are not initiated from this interface.
               </p>
             </div>
           </div>

@@ -90,8 +90,8 @@ export default function SalesEnginePage() {
             </Link>
           )}
           {campaign.isRunnable && (
-            <Link href={`/sales-engine/campaigns/${campaign.id}?tab=execution`} style={{ textDecoration: 'none' }}>
-              <Button variant="cta" size="sm">Start</Button>
+            <Link href={`/sales-engine/campaigns/${campaign.id}?tab=monitoring`} style={{ textDecoration: 'none' }}>
+              <Button variant="secondary" size="sm">View</Button>
             </Link>
           )}
         </div>
