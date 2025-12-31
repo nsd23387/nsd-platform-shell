@@ -1,0 +1,101 @@
+TASK: M67-14 UI Corrections – CampaignCreate Wizard (UI-only)
+
+SYSTEM CONTEXT
+This UI implements CampaignCreate v1. Campaign creation is the ONLY allowed mutation.
+No sourcing, execution, approval, or learning behavior may be introduced.
+All changes must be UI-only and must NOT alter payload semantics beyond removal of invalid fields.
+
+DO NOT:
+- Add new backend calls
+- Add new execution logic
+- Add sourcing decisions
+- Infer intent, volume caps, or readiness
+- Change CampaignCreate API contract
+
+---
+
+REQUIRED UI CHANGES
+
+1. REMOVE INVALID FIELDS (HARD REQUIREMENT)
+Remove the following inputs entirely from the UI and payload:
+- "Max Organizations"
+- "Source Type"
+- "Technologies"
+- "Minimum Signals Required"
+
+These fields violate v1 semantics (no caps, no UI-driven sourcing, no gating).
+
+---
+
+2. ICP STEP – FIELD PRIORITIZATION
+Update ICP Definition step:
+- Mark Keywords as REQUIRED
+- Mark Geography as REQUIRED
+- Visually promote both fields (top of step or emphasized grouping)
+- Add helper text:
+  - Keywords: "Primary drivers of organization sourcing. At least one required."
+  - Geography: "Defines where organizations are sourced from. Required."
+
+---
+
+3. ORGANIZATION SOURCING STEP
+- Remove all quantity or cap-related inputs
+- Replace content with a read-only explanation:
+  “Organizations are sourced automatically based on ICP criteria. Full population sourcing is assumed.”
+
+No user inputs required on this step in v1.
+
+---
+
+4. OUTREACH CONTEXT – DEFAULTS
+Add UI-only default suggestions (editable):
+- Value Propositions (pre-filled examples)
+- Pain Points (pre-filled examples)
+- Calls to Action (pre-filled examples)
+
+Defaults are static for now. Do NOT add persistence or learning.
+
+---
+
+5. CAMPAIGN TARGETS (SIMPLIFY)
+Reduce Campaign Targets to ONLY:
+- Target Leads
+- Target Emails
+- Target Reply Rate
+
+Keep existing non-gating disclaimer.
+Remove all other target fields.
+
+---
+
+6. NAVIGATION UX IMPROVEMENT
+Replace horizontal stepper with a left-hand vertical step navigation:
+- Always visible
+- Shows all steps
+- Clear current/completed/upcoming states
+
+This is a visual/layout change only.
+
+---
+
+7. TOOLTIP & HELP TEXT
+Add concise tooltips for:
+- Keywords (why they matter)
+- Geography (why required)
+- Campaign Targets (benchmarks only, non-gating)
+
+---
+
+ACCEPTANCE CRITERIA
+- UI no longer allows population caps
+- Mandatory fields match CampaignCreate validation rules
+- Payload excludes removed fields
+- No backend or contract changes
+- CampaignCreate POST still succeeds unchanged
+- UX clearly communicates sourcing and benchmarking semantics
+
+OUTPUT
+Provide:
+1. List of components/files updated
+2. Before/after screenshots (if available)
+3. Confirmation no backend behavior was modified

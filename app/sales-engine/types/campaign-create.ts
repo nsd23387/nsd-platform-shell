@@ -27,7 +27,6 @@ export interface ICPDefinition {
   geographies?: string[];
   job_titles?: string[];
   seniority_levels?: string[];
-  technologies?: string[];
   keywords?: string[];
   exclusions?: {
     industries?: string[];
@@ -40,7 +39,6 @@ export interface OrganizationSourcing {
   source_type: 'manual' | 'list' | 'criteria';
   list_id?: string;
   criteria?: ICPDefinition;
-  max_organizations?: number;
 }
 
 export interface ContactTargeting {
@@ -54,7 +52,6 @@ export interface ContactTargeting {
 }
 
 export interface LeadQualification {
-  minimum_signals?: number;
   required_fields?: string[];
   scoring_model?: string;
 }
@@ -74,8 +71,6 @@ export interface ReadinessRequirements {
 }
 
 export interface CampaignTargets {
-  target_organizations?: number | null;
-  target_contacts?: number | null;
   target_leads?: number | null;
   target_emails?: number | null;
   target_replies?: number | null;

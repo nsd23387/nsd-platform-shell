@@ -11,6 +11,7 @@ export interface TagInputProps {
   placeholder?: string;
   error?: string;
   helpText?: string;
+  required?: boolean;
 }
 
 export function TagInput({
@@ -21,6 +22,7 @@ export function TagInput({
   placeholder,
   error,
   helpText,
+  required,
 }: TagInputProps) {
   const [inputValue, setInputValue] = useState('');
 
@@ -53,6 +55,7 @@ export function TagInput({
         }}
       >
         {label}
+        {required && <span style={{ color: NSD_COLORS.cta, marginLeft: '4px' }}>*</span>}
       </label>
 
       <div

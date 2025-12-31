@@ -38,10 +38,17 @@ function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
       code: 'REQUIRED_FIELD',
     });
   } else {
-    if (!payload.icp.industries || payload.icp.industries.length === 0) {
+    if (!payload.icp.keywords || payload.icp.keywords.length === 0) {
       errors.push({
-        field: 'icp.industries',
-        message: 'At least one industry is required',
+        field: 'icp.keywords',
+        message: 'At least one keyword is required',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+    if (!payload.icp.geographies || payload.icp.geographies.length === 0) {
+      errors.push({
+        field: 'icp.geographies',
+        message: 'At least one geography is required',
         code: 'REQUIRED_FIELD',
       });
     }
@@ -53,14 +60,6 @@ function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
       message: 'Organization sourcing configuration is required',
       code: 'REQUIRED_FIELD',
     });
-  } else {
-    if (!payload.organization_sourcing.source_type) {
-      errors.push({
-        field: 'organization_sourcing.source_type',
-        message: 'Source type is required',
-        code: 'REQUIRED_FIELD',
-      });
-    }
   }
 
   if (!payload.contact_targeting) {
@@ -71,13 +70,6 @@ function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
     });
   }
 
-  if (!payload.lead_qualification) {
-    errors.push({
-      field: 'lead_qualification',
-      message: 'Lead qualification configuration is required',
-      code: 'REQUIRED_FIELD',
-    });
-  }
 
   if (!payload.outreach_context) {
     errors.push({
