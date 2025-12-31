@@ -2,6 +2,7 @@
 
 import { useWizard, WizardStep } from './WizardContext';
 import { Icon } from '../../../../design/components/Icon';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 
 const stepIcons: Record<WizardStep, string> = {
   basics: 'edit',
@@ -22,21 +23,21 @@ export function WizardProgress() {
       style={{
         width: '240px',
         padding: '32px 24px',
-        backgroundColor: '#ffffff',
-        borderRadius: '16px',
-        border: '1px solid #e5e7eb',
+        backgroundColor: NSD_COLORS.background,
+        borderRadius: NSD_RADIUS.lg,
+        border: `1px solid ${NSD_COLORS.border.light}`,
         height: 'fit-content',
       }}
     >
       <h3
         style={{
           margin: '0 0 24px 0',
-          fontSize: '14px',
+          fontSize: '12px',
           fontWeight: 600,
-          color: '#6b7280',
+          color: NSD_COLORS.text.secondary,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
-          fontFamily: 'var(--font-display, Poppins, sans-serif)',
+          fontFamily: NSD_TYPOGRAPHY.fontDisplay,
         }}
       >
         Campaign Setup
@@ -58,9 +59,9 @@ export function WizardProgress() {
                 alignItems: 'center',
                 gap: '12px',
                 padding: '12px 16px',
-                backgroundColor: isActive ? '#f3f0ff' : 'transparent',
+                backgroundColor: isActive ? `${NSD_COLORS.secondary}10` : 'transparent',
                 border: 'none',
-                borderRadius: '8px',
+                borderRadius: NSD_RADIUS.md,
                 cursor: isClickable ? 'pointer' : 'not-allowed',
                 opacity: isClickable ? 1 : 0.5,
                 transition: 'all 0.2s ease',
@@ -70,23 +71,23 @@ export function WizardProgress() {
                 style={{
                   width: '32px',
                   height: '32px',
-                  borderRadius: '8px',
+                  borderRadius: NSD_RADIUS.md,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: isActive
-                    ? '#8b5cf6'
+                    ? NSD_COLORS.secondary
                     : isPast
-                    ? '#10b981'
-                    : '#e5e7eb',
-                  color: isActive || isPast ? '#ffffff' : '#9ca3af',
+                    ? NSD_COLORS.success
+                    : NSD_COLORS.border.light,
+                  color: isActive || isPast ? NSD_COLORS.text.inverse : NSD_COLORS.text.muted,
                   transition: 'all 0.2s ease',
                 }}
               >
                 {isPast ? (
-                  <Icon name="check" size={16} />
+                  <Icon name="check" size={16} color={NSD_COLORS.text.inverse} />
                 ) : (
-                  <Icon name={stepIcons[step.id] as any} size={16} />
+                  <Icon name={stepIcons[step.id] as any} size={16} color={isActive ? NSD_COLORS.text.inverse : NSD_COLORS.text.muted} />
                 )}
               </div>
 
@@ -95,8 +96,8 @@ export function WizardProgress() {
                   style={{
                     fontSize: '14px',
                     fontWeight: isActive ? 600 : 500,
-                    color: isActive ? '#8b5cf6' : isPast ? '#111827' : '#6b7280',
-                    fontFamily: 'var(--font-body, Inter, sans-serif)',
+                    color: isActive ? NSD_COLORS.secondary : isPast ? NSD_COLORS.text.primary : NSD_COLORS.text.secondary,
+                    fontFamily: NSD_TYPOGRAPHY.fontBody,
                   }}
                 >
                   {step.label}
@@ -105,7 +106,7 @@ export function WizardProgress() {
                   <div
                     style={{
                       fontSize: '12px',
-                      color: '#8b5cf6',
+                      color: NSD_COLORS.secondary,
                       marginTop: '2px',
                     }}
                   >
@@ -122,14 +123,14 @@ export function WizardProgress() {
         style={{
           marginTop: '24px',
           padding: '16px',
-          backgroundColor: '#f9fafb',
-          borderRadius: '8px',
+          backgroundColor: NSD_COLORS.surface,
+          borderRadius: NSD_RADIUS.md,
         }}
       >
         <div
           style={{
             fontSize: '12px',
-            color: '#6b7280',
+            color: NSD_COLORS.text.secondary,
             marginBottom: '8px',
           }}
         >
@@ -139,7 +140,7 @@ export function WizardProgress() {
           style={{
             width: '100%',
             height: '6px',
-            backgroundColor: '#e5e7eb',
+            backgroundColor: NSD_COLORS.border.light,
             borderRadius: '3px',
             overflow: 'hidden',
           }}
@@ -148,7 +149,7 @@ export function WizardProgress() {
             style={{
               width: `${((currentIndex + 1) / steps.length) * 100}%`,
               height: '100%',
-              backgroundColor: '#8b5cf6',
+              backgroundColor: NSD_COLORS.primary,
               transition: 'width 0.3s ease',
             }}
           />
@@ -156,7 +157,7 @@ export function WizardProgress() {
         <div
           style={{
             fontSize: '12px',
-            color: '#6b7280',
+            color: NSD_COLORS.text.secondary,
             marginTop: '8px',
             textAlign: 'right',
           }}

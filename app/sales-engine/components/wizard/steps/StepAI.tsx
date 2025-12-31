@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useWizard } from '../WizardContext';
 import { Icon } from '../../../../../design/components/Icon';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../../lib/design-tokens';
 
 interface AIGeneratedContent {
   icp: {
@@ -73,8 +74,8 @@ export function StepAI() {
           margin: '0 0 8px 0',
           fontSize: '24px',
           fontWeight: 600,
-          color: '#1e1e4a',
-          fontFamily: 'var(--font-display, Poppins, sans-serif)',
+          color: NSD_COLORS.primary,
+          fontFamily: NSD_TYPOGRAPHY.fontDisplay,
         }}
       >
         AI Campaign Draft Generator
@@ -83,8 +84,8 @@ export function StepAI() {
         style={{
           margin: '0 0 24px 0',
           fontSize: '14px',
-          color: '#6b7280',
-          fontFamily: 'var(--font-body, Inter, sans-serif)',
+          color: NSD_COLORS.text.secondary,
+          fontFamily: NSD_TYPOGRAPHY.fontBody,
         }}
       >
         Let AI analyze your campaign and generate targeting criteria and personalization settings.
@@ -94,14 +95,14 @@ export function StepAI() {
         style={{
           padding: '16px 20px',
           backgroundColor: '#eff6ff',
-          borderRadius: '10px',
+          borderRadius: NSD_RADIUS.md,
           border: '1px solid #bfdbfe',
           marginBottom: '24px',
           display: 'flex',
           gap: '12px',
         }}
       >
-        <Icon name="info" size={20} color="#2563eb" />
+        <Icon name="info" size={20} color={NSD_COLORS.info} />
         <p style={{ margin: 0, fontSize: '13px', color: '#1e40af' }}>
           AI suggestions are advisory only. Human review is required before proceeding. You can edit all generated settings in subsequent steps.
         </p>
@@ -110,8 +111,8 @@ export function StepAI() {
       <div
         style={{
           padding: '32px',
-          backgroundColor: '#f9fafb',
-          borderRadius: '12px',
+          backgroundColor: NSD_COLORS.surface,
+          borderRadius: NSD_RADIUS.lg,
           textAlign: 'center',
         }}
       >
@@ -122,14 +123,14 @@ export function StepAI() {
                 width: '72px',
                 height: '72px',
                 margin: '0 auto 24px',
-                backgroundColor: '#8b5cf6',
-                borderRadius: '18px',
+                backgroundColor: NSD_COLORS.secondary,
+                borderRadius: NSD_RADIUS.lg,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Icon name="ai" size={36} color="#ffffff" />
+              <Icon name="ai" size={36} color={NSD_COLORS.text.inverse} />
             </div>
 
             <h3
@@ -137,8 +138,8 @@ export function StepAI() {
                 margin: '0 0 8px 0',
                 fontSize: '20px',
                 fontWeight: 600,
-                color: '#1e1e4a',
-                fontFamily: 'var(--font-display, Poppins, sans-serif)',
+                color: NSD_COLORS.primary,
+                fontFamily: NSD_TYPOGRAPHY.fontDisplay,
               }}
             >
               Generate Draft with AI
@@ -147,7 +148,7 @@ export function StepAI() {
               style={{
                 margin: '0 0 24px 0',
                 fontSize: '14px',
-                color: '#6b7280',
+                color: NSD_COLORS.text.secondary,
                 maxWidth: '420px',
                 marginLeft: 'auto',
                 marginRight: 'auto',
@@ -164,14 +165,14 @@ export function StepAI() {
                 alignItems: 'center',
                 gap: '10px',
                 padding: '16px 32px',
-                backgroundColor: '#8b5cf6',
-                color: '#ffffff',
+                backgroundColor: NSD_COLORS.secondary,
+                color: NSD_COLORS.text.inverse,
                 border: 'none',
-                borderRadius: '10px',
+                borderRadius: NSD_RADIUS.md,
                 fontSize: '15px',
                 fontWeight: 600,
                 cursor: isGenerating ? 'wait' : 'pointer',
-                fontFamily: 'var(--font-body, Inter, sans-serif)',
+                fontFamily: NSD_TYPOGRAPHY.fontBody,
                 transition: 'background-color 0.2s ease',
               }}
             >
@@ -182,7 +183,7 @@ export function StepAI() {
                       display: 'inline-block',
                       width: '18px',
                       height: '18px',
-                      border: '2px solid #ffffff',
+                      border: `2px solid ${NSD_COLORS.text.inverse}`,
                       borderTopColor: 'transparent',
                       borderRadius: '50%',
                       animation: 'spin 1s linear infinite',
@@ -192,7 +193,7 @@ export function StepAI() {
                 </>
               ) : (
                 <>
-                  <Icon name="ai" size={18} color="#fff" />
+                  <Icon name="ai" size={18} color={NSD_COLORS.text.inverse} />
                   Generate Draft with AI
                 </>
               )}
@@ -205,14 +206,14 @@ export function StepAI() {
                 width: '72px',
                 height: '72px',
                 margin: '0 auto 24px',
-                backgroundColor: '#10b981',
-                borderRadius: '18px',
+                backgroundColor: NSD_COLORS.success,
+                borderRadius: NSD_RADIUS.lg,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Icon name="check" size={36} color="#ffffff" />
+              <Icon name="check" size={36} color={NSD_COLORS.text.inverse} />
             </div>
 
             <h3
@@ -220,8 +221,8 @@ export function StepAI() {
                 margin: '0 0 8px 0',
                 fontSize: '20px',
                 fontWeight: 600,
-                color: '#1e1e4a',
-                fontFamily: 'var(--font-display, Poppins, sans-serif)',
+                color: NSD_COLORS.primary,
+                fontFamily: NSD_TYPOGRAPHY.fontDisplay,
               }}
             >
               Campaign Draft Generated
@@ -230,7 +231,7 @@ export function StepAI() {
               style={{
                 margin: '0 0 20px 0',
                 fontSize: '14px',
-                color: '#6b7280',
+                color: NSD_COLORS.text.secondary,
               }}
             >
               ICP and personalization settings have been populated. Review and edit them in the next steps.
@@ -244,17 +245,17 @@ export function StepAI() {
                   alignItems: 'center',
                   gap: '8px',
                   padding: '12px 20px',
-                  backgroundColor: '#ffffff',
-                  color: '#4f46e5',
-                  border: '1px solid #4f46e5',
-                  borderRadius: '8px',
+                  backgroundColor: NSD_COLORS.background,
+                  color: NSD_COLORS.secondary,
+                  border: `1px solid ${NSD_COLORS.secondary}`,
+                  borderRadius: NSD_RADIUS.md,
                   fontSize: '14px',
                   fontWeight: 500,
                   cursor: 'pointer',
-                  fontFamily: 'var(--font-body, Inter, sans-serif)',
+                  fontFamily: NSD_TYPOGRAPHY.fontBody,
                 }}
               >
-                <Icon name="info" size={16} color="#4f46e5" />
+                <Icon name="info" size={16} color={NSD_COLORS.secondary} />
                 {showRationale ? 'Hide Rationale' : 'View AI Rationale'}
               </button>
               
@@ -266,16 +267,16 @@ export function StepAI() {
                   gap: '8px',
                   padding: '12px 20px',
                   backgroundColor: 'transparent',
-                  color: '#6b7280',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
+                  color: NSD_COLORS.text.secondary,
+                  border: `1px solid ${NSD_COLORS.border.default}`,
+                  borderRadius: NSD_RADIUS.md,
                   fontSize: '14px',
                   fontWeight: 500,
                   cursor: 'pointer',
-                  fontFamily: 'var(--font-body, Inter, sans-serif)',
+                  fontFamily: NSD_TYPOGRAPHY.fontBody,
                 }}
               >
-                <Icon name="refresh" size={16} color="#6b7280" />
+                <Icon name="refresh" size={16} color={NSD_COLORS.text.secondary} />
                 Regenerate
               </button>
             </div>
@@ -290,8 +291,8 @@ export function StepAI() {
               margin: '0 0 16px 0',
               fontSize: '16px',
               fontWeight: 600,
-              color: '#1e1e4a',
-              fontFamily: 'var(--font-display, Poppins, sans-serif)',
+              color: NSD_COLORS.primary,
+              fontFamily: NSD_TYPOGRAPHY.fontDisplay,
             }}
           >
             AI Rationale
@@ -311,8 +312,8 @@ export function StepAI() {
               margin: '0 0 16px 0',
               fontSize: '16px',
               fontWeight: 600,
-              color: '#1e1e4a',
-              fontFamily: 'var(--font-display, Poppins, sans-serif)',
+              color: NSD_COLORS.primary,
+              fontFamily: NSD_TYPOGRAPHY.fontDisplay,
             }}
           >
             Generated Preview
@@ -330,7 +331,7 @@ export function StepAI() {
         style={{
           marginTop: '20px',
           fontSize: '12px',
-          color: '#9ca3af',
+          color: NSD_COLORS.text.muted,
           textAlign: 'center',
         }}
       >
@@ -353,16 +354,16 @@ function RationaleCard({ title, content, icon }: { title: string; content: strin
     <div
       style={{
         padding: '16px 20px',
-        backgroundColor: '#f9fafb',
-        borderRadius: '10px',
-        border: '1px solid #e5e7eb',
+        backgroundColor: NSD_COLORS.surface,
+        borderRadius: NSD_RADIUS.md,
+        border: `1px solid ${NSD_COLORS.border.light}`,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-        <Icon name={icon as any} size={16} color="#8b5cf6" />
-        <span style={{ fontSize: '14px', fontWeight: 600, color: '#1e1e4a' }}>{title}</span>
+        <Icon name={icon as any} size={16} color={NSD_COLORS.secondary} />
+        <span style={{ fontSize: '14px', fontWeight: 600, color: NSD_COLORS.primary }}>{title}</span>
       </div>
-      <p style={{ margin: 0, fontSize: '13px', color: '#6b7280', lineHeight: 1.6 }}>{content}</p>
+      <p style={{ margin: 0, fontSize: '13px', color: NSD_COLORS.text.secondary, lineHeight: 1.6 }}>{content}</p>
     </div>
   );
 }
@@ -372,12 +373,12 @@ function PreviewCard({ title, items }: { title: string; items: string[] }) {
     <div
       style={{
         padding: '16px',
-        backgroundColor: '#ffffff',
-        borderRadius: '10px',
-        border: '1px solid #e5e7eb',
+        backgroundColor: NSD_COLORS.background,
+        borderRadius: NSD_RADIUS.md,
+        border: `1px solid ${NSD_COLORS.border.light}`,
       }}
     >
-      <h5 style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <h5 style={{ margin: '0 0 12px 0', fontSize: '12px', fontWeight: 600, color: NSD_COLORS.text.secondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         {title}
       </h5>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -386,17 +387,17 @@ function PreviewCard({ title, items }: { title: string; items: string[] }) {
             key={i}
             style={{
               padding: '4px 10px',
-              backgroundColor: '#f3f4f6',
-              borderRadius: '6px',
+              backgroundColor: NSD_COLORS.surface,
+              borderRadius: NSD_RADIUS.sm,
               fontSize: '12px',
-              color: '#374151',
+              color: NSD_COLORS.text.primary,
             }}
           >
             {item}
           </span>
         ))}
         {items.length > 4 && (
-          <span style={{ fontSize: '12px', color: '#9ca3af', alignSelf: 'center' }}>+{items.length - 4} more</span>
+          <span style={{ fontSize: '12px', color: NSD_COLORS.text.muted, alignSelf: 'center' }}>+{items.length - 4} more</span>
         )}
       </div>
     </div>

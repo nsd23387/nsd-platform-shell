@@ -10,6 +10,7 @@ import { StepICP } from '../../components/wizard/steps/StepICP';
 import { StepPersonalization } from '../../components/wizard/steps/StepPersonalization';
 import { StepReview } from '../../components/wizard/steps/StepReview';
 import { createCampaign } from '../../lib/api';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 
 function WizardContent() {
@@ -54,7 +55,7 @@ function WizardContent() {
     <div
       style={{
         minHeight: '100vh',
-        backgroundColor: '#fafafa',
+        backgroundColor: NSD_COLORS.surface,
         padding: '32px',
       }}
     >
@@ -67,12 +68,12 @@ function WizardContent() {
               alignItems: 'center',
               gap: '8px',
               fontSize: '14px',
-              color: '#8b5cf6',
+              color: NSD_COLORS.secondary,
               textDecoration: 'none',
-              fontFamily: 'var(--font-body, Inter, sans-serif)',
+              fontFamily: NSD_TYPOGRAPHY.fontBody,
             }}
           >
-            <Icon name="arrow-left" size={16} />
+            <Icon name="arrow-left" size={16} color={NSD_COLORS.secondary} />
             Back to Campaigns
           </Link>
         </div>
@@ -82,8 +83,8 @@ function WizardContent() {
             margin: '0 0 32px 0',
             fontSize: '28px',
             fontWeight: 600,
-            color: '#1e1e4a',
-            fontFamily: 'var(--font-display, Poppins, sans-serif)',
+            color: NSD_COLORS.primary,
+            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
           }}
         >
           Create New Campaign
@@ -94,16 +95,16 @@ function WizardContent() {
             style={{
               padding: '12px 16px',
               backgroundColor: '#fef2f2',
-              borderRadius: '8px',
+              borderRadius: NSD_RADIUS.md,
               marginBottom: '24px',
-              color: '#b91c1c',
+              color: NSD_COLORS.error,
               fontSize: '14px',
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
             }}
           >
-            <Icon name="warning" size={16} />
+            <Icon name="warning" size={16} color={NSD_COLORS.error} />
             {error}
           </div>
         )}
@@ -115,9 +116,9 @@ function WizardContent() {
             style={{
               flex: 1,
               padding: '32px',
-              backgroundColor: '#ffffff',
-              borderRadius: '16px',
-              border: '1px solid #e5e7eb',
+              backgroundColor: NSD_COLORS.background,
+              borderRadius: NSD_RADIUS.lg,
+              border: `1px solid ${NSD_COLORS.border.light}`,
             }}
           >
             {renderStep()}

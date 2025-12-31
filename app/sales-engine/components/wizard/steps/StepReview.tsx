@@ -2,6 +2,7 @@
 
 import { useWizard } from '../WizardContext';
 import { Icon } from '../../../../../design/components/Icon';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../../lib/design-tokens';
 
 export function StepReview() {
   const { data } = useWizard();
@@ -46,8 +47,8 @@ export function StepReview() {
           margin: '0 0 8px 0',
           fontSize: '24px',
           fontWeight: 600,
-          color: '#1e1e4a',
-          fontFamily: 'var(--font-display, Poppins, sans-serif)',
+          color: NSD_COLORS.primary,
+          fontFamily: NSD_TYPOGRAPHY.fontDisplay,
         }}
       >
         Review & Create
@@ -56,8 +57,8 @@ export function StepReview() {
         style={{
           margin: '0 0 32px 0',
           fontSize: '14px',
-          color: '#6b7280',
-          fontFamily: 'var(--font-body, Inter, sans-serif)',
+          color: NSD_COLORS.text.secondary,
+          fontFamily: NSD_TYPOGRAPHY.fontBody,
         }}
       >
         Review your campaign settings before creating. You can edit these later.
@@ -69,8 +70,8 @@ export function StepReview() {
             key={section.title}
             style={{
               padding: '20px',
-              backgroundColor: '#f9fafb',
-              borderRadius: '12px',
+              backgroundColor: NSD_COLORS.surface,
+              borderRadius: NSD_RADIUS.lg,
             }}
           >
             <div
@@ -85,22 +86,22 @@ export function StepReview() {
                 style={{
                   width: '32px',
                   height: '32px',
-                  backgroundColor: '#8b5cf6',
-                  borderRadius: '8px',
+                  backgroundColor: NSD_COLORS.secondary,
+                  borderRadius: NSD_RADIUS.md,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Icon name={section.icon as any} size={16} color="#ffffff" />
+                <Icon name={section.icon as any} size={16} color={NSD_COLORS.text.inverse} />
               </div>
               <h3
                 style={{
                   margin: 0,
                   fontSize: '16px',
                   fontWeight: 600,
-                  color: '#1e1e4a',
-                  fontFamily: 'var(--font-display, Poppins, sans-serif)',
+                  color: NSD_COLORS.primary,
+                  fontFamily: NSD_TYPOGRAPHY.fontDisplay,
                 }}
               >
                 {section.title}
@@ -121,8 +122,8 @@ export function StepReview() {
                   <span
                     style={{
                       fontSize: '14px',
-                      color: '#6b7280',
-                      fontFamily: 'var(--font-body, Inter, sans-serif)',
+                      color: NSD_COLORS.text.secondary,
+                      fontFamily: NSD_TYPOGRAPHY.fontBody,
                     }}
                   >
                     {item.label}
@@ -130,11 +131,11 @@ export function StepReview() {
                   <span
                     style={{
                       fontSize: '14px',
-                      color: '#1e1e4a',
+                      color: NSD_COLORS.primary,
                       fontWeight: 500,
                       textAlign: 'right',
                       maxWidth: '60%',
-                      fontFamily: 'var(--font-body, Inter, sans-serif)',
+                      fontFamily: NSD_TYPOGRAPHY.fontBody,
                     }}
                   >
                     {item.value}
@@ -151,18 +152,18 @@ export function StepReview() {
           marginTop: '24px',
           padding: '16px',
           backgroundColor: '#f0fdf4',
-          borderRadius: '8px',
+          borderRadius: NSD_RADIUS.md,
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
         }}
       >
-        <Icon name="info" size={20} color="#10b981" />
+        <Icon name="info" size={20} color={NSD_COLORS.success} />
         <span
           style={{
             fontSize: '14px',
             color: '#166534',
-            fontFamily: 'var(--font-body, Inter, sans-serif)',
+            fontFamily: NSD_TYPOGRAPHY.fontBody,
           }}
         >
           Campaign will be created in DRAFT status. You can edit and submit for review later.
