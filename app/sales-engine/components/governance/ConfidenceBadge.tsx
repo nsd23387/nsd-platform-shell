@@ -12,9 +12,9 @@ interface ConfidenceBadgeProps {
 }
 
 const CONFIDENCE_TOOLTIPS: Record<MetricConfidence, string> = {
-  SAFE: 'This metric is validated and can be trusted for decision-making.',
-  CONDITIONAL: 'This metric requires additional validation before use.',
-  BLOCKED: 'Blocked: insufficient validation / provenance mismatch. Click for details.',
+  SAFE: 'This metric has been validated by the backend and can be used for decision-making.',
+  CONDITIONAL: 'This metric has not been explicitly validated. Use with caution until validation is complete.',
+  BLOCKED: 'This metric is blocked due to validation failure or provenance mismatch. Click for details.',
 };
 
 /**

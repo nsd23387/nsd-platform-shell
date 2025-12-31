@@ -194,15 +194,53 @@ export function LearningSignalsPanel({
         ) : (
           <div
             style={{
-              padding: '24px',
+              padding: '32px 24px',
               textAlign: 'center',
               backgroundColor: NSD_COLORS.surface,
-              borderRadius: NSD_RADIUS.md,
+              borderRadius: NSD_RADIUS.lg,
               marginBottom: '20px',
+              border: `1px dashed ${NSD_COLORS.border.default}`,
             }}
           >
-            <p style={{ margin: 0, fontSize: '13px', color: NSD_COLORS.text.muted }}>
-              No learning signals configured for this campaign.
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                margin: '0 auto 16px',
+                backgroundColor: NSD_COLORS.background,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '20px',
+              }}
+            >
+              🧠
+            </div>
+            <h5
+              style={{
+                margin: '0 0 8px 0',
+                fontSize: '14px',
+                fontWeight: 600,
+                fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+                color: NSD_COLORS.primary,
+              }}
+            >
+              No Learning Signals Configured
+            </h5>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '13px',
+                color: NSD_COLORS.text.secondary,
+                maxWidth: '360px',
+                marginLeft: 'auto',
+                marginRight: 'auto',
+                lineHeight: 1.5,
+              }}
+            >
+              Learning signals will appear here once they are configured for this campaign by the backend system.
+              Signals are collected for observability only.
             </p>
           </div>
         )}
@@ -210,17 +248,26 @@ export function LearningSignalsPanel({
         {/* Governance notice */}
         <div
           style={{
-            padding: '12px 16px',
-            backgroundColor: NSD_COLORS.surface,
+            padding: '14px 16px',
+            backgroundColor: '#EFF6FF',
             borderRadius: NSD_RADIUS.md,
-            fontSize: '12px',
-            color: NSD_COLORS.text.secondary,
-            lineHeight: 1.6,
+            border: '1px solid #BFDBFE',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
           }}
         >
-          <strong>Governance Note:</strong> Learning signals are collected for observability and offline
-          analysis only. This UI does not trigger automated optimization or model updates.
-          All learning is human-supervised and governed by the data governance team.
+          <span style={{ fontSize: '14px' }}>ℹ️</span>
+          <div>
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: '#1E40AF' }}>
+              Governance Note
+            </p>
+            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#1E40AF', opacity: 0.9, lineHeight: 1.5 }}>
+              Learning signals are collected for observability and offline analysis only.
+              This UI does not trigger automated optimization or model updates.
+              All learning is human-supervised and governed by the data governance team.
+            </p>
+          </div>
         </div>
 
         {/* Campaign ID reference */}

@@ -23,7 +23,7 @@ export function ReadOnlyBanner({
   const variantStyles = {
     info: {
       bg: '#EFF6FF',
-      border: '#93C5FD',
+      border: '#BFDBFE',
       text: '#1E40AF',
       icon: 'ℹ️',
     },
@@ -43,19 +43,19 @@ export function ReadOnlyBanner({
         display: 'flex',
         alignItems: 'flex-start',
         gap: '12px',
-        padding: compact ? '10px 16px' : '14px 20px',
+        padding: compact ? '12px 16px' : '16px 20px',
         backgroundColor: style.bg,
         border: `1px solid ${style.border}`,
         borderRadius: NSD_RADIUS.md,
       }}
     >
-      <span style={{ fontSize: compact ? '14px' : '16px' }}>{style.icon}</span>
+      <span style={{ fontSize: compact ? '14px' : '16px', flexShrink: 0 }}>{style.icon}</span>
       <div style={{ flex: 1 }}>
         <p
           style={{
             margin: 0,
             fontSize: compact ? '12px' : '13px',
-            fontWeight: 500,
+            fontWeight: 600,
             fontFamily: NSD_TYPOGRAPHY.fontBody,
             color: style.text,
             lineHeight: 1.5,
@@ -66,12 +66,12 @@ export function ReadOnlyBanner({
         {!compact && (
           <p
             style={{
-              margin: '4px 0 0 0',
+              margin: '6px 0 0 0',
               fontSize: '13px',
               fontFamily: NSD_TYPOGRAPHY.fontBody,
               color: style.text,
               opacity: 0.9,
-              lineHeight: 1.5,
+              lineHeight: 1.6,
             }}
           >
             {message}

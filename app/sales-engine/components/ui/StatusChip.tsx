@@ -36,8 +36,8 @@ export function StatusChip({ status, size = 'md' }: StatusChipProps) {
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.DRAFT;
   
   const sizeStyles = {
-    sm: { padding: '3px 8px', fontSize: '11px' },
-    md: { padding: '4px 12px', fontSize: '12px' },
+    sm: { padding: '4px 10px', fontSize: '11px' },
+    md: { padding: '5px 14px', fontSize: '12px' },
   };
   
   return (
@@ -53,7 +53,9 @@ export function StatusChip({ status, size = 'md' }: StatusChipProps) {
         fontWeight: 500,
         fontFamily: NSD_TYPOGRAPHY.fontBody,
         whiteSpace: 'nowrap',
+        letterSpacing: '0.01em',
       }}
+      title={`Status: ${config.label}`}
     >
       {config.label}
     </span>

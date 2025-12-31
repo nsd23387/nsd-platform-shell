@@ -49,9 +49,9 @@ const READINESS_STYLES: Record<ReadinessLevel, { bg: string; text: string; borde
 };
 
 const READINESS_MESSAGES: Record<ReadinessLevel, string> = {
-  READY: 'System ready for execution (observed externally)',
-  NOT_READY: 'System not ready - see blocking reasons below',
-  UNKNOWN: 'Readiness unknown - validation not yet performed',
+  READY: 'All readiness checks have passed. Execution is managed by the backend.',
+  NOT_READY: 'One or more readiness checks have failed. See details below.',
+  UNKNOWN: 'Readiness has not been validated yet. This is not an error.',
 };
 
 export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadinessProps) {
@@ -220,27 +220,36 @@ export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadin
         {data.readinessLevel === 'UNKNOWN' && (
           <div
             style={{
-              padding: '14px 16px',
+              padding: '16px 18px',
               backgroundColor: '#F3F4F6',
               borderRadius: NSD_RADIUS.md,
               marginBottom: '16px',
+              border: '1px solid #E5E7EB',
             }}
           >
-            <h5
-              style={{
-                margin: '0 0 8px 0',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#4B5563',
-              }}
-            >
-              Why is this Unknown?
-            </h5>
-            <p style={{ margin: 0, fontSize: '13px', color: '#6B7280', lineHeight: 1.5 }}>
-              Readiness validation has not been performed or the backend has not provided complete
-              readiness data. This is distinct from &quot;Not Ready&quot; - it means the system state is
-              uncertain. Contact the backend team if validation should have occurred.
-            </p>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+              <span style={{ fontSize: '16px' }}>❓</span>
+              <div>
+                <h5
+                  style={{
+                    margin: '0 0 8px 0',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#4B5563',
+                  }}
+                >
+                  Why is readiness unknown?
+                </h5>
+                <p style={{ margin: 0, fontSize: '13px', color: '#6B7280', lineHeight: 1.6 }}>
+                  The backend has not yet validated this campaign&apos;s readiness, or the validation data
+                  is incomplete. This is intentional and not an error. &quot;Unknown&quot; means the system
+                  cannot confirm readiness, which is different from &quot;Not Ready&quot; (where checks have failed).
+                </p>
+                <p style={{ margin: '10px 0 0 0', fontSize: '12px', color: '#9CA3AF' }}>
+                  If you expected validation to have occurred, contact the data governance team.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -283,15 +292,24 @@ export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadin
         <div
           style={{
             marginTop: '16px',
-            padding: '10px 14px',
+            padding: '12px 16px',
             backgroundColor: '#EFF6FF',
-            borderRadius: NSD_RADIUS.sm,
-            fontSize: '12px',
-            color: '#1E40AF',
+            borderRadius: NSD_RADIUS.md,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '10px',
           }}
         >
-          <strong>Note:</strong> Readiness status is observational and computed from backend validation.
-          It is independent of governance approval state. Execution is managed by backend systems.
+          <span style={{ fontSize: '14px' }}>ℹ️</span>
+          <div>
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: '#1E40AF' }}>
+              Observational Only
+            </p>
+            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#1E40AF', opacity: 0.9, lineHeight: 1.5 }}>
+              Readiness is computed from backend validation data and is independent of governance approval.
+              This UI does not initiate execution. Execution is managed by backend systems.
+            </p>
+          </div>
         </div>
       </div>
     </div>

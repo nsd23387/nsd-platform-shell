@@ -101,6 +101,16 @@ Surface: #F9FAFB
 - [x] Brand tokens match NSD website (whitespace, indigo/violet, magenta CTA)
 
 ## Recent Changes
+- December 31, 2025: UI-Only Governance Enhancements
+  - Improved visual hierarchy and spacing in MetricsDisplay, RunsDisplay
+  - Enhanced UX copy for UNKNOWN states and disabled actions
+  - Added detailed explanations for blocked and pending states
+  - Improved empty state presentations in LearningSignalsPanel, RunsDisplay
+  - Applied subtle brand-aligned polish to badges and pills
+  - Updated tooltips for confidence and provenance indicators
+  - Ensured consistent terminology across governance components
+  - All changes are UI-only, no logic or API modifications
+
 - December 31, 2025: Sales Engine UI v4
   - Removed mock APIs, added M60 backend proxy
   - Added environment configuration for API URLs

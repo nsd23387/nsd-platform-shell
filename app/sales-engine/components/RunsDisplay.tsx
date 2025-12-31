@@ -10,10 +10,10 @@ interface RunsDisplayProps {
   latestRun?: CampaignRun | null;
 }
 
-const statusColors: Record<CampaignRun['status'], { bg: string; text: string }> = {
-  COMPLETED: { bg: '#d1fae5', text: '#065f46' },
-  FAILED: { bg: '#fef2f2', text: '#b91c1c' },
-  PARTIAL: { bg: '#fef3c7', text: '#92400e' },
+const statusColors: Record<CampaignRun['status'], { bg: string; text: string; border: string }> = {
+  COMPLETED: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
+  FAILED: { bg: '#FEE2E2', text: '#991B1B', border: '#FECACA' },
+  PARTIAL: { bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },
 };
 
 /**
@@ -39,141 +39,311 @@ export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
   return (
     <div
       style={{
-        padding: '20px',
-        backgroundColor: '#fff',
-        borderRadius: '8px',
-        border: '1px solid #e5e7eb',
+        backgroundColor: NSD_COLORS.background,
+        borderRadius: NSD_RADIUS.lg,
+        border: `1px solid ${NSD_COLORS.border.light}`,
+        overflow: 'hidden',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 20px',
+          borderBottom: `1px solid ${NSD_COLORS.border.light}`,
+        }}
+      >
         <h4
           style={{
             margin: 0,
             fontSize: '14px',
             fontWeight: 600,
-            color: '#374151',
+            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+            color: NSD_COLORS.primary,
           }}
         >
           Execution History (Observed)
         </h4>
         <span
           style={{
-            padding: '3px 8px',
+            padding: '4px 10px',
             fontSize: '10px',
-            fontWeight: 500,
+            fontWeight: 600,
             backgroundColor: '#EFF6FF',
             color: '#1E40AF',
             borderRadius: NSD_RADIUS.sm,
             textTransform: 'uppercase',
+            letterSpacing: '0.03em',
           }}
         >
           Read-Only
         </span>
       </div>
 
-      <p
-        style={{
-          margin: '0 0 16px 0',
-          padding: '12px',
-          backgroundColor: '#f3f4f6',
-          borderRadius: '6px',
-          fontSize: '13px',
-          color: '#6b7280',
-        }}
-      >
-        Execution entries are immutable observability records. No edit, retry, or delete actions are available from this UI.
-      </p>
-
-      {latestRun && (
+      <div style={{ padding: '20px' }}>
         <div
           style={{
-            padding: '16px',
-            backgroundColor: '#f0f9ff',
-            borderRadius: '8px',
+            padding: '14px 16px',
+            backgroundColor: NSD_COLORS.surface,
+            borderRadius: NSD_RADIUS.md,
             marginBottom: '20px',
-            border: '1px solid #bae6fd',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <h5 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#0369a1' }}>
-              Latest Execution
-            </h5>
-            <ProvenancePill provenance={deriveProvenance(latestRun)} />
-          </div>
-          <RunRow run={latestRun} />
+          <p
+            style={{
+              margin: 0,
+              fontSize: '13px',
+              color: NSD_COLORS.text.secondary,
+              lineHeight: 1.5,
+            }}
+          >
+            Execution entries are immutable observability records. No edit, retry, or delete actions are available from this UI.
+            All data shown here was recorded by backend systems.
+          </p>
         </div>
-      )}
 
-      {runs.length === 0 ? (
-        <p style={{ margin: 0, fontSize: '14px', color: '#6b7280', textAlign: 'center', padding: '24px' }}>
-          No execution runs observed yet.
-        </p>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                <th style={{ textAlign: 'left', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Execution ID</th>
-                <th style={{ textAlign: 'left', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Status</th>
-                <th style={{ textAlign: 'left', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Observed At</th>
-                <th style={{ textAlign: 'right', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Qualified Leads</th>
-                <th style={{ textAlign: 'right', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Sent</th>
-                <th style={{ textAlign: 'right', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Errors</th>
-                <th style={{ textAlign: 'center', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Provenance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run) => (
-                <tr key={run.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '10px 12px', color: '#374151', fontFamily: 'monospace', fontSize: '12px' }}>
-                    {run.id.slice(0, 8)}...
-                  </td>
-                  <td style={{ padding: '10px 12px' }}>
-                    <RunStatusBadge status={run.status} />
-                  </td>
-                  <td style={{ padding: '10px 12px', color: '#374151' }}>
-                    {new Date(run.started_at).toLocaleString()}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: '#374151', textAlign: 'right' }}>
-                    {run.leads_processed}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: '#374151', textAlign: 'right' }}>
-                    {run.emails_sent}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: run.errors > 0 ? '#b91c1c' : '#374151', textAlign: 'right' }}>
-                    {run.errors}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                    <ProvenancePill provenance={deriveProvenance(run)} />
-                  </td>
+        {latestRun && (
+          <div
+            style={{
+              padding: '20px',
+              backgroundColor: '#F0F9FF',
+              borderRadius: NSD_RADIUS.lg,
+              marginBottom: '24px',
+              border: '1px solid #BAE6FD',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '16px',
+              }}
+            >
+              <h5
+                style={{
+                  margin: 0,
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#0369A1',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.03em',
+                }}
+              >
+                Latest Execution
+              </h5>
+              <ProvenancePill provenance={deriveProvenance(latestRun)} />
+            </div>
+            <RunRow run={latestRun} />
+          </div>
+        )}
+
+        {runs.length === 0 ? (
+          <EmptyRunsState />
+        ) : (
+          <div
+            style={{
+              overflowX: 'auto',
+              borderRadius: NSD_RADIUS.md,
+              border: `1px solid ${NSD_COLORS.border.light}`,
+            }}
+          >
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ backgroundColor: NSD_COLORS.surface }}>
+                  <th style={{ textAlign: 'left', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Execution ID</th>
+                  <th style={{ textAlign: 'left', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Status</th>
+                  <th style={{ textAlign: 'left', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Observed At</th>
+                  <th style={{ textAlign: 'right', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Qualified Leads</th>
+                  <th style={{ textAlign: 'right', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Sent</th>
+                  <th style={{ textAlign: 'right', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Errors</th>
+                  <th style={{ textAlign: 'center', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Provenance</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {runs.map((run) => (
+                  <tr key={run.id} style={{ borderTop: `1px solid ${NSD_COLORS.border.light}` }}>
+                    <td style={{ padding: '12px 14px', color: NSD_COLORS.text.primary, fontFamily: 'monospace', fontSize: '12px' }}>
+                      {run.id.slice(0, 8)}...
+                    </td>
+                    <td style={{ padding: '12px 14px' }}>
+                      <RunStatusBadge status={run.status} />
+                    </td>
+                    <td style={{ padding: '12px 14px', color: NSD_COLORS.text.primary }}>
+                      {new Date(run.started_at).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '12px 14px', color: NSD_COLORS.text.primary, textAlign: 'right', fontWeight: 500 }}>
+                      {run.leads_processed}
+                    </td>
+                    <td style={{ padding: '12px 14px', color: NSD_COLORS.success, textAlign: 'right', fontWeight: 500 }}>
+                      {run.emails_sent}
+                    </td>
+                    <td style={{ padding: '12px 14px', color: run.errors > 0 ? NSD_COLORS.error : NSD_COLORS.text.primary, textAlign: 'right', fontWeight: 500 }}>
+                      {run.errors}
+                    </td>
+                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                      <ProvenancePill provenance={deriveProvenance(run)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmptyRunsState() {
+  return (
+    <div
+      style={{
+        padding: '40px 24px',
+        textAlign: 'center',
+        backgroundColor: NSD_COLORS.surface,
+        borderRadius: NSD_RADIUS.lg,
+      }}
+    >
+      <div
+        style={{
+          width: '48px',
+          height: '48px',
+          margin: '0 auto 16px',
+          backgroundColor: NSD_COLORS.background,
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '20px',
+        }}
+      >
+        📋
+      </div>
+      <h5
+        style={{
+          margin: '0 0 8px 0',
+          fontSize: '14px',
+          fontWeight: 600,
+          fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+          color: NSD_COLORS.primary,
+        }}
+      >
+        No Execution Runs Observed
+      </h5>
+      <p
+        style={{
+          margin: 0,
+          fontSize: '13px',
+          color: NSD_COLORS.text.secondary,
+          maxWidth: '400px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          lineHeight: 1.5,
+        }}
+      >
+        Execution runs will appear here once the backend system processes this campaign.
+        This UI observes execution records but does not initiate them.
+      </p>
     </div>
   );
 }
 
 function RunRow({ run }: { run: CampaignRun }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
       <div>
-        <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>Status</p>
-        <RunStatusBadge status={run.status} />
+        <p
+          style={{
+            margin: 0,
+            fontSize: '11px',
+            fontWeight: 500,
+            color: '#0369A1',
+            textTransform: 'uppercase',
+            letterSpacing: '0.03em',
+          }}
+        >
+          Status
+        </p>
+        <div style={{ marginTop: '6px' }}>
+          <RunStatusBadge status={run.status} />
+        </div>
       </div>
       <div>
-        <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>Qualified Leads Processed</p>
-        <p style={{ margin: '4px 0 0 0', fontSize: '14px', fontWeight: 500, color: '#111827' }}>{run.leads_processed}</p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: '11px',
+            fontWeight: 500,
+            color: '#0369A1',
+            textTransform: 'uppercase',
+            letterSpacing: '0.03em',
+          }}
+        >
+          Qualified Leads Processed
+        </p>
+        <p
+          style={{
+            margin: '6px 0 0 0',
+            fontSize: '18px',
+            fontWeight: 600,
+            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+            color: NSD_COLORS.primary,
+          }}
+        >
+          {run.leads_processed}
+        </p>
       </div>
       <div>
-        <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>Emails Sent</p>
-        <p style={{ margin: '4px 0 0 0', fontSize: '14px', fontWeight: 500, color: '#111827' }}>{run.emails_sent}</p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: '11px',
+            fontWeight: 500,
+            color: '#0369A1',
+            textTransform: 'uppercase',
+            letterSpacing: '0.03em',
+          }}
+        >
+          Emails Sent
+        </p>
+        <p
+          style={{
+            margin: '6px 0 0 0',
+            fontSize: '18px',
+            fontWeight: 600,
+            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+            color: NSD_COLORS.success,
+          }}
+        >
+          {run.emails_sent}
+        </p>
       </div>
       <div>
-        <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>Errors</p>
-        <p style={{ margin: '4px 0 0 0', fontSize: '14px', fontWeight: 500, color: run.errors > 0 ? '#b91c1c' : '#111827' }}>{run.errors}</p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: '11px',
+            fontWeight: 500,
+            color: '#0369A1',
+            textTransform: 'uppercase',
+            letterSpacing: '0.03em',
+          }}
+        >
+          Errors
+        </p>
+        <p
+          style={{
+            margin: '6px 0 0 0',
+            fontSize: '18px',
+            fontWeight: 600,
+            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+            color: run.errors > 0 ? NSD_COLORS.error : NSD_COLORS.primary,
+          }}
+        >
+          {run.errors}
+        </p>
       </div>
     </div>
   );
@@ -185,12 +355,13 @@ function RunStatusBadge({ status }: { status: CampaignRun['status'] }) {
     <span
       style={{
         display: 'inline-block',
-        padding: '2px 8px',
-        borderRadius: '4px',
+        padding: '4px 10px',
+        borderRadius: NSD_RADIUS.sm,
         fontSize: '12px',
         fontWeight: 500,
         backgroundColor: colors.bg,
         color: colors.text,
+        border: `1px solid ${colors.border}`,
       }}
     >
       {status}

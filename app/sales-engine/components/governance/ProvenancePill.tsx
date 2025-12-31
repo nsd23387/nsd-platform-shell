@@ -11,8 +11,8 @@ interface ProvenancePillProps {
 }
 
 const PROVENANCE_TOOLTIPS: Record<ProvenanceType, string> = {
-  CANONICAL: 'This record originates from the canonical ODS (source of truth).',
-  LEGACY_OBSERVED: 'This record was observed from a legacy system and may require validation.',
+  CANONICAL: 'This data originates from the canonical ODS, which is the authoritative source of truth.',
+  LEGACY_OBSERVED: 'This data was observed from a legacy system. It may require additional validation before use.',
 };
 
 /**

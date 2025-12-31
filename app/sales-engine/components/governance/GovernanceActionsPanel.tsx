@@ -142,50 +142,50 @@ export function GovernanceActionsPanel({
         {governanceState === 'PENDING_APPROVAL' && (
           <div
             style={{
-              padding: '14px 16px',
+              padding: '16px 18px',
               backgroundColor: '#DBEAFE',
               borderRadius: NSD_RADIUS.md,
               marginBottom: '16px',
+              border: '1px solid #93C5FD',
             }}
           >
-            <p
-              style={{
-                margin: 0,
-                fontSize: '13px',
-                color: '#1E40AF',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <span>⏳</span>
-              <span>Awaiting governance review. You will be notified when a decision is made.</span>
-            </p>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+              <span style={{ fontSize: '16px' }}>⏳</span>
+              <div>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: '#1E40AF' }}>
+                  Awaiting Governance Review
+                </p>
+                <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#1E40AF', opacity: 0.9, lineHeight: 1.5 }}>
+                  This campaign has been submitted for approval. You will be notified when a decision is made.
+                  No actions are available until the review is complete.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
         {governanceState === 'BLOCKED' && (
           <div
             style={{
-              padding: '14px 16px',
+              padding: '16px 18px',
               backgroundColor: '#FEE2E2',
               borderRadius: NSD_RADIUS.md,
               marginBottom: '16px',
+              border: '1px solid #FECACA',
             }}
           >
-            <p
-              style={{
-                margin: 0,
-                fontSize: '13px',
-                color: '#991B1B',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <span>⊘</span>
-              <span>This campaign is blocked. Resolve blocking reasons to proceed.</span>
-            </p>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+              <span style={{ fontSize: '16px' }}>⊘</span>
+              <div>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: '#991B1B' }}>
+                  Campaign Blocked
+                </p>
+                <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#991B1B', opacity: 0.9, lineHeight: 1.5 }}>
+                  This campaign cannot proceed due to governance or readiness issues.
+                  Review the blocking reasons and resolve them before resubmitting.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -231,20 +231,23 @@ export function GovernanceActionsPanel({
         {/* Read-only notice */}
         <div
           style={{
-            padding: '12px 16px',
+            padding: '14px 16px',
             backgroundColor: '#EFF6FF',
             borderRadius: NSD_RADIUS.md,
-            fontSize: '12px',
-            color: '#1E40AF',
+            border: '1px solid #BFDBFE',
             display: 'flex',
             alignItems: 'flex-start',
-            gap: '10px',
+            gap: '12px',
           }}
         >
           <span style={{ fontSize: '14px' }}>ℹ️</span>
           <div>
-            <p style={{ margin: 0, fontWeight: 500 }}>Read-Only UI</p>
-            <p style={{ margin: '4px 0 0 0', opacity: 0.9 }}>{READ_ONLY_MESSAGE}</p>
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: '#1E40AF' }}>
+              Read-Only UI
+            </p>
+            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#1E40AF', opacity: 0.9, lineHeight: 1.5 }}>
+              {READ_ONLY_MESSAGE}
+            </p>
           </div>
         </div>
       </div>
