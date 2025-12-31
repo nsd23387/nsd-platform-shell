@@ -4,6 +4,7 @@ import React from 'react';
 
 type IconName =
   | 'campaign'
+  | 'campaigns'
   | 'metrics'
   | 'runs'
   | 'variants'
@@ -27,7 +28,9 @@ type IconName =
   | 'users'
   | 'mail'
   | 'send'
-  | 'archive';
+  | 'archive'
+  | 'star'
+  | 'draft';
 
 interface IconProps {
   name: IconName;
@@ -265,6 +268,32 @@ const icons: Record<IconName, React.ReactNode> = {
   archive: (
     <path
       d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  campaigns: (
+    <path
+      d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"
+      fill="currentColor"
+    />
+  ),
+  star: (
+    <path
+      d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  draft: (
+    <path
+      d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M16 13H8m8 4H8m2-8H8"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"

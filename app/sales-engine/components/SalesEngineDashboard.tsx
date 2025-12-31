@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Icon } from '../../../design/components/Icon';
+import { getStatusLabel } from '../lib/statusLabels';
 import {
   getDashboardReadiness,
   getDashboardThroughput,
@@ -52,13 +53,7 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
 
   if (loading) {
     return (
-      <div
-        style={{
-          padding: '32px',
-          textAlign: 'center',
-          color: '#6b7280',
-        }}
-      >
+      <div style={{ padding: '32px', textAlign: 'center', color: '#6b7280' }}>
         Loading dashboard...
       </div>
     );
@@ -66,15 +61,7 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
 
   if (error) {
     return (
-      <div
-        style={{
-          padding: '16px',
-          backgroundColor: '#fef2f2',
-          borderRadius: '8px',
-          color: '#b91c1c',
-          fontSize: '14px',
-        }}
-      >
+      <div style={{ padding: '16px', backgroundColor: '#fef2f2', borderRadius: '8px', color: '#b91c1c', fontSize: '14px' }}>
         {error}
       </div>
     );
@@ -97,14 +84,7 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
           }}
         >
           <Icon name="warning" size={20} color="#ca8a04" />
-          <span
-            style={{
-              flex: 1,
-              fontSize: '14px',
-              color: '#854d0e',
-              fontFamily: 'var(--font-body, Inter, sans-serif)',
-            }}
-          >
+          <span style={{ flex: 1, fontSize: '14px', color: '#854d0e', fontFamily: 'var(--font-body, Inter, sans-serif)' }}>
             {activeNotice.message}
           </span>
           <span style={{ fontSize: '12px', color: '#a16207' }}>
@@ -114,25 +94,10 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
       )}
 
       {readiness && (
-        <div
-          style={{
-            backgroundColor: '#ffffff',
-            borderRadius: '16px',
-            border: '1px solid #e5e7eb',
-            padding: '24px',
-          }}
-        >
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e5e7eb', padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
             <Icon name="chart" size={20} color="#8b5cf6" />
-            <h3
-              style={{
-                margin: 0,
-                fontSize: '16px',
-                fontWeight: 600,
-                color: '#1e1e4a',
-                fontFamily: 'var(--font-display, Poppins, sans-serif)',
-              }}
-            >
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#1e1e4a', fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
               Campaign Health
             </h3>
           </div>
@@ -141,13 +106,8 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
             {[
               { label: 'Total', value: readiness.total, color: '#8b5cf6', status: null },
               { label: 'Draft', value: readiness.draft, color: '#6b7280', status: 'DRAFT' },
-              {
-                label: 'Pending Review',
-                value: readiness.pendingReview,
-                color: '#f59e0b',
-                status: 'PENDING_REVIEW',
-              },
-              { label: 'Runnable', value: readiness.runnable, color: '#10b981', status: 'RUNNABLE' },
+              { label: 'Pending Review', value: readiness.pendingReview, color: '#f59e0b', status: 'PENDING_REVIEW' },
+              { label: 'Approved & Ready', value: readiness.runnable, color: '#10b981', status: 'RUNNABLE' },
               { label: 'Archived', value: readiness.archived, color: '#6b7280', status: 'ARCHIVED' },
             ].map((item) => (
               <button
@@ -164,24 +124,10 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
                   transition: 'all 0.2s ease',
                 }}
               >
-                <div
-                  style={{
-                    fontSize: '28px',
-                    fontWeight: 700,
-                    color: item.color,
-                    fontFamily: 'var(--font-display, Poppins, sans-serif)',
-                  }}
-                >
+                <div style={{ fontSize: '28px', fontWeight: 700, color: item.color, fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
                   {item.value}
                 </div>
-                <div
-                  style={{
-                    fontSize: '13px',
-                    color: '#6b7280',
-                    marginTop: '4px',
-                    fontFamily: 'var(--font-body, Inter, sans-serif)',
-                  }}
-                >
+                <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px', fontFamily: 'var(--font-body, Inter, sans-serif)' }}>
                   {item.label}
                 </div>
               </button>
@@ -192,25 +138,10 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
         {readiness && readiness.blockers.length > 0 && (
-          <div
-            style={{
-              backgroundColor: '#ffffff',
-              borderRadius: '16px',
-              border: '1px solid #e5e7eb',
-              padding: '24px',
-            }}
-          >
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e5e7eb', padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
               <Icon name="shield" size={20} color="#ef4444" />
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: '16px',
-                  fontWeight: 600,
-                  color: '#1e1e4a',
-                  fontFamily: 'var(--font-display, Poppins, sans-serif)',
-                }}
-              >
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#1e1e4a', fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
                 Readiness Blockers
               </h3>
             </div>
@@ -228,13 +159,7 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
                     borderRadius: '8px',
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: '14px',
-                      color: '#b91c1c',
-                      fontFamily: 'var(--font-body, Inter, sans-serif)',
-                    }}
-                  >
+                  <span style={{ fontSize: '14px', color: '#b91c1c', fontFamily: 'var(--font-body, Inter, sans-serif)' }}>
                     {blocker.reason.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}
                   </span>
                   <span
@@ -256,25 +181,10 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
         )}
 
         {throughput && (
-          <div
-            style={{
-              backgroundColor: '#ffffff',
-              borderRadius: '16px',
-              border: '1px solid #e5e7eb',
-              padding: '24px',
-            }}
-          >
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e5e7eb', padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
               <Icon name="clock" size={20} color="#8b5cf6" />
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: '16px',
-                  fontWeight: 600,
-                  color: '#1e1e4a',
-                  fontFamily: 'var(--font-display, Poppins, sans-serif)',
-                }}
-              >
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#1e1e4a', fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
                 Throughput Snapshot
               </h3>
             </div>
@@ -286,15 +196,7 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
                   {throughput.usedToday} / {throughput.dailyLimit}
                 </span>
               </div>
-              <div
-                style={{
-                  width: '100%',
-                  height: '8px',
-                  backgroundColor: '#e5e7eb',
-                  borderRadius: '4px',
-                  overflow: 'hidden',
-                }}
-              >
+              <div style={{ width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
                 <div
                   style={{
                     width: `${(throughput.usedToday / throughput.dailyLimit) * 100}%`,
@@ -310,31 +212,13 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
             </div>
 
             <div style={{ display: 'flex', gap: '16px' }}>
-              <div
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: '#f9fafb',
-                  borderRadius: '8px',
-                }}
-              >
+              <div style={{ flex: 1, padding: '12px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
                 <div style={{ fontSize: '12px', color: '#6b7280' }}>Active Campaigns</div>
-                <div style={{ fontSize: '20px', fontWeight: 600, color: '#10b981' }}>
-                  {throughput.activeCampaigns}
-                </div>
+                <div style={{ fontSize: '20px', fontWeight: 600, color: '#10b981' }}>{throughput.activeCampaigns}</div>
               </div>
-              <div
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  backgroundColor: '#f9fafb',
-                  borderRadius: '8px',
-                }}
-              >
+              <div style={{ flex: 1, padding: '12px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
                 <div style={{ fontSize: '12px', color: '#6b7280' }}>Blocked by Throughput</div>
-                <div style={{ fontSize: '20px', fontWeight: 600, color: '#ef4444' }}>
-                  {throughput.blockedByThroughput}
-                </div>
+                <div style={{ fontSize: '20px', fontWeight: 600, color: '#ef4444' }}>{throughput.blockedByThroughput}</div>
               </div>
             </div>
           </div>
@@ -342,25 +226,10 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
       </div>
 
       {recentRuns.length > 0 && (
-        <div
-          style={{
-            backgroundColor: '#ffffff',
-            borderRadius: '16px',
-            border: '1px solid #e5e7eb',
-            padding: '24px',
-          }}
-        >
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e5e7eb', padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
             <Icon name="runs" size={20} color="#8b5cf6" />
-            <h3
-              style={{
-                margin: 0,
-                fontSize: '16px',
-                fontWeight: 600,
-                color: '#1e1e4a',
-                fontFamily: 'var(--font-display, Poppins, sans-serif)',
-              }}
-            >
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#1e1e4a', fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
               Recent Run Outcomes
             </h3>
           </div>
@@ -369,29 +238,17 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
-                    Campaign
-                  </th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
-                    Status
-                  </th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
-                    Attempted
-                  </th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
-                    Sent
-                  </th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>
-                    Blocked
-                  </th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Campaign</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Status</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Attempted</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Sent</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Blocked</th>
                 </tr>
               </thead>
               <tbody>
                 {recentRuns.map((run) => (
                   <tr key={run.runId} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '12px', fontSize: '14px', color: '#1e1e4a' }}>
-                      {run.campaignName}
-                    </td>
+                    <td style={{ padding: '12px', fontSize: '14px', color: '#1e1e4a' }}>{run.campaignName}</td>
                     <td style={{ padding: '12px' }}>
                       <span
                         style={{
@@ -406,15 +263,9 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
                         {run.status}
                       </span>
                     </td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#6b7280' }}>
-                      {run.leadsAttempted}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#10b981' }}>
-                      {run.leadsSent}
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#ef4444' }}>
-                      {run.leadsBlocked}
-                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#6b7280' }}>{run.leadsAttempted}</td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#10b981' }}>{run.leadsSent}</td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#ef4444' }}>{run.leadsBlocked}</td>
                   </tr>
                 ))}
               </tbody>
