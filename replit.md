@@ -213,6 +213,14 @@ POST /api/campaign-create
 ---
 
 ## Recent Changes
+- December 31, 2025: M67-14 UI Corrections
+  - Removed invalid fields: Max Organizations, Source Type, Technologies, Minimum Signals
+  - Updated ICP step: Keywords and Geography now REQUIRED with helper text
+  - Organization Sourcing step now read-only (automatic ICP-based sourcing)
+  - Added default suggestions for Outreach Context fields (Value Props, Pain Points, CTAs)
+  - Simplified Campaign Targets to 3 fields only (Leads, Emails, Reply Rate)
+  - Replaced horizontal stepper with vertical left-hand navigation
+  - Updated API validation to match new required fields (keywords, geography)
 - December 31, 2025: M67-14 CampaignCreate Implementation
   - Added POST /api/campaign-create endpoint
   - Created multi-step campaign creation wizard
