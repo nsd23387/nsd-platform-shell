@@ -13,9 +13,20 @@ import type {
   DashboardThroughput,
   SystemNotice,
   RecentRunOutcome,
+  NeedsAttentionItem,
+  UserBootstrap,
 } from '../types/campaign';
 
-const API_BASE = '/api/v1/campaigns';
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    return process.env.NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL || '/api/v1/campaigns';
+  }
+  return process.env.SALES_ENGINE_API_BASE_URL || '/api/v1/campaigns';
+};
+
+const getOdsApiUrl = () => {
+  return process.env.NEXT_PUBLIC_ODS_API_URL || '';
+};
 
 function getAuthToken(): string | undefined {
   if (typeof window !== 'undefined') {
@@ -42,7 +53,10 @@ async function apiRequest<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const baseUrl = getApiBaseUrl();
+  const url = endpoint.startsWith('/') ? `${baseUrl}${endpoint}` : `${baseUrl}/${endpoint}`;
+  
+  const response = await fetch(url, {
     ...options,
     headers: {
       ...buildHeaders(),
@@ -56,6 +70,27 @@ async function apiRequest<T>(
   }
 
   return response.json();
+}
+
+export async function getBootstrap(): Promise<UserBootstrap | null> {
+  const odsUrl = getOdsApiUrl();
+  if (!odsUrl) {
+    return null;
+  }
+  
+  try {
+    const response = await fetch(`${odsUrl}/api/v1/me`, {
+      headers: buildHeaders(),
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    return response.json();
+  } catch {
+    return null;
+  }
 }
 
 export async function listCampaigns(status?: CampaignStatus): Promise<Campaign[]> {
@@ -92,6 +127,19 @@ export async function submitCampaign(id: string): Promise<Campaign> {
 
 export async function approveCampaign(id: string): Promise<Campaign> {
   return apiRequest<Campaign>(`/${id}/approve`, {
+    method: 'POST',
+  });
+}
+
+export async function rejectCampaign(id: string, reason?: string): Promise<Campaign> {
+  return apiRequest<Campaign>(`/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function startCampaignRun(id: string): Promise<CampaignRun> {
+  return apiRequest<CampaignRun>(`/${id}/runs`, {
     method: 'POST',
   });
 }
@@ -134,4 +182,8 @@ export async function getSystemNotices(): Promise<SystemNotice[]> {
 
 export async function getRecentRuns(): Promise<RecentRunOutcome[]> {
   return apiRequest<RecentRunOutcome[]>('/runs/recent');
+}
+
+export async function getNeedsAttention(): Promise<NeedsAttentionItem[]> {
+  return apiRequest<NeedsAttentionItem[]>('/attention');
 }

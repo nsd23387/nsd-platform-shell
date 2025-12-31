@@ -1,4 +1,4 @@
-export type CampaignStatus = 'DRAFT' | 'PENDING_REVIEW' | 'RUNNABLE' | 'ARCHIVED';
+export type CampaignStatus = 'DRAFT' | 'PENDING_REVIEW' | 'RUNNABLE' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'ARCHIVED';
 
 export interface Campaign {
   id: string;
@@ -13,14 +13,33 @@ export interface Campaign {
   isRunnable: boolean;
 }
 
+export interface CampaignICP {
+  keywords?: string[];
+  industries?: string[];
+  roles?: string[];
+  painPoints?: string[];
+  valuePropositions?: string[];
+  employeeSize?: { min: number; max: number };
+}
+
+export interface CampaignPersonalization {
+  toneOfVoice?: string;
+  cta?: string;
+  usp?: string;
+}
+
 export interface CampaignCreatePayload {
   name: string;
   description?: string;
+  icp?: CampaignICP;
+  personalization?: CampaignPersonalization;
 }
 
 export interface CampaignUpdatePayload {
   name?: string;
   description?: string;
+  icp?: CampaignICP;
+  personalization?: CampaignPersonalization;
 }
 
 export type BlockingReason =
@@ -65,6 +84,12 @@ export interface CampaignRun {
   leads_processed: number;
   emails_sent: number;
   errors: number;
+  error_details?: string[];
+  snapshot?: {
+    icp_hash: string;
+    leads_count: number;
+    created_at: string;
+  };
 }
 
 export interface CampaignVariant {
@@ -93,6 +118,11 @@ export interface ReadinessStatus {
 
 export interface CampaignDetail extends Campaign {
   readiness?: ReadinessStatus;
+  icp?: CampaignICP;
+  personalization?: CampaignPersonalization;
+  submitted_at?: string;
+  approved_at?: string;
+  approved_by?: string;
 }
 
 export interface DashboardReadiness {
@@ -100,6 +130,9 @@ export interface DashboardReadiness {
   draft: number;
   pendingReview: number;
   runnable: number;
+  running: number;
+  completed: number;
+  failed: number;
   archived: number;
   blockers: { reason: string; count: number }[];
 }
@@ -128,4 +161,28 @@ export interface RecentRunOutcome {
   leadsSent: number;
   leadsBlocked: number;
   completedAt: string;
+}
+
+export interface NeedsAttentionItem {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  reason: 'in_review_stale' | 'approved_not_started' | 'run_failed';
+  status: CampaignStatus;
+  lastUpdated: string;
+  primaryAction: {
+    label: string;
+    href: string;
+  };
+}
+
+export interface UserBootstrap {
+  id: string;
+  email: string;
+  name?: string;
+  permissions: string[];
+  feature_visibility: {
+    sales_engine?: boolean;
+    [key: string]: boolean | undefined;
+  };
 }

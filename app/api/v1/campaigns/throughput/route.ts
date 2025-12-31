@@ -1,12 +1,31 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET() {
-  const throughput = {
+const BACKEND_URL = process.env.SALES_ENGINE_API_BASE_URL || process.env.NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL;
+
+function getMockThroughput() {
+  return {
     dailyLimit: 500,
     usedToday: 127,
     activeCampaigns: 1,
     blockedByThroughput: 0,
   };
+}
 
-  return NextResponse.json(throughput);
+export async function GET(request: NextRequest) {
+  if (!BACKEND_URL) {
+    return NextResponse.json(getMockThroughput());
+  }
+
+  try {
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    const authHeader = request.headers.get('authorization');
+    if (authHeader) headers['Authorization'] = authHeader;
+
+    const response = await fetch(`${BACKEND_URL}/throughput`, { headers });
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (error) {
+    console.error('Backend proxy error:', error);
+    return NextResponse.json(getMockThroughput());
+  }
 }

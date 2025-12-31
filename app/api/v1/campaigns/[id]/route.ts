@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+const BACKEND_URL = process.env.SALES_ENGINE_API_BASE_URL || process.env.NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL;
+
 const mockCampaigns: Record<string, any> = {
   'camp-001': {
     id: 'camp-001',
@@ -15,6 +17,10 @@ const mockCampaigns: Record<string, any> = {
     readiness: {
       is_ready: false,
       blocking_reasons: ['MISSING_HUMAN_APPROVAL'],
+    },
+    icp: {
+      industries: ['Technology', 'Financial Services'],
+      roles: ['CTO', 'VP Engineering'],
     },
   },
   'camp-002': {
@@ -32,6 +38,10 @@ const mockCampaigns: Record<string, any> = {
       is_ready: false,
       blocking_reasons: ['MISSING_HUMAN_APPROVAL'],
     },
+    icp: {
+      industries: ['Retail', 'E-commerce'],
+      roles: ['Marketing Director', 'CMO'],
+    },
   },
   'camp-003': {
     id: 'camp-003',
@@ -48,6 +58,10 @@ const mockCampaigns: Record<string, any> = {
       is_ready: true,
       blocking_reasons: [],
     },
+    icp: {
+      industries: ['SaaS', 'Enterprise Software'],
+      roles: ['VP Sales', 'Sales Director'],
+    },
   },
 };
 
@@ -55,34 +69,66 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const campaign = mockCampaigns[params.id];
-  
-  if (!campaign) {
-    return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+  if (!BACKEND_URL) {
+    const campaign = mockCampaigns[params.id];
+    if (!campaign) {
+      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+    }
+    return NextResponse.json(campaign);
   }
 
-  return NextResponse.json(campaign);
+  try {
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    const authHeader = request.headers.get('authorization');
+    if (authHeader) headers['Authorization'] = authHeader;
+
+    const response = await fetch(`${BACKEND_URL}/${params.id}`, { headers });
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (error) {
+    console.error('Backend proxy error:', error);
+    const campaign = mockCampaigns[params.id];
+    if (!campaign) {
+      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+    }
+    return NextResponse.json(campaign);
+  }
 }
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const campaign = mockCampaigns[params.id];
-  
-  if (!campaign) {
-    return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
-  }
-
-  if (!campaign.canEdit) {
-    return NextResponse.json({ error: 'Campaign cannot be edited' }, { status: 403 });
-  }
-
   const body = await request.json();
-  
-  if (body.name) campaign.name = body.name;
-  if (body.description !== undefined) campaign.description = body.description;
-  campaign.updated_at = new Date().toISOString();
 
-  return NextResponse.json(campaign);
+  if (!BACKEND_URL) {
+    const campaign = mockCampaigns[params.id];
+    if (!campaign) {
+      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+    }
+    if (!campaign.canEdit) {
+      return NextResponse.json({ error: 'Campaign cannot be edited' }, { status: 403 });
+    }
+    if (body.name) campaign.name = body.name;
+    if (body.description !== undefined) campaign.description = body.description;
+    campaign.updated_at = new Date().toISOString();
+    return NextResponse.json(campaign);
+  }
+
+  try {
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    const authHeader = request.headers.get('authorization');
+    if (authHeader) headers['Authorization'] = authHeader;
+
+    const response = await fetch(`${BACKEND_URL}/${params.id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (error) {
+    console.error('Backend proxy error:', error);
+    return NextResponse.json({ error: 'Failed to update campaign' }, { status: 503 });
+  }
 }
