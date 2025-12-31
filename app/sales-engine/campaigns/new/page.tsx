@@ -8,6 +8,8 @@
  * 
  * Campaign is created in governance_state = DRAFT.
  * No execution or sourcing occurs.
+ * 
+ * M67.9-01: Campaign creation is disabled when API mode is disabled.
  */
 
 import { useState } from 'react';
@@ -22,6 +24,7 @@ import type {
   ValidationError,
   isCampaignCreateSuccess,
 } from '../../types/campaign-create';
+import { isApiDisabled, featureFlags, getDisabledMessage } from '../../../../config/appConfig';
 
 const WIZARD_STEPS = [
   { id: 'identity', label: 'Campaign Identity' },
@@ -110,6 +113,96 @@ export default function NewCampaignPage() {
     icpSnapshotId?: string;
     error?: string;
   } | null>(null);
+
+  // M67.9-01: Show disabled state when API mode is disabled
+  if (!featureFlags.canCreateCampaign) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          backgroundColor: NSD_COLORS.surface,
+          padding: '32px',
+        }}
+      >
+        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <Link
+              href="/sales-engine"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px',
+                color: NSD_COLORS.secondary,
+                textDecoration: 'none',
+              }}
+            >
+              <Icon name="arrow-left" size={16} color={NSD_COLORS.secondary} />
+              Back to Campaigns
+            </Link>
+          </div>
+
+          <div
+            style={{
+              backgroundColor: NSD_COLORS.background,
+              borderRadius: NSD_RADIUS.lg,
+              border: `1px solid ${NSD_COLORS.border.light}`,
+              padding: '48px',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '64px',
+                height: '64px',
+                backgroundColor: '#FEF3C7',
+                borderRadius: '50%',
+                margin: '0 auto 24px',
+              }}
+            >
+              <Icon name="warning" size={32} color="#92400E" />
+            </div>
+
+            <h1
+              style={{
+                margin: '0 0 16px 0',
+                fontSize: '24px',
+                fontWeight: 600,
+                color: NSD_COLORS.primary,
+                fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+              }}
+            >
+              Campaign Creation Disabled
+            </h1>
+
+            <p
+              style={{
+                margin: '0 0 24px 0',
+                fontSize: '15px',
+                color: NSD_COLORS.text.secondary,
+                lineHeight: 1.6,
+              }}
+            >
+              {getDisabledMessage('create')}
+            </p>
+
+            <p
+              style={{
+                margin: '0',
+                fontSize: '13px',
+                color: NSD_COLORS.text.muted,
+              }}
+            >
+              Runtime will be enabled in Milestone M68.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const updateField = <K extends keyof FormData>(field: K, value: FormData[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));

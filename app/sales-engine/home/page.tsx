@@ -19,6 +19,7 @@ import type {
   RecentRunOutcome,
   NeedsAttentionItem,
 } from '../types/campaign';
+import { isApiDisabled, featureFlags } from '../../../config/appConfig';
 
 export default function SalesEngineHomePage() {
   const [readiness, setReadiness] = useState<DashboardReadiness | null>(null);
@@ -73,11 +74,22 @@ export default function SalesEngineHomePage() {
           title="Sales Engine"
           description="Command center for campaign lifecycle management"
           actions={
-            <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
-              <Button variant="cta" icon="plus">
+            featureFlags.canCreateCampaign ? (
+              <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
+                <Button variant="cta" icon="plus">
+                  New Campaign
+                </Button>
+              </Link>
+            ) : (
+              <Button 
+                variant="cta" 
+                icon="plus" 
+                disabled 
+                title="Campaign creation is disabled when API mode is disabled"
+              >
                 New Campaign
               </Button>
-            </Link>
+            )
           }
         />
 

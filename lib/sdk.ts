@@ -12,6 +12,10 @@
  * - No JWT parsing - tokens passed verbatim
  * - No permission inference - permissions come from bootstrap
  * - No direct database access - SDK only
+ * 
+ * M67.9-01 Vercel Hosting:
+ * - When NEXT_PUBLIC_API_MODE=disabled, all API calls return mock data
+ * - No network calls are made when API mode is disabled
  */
 
 import type {
@@ -25,6 +29,7 @@ import type {
   ActivitySpineResponse,
 } from '../types/activity-spine';
 import type { BootstrapResponse } from '../types/bootstrap';
+import { isApiDisabled } from '../config/appConfig';
 
 // ============================================
 // Configuration
@@ -91,6 +96,32 @@ function getAuthToken(): string | undefined {
 // Bootstrap API (/api/v1/me)
 // ============================================
 
+// =============================================================================
+// M67.9-01 MOCK DATA FOR API-DISABLED MODE
+// 
+// SECURITY NOTE: This application is an internal tool.
+// Access control is handled via Vercel Password Protection.
+// No application-level authentication is implemented.
+// The mock data below is for UI rendering only - no user assumed.
+// =============================================================================
+
+const MOCK_BOOTSTRAP_RESPONSE: BootstrapResponse = {
+  user: null as unknown as BootstrapResponse['user'], // No user assumed - Vercel Password Protection handles access
+  organization: null as unknown as BootstrapResponse['organization'],
+  roles: [],
+  permissions: [],
+  environment: {
+    name: 'production',
+    api_version: 'v1',
+  },
+  feature_visibility: {
+    sales_engine: true,
+    campaigns: true,
+    approvals: false,
+    execution: false,
+  },
+};
+
 /**
  * GET /api/v1/me
  * 
@@ -103,8 +134,16 @@ function getAuthToken(): string | undefined {
  * - No JWT parsing
  * - No role/permission inference
  * - This is the SOLE source of truth for access control
+ * 
+ * M67.9-01: Returns mock data when API mode is disabled.
  */
 export async function getMe(): Promise<BootstrapResponse> {
+  // M67.9-01: Return mock bootstrap data when API is disabled
+  if (isApiDisabled) {
+    console.log('[SDK] API mode disabled - returning mock bootstrap data');
+    return MOCK_BOOTSTRAP_RESPONSE;
+  }
+
   const token = getAuthToken();
   
   const headers: HeadersInit = {
@@ -173,11 +212,23 @@ function buildHeaders(): HeadersInit {
 /**
  * Generic fetch wrapper with error handling
  * All Activity Spine calls go through this - ensures read-only compliance
+ * 
+ * M67.9-01: Returns mock response when API mode is disabled.
  */
 async function fetchFromActivitySpine<T>(
   endpoint: string,
   params?: Record<string, string>
 ): Promise<ActivitySpineResponse<T>> {
+  // M67.9-01: Return mock response when API is disabled
+  if (isApiDisabled) {
+    console.log(`[SDK] API mode disabled - returning mock response for ${endpoint}`);
+    return {
+      data: {} as T,
+      timestamp: new Date().toISOString(),
+      orgId: 'mock-org',
+    };
+  }
+
   const url = new URL(`${sdkConfig.activitySpineUrl}${endpoint}`, window.location.origin);
   
   if (params) {

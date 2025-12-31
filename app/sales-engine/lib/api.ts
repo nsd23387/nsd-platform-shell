@@ -8,6 +8,10 @@
  * - All mutation functions have been removed or replaced with read-only alternatives
  * - Execution is observed, not initiated
  * - Canonical ODS is the source of truth
+ * 
+ * M67.9-01 Vercel Hosting:
+ * - When NEXT_PUBLIC_API_MODE=disabled, all API calls return empty/mock data
+ * - No network calls are made when API mode is disabled
  */
 
 import type {
@@ -32,6 +36,7 @@ import {
   ReadOnlyViolationError,
   READ_ONLY_MESSAGE,
 } from './read-only-guard';
+import { isApiDisabled, isReadOnly, READ_ONLY_BANNER_MESSAGE } from '../../../config/appConfig';
 
 const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
@@ -65,14 +70,55 @@ function buildHeaders(): HeadersInit {
   return headers;
 }
 
+// =============================================================================
+// M67.9-01 MOCK DATA FOR API-DISABLED MODE
+// When NEXT_PUBLIC_API_MODE=disabled, these values are returned instead of
+// making network calls. This enables Vercel preview deployments.
+// =============================================================================
+
+const MOCK_DASHBOARD_READINESS: DashboardReadiness = {
+  total: 0,
+  draft: 0,
+  pendingReview: 0,
+  runnable: 0,
+  running: 0,
+  completed: 0,
+  failed: 0,
+  archived: 0,
+  blockers: [],
+};
+
+const MOCK_DASHBOARD_THROUGHPUT: DashboardThroughput = {
+  usedToday: 0,
+  dailyLimit: 100,
+  activeCampaigns: 0,
+  blockedByThroughput: 0,
+};
+
+const MOCK_SYSTEM_NOTICE: SystemNotice = {
+  id: 'api-disabled-notice',
+  type: 'info',
+  message: READ_ONLY_BANNER_MESSAGE,
+  active: true,
+  createdAt: new Date().toISOString(),
+};
+
 /**
  * Read-only API request function.
  * Enforces GET-only constraint for the Sales Engine UI.
+ * 
+ * M67.9-01: Returns early with null when API mode is disabled.
  */
 async function apiRequest<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
+  // M67.9-01: Short-circuit when API mode is disabled
+  if (isApiDisabled) {
+    console.log(`[API] API mode disabled - skipping request to ${endpoint}`);
+    return null as unknown as T;
+  }
+
   const method = options?.method?.toUpperCase() || 'GET';
   const baseUrl = getApiBaseUrl();
   const url = endpoint.startsWith('/') ? `${baseUrl}${endpoint}` : `${baseUrl}/${endpoint}`;
@@ -99,12 +145,19 @@ async function apiRequest<T>(
 // =============================================================================
 // READ-ONLY API FUNCTIONS
 // These are the only allowed API calls from the Sales Engine UI.
+// M67.9-01: All functions return mock data when API mode is disabled.
 // =============================================================================
 
 /**
  * Get bootstrap information for the current user.
  */
 export async function getBootstrap(): Promise<UserBootstrap | null> {
+  // M67.9-01: Return null when API is disabled
+  if (isApiDisabled) {
+    console.log('[API] API mode disabled - returning null for bootstrap');
+    return null;
+  }
+
   const odsUrl = getOdsApiUrl();
   if (!odsUrl) {
     return null;
@@ -129,6 +182,10 @@ export async function getBootstrap(): Promise<UserBootstrap | null> {
  * List campaigns (read-only).
  */
 export async function listCampaigns(status?: CampaignStatus): Promise<Campaign[]> {
+  // M67.9-01: Return empty array when API is disabled
+  if (isApiDisabled) {
+    return [];
+  }
   const params = status ? `?status=${status}` : '';
   return apiRequest<Campaign[]>(params);
 }
@@ -151,6 +208,10 @@ export async function getCampaignMetrics(id: string): Promise<CampaignMetrics> {
  * Get campaign metrics history (read-only).
  */
 export async function getCampaignMetricsHistory(id: string): Promise<MetricsHistoryEntry[]> {
+  // M67.9-01: Return empty array when API is disabled
+  if (isApiDisabled) {
+    return [];
+  }
   return apiRequest<MetricsHistoryEntry[]>(`/${id}/metrics/history`);
 }
 
@@ -158,6 +219,10 @@ export async function getCampaignMetricsHistory(id: string): Promise<MetricsHist
  * Get campaign runs (read-only observability).
  */
 export async function getCampaignRuns(id: string): Promise<CampaignRun[]> {
+  // M67.9-01: Return empty array when API is disabled
+  if (isApiDisabled) {
+    return [];
+  }
   return apiRequest<CampaignRun[]>(`/${id}/runs`);
 }
 
@@ -165,6 +230,10 @@ export async function getCampaignRuns(id: string): Promise<CampaignRun[]> {
  * Get latest campaign run (read-only observability).
  */
 export async function getLatestRun(id: string): Promise<CampaignRun | null> {
+  // M67.9-01: Return null when API is disabled
+  if (isApiDisabled) {
+    return null;
+  }
   return apiRequest<CampaignRun | null>(`/${id}/runs/latest`);
 }
 
@@ -172,6 +241,10 @@ export async function getLatestRun(id: string): Promise<CampaignRun | null> {
  * Get campaign variants (read-only).
  */
 export async function getCampaignVariants(id: string): Promise<CampaignVariant[]> {
+  // M67.9-01: Return empty array when API is disabled
+  if (isApiDisabled) {
+    return [];
+  }
   return apiRequest<CampaignVariant[]>(`/${id}/variants`);
 }
 
@@ -193,6 +266,10 @@ export async function getCampaignReadiness(id: string): Promise<ReadinessStatus>
  * Get dashboard readiness summary (read-only).
  */
 export async function getDashboardReadiness(): Promise<DashboardReadiness> {
+  // M67.9-01: Return mock data when API is disabled
+  if (isApiDisabled) {
+    return MOCK_DASHBOARD_READINESS;
+  }
   return apiRequest<DashboardReadiness>('/readiness');
 }
 
@@ -200,6 +277,10 @@ export async function getDashboardReadiness(): Promise<DashboardReadiness> {
  * Get dashboard throughput summary (read-only).
  */
 export async function getDashboardThroughput(): Promise<DashboardThroughput> {
+  // M67.9-01: Return mock data when API is disabled
+  if (isApiDisabled) {
+    return MOCK_DASHBOARD_THROUGHPUT;
+  }
   return apiRequest<DashboardThroughput>('/throughput');
 }
 
@@ -207,6 +288,10 @@ export async function getDashboardThroughput(): Promise<DashboardThroughput> {
  * Get system notices (read-only).
  */
 export async function getSystemNotices(): Promise<SystemNotice[]> {
+  // M67.9-01: Return API disabled notice when API is disabled
+  if (isApiDisabled) {
+    return [MOCK_SYSTEM_NOTICE];
+  }
   return apiRequest<SystemNotice[]>('/notices');
 }
 
@@ -214,6 +299,10 @@ export async function getSystemNotices(): Promise<SystemNotice[]> {
  * Get recent run outcomes (read-only observability).
  */
 export async function getRecentRuns(): Promise<RecentRunOutcome[]> {
+  // M67.9-01: Return empty array when API is disabled
+  if (isApiDisabled) {
+    return [];
+  }
   return apiRequest<RecentRunOutcome[]>('/runs/recent');
 }
 
@@ -221,6 +310,10 @@ export async function getRecentRuns(): Promise<RecentRunOutcome[]> {
  * Get items needing attention (read-only).
  */
 export async function getNeedsAttention(): Promise<NeedsAttentionItem[]> {
+  // M67.9-01: Return empty array when API is disabled
+  if (isApiDisabled) {
+    return [];
+  }
   return apiRequest<NeedsAttentionItem[]>('/attention');
 }
 

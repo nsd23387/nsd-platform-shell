@@ -212,7 +212,66 @@ POST /api/campaign-create
 
 ---
 
+## Deploying to Vercel (M67.9-01)
+
+### Overview
+
+This milestone (M67.9-01) enables Vercel hosting for the Sales Engine UI in **read-only mode**.
+This is a hosting-only deployment. No runtime, no execution, no backend wiring.
+
+### Required Environment Variables
+
+Set these in your Vercel project settings:
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `NEXT_PUBLIC_API_MODE` | `disabled` | **REQUIRED.** Disables all API calls, returns mock data. |
+| `NEXT_PUBLIC_READ_ONLY` | `true` | **REQUIRED.** Enables read-only mode, disables execution buttons. |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://placeholder.supabase.co` | Placeholder for build (not used). |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `placeholder` | Placeholder for build (not used). |
+
+### Important Notes
+
+⚠️ **This deployment is READ-ONLY.**
+
+- No API connections are active
+- No data modifications are possible  
+- No campaign execution can occur
+- All "Start", "Run", "Reset", and "Execute" buttons are disabled
+- A global banner indicates read-only mode
+
+⚠️ **Runtime wiring occurs in M68, not here.**
+
+This milestone only enables UI preview. Backend integration, execution capabilities,
+and real API connections will be enabled in Milestone M68.
+
+### Security
+
+Access control is handled via **Vercel Password Protection** during M67.9-01.
+No application-level authentication is implemented.
+The code does not assume a logged-in user.
+
+### Hard Constraints
+
+The following are strictly enforced:
+
+- ❌ No writes, mutations, or pipeline execution
+- ❌ No Supabase, Smartlead, Apollo, Make, or backend service connections
+- ❌ No secrets or real API keys
+- ❌ No M68 functionality enabled
+- ✅ All network calls disabled when API mode is disabled
+- ✅ UI clearly communicates read-only state
+
+---
+
 ## Recent Changes
+- December 31, 2025: M67.9-01 Vercel Hosting Setup
+  - Added centralized config module (config/appConfig.ts)
+  - Implemented API short-circuit when NEXT_PUBLIC_API_MODE=disabled
+  - Created VercelReadOnlyBanner component for global read-only indication
+  - Updated all execution buttons to respect read-only mode
+  - Added environment variable documentation
+  - No authentication - access controlled via Vercel Password Protection
 - December 31, 2025: M67-14 CampaignCreate Implementation
   - Added POST /api/campaign-create endpoint
   - Created multi-step campaign creation wizard
