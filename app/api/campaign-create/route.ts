@@ -37,6 +37,14 @@ function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
       message: 'ICP definition is required',
       code: 'REQUIRED_FIELD',
     });
+  } else {
+    if (!payload.icp.industries || payload.icp.industries.length === 0) {
+      errors.push({
+        field: 'icp.industries',
+        message: 'At least one industry is required',
+        code: 'REQUIRED_FIELD',
+      });
+    }
   }
 
   if (!payload.organization_sourcing) {
@@ -45,6 +53,14 @@ function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
       message: 'Organization sourcing configuration is required',
       code: 'REQUIRED_FIELD',
     });
+  } else {
+    if (!payload.organization_sourcing.source_type) {
+      errors.push({
+        field: 'organization_sourcing.source_type',
+        message: 'Source type is required',
+        code: 'REQUIRED_FIELD',
+      });
+    }
   }
 
   if (!payload.contact_targeting) {

@@ -8,6 +8,10 @@ governed M60 Campaign Management APIs.
 This UI **never initiates execution, approval, or submission**.
 All state transitions and execution occur in backend systems and are **observed, not controlled**, here.
 
+**M67-14 Exception**: Campaign creation (POST /campaign-create) is allowed.
+Campaigns are created in `governance_state = DRAFT` with `source_eligible = false`.
+No execution or sourcing occurs from this flow.
+
 The design follows a governance-first architecture:
 - Truth over completeness
 - Explicit UNKNOWN states
@@ -37,17 +41,20 @@ NEXT_PUBLIC_ODS_API_URL                # ODS API for bootstrap/identity
 ## Project Structure
 ```
 app/
-├── api/v1/campaigns/           # Read-only M60 API proxies (observational only)
-│   ├── route.ts                # Campaign list
-│   ├── attention/              # Needs-attention queue (derived from backend state)
-│   ├── notices/                # System notices
-│   ├── readiness/              # Readiness status (observed)
-│   ├── throughput/             # Capacity metrics (observed)
-│   ├── runs/                   # Run history (observed)
-│   └── [id]/                   # Campaign detail (read-only)
-│       ├── metrics/
-│       ├── runs/
-│       └── throughput/
+├── api/
+│   ├── campaign-create/        # M67-14: Campaign creation (WRITE exception)
+│   │   └── route.ts            # POST handler - creates DRAFT campaigns
+│   └── v1/campaigns/           # Read-only M60 API proxies (observational only)
+│       ├── route.ts            # Campaign list
+│       ├── attention/          # Needs-attention queue (derived from backend state)
+│       ├── notices/            # System notices
+│       ├── readiness/          # Readiness status (observed)
+│       ├── throughput/         # Capacity metrics (observed)
+│       ├── runs/               # Run history (observed)
+│       └── [id]/               # Campaign detail (read-only)
+│           ├── metrics/
+│           ├── runs/
+│           └── throughput/
 ├── sales-engine/
 │   ├── home/                   # Dashboard with KPIs + Needs Attention
 │   ├── campaigns/
@@ -160,7 +167,58 @@ Border:     #E5E7EB
 
 ---
 
+## M67-14 CampaignCreate API
+
+### Endpoint
+```
+POST /api/campaign-create
+```
+
+### Allowed Behavior
+- Creates campaign in `governance_state = DRAFT`
+- Persists immutable ICP snapshot
+- No execution or sourcing occurs
+
+### Success Response Shape
+```json
+{
+  "success": true,
+  "data": {
+    "campaign": {
+      "id": "uuid",
+      "governance_state": "DRAFT",
+      "source_eligible": false
+    },
+    "icp_snapshot": {
+      "id": "uuid",
+      "campaign_id": "uuid"
+    }
+  },
+  "meta": {
+    "semantics": {
+      "governance_state": "DRAFT",
+      "source_eligible": false,
+      "targets_gating": false
+    }
+  }
+}
+```
+
+### UI Consumption Rules
+- Display campaign.id, governance_state, source_eligible
+- DO NOT infer readiness, progress, or next steps
+- DO NOT trigger any follow-on calls
+- Targets are benchmarks only — do not affect campaign execution
+
+---
+
 ## Recent Changes
+- December 31, 2025: M67-14 CampaignCreate Implementation
+  - Added POST /api/campaign-create endpoint
+  - Created multi-step campaign creation wizard
+  - Implemented form validation with error binding
+  - Added success confirmation with governance semantics
+  - Updated read-only guard with M67-14 exception
 - December 31, 2025: UI Governance Enhancements
   - Improved visual hierarchy and spacing
   - Enhanced UX copy for UNKNOWN and disabled states

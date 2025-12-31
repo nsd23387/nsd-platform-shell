@@ -178,7 +178,31 @@ export default function NewCampaignPage() {
     },
   });
 
+  const validateAllSteps = (): boolean => {
+    const allErrors: Record<string, string> = {};
+
+    if (!formData.name.trim()) {
+      allErrors['campaign_identity.name'] = 'Campaign name is required';
+    }
+    if (formData.industries.length === 0) {
+      allErrors['icp.industries'] = 'At least one industry is required';
+    }
+    if (!formData.sourceType) {
+      allErrors['organization_sourcing.source_type'] = 'Source type is required';
+    }
+
+    if (Object.keys(allErrors).length > 0) {
+      setErrors(allErrors);
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async () => {
+    if (!validateAllSteps()) {
+      return;
+    }
+
     setIsSubmitting(true);
     setErrors({});
 
@@ -223,14 +247,49 @@ export default function NewCampaignPage() {
     }
   };
 
+  const validateCurrentStep = (): boolean => {
+    const stepErrors: Record<string, string> = {};
+
+    switch (currentStep) {
+      case 0:
+        if (!formData.name.trim()) {
+          stepErrors['campaign_identity.name'] = 'Campaign name is required';
+        }
+        break;
+      case 1:
+        if (formData.industries.length === 0) {
+          stepErrors['icp.industries'] = 'At least one industry is required';
+        }
+        break;
+      case 2:
+        if (!formData.sourceType) {
+          stepErrors['organization_sourcing.source_type'] = 'Source type is required';
+        }
+        break;
+      default:
+        break;
+    }
+
+    if (Object.keys(stepErrors).length > 0) {
+      setErrors(stepErrors);
+      return false;
+    }
+    return true;
+  };
+
   const goNext = () => {
+    if (!validateCurrentStep()) {
+      return;
+    }
     if (currentStep < WIZARD_STEPS.length - 1) {
+      setErrors({});
       setCurrentStep(currentStep + 1);
     }
   };
 
   const goPrev = () => {
     if (currentStep > 0) {
+      setErrors({});
       setCurrentStep(currentStep - 1);
     }
   };
@@ -444,10 +503,18 @@ export default function NewCampaignPage() {
         <WizardNav
           steps={stepsWithCompletion}
           currentStep={currentStep}
-          onStepClick={setCurrentStep}
+          onStepClick={(step) => {
+            if (step > currentStep) {
+              if (!validateCurrentStep()) {
+                return;
+              }
+            }
+            setErrors({});
+            setCurrentStep(step);
+          }}
         />
 
-        {submitResult?.error && (
+        {(submitResult?.error || Object.keys(errors).length > 0) && (
           <div
             style={{
               backgroundColor: '#FEE2E2',
@@ -462,7 +529,7 @@ export default function NewCampaignPage() {
             <Icon name="warning" size={20} color="#991B1B" />
             <div>
               <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: '#991B1B' }}>
-                {submitResult.error}
+                {submitResult?.error || 'Please fix the errors below before continuing'}
               </p>
               {Object.keys(errors).length > 0 && (
                 <ul style={{ margin: '8px 0 0 0', padding: '0 0 0 16px', fontSize: '13px', color: '#991B1B' }}>
@@ -513,8 +580,9 @@ export default function NewCampaignPage() {
             name="industries"
             values={formData.industries}
             onChange={(v) => updateField('industries', v)}
-            placeholder="Type and press Enter"
+            placeholder="Type and press Enter (required)"
             helpText="Target industries for this campaign"
+            error={errors['icp.industries']}
           />
           <TagInput
             label="Geographies"
@@ -580,6 +648,8 @@ export default function NewCampaignPage() {
               { value: 'list', label: 'From List' },
               { value: 'manual', label: 'Manual Selection' },
             ]}
+            required
+            error={errors['organization_sourcing.source_type']}
           />
           <FormField
             label="Max Organizations"
