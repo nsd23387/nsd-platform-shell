@@ -1,6 +1,7 @@
 'use client';
 
 import { useWizard } from '../WizardContext';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../../lib/design-tokens';
 
 export function StepBasics() {
   const { data, updateData } = useWizard();
@@ -12,8 +13,8 @@ export function StepBasics() {
           margin: '0 0 8px 0',
           fontSize: '24px',
           fontWeight: 600,
-          color: '#1e1e4a',
-          fontFamily: 'var(--font-display, Poppins, sans-serif)',
+          color: NSD_COLORS.primary,
+          fontFamily: NSD_TYPOGRAPHY.fontDisplay,
         }}
       >
         Campaign Basics
@@ -22,8 +23,8 @@ export function StepBasics() {
         style={{
           margin: '0 0 32px 0',
           fontSize: '14px',
-          color: '#6b7280',
-          fontFamily: 'var(--font-body, Inter, sans-serif)',
+          color: NSD_COLORS.text.secondary,
+          fontFamily: NSD_TYPOGRAPHY.fontBody,
         }}
       >
         Start by giving your campaign a name and description.
@@ -36,9 +37,9 @@ export function StepBasics() {
               display: 'block',
               fontSize: '14px',
               fontWeight: 500,
-              color: '#374151',
+              color: NSD_COLORS.text.primary,
               marginBottom: '8px',
-              fontFamily: 'var(--font-body, Inter, sans-serif)',
+              fontFamily: NSD_TYPOGRAPHY.fontBody,
             }}
           >
             Campaign Name *
@@ -52,11 +53,11 @@ export function StepBasics() {
               width: '100%',
               padding: '12px 16px',
               fontSize: '14px',
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px',
+              border: `1px solid ${NSD_COLORS.border.default}`,
+              borderRadius: NSD_RADIUS.md,
               outline: 'none',
               transition: 'border-color 0.2s ease',
-              fontFamily: 'var(--font-body, Inter, sans-serif)',
+              fontFamily: NSD_TYPOGRAPHY.fontBody,
             }}
           />
         </div>
@@ -67,9 +68,9 @@ export function StepBasics() {
               display: 'block',
               fontSize: '14px',
               fontWeight: 500,
-              color: '#374151',
+              color: NSD_COLORS.text.primary,
               marginBottom: '8px',
-              fontFamily: 'var(--font-body, Inter, sans-serif)',
+              fontFamily: NSD_TYPOGRAPHY.fontBody,
             }}
           >
             Description
@@ -83,11 +84,11 @@ export function StepBasics() {
               width: '100%',
               padding: '12px 16px',
               fontSize: '14px',
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px',
+              border: `1px solid ${NSD_COLORS.border.default}`,
+              borderRadius: NSD_RADIUS.md,
               outline: 'none',
               resize: 'vertical',
-              fontFamily: 'var(--font-body, Inter, sans-serif)',
+              fontFamily: NSD_TYPOGRAPHY.fontBody,
             }}
           />
         </div>
