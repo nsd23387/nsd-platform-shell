@@ -1,123 +1,161 @@
-# M67 Sales Engine UI v4
+# M67 Sales Engine UI
 
 ## Overview
-Sales Engine UI v4 - A Sales Operator Command Interface for campaign lifecycle management. This standalone Next.js application provides situational awareness and human-controlled campaign governance using M60 Campaign Management APIs only.
+Sales Engine UI - A read-only Sales Operator Command Interface for campaign lifecycle observability and governance. This Next.js application provides situational awareness through governed M60 Campaign Management APIs. The UI follows a governance-first architecture where all state transitions are observed, not initiated.
 
 ## Tech Stack
-- **Framework**: Next.js 14
+- **Framework**: Next.js 14 (App Router)
 - **Language**: TypeScript
-- **Runtime**: Node.js 18+
+- **Runtime**: Node.js 20
 - **Package Manager**: npm
-- **Design System**: NSD Brand Tokens (Deep Indigo, Violet, Magenta)
+- **Design System**: NSD Brand Tokens
 
 ## Environment Variables
 ```
-NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL - M60 API base URL (staging)
+NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL - M60 API base URL (client-side)
+SALES_ENGINE_API_BASE_URL - M60 API base URL (server-side proxy)
 NEXT_PUBLIC_ODS_API_URL - ODS API for bootstrap/identity
 ```
 
 ## Project Structure
 ```
-├── app/
-│   ├── api/v1/campaigns/       # M60 API proxy routes (passthrough only)
-│   ├── sales-engine/
-│   │   ├── home/               # Dashboard with KPI strip + Needs Attention
-│   │   ├── campaigns/
-│   │   │   ├── new/            # Campaign creation (wizard + AI generator)
-│   │   │   └── [id]/           # Campaign detail with tabs
-│   │   ├── components/
-│   │   │   ├── ui/             # Shared NSD components
-│   │   │   └── wizard/         # Campaign creation wizard
-│   │   ├── lib/
-│   │   │   ├── api.ts          # M60 API client
-│   │   │   ├── design-tokens.ts # NSD brand tokens
-│   │   │   └── statusLabels.ts # Status language mapping
-│   │   └── types/              # TypeScript types
-│   └── page.tsx                # Redirects to /sales-engine/home
-├── design/components/          # Shared Icon component
-└── ...
+app/
+├── api/v1/campaigns/           # M60 API proxy routes
+│   ├── route.ts                # Campaign list
+│   ├── attention/              # Needs attention queue
+│   ├── notices/                # System notices
+│   ├── readiness/              # Readiness status
+│   ├── throughput/             # Capacity metrics
+│   ├── runs/recent/            # Recent runs
+│   └── [id]/                   # Campaign detail endpoints
+│       ├── approve/
+│       ├── submit/
+│       ├── metrics/
+│       ├── runs/
+│       ├── variants/
+│       └── throughput/
+├── sales-engine/
+│   ├── home/                   # Dashboard with KPIs + Needs Attention
+│   ├── campaigns/
+│   │   ├── new/                # Campaign creation wizard
+│   │   └── [id]/               # Campaign detail view
+│   ├── approvals/              # Approvals page
+│   ├── execution/              # Execution observability
+│   ├── monitoring/             # Run monitoring
+│   ├── components/
+│   │   ├── governance/         # Governance-specific components
+│   │   │   ├── CampaignStateBadge.tsx
+│   │   │   ├── ConfidenceBadge.tsx
+│   │   │   ├── ExecutionReadinessPanel.tsx
+│   │   │   ├── GovernanceActionsPanel.tsx
+│   │   │   ├── LearningSignalsPanel.tsx
+│   │   │   ├── ProvenancePill.tsx
+│   │   │   └── ReadOnlyBanner.tsx
+│   │   ├── ui/                 # Shared NSD UI components
+│   │   │   ├── Button.tsx
+│   │   │   ├── DataTable.tsx
+│   │   │   ├── PageHeader.tsx
+│   │   │   ├── SectionCard.tsx
+│   │   │   ├── StatCard.tsx
+│   │   │   └── StatusChip.tsx
+│   │   └── wizard/             # Campaign creation wizard
+│   │       ├── WizardContext.tsx
+│   │       ├── WizardNavigation.tsx
+│   │       ├── WizardProgress.tsx
+│   │       └── steps/
+│   ├── lib/
+│   │   ├── api.ts              # M60 API client
+│   │   ├── campaign-state.ts   # Governance state mapping
+│   │   ├── design-tokens.ts    # NSD brand tokens
+│   │   ├── read-only-guard.ts  # Read-only enforcement
+│   │   └── statusLabels.ts     # Status language mapping
+│   └── types/
+│       └── campaign.ts         # TypeScript types
+└── page.tsx                    # Redirects to /sales-engine/home
+
+docs/
+└── UI_GOVERNANCE.md            # Governance architecture documentation
 ```
 
-## v4 Routes
-| Route | Feature |
+## Routes
+| Route | Purpose |
 |-------|---------|
 | `/sales-engine/home` | Dashboard with KPI strip + Needs Attention queue |
-| `/sales-engine` | Campaign table with filters + search + quick actions |
-| `/sales-engine/campaigns/new` | Campaign form + AI generator |
-| `/sales-engine/campaigns/:id` | Campaign detail with tabs |
+| `/sales-engine` | Campaign table with filters, search, quick actions |
+| `/sales-engine/campaigns/new` | Campaign creation wizard |
+| `/sales-engine/campaigns/:id` | Campaign detail with governance tabs |
+| `/sales-engine/approvals` | Approvals workflow |
+| `/sales-engine/execution` | Execution observability |
+| `/sales-engine/monitoring` | Run monitoring |
 
-### Campaign Detail Tabs
-- **Setup** - View/edit campaign details (read-only if not DRAFT)
-- **Review** - Submit to review with governance checklist (DRAFT only)
-- **Approvals** - Approve/reject with confirmation (PENDING_REVIEW only)
-- **Execution** - Start run with safety warnings (Approved & Ready only)
-- **Monitoring** - Run history, metrics, snapshots (read-only)
+## Governance Architecture
 
-## Status Language (v4 REQUIRED)
-Backend Status → UI Label:
-- `DRAFT` → Draft
-- `PENDING_REVIEW` → In Review
-- `RUNNABLE` → **Approved & Ready** (NEVER "Runnable")
-- `RUNNING` → Running
-- `COMPLETED` → Completed
-- `FAILED` → Failed
-- `ARCHIVED` → Archived
+### Read-Only UI Principle
+The UI is a **read-only observation layer**. It displays governance and approval stages, not execution controls.
+
+- Allowed HTTP methods: GET, HEAD, OPTIONS only
+- Enforcement: Runtime guard (`read-only-guard.ts`)
+- All data originates from backend systems
+
+### Governance States
+| Backend Status | UI Label |
+|----------------|----------|
+| `DRAFT` | Draft |
+| `PENDING_REVIEW` | In Review |
+| `RUNNABLE` | **Approved & Ready** |
+| `RUNNING` | Running |
+| `COMPLETED` | Completed |
+| `FAILED` | Failed |
+| `ARCHIVED` | Archived |
+
+### Readiness vs Governance State
+These are orthogonal concepts:
+- **Governance State**: Approval workflow stage (DRAFT → PENDING → APPROVED → EXECUTED)
+- **Readiness Level**: System capability to execute (READY, NOT_READY, UNKNOWN)
+
+A campaign can be APPROVED but NOT_READY (awaiting mailbox health).
 
 ## NSD Brand Tokens
 ```typescript
 Primary: #020F5A (Deep Indigo)
 Secondary: #692BAA (Violet)
-CTA: #CC368F (Magenta - sparingly)
+CTA: #CC368F (Magenta - use sparingly)
 Background: #FFFFFF
 Surface: #F9FAFB
+Border: #E5E7EB
 ```
 
-## Shared Components
-- `PageHeader` - Page title with back link and actions
-- `SectionCard` - Content section with title and icon
+## Governance Components
+- `ReadOnlyBanner` - Read-only mode notification
+- `ConfidenceBadge` - Data confidence indicator (HIGH, MEDIUM, LOW, UNKNOWN)
+- `ProvenancePill` - Data source attribution
+- `CampaignStateBadge` - Governance state display
+- `ExecutionReadinessPanel` - Readiness status with blocking reasons
+- `GovernanceActionsPanel` - Available governance actions
+- `LearningSignalsPanel` - Campaign learning insights
+
+## UI Components
+- `PageHeader` - Page title with navigation and actions
+- `SectionCard` - Content section container
 - `StatCard` - KPI display card
 - `StatusChip` - Status badge with color coding
 - `Button` - Primary, secondary, CTA, ghost variants
 - `DataTable` - Tabular data display
 
 ## Key Constraints
-- API routes proxy to M60 backend only (no business logic)
-- No direct Supabase access, no service_role keys
-- Bootstrap from ODS /api/v1/me endpoint
+- API routes proxy to M60 backend only (no business logic in UI)
+- No direct database access
+- Bootstrap identity from ODS /api/v1/me endpoint
 - UI must not parse JWT or infer permissions
 - All dashboard data comes from governed read endpoints
 - Human authority required for all state transitions
-
-## UX Success Checklist
-- [x] Home dashboard shows correct totals by status
-- [x] Needs Attention queue routes to correct next action
-- [x] Status language uses "Approved & Ready" (never Runnable)
-- [x] Campaign table supports filtering by status + search by name
-- [x] Draft can be created, saved, re-opened, edited
-- [x] Review step explains what changes when submitting
-- [x] Approval step requires explicit confirmation
-- [x] Execution step requires confirmation and shows safety warnings
-- [x] Monitoring is read-only and shows run history
-- [x] Brand tokens match NSD website (whitespace, indigo/violet, magenta CTA)
+- Never display "Runnable" - always use "Approved & Ready"
 
 ## Recent Changes
-- December 31, 2025: UI-Only Governance Enhancements
-  - Improved visual hierarchy and spacing in MetricsDisplay, RunsDisplay
+- December 31, 2025: UI Governance Enhancements
+  - Improved visual hierarchy and spacing across governance components
   - Enhanced UX copy for UNKNOWN states and disabled actions
-  - Added detailed explanations for blocked and pending states
-  - Improved empty state presentations in LearningSignalsPanel, RunsDisplay
-  - Applied subtle brand-aligned polish to badges and pills
-  - Updated tooltips for confidence and provenance indicators
-  - Ensured consistent terminology across governance components
-  - All changes are UI-only, no logic or API modifications
-
-- December 31, 2025: Sales Engine UI v4
-  - Removed mock APIs, added M60 backend proxy
-  - Added environment configuration for API URLs
-  - Global status rewrite: "Runnable" → "Approved & Ready"
-  - Enhanced Home Dashboard with 6-stat KPI strip
-  - Added Needs Attention queue with actionable CTAs
-  - Campaign detail page with 5 tabs (Setup, Review, Approvals, Execution, Monitoring)
-  - Applied NSD brand tokens throughout
-  - Created shared UI component library
-  - Campaign table with filters, search, quick actions
+  - Added tooltips for confidence and provenance indicators
+  - Improved empty state presentations
+  - Applied NSD brand polish to badges and status chips
+  - Fixed undefined rate field guards in MetricsDisplay
