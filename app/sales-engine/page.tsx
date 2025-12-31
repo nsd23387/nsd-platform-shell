@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { Campaign, CampaignStatus } from './types/campaign';
 import { listCampaigns } from './lib/api';
-import { CampaignCard, StatusBadge } from './components';
+import { CampaignCard, StatusBadge, SalesEngineDashboard } from './components';
 
 const statusFilters: { value: CampaignStatus | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All' },
@@ -80,6 +80,16 @@ export default function SalesEnginePage() {
             + New Campaign
           </Link>
         </div>
+
+        <SalesEngineDashboard
+          onStatusFilter={(status) => {
+            if (status === null) {
+              setStatusFilter('ALL');
+            } else {
+              setStatusFilter(status as CampaignStatus);
+            }
+          }}
+        />
 
         <div
           style={{

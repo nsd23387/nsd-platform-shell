@@ -94,3 +94,38 @@ export interface ReadinessStatus {
 export interface CampaignDetail extends Campaign {
   readiness?: ReadinessStatus;
 }
+
+export interface DashboardReadiness {
+  total: number;
+  draft: number;
+  pendingReview: number;
+  runnable: number;
+  archived: number;
+  blockers: { reason: string; count: number }[];
+}
+
+export interface DashboardThroughput {
+  dailyLimit: number;
+  usedToday: number;
+  activeCampaigns: number;
+  blockedByThroughput: number;
+}
+
+export interface SystemNotice {
+  id: string;
+  type: 'info' | 'warning' | 'error';
+  message: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface RecentRunOutcome {
+  runId: string;
+  campaignId: string;
+  campaignName: string;
+  status: 'COMPLETED' | 'FAILED' | 'PARTIAL';
+  leadsAttempted: number;
+  leadsSent: number;
+  leadsBlocked: number;
+  completedAt: string;
+}
