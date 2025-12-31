@@ -135,6 +135,7 @@ Border: #E5E7EB
 - `LearningSignalsPanel` - Campaign learning insights
 
 ## UI Components
+- `NavBar` - Shared navigation bar across all Sales Engine pages
 - `PageHeader` - Page title with navigation and actions
 - `SectionCard` - Content section container
 - `StatCard` - KPI display card
@@ -152,6 +153,10 @@ Border: #E5E7EB
 - Never display "Runnable" - always use "Approved & Ready"
 
 ## Recent Changes
+- December 31, 2025: Navigation Enhancement
+  - Added shared NavBar component for consistent navigation across all pages
+  - All Sales Engine pages now have access to Dashboard, Campaigns, Approvals, Execution, and Monitoring
+
 - December 31, 2025: UI Governance Enhancements
   - Improved visual hierarchy and spacing across governance components
   - Enhanced UX copy for UNKNOWN states and disabled actions

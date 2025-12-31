@@ -1,0 +1,93 @@
+You are Replit working in the NSD Sales Engine UI repository.
+
+THIS TASK IS A DOCUMENTATION + UI NAMING CORRECTION TASK.
+It is NOT a feature build and NOT an architectural redesign.
+
+════════════════════════════════════
+ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+════════════════════════════════════
+This UI is a GOVERNED, READ-ONLY OBSERVABILITY INTERFACE.
+
+You MUST NOT:
+- Add execution controls, start/run buttons, or execution flows
+- Add or modify campaign state machines
+- Add or modify API behavior
+- Add new routes that imply control or execution
+- Introduce POST/PUT/PATCH/DELETE semantics
+- Change logic under app/sales-engine/lib/
+- Reintroduce RUNNING / FAILED / COMPLETED as governance states
+
+You MAY ONLY:
+- Rename routes, tabs, and documentation language to remove execution semantics
+- Improve clarity, terminology, and scope documentation
+- Align replit.md with the already-implemented governed UI
+- Improve wording to reduce future architectural drift
+- Make UI-only naming adjustments (no logic changes)
+
+If a change risks altering behavior → DO NOT DO IT.
+
+════════════════════════════════════
+OBJECTIVE
+════════════════════════════════════
+Bring Replit documentation and surface-level naming fully into alignment with the
+target-state architecture:
+
+- UI is READ-ONLY
+- UI OBSERVES execution, it does not initiate it
+- Governance state ≠ runtime execution state
+- Backend systems own all mutations and execution
+- UNKNOWN is a valid and intentional state
+
+════════════════════════════════════
+REQUIRED CHANGES
+════════════════════════════════════
+
+A) REMOVE EXECUTION SEMANTICS FROM ROUTES & NAMING
+- Rename any routes, folders, or references named:
+  - `execution`
+  - `running`
+  - `control`
+- Replace with observational terminology:
+  - `runs`
+  - `run-history`
+  - `execution-observed`
+  - `delivery-observability`
+
+Example:
+❌ /sales-engine/execution
+✅ /sales-engine/runs
+
+B) GOVERNANCE STATE MODEL CORRECTION (DOCUMENTATION ONLY)
+- Update replit.md to reflect UI-level governance states ONLY:
+  - DRAFT
+  - PENDING_REVIEW
+  - APPROVED_READY
+  - BLOCKED
+  - EXECUTED_READ_ONLY
+  - ARCHIVED
+- Explicitly state:
+  - RUNNING / FAILED / COMPLETED are backend runtime states
+  - They appear ONLY in run history rows, never as campaign state
+
+C) API PROXY CLARIFICATION
+- Clarify that any API proxy routes:
+  - Are READ-ONLY reflections of backend state
+  - Do not initiate approval, submission, or execution
+  - Exist only to normalize response shape and auth
+- If clarification is not possible, remove proxy route documentation entirely
+
+D) TERMINOLOGY CLEANUP
+- Replace “Sales Operator Command Interface” with:
+  - “Governed Campaign Observability & Approval Interface”
+- Add explicit language stating:
+  - “This UI never initiates execution or approval.”
+
+════════════════════════════════════
+DELIVERABLES
+════════════════════════════════════
+1) Updated replit.md fully aligned to target-state architecture
+2) No code logic changes
+3) No new routes or APIs
+4) Clear wording that prevents future contributor drift
+
+Proceed now.
