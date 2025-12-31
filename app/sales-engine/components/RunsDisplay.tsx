@@ -1,6 +1,9 @@
 'use client';
 
 import type { CampaignRun } from '../types/campaign';
+import { ProvenancePill } from './governance';
+import { deriveProvenance } from '../lib/campaign-state';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../lib/design-tokens';
 
 interface RunsDisplayProps {
   runs: CampaignRun[];
@@ -13,6 +16,25 @@ const statusColors: Record<CampaignRun['status'], { bg: string; text: string }> 
   PARTIAL: { bg: '#fef3c7', text: '#92400e' },
 };
 
+/**
+ * RunsDisplay - Execution run history (Read-Only).
+ * 
+ * Updated for target-state architecture:
+ * - Uses "Qualified Leads Processed" terminology
+ * - Includes provenance indicators
+ * - Emphasizes read-only observability
+ * 
+ * LEAD MODEL DISTINCTION:
+ * - "Qualified Leads" shown here represent records that passed lead qualification
+ *   checks (valid email, qualification state) at execution time
+ * - This is distinct from "Contacts Observed" which shows all contacts regardless
+ *   of email validity or qualification status
+ * - The leads_processed count comes directly from the backend execution record
+ *   and is not filtered client-side
+ * 
+ * See: isQualifiedLead() and isValidLeadEmail() in campaign-state.ts for
+ * the qualification logic documentation.
+ */
 export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
   return (
     <div
@@ -23,16 +45,31 @@ export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
         border: '1px solid #e5e7eb',
       }}
     >
-      <h4
-        style={{
-          margin: '0 0 16px 0',
-          fontSize: '14px',
-          fontWeight: 600,
-          color: '#374151',
-        }}
-      >
-        Run History (Read-Only)
-      </h4>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <h4
+          style={{
+            margin: 0,
+            fontSize: '14px',
+            fontWeight: 600,
+            color: '#374151',
+          }}
+        >
+          Execution History (Observed)
+        </h4>
+        <span
+          style={{
+            padding: '3px 8px',
+            fontSize: '10px',
+            fontWeight: 500,
+            backgroundColor: '#EFF6FF',
+            color: '#1E40AF',
+            borderRadius: NSD_RADIUS.sm,
+            textTransform: 'uppercase',
+          }}
+        >
+          Read-Only
+        </span>
+      </div>
 
       <p
         style={{
@@ -44,7 +81,7 @@ export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
           color: '#6b7280',
         }}
       >
-        Run entries are immutable ledger records. No edit, retry, or delete actions are available.
+        Execution entries are immutable observability records. No edit, retry, or delete actions are available from this UI.
       </p>
 
       {latestRun && (
@@ -57,28 +94,32 @@ export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
             border: '1px solid #bae6fd',
           }}
         >
-          <h5 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600, color: '#0369a1' }}>
-            Latest Run
-          </h5>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <h5 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#0369a1' }}>
+              Latest Execution
+            </h5>
+            <ProvenancePill provenance={deriveProvenance(latestRun)} />
+          </div>
           <RunRow run={latestRun} />
         </div>
       )}
 
       {runs.length === 0 ? (
         <p style={{ margin: 0, fontSize: '14px', color: '#6b7280', textAlign: 'center', padding: '24px' }}>
-          No runs recorded yet.
+          No execution runs observed yet.
         </p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                <th style={{ textAlign: 'left', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Run ID</th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Execution ID</th>
                 <th style={{ textAlign: 'left', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Status</th>
-                <th style={{ textAlign: 'left', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Started</th>
-                <th style={{ textAlign: 'right', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Leads</th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Observed At</th>
+                <th style={{ textAlign: 'right', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Qualified Leads</th>
                 <th style={{ textAlign: 'right', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Sent</th>
                 <th style={{ textAlign: 'right', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Errors</th>
+                <th style={{ textAlign: 'center', padding: '10px 12px', color: '#6b7280', fontWeight: 500 }}>Provenance</th>
               </tr>
             </thead>
             <tbody>
@@ -102,6 +143,9 @@ export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
                   <td style={{ padding: '10px 12px', color: run.errors > 0 ? '#b91c1c' : '#374151', textAlign: 'right' }}>
                     {run.errors}
                   </td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                    <ProvenancePill provenance={deriveProvenance(run)} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -120,7 +164,7 @@ function RunRow({ run }: { run: CampaignRun }) {
         <RunStatusBadge status={run.status} />
       </div>
       <div>
-        <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>Leads Processed</p>
+        <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>Qualified Leads Processed</p>
         <p style={{ margin: '4px 0 0 0', fontSize: '14px', fontWeight: 500, color: '#111827' }}>{run.leads_processed}</p>
       </div>
       <div>
