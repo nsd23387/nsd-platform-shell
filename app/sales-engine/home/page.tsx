@@ -77,45 +77,31 @@ export default function SalesEngineHomePage() {
               Command center for campaign lifecycle management
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <Link
-              href="/sales-engine"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 20px',
-                backgroundColor: '#fff',
-                color: '#374151',
-                fontSize: '14px',
-                fontWeight: 500,
-                borderRadius: '8px',
-                border: '1px solid #d1d5db',
-                textDecoration: 'none',
-              }}
-            >
-              <Icon name="campaigns" size={16} color="#6b7280" />
-              All Campaigns
-            </Link>
-            <Link
-              href="/sales-engine/campaigns/new"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 20px',
-                backgroundColor: '#4f46e5',
-                color: '#fff',
-                fontSize: '14px',
-                fontWeight: 500,
-                borderRadius: '8px',
-                textDecoration: 'none',
-              }}
-            >
-              <Icon name="plus" size={16} color="#fff" />
-              New Campaign
-            </Link>
-          </div>
+          <Link
+            href="/sales-engine/campaigns/new"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 20px',
+              backgroundColor: '#4f46e5',
+              color: '#fff',
+              fontSize: '14px',
+              fontWeight: 500,
+              borderRadius: '8px',
+              textDecoration: 'none',
+            }}
+          >
+            <Icon name="plus" size={16} color="#fff" />
+            New Campaign
+          </Link>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
+          <NavCard href="/sales-engine" icon="campaigns" label="Campaigns" description="View and manage all campaigns" />
+          <NavCard href="/sales-engine/approvals" icon="review" label="Approvals" description="Review pending campaigns" />
+          <NavCard href="/sales-engine/execution" icon="runs" label="Execution" description="View approved campaigns" />
+          <NavCard href="/sales-engine/monitoring" icon="metrics" label="Monitoring" description="Performance metrics" />
         </div>
 
         {activeNotice && (
@@ -308,5 +294,43 @@ function MetricCard({ label, value, color, icon }: { label: string; value: numbe
         {value}
       </div>
     </div>
+  );
+}
+
+function NavCard({ href, icon, label, description }: { href: string; icon: string; label: string; description: string }) {
+  return (
+    <Link
+      href={href}
+      style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '14px',
+        padding: '16px 20px',
+        backgroundColor: '#fff',
+        borderRadius: '12px',
+        border: '1px solid #e5e7eb',
+        textDecoration: 'none',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+      }}
+    >
+      <div
+        style={{
+          width: '40px',
+          height: '40px',
+          backgroundColor: '#f3f4f6',
+          borderRadius: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon name={icon as any} size={20} color="#6b7280" />
+      </div>
+      <div>
+        <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827', marginBottom: '2px' }}>{label}</div>
+        <div style={{ fontSize: '12px', color: '#9ca3af' }}>{description}</div>
+      </div>
+    </Link>
   );
 }
