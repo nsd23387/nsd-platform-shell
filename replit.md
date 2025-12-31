@@ -5,7 +5,7 @@ Sales Engine UI is a **governed, read-only campaign observability and approval i
 It provides situational awareness into campaign lifecycle, readiness, and outcomes using
 governed M60 Campaign Management APIs.
 
-This UI **never initiates execution, approval, or submission**.
+This UI **never initiates execution, approval, sourcing, or governance transitions**.
 All state transitions and execution occur in backend systems and are **observed, not controlled**, here.
 
 **M67-14 Exception**: Campaign creation (POST /campaign-create) is allowed.
