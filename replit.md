@@ -27,9 +27,9 @@ The design follows a governance-first architecture:
 
 ## Environment Variables
 ```
-NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL - M60 API base URL (client-side)
-SALES_ENGINE_API_BASE_URL - M60 API base URL (server-side proxy)
-NEXT_PUBLIC_ODS_API_URL - ODS API for bootstrap/identity
+NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL  # M60 API base URL (client-side, read-only)
+SALES_ENGINE_API_BASE_URL              # M60 API base URL (server-side, read-only proxy)
+NEXT_PUBLIC_ODS_API_URL                # ODS API for bootstrap/identity
 ```
 
 ---
@@ -37,158 +37,134 @@ NEXT_PUBLIC_ODS_API_URL - ODS API for bootstrap/identity
 ## Project Structure
 ```
 app/
-├── api/v1/campaigns/           # M60 API proxy routes (READ-ONLY)
+├── api/v1/campaigns/           # Read-only M60 API proxies (observational only)
 │   ├── route.ts                # Campaign list
-│   ├── attention/              # Needs attention queue
+│   ├── attention/              # Needs-attention queue (derived from backend state)
 │   ├── notices/                # System notices
-│   ├── readiness/              # Readiness status
-│   ├── throughput/             # Capacity metrics
-│   ├── runs/recent/            # Recent runs
-│   └── [id]/                   # Campaign detail endpoints
+│   ├── readiness/              # Readiness status (observed)
+│   ├── throughput/             # Capacity metrics (observed)
+│   ├── runs/                   # Run history (observed)
+│   └── [id]/                   # Campaign detail (read-only)
 │       ├── metrics/
 │       ├── runs/
-│       ├── variants/
 │       └── throughput/
 ├── sales-engine/
 │   ├── home/                   # Dashboard with KPIs + Needs Attention
 │   ├── campaigns/
-│   │   ├── new/                # Campaign creation wizard
-│   │   └── [id]/               # Campaign detail view (observability)
-│   ├── approvals/              # Pending approvals observability
-│   ├── runs/                   # Run observability (read-only)
-│   ├── monitoring/             # Performance metrics observability
+│   │   ├── new/                # Campaign configuration (draft only)
+│   │   └── [id]/               # Campaign detail (governance + observability)
+│   ├── approvals/              # Approval status & history (observed)
+│   ├── runs/                   # Execution observability (read-only)
+│   ├── monitoring/             # Metrics & run monitoring (read-only)
 │   ├── components/
-│   │   ├── governance/         # Governance-specific components
-│   │   └── ui/                 # Shared NSD UI components
+│   │   ├── governance/         # Governance & trust indicators
+│   │   ├── ui/                 # Shared NSD UI components
+│   │   └── wizard/             # Campaign creation wizard (draft-only)
 │   ├── lib/
-│   │   ├── api.ts              # M60 API client (GET only)
-│   │   ├── campaign-state.ts   # Governance state mapping
+│   │   ├── api.ts              # Read-only M60 API client
+│   │   ├── campaign-state.ts   # Governance state mapping (UI-level)
 │   │   ├── design-tokens.ts    # NSD brand tokens
 │   │   ├── read-only-guard.ts  # Read-only enforcement
 │   │   └── statusLabels.ts     # Status language mapping
 │   └── types/
-│       └── campaign.ts         # TypeScript types
-└── page.tsx                    # Redirects to /sales-engine/home
+│       └── campaign.ts
+└── page.tsx                    # Redirect to /sales-engine/home
 
 docs/
-└── UI_GOVERNANCE.md            # Governance architecture documentation
+└── UI_GOVERNANCE.md            # Governance & architectural boundaries
 ```
 
 ---
 
 ## Routes
-
 | Route | Purpose |
 |-------|---------|
-| `/sales-engine/home` | Dashboard with KPI strip + Needs Attention queue |
-| `/sales-engine` | Campaign table with filters, search |
-| `/sales-engine/campaigns/new` | Campaign creation wizard |
-| `/sales-engine/campaigns/:id` | Campaign detail with observability tabs |
-| `/sales-engine/approvals` | Pending approvals observability |
-| `/sales-engine/runs` | Run observability (approved campaigns) |
-| `/sales-engine/monitoring` | Performance metrics observability |
+| `/sales-engine/home` | KPI dashboard + needs-attention overview |
+| `/sales-engine` | Campaign list with filters and search |
+| `/sales-engine/campaigns/new` | Draft campaign configuration |
+| `/sales-engine/campaigns/:id` | Campaign governance & observability |
+| `/sales-engine/approvals` | Approval history and status |
+| `/sales-engine/runs` | Execution run history (observed) |
+| `/sales-engine/monitoring` | Metrics & throughput monitoring |
 
 ---
 
 ## Governance Architecture
 
 ### Read-Only UI Principle
-This UI is a **read-only observation layer**. It does not initiate, control, or mutate any backend state.
+The UI is a **read-only observation layer**.
 
-- **Allowed HTTP methods:** GET, HEAD, OPTIONS only
-- **Forbidden methods:** POST, PUT, PATCH, DELETE to canonical entities
-- **Enforcement:** Runtime guard (`read-only-guard.ts`)
-- All data originates from backend systems
-- This UI **never initiates execution or approval**
-
-### UI-Level Governance States
-The UI displays these governance states (NOT runtime execution states):
-
-| Governance State | Meaning |
-|------------------|---------|
-| `DRAFT` | Campaign is being authored |
-| `PENDING_REVIEW` | Submitted for governance review |
-| `APPROVED_READY` | Approved by governance team (display as "Approved & Ready") |
-| `BLOCKED` | Cannot proceed due to governance or readiness issues |
-| `EXECUTED_READ_ONLY` | Has been executed, now observability only |
-| `ARCHIVED` | Campaign archived |
-
-### Backend Runtime States (Observed Only)
-The following states appear **only in run history rows**, never as campaign governance state:
-- `RUNNING` - Active execution in progress
-- `COMPLETED` - Run finished successfully
-- `FAILED` - Run failed
-- `PARTIAL` - Run partially completed
-
-These are backend runtime states that the UI observes but does not control.
-
-### Readiness vs Governance State
-These are **orthogonal concepts**:
-- **Governance State**: Approval workflow stage (DRAFT → PENDING → APPROVED → EXECUTED)
-- **Readiness Level**: System capability to execute (READY, NOT_READY, UNKNOWN)
-
-A campaign can be APPROVED but NOT_READY (awaiting mailbox health).
-The UI **never infers readiness from governance state**.
+- Allowed HTTP methods: GET, HEAD, OPTIONS
+- Enforcement: runtime guard (`read-only-guard.ts`)
+- No UI-initiated mutations
+- No execution, scheduling, or automation logic
 
 ---
 
-## API Proxy Clarification
-All API proxy routes under `app/api/v1/campaigns/`:
-- Are **read-only reflections** of backend state
-- Do **not** initiate approval, submission, or execution
-- Exist only to normalize response shape and handle authentication
-- Proxy GET requests to M60 backend only
+### Governance States (UI-Level)
+These represent **approval and governance lifecycle only**.
+
+| UI Governance State | Description |
+|---------------------|-------------|
+| `DRAFT` | Configuration in progress |
+| `PENDING_REVIEW` | Submitted for review |
+| `APPROVED_READY` | Approved, awaiting backend execution |
+| `BLOCKED` | Cannot proceed due to governance or readiness issues |
+| `EXECUTED_READ_ONLY` | Execution completed and observed |
+| `ARCHIVED` | No longer active |
+
+> Backend runtime states such as RUNNING, FAILED, or COMPLETED
+> appear **only in run history records**, not as campaign governance state.
+
+---
+
+### Readiness vs Governance State
+These are **orthogonal concepts**.
+
+- **Governance State**: human approval lifecycle
+- **Readiness Level**: system capability to execute (READY / NOT_READY / UNKNOWN)
+
+A campaign may be APPROVED but NOT_READY (for example, mailbox health issues).
 
 ---
 
 ## NSD Brand Tokens
-```typescript
-Primary: #020F5A (Deep Indigo)
-Secondary: #692BAA (Violet)
-CTA: #CC368F (Magenta - use sparingly)
+```ts
+Primary:    #020F5A  // Deep Indigo
+Secondary:  #692BAA  // Violet
+CTA:        #CC368F  // Magenta (use sparingly)
 Background: #FFFFFF
-Surface: #F9FAFB
-Border: #E5E7EB
+Surface:    #F9FAFB
+Border:     #E5E7EB
 ```
 
 ---
 
 ## Governance Components
-- `ReadOnlyBanner` - Read-only mode notification
-- `ConfidenceBadge` - Data confidence indicator (HIGH, MEDIUM, LOW, UNKNOWN)
-- `ProvenancePill` - Data source attribution
-- `CampaignStateBadge` - Governance state display
-- `ExecutionReadinessPanel` - Readiness status with blocking reasons
-- `GovernanceActionsPanel` - Available governance actions (observability only)
-- `LearningSignalsPanel` - Campaign learning insights
-
-## UI Components
-- `NavBar` - Shared navigation bar across all Sales Engine pages
-- `PageHeader` - Page title with navigation and actions
-- `SectionCard` - Content section container
-- `StatCard` - KPI display card
-- `StatusChip` - Status badge with color coding
-- `Button` - Primary, secondary, CTA, ghost variants
-- `DataTable` - Tabular data display
+- `ReadOnlyBanner` – Read-only mode indicator
+- `CampaignStateBadge` – Governance state display
+- `ExecutionReadinessPanel` – Readiness status and blocking reasons
+- `ConfidenceBadge` – Data confidence classification
+- `ProvenancePill` – Data origin attribution
+- `LearningSignalsPanel` – Insight-only learning signals
 
 ---
 
 ## Key Constraints
-- API routes proxy to M60 backend only (no business logic in UI)
-- No direct database access
-- Bootstrap identity from ODS /api/v1/me endpoint
-- UI must not parse JWT or infer permissions
-- All dashboard data comes from governed read endpoints
-- Human authority required for all state transitions
-- Never display "Runnable" - always use "Approved & Ready"
-- **This UI never initiates execution, approval, or submission**
+- UI is read-only and governed
+- Backend systems own all execution and mutations
+- No JWT parsing or permission inference in UI
+- No optimistic state transitions
+- UNKNOWN is an intentional and valid state
+- Never display the term "Runnable" in the UI
 
 ---
 
 ## Recent Changes
-- December 31, 2025: Documentation & Naming Correction
-  - Renamed /execution route to /runs for observational terminology
-  - Updated replit.md to governance-first architecture alignment
-  - Clarified UI-level governance states vs backend runtime states
-  - Added explicit read-only observability language throughout
-  - Removed execution semantics from navigation and page titles
+- December 31, 2025: UI Governance Enhancements
+  - Improved visual hierarchy and spacing
+  - Enhanced UX copy for UNKNOWN and disabled states
+  - Added tooltips for confidence and provenance
+  - Improved empty state presentations
+  - Applied NSD brand polish
+  - Fixed MetricsDisplay guard conditions
