@@ -1,11 +1,11 @@
 /**
  * Design System: Typography Tokens
  * 
- * Typography system aligned with NSD brand guidelines.
+ * Typography system aligned with neonsignsdepot.com brand.
  * 
  * Rules:
- * - Poppins for headers (display, h1-h4) - Primary font
- * - Inter for body/UI text - Secondary font
+ * - Poppins for headers (display, h1-h4)
+ * - Inter for body/UI text
  * - Font weights 400-600 only (no 700+ for calm hierarchy)
  * - Generous line heights for readability
  */
@@ -16,14 +16,13 @@
 
 /**
  * Font stack definitions
- * Uses CSS variables from next/font/google loaded in layout.tsx
  * Poppins = headers, Inter = body
  */
 export const fontFamily = {
-  /** Display and header font - Poppins */
-  display: "var(--font-poppins), 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  /** Body and UI font - Inter */
-  body: "var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  /** Display and header font */
+  display: "'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  /** Body and UI font */
+  body: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   /** Monospace for code/data */
   mono: "'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace",
 } as const;

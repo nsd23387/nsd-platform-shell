@@ -1,141 +1,87 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import {
-  WizardProvider,
-  useWizard,
-  WizardProgress,
-  WizardNavigation,
-  StepBasics,
-  StepAI,
-  StepICP,
-  StepPersonalization,
-  StepReview,
-} from '../../components/wizard';
+import { CampaignForm } from '../../components';
 import { createCampaign } from '../../lib/api';
-import { Icon } from '../../../../design/components/Icon';
-import { background, text, border } from '../../../../design/tokens/colors';
-import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 
-function WizardContent() {
+export default function NewCampaignPage() {
   const router = useRouter();
-  const { state, dispatch } = useWizard();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleCreate() {
-    if (!state.name.trim()) return;
-
-    dispatch({ type: 'SET_LOADING', isLoading: true });
-    dispatch({ type: 'SET_ERROR', error: null });
-
+  async function handleSubmit(data: { name: string; description?: string }) {
+    setIsLoading(true);
+    setError(null);
     try {
-      const campaign = await createCampaign({
-        name: state.name,
-        description: state.description,
-        icp: state.icp,
-        personalization: state.personalization,
-      });
+      const campaign = await createCampaign(data);
       router.push(`/sales-engine/campaigns/${campaign.id}`);
     } catch (err) {
-      dispatch({
-        type: 'SET_ERROR',
-        error: err instanceof Error ? err.message : 'Failed to create campaign',
-      });
-      dispatch({ type: 'SET_LOADING', isLoading: false });
+      setError(err instanceof Error ? err.message : 'Failed to create campaign');
+      setIsLoading(false);
     }
   }
 
   return (
-    <div style={{ padding: '48px 32px', fontFamily: fontFamily.body, minHeight: '100vh', backgroundColor: background.page }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ marginBottom: '32px' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        backgroundColor: '#f9fafb',
+        padding: '32px',
+      }}
+    >
+      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <div style={{ marginBottom: '24px' }}>
           <Link
             href="/sales-engine"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              color: text.secondary,
+              fontSize: '14px',
+              color: '#4f46e5',
               textDecoration: 'none',
-              fontSize: fontSize.sm,
-              fontFamily: fontFamily.body,
             }}
           >
-            <Icon name="arrow-left" size={16} color={text.secondary} />
-            Back to Campaigns
+            ← Back to Campaigns
           </Link>
         </div>
 
-        <div style={{ marginBottom: '48px' }}>
-          <h1 style={{
-            margin: 0,
-            fontSize: fontSize['4xl'],
-            fontWeight: fontWeight.semibold,
-            color: text.primary,
-            fontFamily: fontFamily.display,
-          }}>
+        <div
+          style={{
+            padding: '32px',
+            backgroundColor: '#fff',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+          }}
+        >
+          <h1 style={{ margin: '0 0 8px 0', fontSize: '24px', fontWeight: 600, color: '#111827' }}>
             Create New Campaign
           </h1>
-          <p style={{
-            margin: '12px 0 0 0',
-            color: text.secondary,
-            fontSize: fontSize.base,
-            fontFamily: fontFamily.body,
-            lineHeight: 1.6,
-          }}>
-            Set up your campaign targeting and personalization. New campaigns start in draft mode.
+          <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#6b7280' }}>
+            New campaigns are created in DRAFT state. You can edit and submit for review later.
           </p>
-        </div>
 
-        {state.error && (
-          <div style={{
-            padding: '16px 20px',
-            backgroundColor: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderRadius: '12px',
-            marginBottom: '32px',
-            color: '#b91c1c',
-            fontSize: fontSize.sm,
-            fontFamily: fontFamily.body,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-          }}>
-            <Icon name="alert" size={20} color="#b91c1c" />
-            {state.error}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: '48px' }}>
-          <WizardProgress />
-
-          <div style={{ flex: 1 }}>
-            <div style={{
-              backgroundColor: background.surface,
-              borderRadius: '20px',
-              padding: '48px',
-              border: `1px solid ${border.subtle}`,
-              minHeight: '500px',
-            }}>
-              {state.currentStep === 'basics' && <StepBasics />}
-              {state.currentStep === 'ai' && <StepAI />}
-              {state.currentStep === 'icp' && <StepICP />}
-              {state.currentStep === 'personalization' && <StepPersonalization />}
-              {state.currentStep === 'review' && <StepReview />}
-
-              <WizardNavigation onSubmit={handleCreate} isSubmitting={state.isLoading} />
+          {error && (
+            <div
+              style={{
+                padding: '12px 16px',
+                backgroundColor: '#fef2f2',
+                borderRadius: '8px',
+                marginBottom: '24px',
+                color: '#b91c1c',
+                fontSize: '14px',
+              }}
+            >
+              {error}
             </div>
-          </div>
+          )}
+
+          <CampaignForm
+            onSubmit={handleSubmit}
+            onCancel={() => router.push('/sales-engine')}
+            isLoading={isLoading}
+          />
         </div>
       </div>
     </div>
-  );
-}
-
-export default function NewCampaignPage() {
-  return (
-    <WizardProvider>
-      <WizardContent />
-    </WizardProvider>
   );
 }

@@ -1,7 +1,7 @@
-# M67 Sales Engine UI
+# NSD Platform Shell
 
 ## Overview
-Standalone Sales Engine UI for campaign lifecycle management (create, edit, submit, approve, monitor). This is a Next.js 14 application that operates independently using only M60 Campaign Management APIs with NO execution capability.
+Unified internal platform shell for the NSD Business Platform with read-only Activity Spine dashboards. This is a Next.js 14 application providing analytics dashboard views.
 
 ## Tech Stack
 - **Framework**: Next.js 14
@@ -12,24 +12,25 @@ Standalone Sales Engine UI for campaign lifecycle management (create, edit, subm
 ## Project Structure
 ```
 ├── app/                    # Next.js App Router pages
-│   ├── api/v1/campaigns/   # M60 Campaign API routes
-│   │   ├── [id]/           # Campaign-specific endpoints
-│   │   ├── readiness/      # Dashboard readiness data
-│   │   ├── throughput/     # System throughput snapshot
-│   │   ├── notices/        # System notices
-│   │   └── runs/recent/    # Recent run outcomes
+│   ├── api/v1/campaigns/   # Mock Campaign API routes (M60)
+│   ├── dashboard/          # Dashboard pages (executive, operations, design, media, sales)
 │   ├── functions/v1/       # Mock API routes for development
-│   ├── sales-engine/       # Sales Engine UI pages
-│   │   ├── components/     # Sales Engine components
-│   │   ├── lib/            # API client functions
-│   │   ├── types/          # TypeScript types
-│   │   └── campaigns/      # Campaign pages
-│   └── page.tsx            # Redirects to /sales-engine
+│   └── sales-engine/       # M67 Sales Engine UI (standalone)
+│       ├── campaigns/      # Campaign pages (list, detail, new)
+│       ├── components/     # Sales Engine components
+│       ├── lib/            # API client
+│       └── types/          # Campaign types
+├── components/             # React components
+│   └── dashboard/          # Dashboard-specific components
 ├── contexts/               # React contexts (BootstrapContext)
 ├── design/                 # Design system
-│   ├── components/         # Shared UI components (Icon.tsx)
+│   ├── components/         # Shared UI components
+│   ├── patterns/           # UI patterns
 │   └── tokens/             # Design tokens (colors, spacing, typography)
-└── hooks/                  # Custom React hooks
+├── hooks/                  # Custom React hooks
+├── lib/                    # SDK and utilities
+├── types/                  # TypeScript type definitions
+└── docs/                   # Documentation
 ```
 
 ## Development
@@ -51,47 +52,25 @@ npm run start -- -p 5000 -H 0.0.0.0
 ```
 
 ## Key Features
-- **Sales Engine Dashboard** - Campaign health, readiness blockers, throughput, recent runs, system notices
-- **Campaign Lifecycle Management** - Create, edit, submit, approve, monitor campaigns
-- **Read-only observability** - All data is read-only, no execution capability
-- **M60 API compliance** - Uses only `/api/v1/campaigns/*` endpoints
+- Read-only analytics dashboards
+- Bootstrap context for user/permissions
+- Activity Spine integration (mocked for development)
+- Design system with tokens
+- **M67 Sales Engine UI** (standalone campaign management)
 
-## Sales Engine Dashboard
-The dashboard appears above the campaign list on the homepage and provides:
+## Mock APIs
 
-### 1. Campaign Health Summary
-- KPI cards showing Total, Draft, Pending Review, Runnable, Archived counts
-- Click a card to filter the campaign list by status
+### Bootstrap API
+A mock API route at `/functions/v1/ods-api/me` provides bootstrap data for development.
 
-### 2. Readiness & Safety Blockers
-- Grouped counts by blocker reason
-- M65 blocking codes displayed verbatim
-
-### 3. Throughput Utilization Snapshot
-- Daily capacity usage with progress bar
-- Active campaigns count
-- Blocked-by-throughput count
-
-### 4. Recent Run Outcomes
-- Latest runs with campaign name, status, leads attempted/sent/blocked
-- Read-only table with links to campaign details
-
-### 5. System Notices
-- Informational banners for governance visibility
-- No dismiss or action buttons
-
-## M60 Campaign APIs
-All APIs at `/api/v1/campaigns/*`:
-
-### Campaign List & Management
+### Campaign API (M60)
+Mock campaign management APIs at `/api/v1/campaigns/*`:
 - `GET /api/v1/campaigns` - List campaigns
 - `POST /api/v1/campaigns` - Create campaign (DRAFT)
-- `GET /api/v1/campaigns/:id` - Get campaign detail
+- `GET /api/v1/campaigns/:id` - Get campaign detail with governance flags
 - `PATCH /api/v1/campaigns/:id` - Update campaign (DRAFT only)
 - `POST /api/v1/campaigns/:id/submit` - Submit for review
 - `POST /api/v1/campaigns/:id/approve` - Approve campaign
-
-### Campaign Analytics
 - `GET /api/v1/campaigns/:id/metrics` - Campaign metrics
 - `GET /api/v1/campaigns/:id/metrics/history` - Metrics history
 - `GET /api/v1/campaigns/:id/runs` - Run history
@@ -99,88 +78,26 @@ All APIs at `/api/v1/campaigns/*`:
 - `GET /api/v1/campaigns/:id/variants` - Personalization variants
 - `GET /api/v1/campaigns/:id/throughput` - Throughput config
 
-### Dashboard APIs
-- `GET /api/v1/campaigns/readiness` - Aggregated readiness data
-- `GET /api/v1/campaigns/throughput` - System throughput snapshot
-- `GET /api/v1/campaigns/notices` - System notices
-- `GET /api/v1/campaigns/runs/recent` - Recent run outcomes
+## M67 Sales Engine UI
+Standalone campaign management UI accessible at `/sales-engine`. Features:
+- **M67-02**: Campaign Setup (create/edit DRAFT campaigns)
+- **M67-03**: Campaign Approval (submit/approve workflow)
+- **M67-04**: Execution Readiness (display only, NO execution)
+- **M67-05**: Monitoring (metrics, runs, throughput - read-only)
 
-## Routes
-| Route | Feature |
-|-------|---------|
-| `/sales-engine` | Homepage with Dashboard + Campaign List |
-| `/sales-engine/campaigns/new` | Create Campaign (5-step wizard) |
-| `/sales-engine/campaigns/:id` | Campaign Overview |
-| `/sales-engine/campaigns/:id/edit` | Edit DRAFT campaign |
-| `/sales-engine/campaigns/:id/review` | Review & Approve |
-| `/sales-engine/campaigns/:id/metrics` | Performance Metrics |
-| `/sales-engine/campaigns/:id/runs` | Run History |
-| `/sales-engine/campaigns/:id/variants` | Personalization Variants |
-| `/sales-engine/campaigns/:id/safety` | Throughput & Blocking |
-
-## Visual Design
-- Light theme with soft white backgrounds
-- Page background: #fafafa, Surface: #ffffff
-- Deep indigo text: #1e1e4a
-- Violet accents: #8b5cf6
-- Magenta CTAs: #ec4899
-
-### Typography
-- **Headings**: Poppins (Google Font)
-- **Body/UI**: Inter (Google Font)
-
-### Icons
-- Minimalist SVG icons via `design/components/Icon.tsx`
-- 25+ icons including campaign, metrics, runs, variants, safety, AI, etc.
-- NO emojis - brand-aligned minimalist icons only
-
-## Key Components
-- **SalesEngineDashboard**: Homepage dashboard with 5 panels
-- **Icon**: Centralized SVG icon component
-- **WizardContext/WizardProgress**: Multi-step campaign creation wizard
-- **AICampaignGenerator**: AI-powered ICP and personalization generation
-- **ICPEditor**: Tag-based ICP configuration
-- **PersonalizationEditor**: Tone, CTA, USP management
-- **StatusBadge**: Campaign status display
-
-## M67 Constraints (CRITICAL)
+Key constraints:
 - Uses only M60 Campaign APIs (`/api/v1/campaigns/*`)
-- **NO execution capability** - explicitly forbidden
-- All dashboard data is read-only
-- No UI-side calculations - all values from API
+- NO execution capability (explicitly forbidden)
 - Governance flags (canEdit, canSubmit, canApprove, isRunnable) from API
-- M65 blocking reasons displayed verbatim
-
-## Blocking Reason Codes
-M65 reasons:
-- `MISSING_HUMAN_APPROVAL`
-- `PERSISTENCE_ERRORS`
-- `NO_LEADS_PERSISTED`
-- `KILL_SWITCH_ENABLED`
-- `SMARTLEAD_NOT_CONFIGURED`
-- `INSUFFICIENT_CREDITS`
-
-Throughput blocks:
-- `DAILY_LIMIT_EXCEEDED`
-- `HOURLY_LIMIT_EXCEEDED`
-- `MAILBOX_LIMIT_EXCEEDED`
-- `CONFIG_INACTIVE`
-- `NO_CONFIG_FOUND`
+- No NSD Command Center integration (handled separately in M68)
 
 ## Recent Changes
-- December 30, 2025: Added Sales Engine Dashboard
-  - Created dashboard with 5 panels: Campaign Health, Readiness Blockers, Throughput Snapshot, Recent Runs, System Notices
-  - Added M60-compliant API endpoints: /readiness, /throughput, /notices, /runs/recent
-  - Dashboard integrated above campaign list on homepage
-  - All data read-only, sourced from M60 APIs only
-- December 30, 2025: Simplified to Standalone Sales Engine
-  - Removed Command Center wrapper and dashboard pages
-  - Sales Engine now operates as standalone app at /sales-engine
-  - Root redirects to /sales-engine
-  - M60/M67 compliance maintained
-- December 30, 2025: M67 Sales Engine UI Full Implementation
-  - Created all route pages: detail, edit, review, metrics, runs, variants, safety
-  - Implemented AICampaignGenerator, ICPEditor, PersonalizationEditor
-  - Full ICP structure with targeting configuration
-  - Actor attribution for audit trail
-  - M65/throughput blocking reasons displayed verbatim
+- December 30, 2025: M67 Sales Engine UI Implementation
+  - Created standalone Sales Engine UI at `/sales-engine`
+  - Implemented M67-02 through M67-05 features
+  - Created mock Campaign APIs for development
+  - No execution capability (by design)
+- December 30, 2025: Initial Replit environment setup
+  - Configured Next.js to allow all dev origins for Replit proxy
+  - Created mock bootstrap API for development
+  - Set up deployment configuration

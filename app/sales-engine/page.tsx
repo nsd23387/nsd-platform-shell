@@ -4,10 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { Campaign, CampaignStatus } from './types/campaign';
 import { listCampaigns } from './lib/api';
-import { StatusBadge, SalesEngineDashboard } from './components';
-import { Icon } from '../../design/components/Icon';
-import { background, text, border, violet, magenta } from '../../design/tokens/colors';
-import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
+import { CampaignCard, StatusBadge } from './components';
 
 const statusFilters: { value: CampaignStatus | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All' },
@@ -41,26 +38,28 @@ export default function SalesEnginePage() {
   }, [statusFilter]);
 
   return (
-    <div style={{ padding: '48px 32px', fontFamily: fontFamily.body, minHeight: '100vh', backgroundColor: background.page }}>
-      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '48px' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        backgroundColor: '#f9fafb',
+        padding: '32px',
+      }}
+    >
+      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '32px',
+          }}
+        >
           <div>
-            <h1 style={{
-              margin: 0,
-              fontSize: fontSize['4xl'],
-              fontWeight: fontWeight.semibold,
-              color: text.primary,
-              fontFamily: fontFamily.display,
-            }}>
+            <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600, color: '#111827' }}>
               Sales Engine
             </h1>
-            <p style={{
-              margin: '12px 0 0 0',
-              fontSize: fontSize.base,
-              color: text.secondary,
-              fontFamily: fontFamily.body,
-            }}>
-              Campaign Lifecycle Management
+            <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: '#6b7280' }}>
+              Campaign Management (M67 - Standalone UI)
             </p>
           </div>
           <Link
@@ -69,108 +68,96 @@ export default function SalesEnginePage() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '14px 28px',
-              backgroundColor: magenta[500],
-              color: text.inverse,
-              fontSize: fontSize.sm,
-              fontWeight: fontWeight.semibold,
-              fontFamily: fontFamily.body,
-              borderRadius: '10px',
+              padding: '10px 20px',
+              backgroundColor: '#4f46e5',
+              color: '#fff',
+              fontSize: '14px',
+              fontWeight: 500,
+              borderRadius: '6px',
               textDecoration: 'none',
-              transition: 'background-color 0.2s',
             }}
           >
-            <Icon name="plus" size={16} color={text.inverse} />
-            New Campaign
+            + New Campaign
           </Link>
         </div>
 
-        <SalesEngineDashboard onStatusFilter={setStatusFilter} />
-
-        <div style={{ marginBottom: '32px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {statusFilters.map((filter) => (
-            <button
-              key={filter.value}
-              onClick={() => setStatusFilter(filter.value)}
-              style={{
-                padding: '10px 20px',
-                fontSize: fontSize.sm,
-                fontWeight: fontWeight.medium,
-                fontFamily: fontFamily.body,
-                backgroundColor: statusFilter === filter.value ? violet[500] : 'transparent',
-                color: statusFilter === filter.value ? text.inverse : text.secondary,
-                border: `1px solid ${statusFilter === filter.value ? violet[500] : border.default}`,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-            >
-              {filter.label}
-            </button>
-          ))}
+        <div
+          style={{
+            marginBottom: '24px',
+            padding: '16px',
+            backgroundColor: '#fff',
+            borderRadius: '8px',
+            border: '1px solid #e5e7eb',
+          }}
+        >
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {statusFilters.map((filter) => (
+              <button
+                key={filter.value}
+                onClick={() => setStatusFilter(filter.value)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  backgroundColor: statusFilter === filter.value ? '#4f46e5' : '#fff',
+                  color: statusFilter === filter.value ? '#fff' : '#374151',
+                  border: `1px solid ${statusFilter === filter.value ? '#4f46e5' : '#d1d5db'}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {loading && (
-          <div style={{ textAlign: 'center', padding: '80px 48px' }}>
-            <p style={{ color: text.muted, fontSize: fontSize.base, fontFamily: fontFamily.body }}>Loading campaigns...</p>
+          <div style={{ textAlign: 'center', padding: '48px' }}>
+            <p style={{ color: '#6b7280' }}>Loading campaigns...</p>
           </div>
         )}
 
         {error && (
-          <div style={{
-            padding: '16px 20px',
-            backgroundColor: '#fef2f2',
-            borderRadius: '12px',
-            color: '#b91c1c',
-            marginBottom: '24px',
-            border: '1px solid #fecaca',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            fontSize: fontSize.sm,
-            fontFamily: fontFamily.body,
-          }}>
-            <Icon name="alert" size={20} color="#b91c1c" />
+          <div
+            style={{
+              padding: '16px',
+              backgroundColor: '#fef2f2',
+              borderRadius: '8px',
+              color: '#b91c1c',
+              marginBottom: '24px',
+            }}
+          >
             {error}
           </div>
         )}
 
         {!loading && !error && campaigns.length === 0 && (
-          <div style={{
-            textAlign: 'center',
-            padding: '80px 48px',
-            backgroundColor: background.surface,
-            borderRadius: '16px',
-            border: `1px solid ${border.subtle}`,
-          }}>
-            <div style={{ marginBottom: '20px' }}>
-              <Icon name="campaign" size={48} color={text.muted} />
-            </div>
-            <p style={{
-              margin: '0 0 24px 0',
-              fontSize: fontSize.lg,
-              color: text.secondary,
-              fontFamily: fontFamily.body,
-            }}>
-              No campaigns found
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '48px',
+              backgroundColor: '#fff',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb',
+            }}
+          >
+            <p style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#6b7280' }}>
+              No campaigns found.
             </p>
             <Link
               href="/sales-engine/campaigns/new"
               style={{
                 display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '14px 28px',
-                backgroundColor: magenta[500],
-                color: text.inverse,
-                fontSize: fontSize.sm,
-                fontWeight: fontWeight.semibold,
-                fontFamily: fontFamily.body,
-                borderRadius: '10px',
+                padding: '10px 20px',
+                backgroundColor: '#4f46e5',
+                color: '#fff',
+                fontSize: '14px',
+                fontWeight: 500,
+                borderRadius: '6px',
                 textDecoration: 'none',
               }}
             >
-              <Icon name="plus" size={16} color={text.inverse} />
               Create Your First Campaign
             </Link>
           </div>
@@ -179,97 +166,26 @@ export default function SalesEnginePage() {
         {!loading && !error && campaigns.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {campaigns.map((campaign) => (
-              <CampaignListItem key={campaign.id} campaign={campaign} />
+              <CampaignCard key={campaign.id} campaign={campaign} />
             ))}
           </div>
         )}
 
-        <div style={{
-          marginTop: '48px',
-          padding: '20px 24px',
-          backgroundColor: background.muted,
-          borderRadius: '12px',
-          border: `1px solid ${border.subtle}`,
-        }}>
-          <p style={{
-            margin: 0,
-            fontSize: fontSize.xs,
-            color: text.muted,
-            fontFamily: fontFamily.body,
-          }}>
-            Sales Engine UI (M67) operates independently using M60 Campaign Management APIs. 
-            No execution capability.
+        <div
+          style={{
+            marginTop: '32px',
+            padding: '16px',
+            backgroundColor: '#fffbeb',
+            borderRadius: '8px',
+            border: '1px solid #fcd34d',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '13px', color: '#92400e' }}>
+            <strong>Note:</strong> This is the Sales Engine UI (M67). It operates independently and consumes only M60 Campaign Management APIs.
+            Platform Shell integration will be added in M68.
           </p>
         </div>
       </div>
     </div>
-  );
-}
-
-function CampaignListItem({ campaign }: { campaign: Campaign }) {
-  return (
-    <Link
-      href={`/sales-engine/campaigns/${campaign.id}`}
-      style={{
-        display: 'block',
-        padding: '24px 28px',
-        backgroundColor: background.surface,
-        borderRadius: '14px',
-        border: `1px solid ${border.subtle}`,
-        textDecoration: 'none',
-        transition: 'border-color 0.2s, box-shadow 0.2s',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <h3 style={{
-              margin: 0,
-              fontSize: fontSize.lg,
-              fontWeight: fontWeight.semibold,
-              color: text.primary,
-              fontFamily: fontFamily.display,
-            }}>
-              {campaign.name}
-            </h3>
-            <StatusBadge status={campaign.status} />
-          </div>
-          {campaign.description && (
-            <p style={{
-              margin: 0,
-              fontSize: fontSize.sm,
-              color: text.secondary,
-              fontFamily: fontFamily.body,
-            }}>
-              {campaign.description}
-            </p>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {campaign.canEdit && <GovernanceIcon label="Edit" color="#10b981" />}
-            {campaign.canSubmit && <GovernanceIcon label="Submit" color="#3b82f6" />}
-            {campaign.canApprove && <GovernanceIcon label="Approve" color="#f59e0b" />}
-            {campaign.isRunnable && <GovernanceIcon label="Runnable" color={violet[500]} />}
-          </div>
-          <Icon name="arrow-right" size={20} color={violet[500]} />
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function GovernanceIcon({ label, color }: { label: string; color: string }) {
-  return (
-    <span
-      title={label}
-      style={{
-        display: 'inline-block',
-        width: '8px',
-        height: '8px',
-        borderRadius: '50%',
-        backgroundColor: color,
-      }}
-    />
   );
 }

@@ -2,11 +2,11 @@
 
 import type { CampaignStatus } from '../types/campaign';
 
-const statusStyles: Record<CampaignStatus, { bg: string; text: string; border: string; label: string }> = {
-  DRAFT: { bg: '#f5f5f5', text: '#525252', border: '#d4d4d4', label: 'Draft' },
-  PENDING_REVIEW: { bg: '#fef3c7', text: '#92400e', border: '#fbbf24', label: 'Pending Review' },
-  RUNNABLE: { bg: '#ecfdf5', text: '#047857', border: '#10b981', label: 'Runnable' },
-  ARCHIVED: { bg: '#f5f5f5', text: '#737373', border: '#a3a3a3', label: 'Archived' },
+const statusStyles: Record<CampaignStatus, { bg: string; text: string; label: string }> = {
+  DRAFT: { bg: '#fef3c7', text: '#92400e', label: 'Draft' },
+  PENDING_REVIEW: { bg: '#dbeafe', text: '#1e40af', label: 'Pending Review' },
+  RUNNABLE: { bg: '#d1fae5', text: '#065f46', label: 'Runnable' },
+  ARCHIVED: { bg: '#f3f4f6', text: '#4b5563', label: 'Archived' },
 };
 
 interface StatusBadgeProps {
@@ -27,7 +27,6 @@ export function StatusBadge({ status }: StatusBadgeProps) {
         fontWeight: 500,
         backgroundColor: style.bg,
         color: style.text,
-        border: `1px solid ${style.border}`,
       }}
     >
       {style.label}
