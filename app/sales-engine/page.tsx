@@ -2,17 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Campaign, CampaignStatus } from './types/campaign';
 import { listCampaigns } from './lib/api';
 import { STATUS_FILTER_OPTIONS } from './lib/statusLabels';
-import { CampaignCard, StatusBadge, SalesEngineDashboard } from './components';
+import { PageHeader, SectionCard, StatusChip, Button, DataTable } from './components/ui';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from './lib/design-tokens';
 import { Icon } from '../../design/components/Icon';
 
 export default function SalesEnginePage() {
+  const router = useRouter();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<CampaignStatus | 'ALL'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     async function loadCampaigns() {
@@ -31,141 +35,182 @@ export default function SalesEnginePage() {
     loadCampaigns();
   }, [statusFilter]);
 
-  return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#fafafa', padding: '32px' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600, color: '#111827', fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
-              Campaigns
-            </h1>
-            <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: '#6b7280' }}>
-              Manage your sales campaigns
-            </p>
+  const filteredCampaigns = campaigns.filter(c => 
+    searchQuery === '' || c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const columns = [
+    {
+      key: 'name',
+      header: 'Campaign',
+      render: (campaign: Campaign) => (
+        <div>
+          <div style={{ fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary, marginBottom: '2px' }}>
+            {campaign.name}
           </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <Link
-              href="/sales-engine/home"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 20px',
-                backgroundColor: '#fff',
-                color: '#374151',
-                fontSize: '14px',
-                fontWeight: 500,
-                borderRadius: '8px',
-                border: '1px solid #d1d5db',
-                textDecoration: 'none',
-              }}
-            >
-              <Icon name="chart" size={16} color="#6b7280" />
-              Dashboard
+          {campaign.description && (
+            <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {campaign.description}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      width: '150px',
+      render: (campaign: Campaign) => <StatusChip status={campaign.status} size="sm" />,
+    },
+    {
+      key: 'updated_at',
+      header: 'Last Updated',
+      width: '150px',
+      render: (campaign: Campaign) => (
+        <span style={{ fontSize: '13px', color: NSD_COLORS.text.secondary }}>
+          {new Date(campaign.updated_at).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      width: '120px',
+      align: 'right' as const,
+      render: (campaign: Campaign) => (
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+          {campaign.canEdit && (
+            <Link href={`/sales-engine/campaigns/${campaign.id}?tab=setup`} style={{ textDecoration: 'none' }}>
+              <Button variant="ghost" size="sm">Edit</Button>
             </Link>
-            <Link
-              href="/sales-engine/campaigns/new"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 20px',
-                backgroundColor: '#4f46e5',
-                color: '#fff',
-                fontSize: '14px',
-                fontWeight: 500,
-                borderRadius: '8px',
-                textDecoration: 'none',
-              }}
-            >
-              + New Campaign
+          )}
+          {campaign.canApprove && (
+            <Link href={`/sales-engine/campaigns/${campaign.id}?tab=approvals`} style={{ textDecoration: 'none' }}>
+              <Button variant="secondary" size="sm">Review</Button>
             </Link>
+          )}
+          {campaign.isRunnable && (
+            <Link href={`/sales-engine/campaigns/${campaign.id}?tab=execution`} style={{ textDecoration: 'none' }}>
+              <Button variant="cta" size="sm">Start</Button>
+            </Link>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
+        <PageHeader
+          title="Campaigns"
+          description="Manage your sales campaigns"
+          actions={
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <Link href="/sales-engine/home" style={{ textDecoration: 'none' }}>
+                <Button variant="secondary" icon="chart">Dashboard</Button>
+              </Link>
+              <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
+                <Button variant="cta" icon="plus">New Campaign</Button>
+              </Link>
+            </div>
+          }
+        />
+
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ position: 'relative' }}>
+              <Icon 
+                name="target" 
+                size={18} 
+                color={NSD_COLORS.text.muted} 
+              />
+              <input
+                type="text"
+                placeholder="Search campaigns..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px 12px 44px',
+                  fontSize: '14px',
+                  fontFamily: NSD_TYPOGRAPHY.fontBody,
+                  backgroundColor: NSD_COLORS.background,
+                  border: `1px solid ${NSD_COLORS.border.default}`,
+                  borderRadius: NSD_RADIUS.md,
+                  outline: 'none',
+                }}
+              />
+            </div>
           </div>
         </div>
 
-        <SalesEngineDashboard
-          onStatusFilter={(status) => {
-            if (status === null) {
-              setStatusFilter('ALL');
-            } else {
-              setStatusFilter(status as CampaignStatus);
-            }
-          }}
-        />
-
         <div
           style={{
+            display: 'flex',
+            gap: '8px',
+            flexWrap: 'wrap',
             marginBottom: '24px',
             padding: '16px',
-            backgroundColor: '#fff',
-            borderRadius: '12px',
-            border: '1px solid #e5e7eb',
+            backgroundColor: NSD_COLORS.background,
+            borderRadius: NSD_RADIUS.lg,
+            border: `1px solid ${NSD_COLORS.border.light}`,
           }}
         >
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {STATUS_FILTER_OPTIONS.map((filter) => (
-              <button
-                key={filter.value}
-                onClick={() => setStatusFilter(filter.value)}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  backgroundColor: statusFilter === filter.value ? '#4f46e5' : '#fff',
-                  color: statusFilter === filter.value ? '#fff' : '#374151',
-                  border: `1px solid ${statusFilter === filter.value ? '#4f46e5' : '#d1d5db'}`,
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+          {STATUS_FILTER_OPTIONS.map((filter) => (
+            <button
+              key={filter.value}
+              onClick={() => setStatusFilter(filter.value)}
+              style={{
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: 500,
+                fontFamily: NSD_TYPOGRAPHY.fontBody,
+                backgroundColor: statusFilter === filter.value ? NSD_COLORS.primary : NSD_COLORS.background,
+                color: statusFilter === filter.value ? NSD_COLORS.text.inverse : NSD_COLORS.text.primary,
+                border: `1px solid ${statusFilter === filter.value ? NSD_COLORS.primary : NSD_COLORS.border.default}`,
+                borderRadius: NSD_RADIUS.md,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {filter.label}
+            </button>
+          ))}
         </div>
 
         {loading && (
           <div style={{ textAlign: 'center', padding: '48px' }}>
-            <p style={{ color: '#6b7280' }}>Loading campaigns...</p>
+            <p style={{ color: NSD_COLORS.text.secondary }}>Loading campaigns...</p>
           </div>
         )}
 
         {error && (
-          <div style={{ padding: '16px', backgroundColor: '#fef2f2', borderRadius: '12px', color: '#b91c1c', marginBottom: '24px' }}>
+          <div style={{ padding: '16px', backgroundColor: '#fef2f2', borderRadius: NSD_RADIUS.lg, color: '#b91c1c', marginBottom: '24px' }}>
             {error}
           </div>
         )}
 
-        {!loading && !error && campaigns.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '48px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-            <p style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#6b7280' }}>
-              No campaigns found.
+        {!loading && !error && filteredCampaigns.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '48px', backgroundColor: NSD_COLORS.background, borderRadius: NSD_RADIUS.lg, border: `1px solid ${NSD_COLORS.border.light}` }}>
+            <p style={{ margin: '0 0 16px 0', fontSize: '16px', color: NSD_COLORS.text.secondary }}>
+              {searchQuery ? 'No campaigns match your search.' : 'No campaigns found.'}
             </p>
-            <Link
-              href="/sales-engine/campaigns/new"
-              style={{
-                display: 'inline-flex',
-                padding: '10px 20px',
-                backgroundColor: '#4f46e5',
-                color: '#fff',
-                fontSize: '14px',
-                fontWeight: 500,
-                borderRadius: '8px',
-                textDecoration: 'none',
-              }}
-            >
-              Create Your First Campaign
-            </Link>
+            {!searchQuery && (
+              <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
+                <Button variant="primary">Create Your First Campaign</Button>
+              </Link>
+            )}
           </div>
         )}
 
-        {!loading && !error && campaigns.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {campaigns.map((campaign) => (
-              <CampaignCard key={campaign.id} campaign={campaign} />
-            ))}
-          </div>
+        {!loading && !error && filteredCampaigns.length > 0 && (
+          <DataTable
+            columns={columns}
+            data={filteredCampaigns}
+            keyExtractor={(c) => c.id}
+            onRowClick={(c) => router.push(`/sales-engine/campaigns/${c.id}`)}
+          />
         )}
       </div>
     </div>

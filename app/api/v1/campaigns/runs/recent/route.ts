@@ -1,7 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET() {
-  const recentRuns = [
+const BACKEND_URL = process.env.SALES_ENGINE_API_BASE_URL || process.env.NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL;
+
+function getMockRecentRuns() {
+  return [
     {
       runId: 'run-001',
       campaignId: 'camp-001',
@@ -23,6 +25,23 @@ export async function GET() {
       completedAt: new Date(Date.now() - 7200000).toISOString(),
     },
   ];
+}
 
-  return NextResponse.json(recentRuns);
+export async function GET(request: NextRequest) {
+  if (!BACKEND_URL) {
+    return NextResponse.json(getMockRecentRuns());
+  }
+
+  try {
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    const authHeader = request.headers.get('authorization');
+    if (authHeader) headers['Authorization'] = authHeader;
+
+    const response = await fetch(`${BACKEND_URL}/runs/recent`, { headers });
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (error) {
+    console.error('Backend proxy error:', error);
+    return NextResponse.json(getMockRecentRuns());
+  }
 }

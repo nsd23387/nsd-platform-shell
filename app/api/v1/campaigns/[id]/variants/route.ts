@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const variants = [
+const BACKEND_URL = process.env.SALES_ENGINE_API_BASE_URL || process.env.NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL;
+
+function getMockVariants() {
+  return [
     {
       id: 'var-001',
       name: 'Variant A - Professional',
@@ -20,6 +19,26 @@ export async function GET(
       weight: 50,
     },
   ];
+}
 
-  return NextResponse.json(variants);
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  if (!BACKEND_URL) {
+    return NextResponse.json(getMockVariants());
+  }
+
+  try {
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    const authHeader = request.headers.get('authorization');
+    if (authHeader) headers['Authorization'] = authHeader;
+
+    const response = await fetch(`${BACKEND_URL}/${params.id}/variants`, { headers });
+    const data = await response.json();
+    return NextResponse.json(data, { status: response.status });
+  } catch (error) {
+    console.error('Backend proxy error:', error);
+    return NextResponse.json(getMockVariants());
+  }
 }

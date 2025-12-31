@@ -1,117 +1,113 @@
-# M67 Sales Engine UI v3
+# M67 Sales Engine UI v4
 
 ## Overview
-Sales Engine UI v3 - A Sales Operator Command Interface for campaign lifecycle management. This standalone Next.js application provides situational awareness and human-controlled campaign governance using M60 Campaign Management APIs only.
+Sales Engine UI v4 - A Sales Operator Command Interface for campaign lifecycle management. This standalone Next.js application provides situational awareness and human-controlled campaign governance using M60 Campaign Management APIs only.
 
 ## Tech Stack
 - **Framework**: Next.js 14
 - **Language**: TypeScript
 - **Runtime**: Node.js 18+
 - **Package Manager**: npm
+- **Design System**: NSD Brand Tokens (Deep Indigo, Violet, Magenta)
+
+## Environment Variables
+```
+NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL - M60 API base URL (staging)
+NEXT_PUBLIC_ODS_API_URL - ODS API for bootstrap/identity
+```
 
 ## Project Structure
 ```
 ├── app/
-│   ├── api/v1/campaigns/       # M60 Campaign API routes
-│   ├── sales-engine/           # Sales Engine UI pages
-│   │   ├── home/               # Dashboard (situational awareness)
-│   │   ├── campaigns/          # Campaign management
-│   │   │   ├── new/            # Campaign creation wizard
-│   │   │   └── [id]/           # Campaign details
-│   │   ├── approvals/          # Human approval workflow
-│   │   ├── execution/          # Execution visibility (read-only)
-│   │   ├── monitoring/         # Metrics & run history
-│   │   ├── components/         # UI components
+│   ├── api/v1/campaigns/       # M60 API proxy routes (passthrough only)
+│   ├── sales-engine/
+│   │   ├── home/               # Dashboard with KPI strip + Needs Attention
+│   │   ├── campaigns/
+│   │   │   ├── new/            # Campaign creation (wizard + AI generator)
+│   │   │   └── [id]/           # Campaign detail with tabs
+│   │   ├── components/
+│   │   │   ├── ui/             # Shared NSD components
 │   │   │   └── wizard/         # Campaign creation wizard
-│   │   ├── lib/                # API client & utilities
+│   │   ├── lib/
+│   │   │   ├── api.ts          # M60 API client
+│   │   │   ├── design-tokens.ts # NSD brand tokens
+│   │   │   └── statusLabels.ts # Status language mapping
 │   │   └── types/              # TypeScript types
 │   └── page.tsx                # Redirects to /sales-engine/home
-├── design/                     # Design system
-│   └── components/             # Shared UI components (Icon.tsx)
+├── design/components/          # Shared Icon component
 └── ...
 ```
 
-## Development
-
-### Running the Dev Server
-```bash
-npm run dev -- -p 5000 -H 0.0.0.0
-```
-
-## v3 Routes
+## v4 Routes
 | Route | Feature |
 |-------|---------|
-| `/sales-engine/home` | Dashboard - situational awareness, metrics overview |
-| `/sales-engine` | Campaign list with filters |
-| `/sales-engine/campaigns/new` | Create Campaign (5-step wizard with AI assist) |
-| `/sales-engine/campaigns/:id` | Campaign Overview |
-| `/sales-engine/approvals` | Human approval workflow with responsibility confirmation |
-| `/sales-engine/execution` | Execution visibility (read-only, no execution capability) |
-| `/sales-engine/monitoring` | Metrics grouped by Yield, Efficiency, Quality, Safety |
+| `/sales-engine/home` | Dashboard with KPI strip + Needs Attention queue |
+| `/sales-engine` | Campaign table with filters + search + quick actions |
+| `/sales-engine/campaigns/new` | Campaign form + AI generator |
+| `/sales-engine/campaigns/:id` | Campaign detail with tabs |
 
-## Key Features
+### Campaign Detail Tabs
+- **Setup** - View/edit campaign details (read-only if not DRAFT)
+- **Review** - Submit to review with governance checklist (DRAFT only)
+- **Approvals** - Approve/reject with confirmation (PENDING_REVIEW only)
+- **Execution** - Start run with safety warnings (Approved & Ready only)
+- **Monitoring** - Run history, metrics, snapshots (read-only)
 
-### Home Dashboard (NEW in v3)
-- Aggregate campaign metrics by status
-- Attention required panel (pending approvals)
-- Today's throughput with capacity visualization
-- Recent activity timeline
-
-### Status Language (v3 REQUIRED)
+## Status Language (v4 REQUIRED)
 Backend Status → UI Label:
 - `DRAFT` → Draft
-- `PENDING_REVIEW` → Pending Review
-- `RUNNABLE` → **Approved & Ready** (never "Runnable")
+- `PENDING_REVIEW` → In Review
+- `RUNNABLE` → **Approved & Ready** (NEVER "Runnable")
+- `RUNNING` → Running
+- `COMPLETED` → Completed
+- `FAILED` → Failed
 - `ARCHIVED` → Archived
 
-### Campaign Creation Wizard
-5-step wizard with AI Draft Generator:
-1. **Basics** - Campaign name and description
-2. **AI Assist** - AI-powered ICP and personalization generation with rationale
-3. **ICP** - Ideal Customer Profile targeting configuration
-4. **Personalization** - Tone, CTA, USP settings
-5. **Review** - Final review before saving as DRAFT
+## NSD Brand Tokens
+```typescript
+Primary: #020F5A (Deep Indigo)
+Secondary: #692BAA (Violet)
+CTA: #CC368F (Magenta - sparingly)
+Background: #FFFFFF
+Surface: #F9FAFB
+```
 
-### Approval UX (Human Authority)
-- Responsibility confirmation modal
-- Campaign summary snapshot with ICP hash
-- Governance disclosure language
-- Explicit checkbox confirmation required
-
-### Execution (Safety First)
-- Read-only visibility into approved campaigns
-- Safety gates display (daily limits, used today, remaining)
-- NO execution capability in UI (managed by backend)
-
-### Monitoring
-Metrics grouped into:
-- **Yield** - Leads attempted, sent, success rate
-- **Efficiency** - Utilization, active campaigns
-- **Quality** - Completed, partial, failed runs
-- **Safety** - Blocked by throughput, active blockers
-
-## Visual Design
-- Clean, modern, confident design
-- High whitespace, minimal borders
-- Purposeful color usage (state/action only)
-- **Headings**: Poppins font
-- **Body/UI**: Inter font
-- Minimalist SVG icons (no emojis)
+## Shared Components
+- `PageHeader` - Page title with back link and actions
+- `SectionCard` - Content section with title and icon
+- `StatCard` - KPI display card
+- `StatusChip` - Status badge with color coding
+- `Button` - Primary, secondary, CTA, ghost variants
+- `DataTable` - Tabular data display
 
 ## Key Constraints
-- Uses only M60 Campaign APIs (`/api/v1/campaigns/*`)
-- **NO execution capability** - explicitly forbidden
-- All dashboard data is read-only
-- Governance flags (canEdit, canSubmit, canApprove, isRunnable) from API
-- M65 blocking reasons displayed verbatim
-- UI teaches the system as it's used
+- API routes proxy to M60 backend only (no business logic)
+- No direct Supabase access, no service_role keys
+- Bootstrap from ODS /api/v1/me endpoint
+- UI must not parse JWT or infer permissions
+- All dashboard data comes from governed read endpoints
+- Human authority required for all state transitions
+
+## UX Success Checklist
+- [x] Home dashboard shows correct totals by status
+- [x] Needs Attention queue routes to correct next action
+- [x] Status language uses "Approved & Ready" (never Runnable)
+- [x] Campaign table supports filtering by status + search by name
+- [x] Draft can be created, saved, re-opened, edited
+- [x] Review step explains what changes when submitting
+- [x] Approval step requires explicit confirmation
+- [x] Execution step requires confirmation and shows safety warnings
+- [x] Monitoring is read-only and shows run history
+- [x] Brand tokens match NSD website (whitespace, indigo/violet, magenta CTA)
 
 ## Recent Changes
-- December 31, 2025: Sales Engine UI v3
-  - Added Home Dashboard for situational awareness
+- December 31, 2025: Sales Engine UI v4
+  - Removed mock APIs, added M60 backend proxy
+  - Added environment configuration for API URLs
   - Global status rewrite: "Runnable" → "Approved & Ready"
-  - Enhanced AI Campaign Draft Generator with rationale
-  - Approval modal with responsibility confirmation
-  - Execution page with safety gates (read-only)
-  - Monitoring page with grouped metrics
-  - Brand-aligned visual refinements
+  - Enhanced Home Dashboard with 6-stat KPI strip
+  - Added Needs Attention queue with actionable CTAs
+  - Campaign detail page with 5 tabs (Setup, Review, Approvals, Execution, Monitoring)
+  - Applied NSD brand tokens throughout
+  - Created shared UI component library
+  - Campaign table with filters, search, quick actions
