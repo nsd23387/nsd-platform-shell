@@ -1,0 +1,148 @@
+You are Replit working in the NSD Platform Shell / Sales Engine UI.
+
+THIS IS A UI-ONLY ENHANCEMENT TASK.
+You are NOT allowed to change system behavior, logic, or architecture.
+
+════════════════════════════════════
+ABSOLUTE CONSTRAINTS (DO NOT VIOLATE)
+════════════════════════════════════
+This UI is a GOVERNED, READ-ONLY FAÇADE.
+
+You MUST NOT:
+- Add, modify, or remove API calls
+- Add POST/PUT/PATCH/DELETE requests
+- Modify campaign states, readiness logic, confidence logic, or provenance logic
+- Infer or “improve” UNKNOWN states
+- Add execution, automation, or “smart” behavior
+- Touch any files under `app/sales-engine/lib/`
+- Touch governance logic, state machines, or derivation functions
+- Collapse UNKNOWN → READY or CONDITIONAL → SAFE
+- Remove read-only banners, explanations, or tooltips
+
+If a change would affect correctness, truth, or governance, DO NOT DO IT.
+
+You MAY ONLY:
+- Improve layout, spacing, alignment, and visual hierarchy
+- Improve copy, labels, tooltips, and micro-copy
+- Enhance clarity of existing states (DRAFT, APPROVED, UNKNOWN, etc.)
+- Apply subtle brand-aligned visual polish
+- Improve accessibility and readability
+- Improve empty states and “UNKNOWN” explanations
+
+If unsure → do nothing and explain.
+
+════════════════════════════════════
+REFERENCE (MANDATORY)
+════════════════════════════════════
+Before making changes, READ:
+docs/UI_GOVERNANCE.md
+
+Your changes must reinforce the principles in that document:
+- Read-only UI
+- Governance transparency
+- Explicit UNKNOWN states
+- No implied autonomy
+
+════════════════════════════════════
+SCOPE OF WORK
+════════════════════════════════════
+
+Focus ONLY on the following components and pages:
+
+Campaign Detail Page:
+- ExecutionReadinessPanel
+- CampaignStateBadge
+- GovernanceActionsPanel
+- LearningSignalsPanel
+- ReadOnlyBanner
+
+Dashboards & Lists:
+- SalesEngineDashboard
+- MetricsDisplay
+- RunsDisplay
+- ProvenancePill
+- ConfidenceBadge
+- StatusChip
+
+════════════════════════════════════
+DESIRED UI IMPROVEMENTS
+════════════════════════════════════
+
+1) VISUAL HIERARCHY & SPACING
+- Improve spacing between major sections
+- Make state badges, readiness status, and banners visually distinct
+- Group related information clearly
+- Reduce visual noise without hiding information
+
+2) UX COPY & EXPLAINABILITY
+Improve clarity of:
+- Disabled actions (“Why can’t I do this?”)
+- UNKNOWN states (“Why is this unknown?”)
+- Observed vs Executed language
+- Governance vs Readiness distinction
+
+Add tooltips or inline helper text where helpful.
+Use plain, professional language.
+Avoid em-dashes. Use sentences.
+
+3) BRAND-ALIGNED POLISH (SUBTLE)
+Neon Signs Depot brand traits:
+- Confident
+- Modern
+- Technical but approachable
+- Not flashy, not gimmicky
+
+You may:
+- Use subtle accent colors for:
+  - Approved campaigns
+  - Positive replies
+  - High-intent segments
+- Improve typography balance
+- Improve badge and pill styling
+
+You must NOT:
+- Add neon effects
+- Add animations
+- Add “celebratory” UI
+- Turn dashboards into marketing visuals
+
+4) EMPTY & UNKNOWN STATES
+Improve presentation of:
+- UNKNOWN readiness
+- Missing confidence metadata
+- Empty metrics or runs
+
+UNKNOWN must feel intentional and trustworthy, not broken.
+
+5) ACCESSIBILITY & CONSISTENCY
+- Ensure color contrast is readable
+- Ensure badges and pills are consistent
+- Ensure tooltips are accessible
+- Ensure terminology is consistent across views
+
+════════════════════════════════════
+OUTPUT REQUIREMENTS
+════════════════════════════════════
+
+- Make only UI-level changes (JSX, CSS, Tailwind classes, copy).
+- Do NOT change data shape, props, or logic.
+- If you need additional data, STOP and explain.
+- Provide a clear summary of:
+  - What was changed
+  - Why it improves clarity
+  - Confirmation that no logic was altered
+
+If you believe a requested improvement would violate governance or correctness, explicitly refuse and explain.
+
+════════════════════════════════════
+SUCCESS CRITERIA
+════════════════════════════════════
+
+This task is successful if:
+- The UI feels clearer, calmer, and more confident
+- Governance concepts are easier to understand
+- UNKNOWN states feel intentional
+- No architecture or behavior changed
+- The UI remains fully read-only and truthful
+
+Proceed now.
