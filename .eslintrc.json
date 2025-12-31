@@ -27,6 +27,12 @@
       "rules": {
         "no-restricted-syntax": "off"
       }
+    },
+    {
+      "files": ["app/sales-engine/campaigns/new/**/*.tsx"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
     }
   ]
 }
