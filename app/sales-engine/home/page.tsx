@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '../../../design/components/Icon';
-import { PageHeader, SectionCard, StatCard, StatusChip, Button } from '../components/ui';
+import { PageHeader, SectionCard, StatCard, StatusChip, Button, NavBar } from '../components/ui';
 import { NSD_COLORS, NSD_TYPOGRAPHY, NSD_RADIUS } from '../lib/design-tokens';
 import {
   getDashboardReadiness,
@@ -81,10 +81,7 @@ export default function SalesEngineHomePage() {
           }
         />
 
-        <nav style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
-          <NavCard href="/sales-engine" icon="campaigns" label="Campaigns" active={false} />
-          <NavCard href="/sales-engine/home" icon="chart" label="Dashboard" active={true} />
-        </nav>
+        <NavBar active="dashboard" />
 
         {activeNotice && (
           <div
@@ -216,31 +213,6 @@ export default function SalesEngineHomePage() {
         )}
       </div>
     </div>
-  );
-}
-
-function NavCard({ href, icon, label, active }: { href: string; icon: string; label: string; active: boolean }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        padding: '12px 20px',
-        backgroundColor: active ? NSD_COLORS.primary : NSD_COLORS.background,
-        color: active ? NSD_COLORS.text.inverse : NSD_COLORS.text.primary,
-        borderRadius: NSD_RADIUS.md,
-        border: `1px solid ${active ? NSD_COLORS.primary : NSD_COLORS.border.default}`,
-        textDecoration: 'none',
-        fontSize: '14px',
-        fontWeight: 500,
-        fontFamily: NSD_TYPOGRAPHY.fontBody,
-      }}
-    >
-      <Icon name={icon as any} size={18} color={active ? NSD_COLORS.text.inverse : NSD_COLORS.text.secondary} />
-      {label}
-    </Link>
   );
 }
 

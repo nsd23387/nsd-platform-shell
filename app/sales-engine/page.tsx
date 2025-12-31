@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { Campaign, CampaignStatus } from './types/campaign';
 import { listCampaigns } from './lib/api';
 import { STATUS_FILTER_OPTIONS } from './lib/statusLabels';
-import { PageHeader, SectionCard, StatusChip, Button, DataTable } from './components/ui';
+import { PageHeader, SectionCard, StatusChip, Button, DataTable, NavBar } from './components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from './lib/design-tokens';
 import { Icon } from '../../design/components/Icon';
 
@@ -106,16 +106,13 @@ export default function SalesEnginePage() {
           title="Campaigns"
           description="Manage your sales campaigns"
           actions={
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <Link href="/sales-engine/home" style={{ textDecoration: 'none' }}>
-                <Button variant="secondary" icon="chart">Dashboard</Button>
-              </Link>
-              <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
-                <Button variant="cta" icon="plus">New Campaign</Button>
-              </Link>
-            </div>
+            <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
+              <Button variant="cta" icon="plus">New Campaign</Button>
+            </Link>
           }
         />
+
+        <NavBar active="campaigns" />
 
         <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
           <div style={{ flex: 1 }}>

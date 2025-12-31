@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Icon } from '../../../design/components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
+import { NavBar, PageHeader } from '../components/ui';
 import { listCampaigns, getDashboardThroughput } from '../lib/api';
 import type { Campaign, DashboardThroughput } from '../types/campaign';
 
@@ -33,35 +34,12 @@ export default function ExecutionPage() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#fafafa' }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '40px 32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600, color: '#111827', fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
-              Execution
-            </h1>
-            <p style={{ margin: '8px 0 0 0', fontSize: '14px', color: '#6b7280' }}>
-              Launch approved campaigns with human-initiated execution
-            </p>
-          </div>
-          <Link
-            href="/sales-engine/home"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px 20px',
-              backgroundColor: '#fff',
-              color: '#374151',
-              fontSize: '14px',
-              fontWeight: 500,
-              borderRadius: '8px',
-              border: '1px solid #d1d5db',
-              textDecoration: 'none',
-            }}
-          >
-            <Icon name="arrow-left" size={16} color="#6b7280" />
-            Back to Dashboard
-          </Link>
-        </div>
+        <PageHeader
+          title="Execution"
+          description="Observe approved campaigns ready for execution"
+        />
+
+        <NavBar active="execution" />
 
         <div style={{ backgroundColor: '#fef2f2', borderRadius: '12px', padding: '20px', marginBottom: '24px', border: '1px solid #fecaca' }}>
           <div style={{ display: 'flex', gap: '16px' }}>
