@@ -7,7 +7,21 @@
  * - UI MUST NOT perform POST/PUT/PATCH/DELETE to canonical entities
  * - Only GET requests are allowed from the UI layer
  * - Mutation calls throw in dev and fail build in production
+ * 
+ * M67-14 Exception:
+ * - POST /campaign-create is allowed for campaign creation in DRAFT state
+ * - This is a WRITE + OBSERVE flow only - no execution capability
  */
+
+/**
+ * Endpoints that are explicitly allowed for write operations.
+ * These are governance-controlled exceptions to the read-only rule.
+ */
+export const ALLOWED_WRITE_ENDPOINTS = [
+  '/campaign-create',
+  '/api/campaign-create',
+  '/api/v1/campaign-create',
+] as const;
 
 /**
  * HTTP methods that are allowed in the read-only UI.
@@ -57,8 +71,21 @@ export function isForbiddenMethod(method: string): boolean {
 }
 
 /**
+ * Check if an endpoint is in the allowed write list.
+ * M67-14: POST /campaign-create is allowed for DRAFT creation.
+ */
+export function isAllowedWriteEndpoint(endpoint: string): boolean {
+  const normalizedEndpoint = endpoint.toLowerCase();
+  return ALLOWED_WRITE_ENDPOINTS.some(
+    allowed => normalizedEndpoint.includes(allowed.toLowerCase())
+  );
+}
+
+/**
  * Validate that a request method is allowed.
  * Throws ReadOnlyViolationError if the method is forbidden.
+ * 
+ * M67-14 Exception: POST to /campaign-create is allowed.
  * 
  * @param method - HTTP method to validate
  * @param endpoint - Endpoint being accessed (for error context)
@@ -66,9 +93,12 @@ export function isForbiddenMethod(method: string): boolean {
  */
 export function assertReadOnly(method: string, endpoint: string): void {
   if (isForbiddenMethod(method)) {
+    if (isAllowedWriteEndpoint(endpoint)) {
+      return;
+    }
+    
     const error = new ReadOnlyViolationError(method, endpoint);
     
-    // Always log violation for observability
     console.error('[READ-ONLY GUARD]', {
       error: error.message,
       method,
@@ -76,7 +106,6 @@ export function assertReadOnly(method: string, endpoint: string): void {
       timestamp: error.timestamp,
     });
 
-    // Throw error to prevent mutation
     throw error;
   }
 }
