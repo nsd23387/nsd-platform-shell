@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { CampaignDetail } from '../types/campaign';
 import { isReadOnly, getDisabledMessage, guardRuntimeAction, canRuntimeExecute } from '../../../config/appConfig';
+import { ExecutionConfirmationModal } from './ExecutionConfirmationModal';
 
 interface GovernanceActionsProps {
   campaign: CampaignDetail;
@@ -15,47 +16,78 @@ export function GovernanceActions({ campaign, onSubmit, onApprove }: GovernanceA
   const [isApproving, setIsApproving] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'submit' | 'approve' | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // M68-03: Execution confirmation modal state
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'submit' | 'approve' | null>(null);
 
   // M67.9-01: All actions disabled in read-only mode (unless runtime permitted)
   const runtimePermitted = canRuntimeExecute();
   const actionsDisabled = isReadOnly && !runtimePermitted;
 
-  async function handleSubmit() {
-    // M68-02: Defensive guard - prevent any bypass
-    const guardError = guardRuntimeAction('submit campaign');
-    if (guardError) {
-      setErrorMessage(guardError);
+  // M68-03: Request confirmation before any runtime action
+  function requestConfirmation(action: 'submit' | 'approve') {
+    // Check if runtime is permitted before showing confirmation
+    const guardResult = guardRuntimeAction(`${action} campaign`, false);
+    if (!guardResult.allowed && guardResult.reason !== 'requires_confirmation') {
+      setErrorMessage(guardResult.message);
       return;
     }
-    if (actionsDisabled) return;
+    
+    setPendingAction(action);
+    setShowConfirmationModal(true);
+  }
+
+  // M68-03: Handle confirmed execution
+  async function handleConfirmedExecution() {
+    if (!pendingAction) return;
+    
+    // Final guard check with confirmation=true
+    const guardResult = guardRuntimeAction(`${pendingAction} campaign`, true);
+    if (!guardResult.allowed) {
+      setErrorMessage(guardResult.message);
+      setShowConfirmationModal(false);
+      setPendingAction(null);
+      return;
+    }
     
     setErrorMessage(null);
-    setIsSubmitting(true);
-    try {
-      await onSubmit();
-      setConfirmAction(null);
-    } finally {
-      setIsSubmitting(false);
+    
+    if (pendingAction === 'submit') {
+      setIsSubmitting(true);
+      try {
+        await onSubmit();
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else if (pendingAction === 'approve') {
+      setIsApproving(true);
+      try {
+        await onApprove();
+      } finally {
+        setIsApproving(false);
+      }
     }
+    
+    setShowConfirmationModal(false);
+    setPendingAction(null);
+    setConfirmAction(null);
+  }
+
+  function handleCancelConfirmation() {
+    setShowConfirmationModal(false);
+    setPendingAction(null);
+  }
+
+  // Legacy handlers for inline confirmation (updated for M68-03)
+  async function handleSubmit() {
+    // M68-03: Use confirmation modal flow
+    requestConfirmation('submit');
   }
 
   async function handleApprove() {
-    // M68-02: Defensive guard - prevent any bypass
-    const guardError = guardRuntimeAction('approve campaign');
-    if (guardError) {
-      setErrorMessage(guardError);
-      return;
-    }
-    if (actionsDisabled) return;
-    
-    setErrorMessage(null);
-    setIsApproving(true);
-    try {
-      await onApprove();
-      setConfirmAction(null);
-    } finally {
-      setIsApproving(false);
-    }
+    // M68-03: Use confirmation modal flow
+    requestConfirmation('approve');
   }
 
   return (
@@ -251,6 +283,20 @@ export function GovernanceActions({ campaign, onSubmit, onApprove }: GovernanceA
           Governance Flags: canEdit={String(campaign.canEdit)}, canSubmit={String(campaign.canSubmit)}, canApprove={String(campaign.canApprove)}, isRunnable={String(campaign.isRunnable)}
         </p>
       </div>
+
+      {/* M68-03: Execution Confirmation Modal */}
+      <ExecutionConfirmationModal
+        isOpen={showConfirmationModal}
+        actionName={pendingAction === 'submit' ? 'Submit Campaign' : 'Approve Campaign'}
+        actionDescription={
+          pendingAction === 'submit'
+            ? 'This will submit the campaign for review. The campaign will no longer be editable.'
+            : 'This will approve the campaign and transition it to RUNNABLE state.'
+        }
+        onConfirm={handleConfirmedExecution}
+        onCancel={handleCancelConfirmation}
+        isLoading={isSubmitting || isApproving}
+      />
     </div>
   );
 }
