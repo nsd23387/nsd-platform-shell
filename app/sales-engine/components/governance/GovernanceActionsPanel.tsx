@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import type { CampaignGovernanceState } from '../../lib/campaign-state';
 import { getPrimaryAction, getGovernanceStateLabel } from '../../lib/campaign-state';
 import { READ_ONLY_MESSAGE } from '../../lib/read-only-guard';
 import { CampaignStateBadge } from './CampaignStateBadge';
+import { guardRuntimeAction, canRuntimeExecute, RUNTIME_PERMITTED_MESSAGE } from '../../../../config/appConfig';
 
 interface GovernanceActionsPanelProps {
   campaignId: string;
@@ -25,6 +27,8 @@ interface GovernanceActionsPanelProps {
  * - Primary action is "Submit for Approval" when in DRAFT
  * - Other states show read-only status with explanations
  * - Execution is observed, not initiated
+ * 
+ * M68-02: Added defensive guard for submit action.
  */
 export function GovernanceActionsPanel({
   campaignId,
@@ -35,7 +39,20 @@ export function GovernanceActionsPanel({
   submitting = false,
   runsCount = 0,
 }: GovernanceActionsPanelProps) {
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const primaryAction = getPrimaryAction(governanceState, canSubmit, canApprove);
+  const runtimePermitted = canRuntimeExecute();
+
+  // M68-02: Defensive guard wrapper for submit action
+  function handleSubmitWithGuard() {
+    const guardError = guardRuntimeAction('submit for approval');
+    if (guardError) {
+      setErrorMessage(guardError);
+      return;
+    }
+    setErrorMessage(null);
+    onSubmitForApproval?.();
+  }
 
   return (
     <div
@@ -71,6 +88,38 @@ export function GovernanceActionsPanel({
       </div>
 
       <div style={{ padding: '20px' }}>
+        {/* M68-02: Error message from defensive guard */}
+        {errorMessage && (
+          <div
+            style={{
+              padding: '12px 16px',
+              backgroundColor: '#FEE2E2',
+              borderRadius: NSD_RADIUS.md,
+              marginBottom: '16px',
+              fontSize: '13px',
+              color: '#991B1B',
+            }}
+          >
+            {errorMessage}
+          </div>
+        )}
+
+        {/* M68-02: Runtime permitted notice */}
+        {runtimePermitted && (
+          <div
+            style={{
+              padding: '12px 16px',
+              backgroundColor: '#DCFCE7',
+              borderRadius: NSD_RADIUS.md,
+              marginBottom: '16px',
+              fontSize: '13px',
+              color: '#166534',
+            }}
+          >
+            {RUNTIME_PERMITTED_MESSAGE}
+          </div>
+        )}
+
         {/* Primary action area */}
         <div
           style={{
@@ -83,7 +132,7 @@ export function GovernanceActionsPanel({
           {governanceState === 'DRAFT' && canSubmit ? (
             <>
               <button
-                onClick={onSubmitForApproval}
+                onClick={handleSubmitWithGuard}
                 disabled={submitting}
                 style={{
                   width: '100%',

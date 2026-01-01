@@ -1,5 +1,5 @@
 /**
- * Application Configuration - M67.9-01 Vercel Hosting Setup
+ * Application Configuration - M67.9-01 Vercel Hosting Setup + M68-02 Runtime Gating
  * 
  * Centralized configuration module for environment variable gating.
  * This module controls read-only mode and API access for Vercel deployment.
@@ -11,9 +11,14 @@
  * - All network calls disabled when API mode is disabled.
  * - This milestone is hosting-only - does NOT enable M68 functionality.
  * 
+ * M68-02 RUNTIME GATING:
+ * - canRuntimeExecute() is the SINGLE SOURCE OF TRUTH for runtime permission
+ * - Production MUST evaluate false (READ_ONLY=true, API_MODE=disabled)
+ * - Preview environments may enable runtime with explicit RUNTIME_ENABLED=true
+ * 
  * SECURITY NOTE:
  * This application is deployed as an internal tool.
- * Access control is handled via Vercel Password Protection (not application-level auth).
+ * Access control is handled via HTTP Basic Auth middleware (server-side only).
  * No code assumes a logged-in user.
  */
 
@@ -38,6 +43,15 @@ export const isApiDisabled =
  */
 export const isReadOnly = 
   process.env.NEXT_PUBLIC_READ_ONLY === 'true' || isApiDisabled;
+
+/**
+ * Whether runtime is explicitly enabled.
+ * This is an opt-in flag for preview environments only.
+ * 
+ * Set via: NEXT_PUBLIC_RUNTIME_ENABLED=true
+ */
+export const isRuntimeEnabled = 
+  process.env.NEXT_PUBLIC_RUNTIME_ENABLED === 'true';
 
 /**
  * Current deployment mode.
@@ -166,6 +180,36 @@ export function logConfigState(): void {
 // =============================================================================
 
 /**
+ * M68-02: SINGLE SOURCE OF TRUTH for runtime execution permission.
+ * 
+ * Returns true ONLY when ALL of the following conditions are met:
+ * - NEXT_PUBLIC_RUNTIME_ENABLED === "true"
+ * - NEXT_PUBLIC_READ_ONLY !== "true"
+ * - NEXT_PUBLIC_API_MODE !== "disabled"
+ * 
+ * Production MUST evaluate false because:
+ * - READ_ONLY will be true in production
+ * - API_MODE will be disabled in production
+ * 
+ * This function is the ONLY authority for determining if runtime
+ * actions (start, approve, reset, run) are permitted.
+ */
+export function canRuntimeExecute(): boolean {
+  // All three conditions must be satisfied
+  const runtimeEnabled = process.env.NEXT_PUBLIC_RUNTIME_ENABLED === 'true';
+  const notReadOnly = process.env.NEXT_PUBLIC_READ_ONLY !== 'true';
+  const apiEnabled = process.env.NEXT_PUBLIC_API_MODE !== 'disabled';
+  
+  return runtimeEnabled && notReadOnly && apiEnabled;
+}
+
+/**
+ * Message shown when runtime is permitted but execution still requires confirmation.
+ */
+export const RUNTIME_PERMITTED_MESSAGE = 
+  'Runtime permitted (Preview only). Execution still requires confirmation (M68-03).';
+
+/**
  * Check if a specific action is allowed.
  * Returns true only if both not read-only and action is enabled.
  */
@@ -180,6 +224,18 @@ export function getDisabledMessage(action: keyof typeof disabledActionMessages):
   return disabledActionMessages[action] || disabledActionMessages.general;
 }
 
+/**
+ * M68-02: Defensive guard for runtime actions.
+ * Call this at the start of any handler that could start/approve/reset/run anything.
+ * Returns an error message if runtime is not permitted, or null if permitted.
+ */
+export function guardRuntimeAction(actionName: string): string | null {
+  if (!canRuntimeExecute()) {
+    return `Cannot ${actionName}: Runtime execution is not permitted in this environment.`;
+  }
+  return null;
+}
+
 // =============================================================================
 // EXPORTS
 // =============================================================================
@@ -187,6 +243,7 @@ export function getDisabledMessage(action: keyof typeof disabledActionMessages):
 export const appConfig = {
   isApiDisabled,
   isReadOnly,
+  isRuntimeEnabled,
   deploymentMode,
   api: apiConfig,
   features: featureFlags,
@@ -194,9 +251,12 @@ export const appConfig = {
     banner: READ_ONLY_BANNER_MESSAGE,
     bannerDescription: READ_ONLY_BANNER_DESCRIPTION,
     disabled: disabledActionMessages,
+    runtimePermitted: RUNTIME_PERMITTED_MESSAGE,
   },
+  canRuntimeExecute,
   isActionAllowed,
   getDisabledMessage,
+  guardRuntimeAction,
   logConfigState,
 } as const;
 
