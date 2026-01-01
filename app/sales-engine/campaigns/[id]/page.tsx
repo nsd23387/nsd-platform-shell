@@ -50,6 +50,12 @@ import {
   GovernanceActionsPanel,
 } from '../../components/governance';
 import { MetricsDisplay } from '../../components/MetricsDisplay';
+import { 
+  isTestCampaign, 
+  getTestCampaignDetail, 
+  TEST_CAMPAIGN_BANNER,
+  shouldShowTestCampaigns,
+} from '../../lib/test-campaign';
 
 type TabType = 'overview' | 'readiness' | 'monitoring' | 'learning';
 
@@ -87,11 +93,33 @@ export default function CampaignDetailPage() {
       )
     : 'BLOCKED';
 
+  // Check if this is a test campaign
+  const isTest = isTestCampaign(campaignId);
+
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError(null);
       try {
+        // M68-03: Handle test campaigns separately - no API calls
+        if (isTestCampaign(campaignId)) {
+          const testCampaign = getTestCampaignDetail(campaignId);
+          if (testCampaign) {
+            setCampaign(testCampaign);
+            // Test campaigns don't have real metrics/runs/variants
+            setMetrics(null);
+            setMetricsHistory([]);
+            setRuns([]);
+            setLatestRun(null);
+            setVariants([]);
+            setThroughput(null);
+          } else {
+            setError('Test campaign not found or not available in this environment');
+          }
+          setLoading(false);
+          return;
+        }
+
         const campaignData = await getCampaign(campaignId);
         setCampaign(campaignData);
 
@@ -146,6 +174,21 @@ export default function CampaignDetailPage() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
+        {/* M68-03: Test campaign banner */}
+        {isTest && (
+          <div style={{ 
+            marginBottom: '16px', 
+            padding: '12px 16px', 
+            backgroundColor: '#FEF3C7', 
+            borderRadius: NSD_RADIUS.md,
+            border: '2px dashed #F59E0B',
+          }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#92400E', fontWeight: 500 }}>
+              {TEST_CAMPAIGN_BANNER}
+            </p>
+          </div>
+        )}
+
         {/* Read-only banner */}
         <div style={{ marginBottom: '24px' }}>
           <ReadOnlyBanner variant="info" compact />

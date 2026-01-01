@@ -9,6 +9,7 @@ import { READ_ONLY_MESSAGE } from '../../lib/read-only-guard';
 import { CampaignStateBadge } from './CampaignStateBadge';
 import { guardRuntimeAction, canRuntimeExecute, RUNTIME_PERMITTED_MESSAGE, isRuntimeKillSwitchActive, KILL_SWITCH_MESSAGE } from '../../../../config/appConfig';
 import { ExecutionConfirmationModal } from '../ExecutionConfirmationModal';
+import { isTestCampaign, handleTestCampaignAction } from '../../lib/test-campaign';
 
 interface GovernanceActionsPanelProps {
   campaignId: string;
@@ -42,38 +43,90 @@ export function GovernanceActionsPanel({
   runsCount = 0,
 }: GovernanceActionsPanelProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'submit' | 'approve' | 'run' | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const primaryAction = getPrimaryAction(governanceState, canSubmit, canApprove);
   const runtimePermitted = canRuntimeExecute();
+  
+  // M68-03: Check if this is a test campaign
+  const isTest = isTestCampaign(campaignId);
 
-  // M68-03: Request confirmation before submit action
-  function handleSubmitWithGuard() {
+  // M68-03: Request confirmation before any action
+  function requestConfirmation(action: 'submit' | 'approve' | 'run') {
     // Check if runtime is permitted before showing confirmation
-    const guardResult = guardRuntimeAction('submit for approval', false);
+    const guardResult = guardRuntimeAction(action, false);
     if (!guardResult.allowed && guardResult.reason !== 'requires_confirmation') {
       setErrorMessage(guardResult.message);
+      setSuccessMessage(null);
       return;
     }
     
+    setPendingAction(action);
     setShowConfirmationModal(true);
   }
 
   // M68-03: Handle confirmed execution
-  function handleConfirmedSubmit() {
-    const guardResult = guardRuntimeAction('submit for approval', true);
+  async function handleConfirmedAction() {
+    if (!pendingAction) return;
+    
+    const guardResult = guardRuntimeAction(pendingAction, true);
     if (!guardResult.allowed) {
       setErrorMessage(guardResult.message);
+      setSuccessMessage(null);
       setShowConfirmationModal(false);
+      setPendingAction(null);
       return;
     }
     
     setErrorMessage(null);
     setShowConfirmationModal(false);
-    onSubmitForApproval?.();
+    
+    // M68-03: Handle test campaign actions
+    if (isTest) {
+      setActionLoading(true);
+      const result = await handleTestCampaignAction(campaignId, pendingAction);
+      setActionLoading(false);
+      if (result.success) {
+        setSuccessMessage(result.message);
+      } else {
+        setErrorMessage(result.message);
+      }
+      setPendingAction(null);
+      return;
+    }
+    
+    // For real campaigns, call the appropriate handler
+    if (pendingAction === 'submit') {
+      onSubmitForApproval?.();
+    }
+    setPendingAction(null);
   }
 
   function handleCancelConfirmation() {
     setShowConfirmationModal(false);
+    setPendingAction(null);
+  }
+  
+  // Get action label for confirmation modal
+  function getActionLabel(): string {
+    switch (pendingAction) {
+      case 'submit': return 'Submit for Approval';
+      case 'approve': return 'Approve Campaign';
+      case 'run': return 'Run Campaign';
+      default: return 'Execute Action';
+    }
+  }
+  
+  // Get action description for confirmation modal
+  function getActionDescription(): string {
+    switch (pendingAction) {
+      case 'submit': return 'This will submit the campaign for approval review. The campaign will no longer be editable.';
+      case 'approve': return 'This will approve the campaign for execution. Once approved, the campaign may be scheduled for execution.';
+      case 'run': return 'This will trigger a campaign run. Leads will be processed and emails may be sent.';
+      default: return 'This action will be executed.';
+    }
   }
 
   return (
@@ -110,6 +163,22 @@ export function GovernanceActionsPanel({
       </div>
 
       <div style={{ padding: '20px' }}>
+        {/* M68-03: Success message from test campaign action */}
+        {successMessage && (
+          <div
+            style={{
+              padding: '12px 16px',
+              backgroundColor: '#DCFCE7',
+              borderRadius: NSD_RADIUS.md,
+              marginBottom: '16px',
+              fontSize: '13px',
+              color: '#166534',
+            }}
+          >
+            ✅ {successMessage}
+          </div>
+        )}
+
         {/* M68-02: Error message from defensive guard */}
         {errorMessage && (
           <div
@@ -171,8 +240,8 @@ export function GovernanceActionsPanel({
           {governanceState === 'DRAFT' && canSubmit ? (
             <>
               <button
-                onClick={handleSubmitWithGuard}
-                disabled={submitting}
+                onClick={() => requestConfirmation('submit')}
+                disabled={submitting || actionLoading}
                 style={{
                   width: '100%',
                   padding: '12px 20px',
@@ -183,11 +252,11 @@ export function GovernanceActionsPanel({
                   color: NSD_COLORS.text.inverse,
                   border: 'none',
                   borderRadius: NSD_RADIUS.md,
-                  cursor: submitting ? 'not-allowed' : 'pointer',
-                  opacity: submitting ? 0.7 : 1,
+                  cursor: (submitting || actionLoading) ? 'not-allowed' : 'pointer',
+                  opacity: (submitting || actionLoading) ? 0.7 : 1,
                 }}
               >
-                {submitting ? 'Submitting...' : 'Submit for Approval'}
+                {submitting || actionLoading ? 'Processing...' : 'Submit for Approval'}
               </button>
               <p
                 style={{
@@ -198,6 +267,70 @@ export function GovernanceActionsPanel({
                 }}
               >
                 {primaryAction.explanation}
+              </p>
+            </>
+          ) : governanceState === 'PENDING_APPROVAL' && canApprove ? (
+            <>
+              <button
+                onClick={() => requestConfirmation('approve')}
+                disabled={actionLoading}
+                style={{
+                  width: '100%',
+                  padding: '12px 20px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  fontFamily: NSD_TYPOGRAPHY.fontBody,
+                  backgroundColor: '#16A34A',
+                  color: NSD_COLORS.text.inverse,
+                  border: 'none',
+                  borderRadius: NSD_RADIUS.md,
+                  cursor: actionLoading ? 'not-allowed' : 'pointer',
+                  opacity: actionLoading ? 0.7 : 1,
+                }}
+              >
+                {actionLoading ? 'Processing...' : 'Approve Campaign'}
+              </button>
+              <p
+                style={{
+                  margin: '10px 0 0 0',
+                  fontSize: '12px',
+                  color: NSD_COLORS.text.muted,
+                  textAlign: 'center',
+                }}
+              >
+                {primaryAction.explanation}
+              </p>
+            </>
+          ) : governanceState === 'APPROVED_READY' ? (
+            <>
+              <button
+                onClick={() => requestConfirmation('run')}
+                disabled={actionLoading}
+                style={{
+                  width: '100%',
+                  padding: '12px 20px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  fontFamily: NSD_TYPOGRAPHY.fontBody,
+                  backgroundColor: NSD_COLORS.primary,
+                  color: NSD_COLORS.text.inverse,
+                  border: 'none',
+                  borderRadius: NSD_RADIUS.md,
+                  cursor: actionLoading ? 'not-allowed' : 'pointer',
+                  opacity: actionLoading ? 0.7 : 1,
+                }}
+              >
+                {actionLoading ? 'Processing...' : 'Run Campaign'}
+              </button>
+              <p
+                style={{
+                  margin: '10px 0 0 0',
+                  fontSize: '12px',
+                  color: NSD_COLORS.text.muted,
+                  textAlign: 'center',
+                }}
+              >
+                {isTest ? 'Test action - no actual execution will occur' : primaryAction.explanation}
               </p>
             </>
           ) : (
@@ -343,11 +476,11 @@ export function GovernanceActionsPanel({
       {/* M68-03: Execution Confirmation Modal */}
       <ExecutionConfirmationModal
         isOpen={showConfirmationModal}
-        actionName="Submit for Approval"
-        actionDescription="This will submit the campaign for approval review. The campaign will no longer be editable."
-        onConfirm={handleConfirmedSubmit}
+        actionName={getActionLabel()}
+        actionDescription={getActionDescription()}
+        onConfirm={handleConfirmedAction}
         onCancel={handleCancelConfirmation}
-        isLoading={submitting}
+        isLoading={actionLoading || submitting}
       />
     </div>
   );
