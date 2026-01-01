@@ -1,5 +1,7 @@
 # M67 Sales Engine UI
 
+> **M68-01: Preview runtime flag validation branch.**
+
 ## Overview
 Sales Engine UI is a **governed, read-only campaign observability and approval interface**.
 It provides situational awareness into campaign lifecycle, readiness, and outcomes using
