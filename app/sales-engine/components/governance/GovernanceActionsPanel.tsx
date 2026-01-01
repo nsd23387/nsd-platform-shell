@@ -7,7 +7,8 @@ import type { CampaignGovernanceState } from '../../lib/campaign-state';
 import { getPrimaryAction, getGovernanceStateLabel } from '../../lib/campaign-state';
 import { READ_ONLY_MESSAGE } from '../../lib/read-only-guard';
 import { CampaignStateBadge } from './CampaignStateBadge';
-import { guardRuntimeAction, canRuntimeExecute, RUNTIME_PERMITTED_MESSAGE } from '../../../../config/appConfig';
+import { guardRuntimeAction, canRuntimeExecute, RUNTIME_PERMITTED_MESSAGE, isRuntimeKillSwitchActive, KILL_SWITCH_MESSAGE } from '../../../../config/appConfig';
+import { ExecutionConfirmationModal } from '../ExecutionConfirmationModal';
 
 interface GovernanceActionsPanelProps {
   campaignId: string;
@@ -29,6 +30,7 @@ interface GovernanceActionsPanelProps {
  * - Execution is observed, not initiated
  * 
  * M68-02: Added defensive guard for submit action.
+ * M68-03: Added execution confirmation modal.
  */
 export function GovernanceActionsPanel({
   campaignId,
@@ -40,18 +42,38 @@ export function GovernanceActionsPanel({
   runsCount = 0,
 }: GovernanceActionsPanelProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const primaryAction = getPrimaryAction(governanceState, canSubmit, canApprove);
   const runtimePermitted = canRuntimeExecute();
 
-  // M68-02: Defensive guard wrapper for submit action
+  // M68-03: Request confirmation before submit action
   function handleSubmitWithGuard() {
-    const guardError = guardRuntimeAction('submit for approval');
-    if (guardError) {
-      setErrorMessage(guardError);
+    // Check if runtime is permitted before showing confirmation
+    const guardResult = guardRuntimeAction('submit for approval', false);
+    if (!guardResult.allowed && guardResult.reason !== 'requires_confirmation') {
+      setErrorMessage(guardResult.message);
       return;
     }
+    
+    setShowConfirmationModal(true);
+  }
+
+  // M68-03: Handle confirmed execution
+  function handleConfirmedSubmit() {
+    const guardResult = guardRuntimeAction('submit for approval', true);
+    if (!guardResult.allowed) {
+      setErrorMessage(guardResult.message);
+      setShowConfirmationModal(false);
+      return;
+    }
+    
     setErrorMessage(null);
+    setShowConfirmationModal(false);
     onSubmitForApproval?.();
+  }
+
+  function handleCancelConfirmation() {
+    setShowConfirmationModal(false);
   }
 
   return (
@@ -104,8 +126,25 @@ export function GovernanceActionsPanel({
           </div>
         )}
 
+        {/* M68-03: Kill switch notice */}
+        {isRuntimeKillSwitchActive && (
+          <div
+            style={{
+              padding: '12px 16px',
+              backgroundColor: '#FEE2E2',
+              borderRadius: NSD_RADIUS.md,
+              marginBottom: '16px',
+              fontSize: '13px',
+              color: '#991B1B',
+              fontWeight: 500,
+            }}
+          >
+            {KILL_SWITCH_MESSAGE}
+          </div>
+        )}
+
         {/* M68-02: Runtime permitted notice */}
-        {runtimePermitted && (
+        {runtimePermitted && !isRuntimeKillSwitchActive && (
           <div
             style={{
               padding: '12px 16px',
@@ -300,6 +339,16 @@ export function GovernanceActionsPanel({
           </div>
         </div>
       </div>
+
+      {/* M68-03: Execution Confirmation Modal */}
+      <ExecutionConfirmationModal
+        isOpen={showConfirmationModal}
+        actionName="Submit for Approval"
+        actionDescription="This will submit the campaign for approval review. The campaign will no longer be editable."
+        onConfirm={handleConfirmedSubmit}
+        onCancel={handleCancelConfirmation}
+        isLoading={submitting}
+      />
     </div>
   );
 }

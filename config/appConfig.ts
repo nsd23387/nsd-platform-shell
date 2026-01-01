@@ -1,5 +1,5 @@
 /**
- * Application Configuration - M67.9-01 Vercel Hosting Setup + M68-02 Runtime Gating
+ * Application Configuration - M67.9-01 Vercel Hosting Setup + M68-02/03 Runtime Gating
  * 
  * Centralized configuration module for environment variable gating.
  * This module controls read-only mode and API access for Vercel deployment.
@@ -15,6 +15,11 @@
  * - canRuntimeExecute() is the SINGLE SOURCE OF TRUTH for runtime permission
  * - Production MUST evaluate false (READ_ONLY=true, API_MODE=disabled)
  * - Preview environments may enable runtime with explicit RUNTIME_ENABLED=true
+ * 
+ * M68-03 EXECUTION CONFIRMATION:
+ * - All runtime actions require explicit user confirmation
+ * - Kill switch (RUNTIME_KILL_SWITCH=true) overrides ALL conditions
+ * - Confirmation state is local only (no persistence)
  * 
  * SECURITY NOTE:
  * This application is deployed as an internal tool.
@@ -52,6 +57,16 @@ export const isReadOnly =
  */
 export const isRuntimeEnabled = 
   process.env.NEXT_PUBLIC_RUNTIME_ENABLED === 'true';
+
+/**
+ * M68-03: Global runtime kill switch.
+ * When true, ALL runtime actions are blocked regardless of other conditions.
+ * This overrides canRuntimeExecute() and prevents confirmation from proceeding.
+ * 
+ * Set via: NEXT_PUBLIC_RUNTIME_KILL_SWITCH=true
+ */
+export const isRuntimeKillSwitchActive = 
+  process.env.NEXT_PUBLIC_RUNTIME_KILL_SWITCH === 'true';
 
 /**
  * Current deployment mode.
@@ -180,9 +195,10 @@ export function logConfigState(): void {
 // =============================================================================
 
 /**
- * M68-02: SINGLE SOURCE OF TRUTH for runtime execution permission.
+ * M68-02/03: SINGLE SOURCE OF TRUTH for runtime execution permission.
  * 
  * Returns true ONLY when ALL of the following conditions are met:
+ * - NEXT_PUBLIC_RUNTIME_KILL_SWITCH !== "true" (M68-03: kill switch overrides all)
  * - NEXT_PUBLIC_RUNTIME_ENABLED === "true"
  * - NEXT_PUBLIC_READ_ONLY !== "true"
  * - NEXT_PUBLIC_API_MODE !== "disabled"
@@ -193,8 +209,16 @@ export function logConfigState(): void {
  * 
  * This function is the ONLY authority for determining if runtime
  * actions (start, approve, reset, run) are permitted.
+ * 
+ * NOTE: This only checks if runtime is PERMITTED. Actual execution
+ * still requires explicit user confirmation (M68-03).
  */
 export function canRuntimeExecute(): boolean {
+  // M68-03: Kill switch overrides ALL other conditions
+  if (isRuntimeKillSwitchActive) {
+    return false;
+  }
+  
   // All three conditions must be satisfied
   const runtimeEnabled = process.env.NEXT_PUBLIC_RUNTIME_ENABLED === 'true';
   const notReadOnly = process.env.NEXT_PUBLIC_READ_ONLY !== 'true';
@@ -207,7 +231,13 @@ export function canRuntimeExecute(): boolean {
  * Message shown when runtime is permitted but execution still requires confirmation.
  */
 export const RUNTIME_PERMITTED_MESSAGE = 
-  'Runtime permitted (Preview only). Execution still requires confirmation (M68-03).';
+  'Runtime permitted (Preview only). Execution requires confirmation.';
+
+/**
+ * M68-03: Message shown when kill switch is active.
+ */
+export const KILL_SWITCH_MESSAGE = 
+  'Runtime disabled by kill switch. No execution is possible.';
 
 /**
  * Check if a specific action is allowed.
@@ -225,11 +255,73 @@ export function getDisabledMessage(action: keyof typeof disabledActionMessages):
 }
 
 /**
- * M68-02: Defensive guard for runtime actions.
- * Call this at the start of any handler that could start/approve/reset/run anything.
- * Returns an error message if runtime is not permitted, or null if permitted.
+ * M68-03: Guard result type for runtime actions.
  */
-export function guardRuntimeAction(actionName: string): string | null {
+export type RuntimeGuardResult = {
+  allowed: boolean;
+  reason: 'kill_switch' | 'not_permitted' | 'requires_confirmation' | 'allowed';
+  message: string;
+};
+
+/**
+ * M68-02/03: Defensive guard for runtime actions.
+ * Call this at the start of any handler that could start/approve/reset/run anything.
+ * 
+ * M68-03 behavior:
+ * - If kill switch is active → block immediately
+ * - If runtime not permitted → block with explanation
+ * - If runtime permitted but not confirmed → require confirmation
+ * - If confirmed and kill switch is false → allow continuation
+ * 
+ * @param actionName - Name of the action being attempted
+ * @param isConfirmed - Whether the user has explicitly confirmed the action
+ * @returns RuntimeGuardResult with allowed status and reason
+ */
+export function guardRuntimeAction(actionName: string, isConfirmed: boolean = false): RuntimeGuardResult {
+  // M68-03: Kill switch overrides ALL conditions - block immediately
+  if (isRuntimeKillSwitchActive) {
+    return {
+      allowed: false,
+      reason: 'kill_switch',
+      message: KILL_SWITCH_MESSAGE,
+    };
+  }
+  
+  // M68-02: Check if runtime is permitted
+  if (!canRuntimeExecute()) {
+    return {
+      allowed: false,
+      reason: 'not_permitted',
+      message: `Cannot ${actionName}: Runtime execution is not permitted in this environment.`,
+    };
+  }
+  
+  // M68-03: Runtime permitted but requires explicit confirmation
+  if (!isConfirmed) {
+    return {
+      allowed: false,
+      reason: 'requires_confirmation',
+      message: `${actionName} requires explicit confirmation before proceeding.`,
+    };
+  }
+  
+  // All checks passed - allow continuation (still no actual execution logic)
+  return {
+    allowed: true,
+    reason: 'allowed',
+    message: `${actionName} confirmed and permitted.`,
+  };
+}
+
+/**
+ * M68-03: Simple guard check (backwards compatible).
+ * Returns error message string or null if action is allowed.
+ * NOTE: This does NOT check confirmation - use guardRuntimeAction() for full M68-03 compliance.
+ */
+export function guardRuntimeActionSimple(actionName: string): string | null {
+  if (isRuntimeKillSwitchActive) {
+    return KILL_SWITCH_MESSAGE;
+  }
   if (!canRuntimeExecute()) {
     return `Cannot ${actionName}: Runtime execution is not permitted in this environment.`;
   }
@@ -244,6 +336,7 @@ export const appConfig = {
   isApiDisabled,
   isReadOnly,
   isRuntimeEnabled,
+  isRuntimeKillSwitchActive,
   deploymentMode,
   api: apiConfig,
   features: featureFlags,
@@ -252,11 +345,13 @@ export const appConfig = {
     bannerDescription: READ_ONLY_BANNER_DESCRIPTION,
     disabled: disabledActionMessages,
     runtimePermitted: RUNTIME_PERMITTED_MESSAGE,
+    killSwitch: KILL_SWITCH_MESSAGE,
   },
   canRuntimeExecute,
   isActionAllowed,
   getDisabledMessage,
   guardRuntimeAction,
+  guardRuntimeActionSimple,
   logConfigState,
 } as const;
 
