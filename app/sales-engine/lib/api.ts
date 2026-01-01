@@ -149,13 +149,30 @@ async function apiRequest<T>(
 // =============================================================================
 
 /**
+ * M68-03: Mock bootstrap data for API-disabled mode.
+ * Includes all required top-level keys to prevent UI crashes.
+ */
+const MOCK_USER_BOOTSTRAP: UserBootstrap = {
+  id: 'mock-user',
+  email: 'mock@nsd.local',
+  name: 'Mock User',
+  permissions: [],
+  feature_visibility: {
+    sales_engine: true,
+  },
+  // M68-03: Additional required keys to prevent "Cannot read properties of undefined" errors
+  payload: {},
+  metadata: {},
+};
+
+/**
  * Get bootstrap information for the current user.
  */
 export async function getBootstrap(): Promise<UserBootstrap | null> {
-  // M67.9-01: Return null when API is disabled
+  // M68-03: Return mock bootstrap data when API is disabled (instead of null)
   if (isApiDisabled) {
-    console.log('[API] API mode disabled - returning null for bootstrap');
-    return null;
+    console.log('[API] API mode disabled - returning mock bootstrap data');
+    return MOCK_USER_BOOTSTRAP;
   }
 
   const odsUrl = getOdsApiUrl();

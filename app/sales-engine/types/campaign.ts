@@ -233,6 +233,9 @@ export interface UserBootstrap {
     sales_engine?: boolean;
     [key: string]: boolean | undefined;
   };
+  // M68-03: Optional additional keys that some UI components may access
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
