@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { CampaignDetail } from '../types/campaign';
-import { isReadOnly, getDisabledMessage } from '../../../config/appConfig';
+import { isReadOnly, getDisabledMessage, guardRuntimeAction, canRuntimeExecute } from '../../../config/appConfig';
 
 interface GovernanceActionsProps {
   campaign: CampaignDetail;
@@ -14,12 +14,22 @@ export function GovernanceActions({ campaign, onSubmit, onApprove }: GovernanceA
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'submit' | 'approve' | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // M67.9-01: All actions disabled in read-only mode
-  const actionsDisabled = isReadOnly;
+  // M67.9-01: All actions disabled in read-only mode (unless runtime permitted)
+  const runtimePermitted = canRuntimeExecute();
+  const actionsDisabled = isReadOnly && !runtimePermitted;
 
   async function handleSubmit() {
+    // M68-02: Defensive guard - prevent any bypass
+    const guardError = guardRuntimeAction('submit campaign');
+    if (guardError) {
+      setErrorMessage(guardError);
+      return;
+    }
     if (actionsDisabled) return;
+    
+    setErrorMessage(null);
     setIsSubmitting(true);
     try {
       await onSubmit();
@@ -30,7 +40,15 @@ export function GovernanceActions({ campaign, onSubmit, onApprove }: GovernanceA
   }
 
   async function handleApprove() {
+    // M68-02: Defensive guard - prevent any bypass
+    const guardError = guardRuntimeAction('approve campaign');
+    if (guardError) {
+      setErrorMessage(guardError);
+      return;
+    }
     if (actionsDisabled) return;
+    
+    setErrorMessage(null);
     setIsApproving(true);
     try {
       await onApprove();
@@ -60,8 +78,24 @@ export function GovernanceActions({ campaign, onSubmit, onApprove }: GovernanceA
         Campaign Actions
       </h4>
 
+      {/* M68-02: Error message from defensive guard */}
+      {errorMessage && (
+        <div
+          style={{
+            padding: '12px 16px',
+            backgroundColor: '#FEE2E2',
+            borderRadius: '6px',
+            marginBottom: '16px',
+            fontSize: '13px',
+            color: '#991B1B',
+          }}
+        >
+          {errorMessage}
+        </div>
+      )}
+
       {/* M67.9-01: Read-only mode notice */}
-      {actionsDisabled && (
+      {actionsDisabled && !errorMessage && (
         <div
           style={{
             padding: '12px 16px',
