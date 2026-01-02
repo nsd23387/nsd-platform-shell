@@ -248,11 +248,8 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
             <Icon name="runs" size={20} color="#8b5cf6" />
             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#1e1e4a', fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
-              Recent Execution Outcomes (Observed)
+              Recent Execution Outcomes
             </h3>
-            <span style={{ padding: '3px 8px', fontSize: '10px', fontWeight: 500, backgroundColor: '#eff6ff', color: '#1e40af', borderRadius: '4px', textTransform: 'uppercase' }}>
-              Read-Only
-            </span>
           </div>
 
           <div style={{ overflowX: 'auto' }}>

@@ -60,25 +60,25 @@ describe('mapToGovernanceState', () => {
   });
 
   describe('Execution states mapping', () => {
-    it('should map RUNNING to EXECUTED_READ_ONLY', () => {
-      expect(mapToGovernanceState('RUNNING', [], false)).toBe('EXECUTED_READ_ONLY');
+    it('should map RUNNING to EXECUTED', () => {
+      expect(mapToGovernanceState('RUNNING', [], false)).toBe('EXECUTED');
     });
 
-    it('should map COMPLETED to EXECUTED_READ_ONLY', () => {
-      expect(mapToGovernanceState('COMPLETED', [], false)).toBe('EXECUTED_READ_ONLY');
+    it('should map COMPLETED to EXECUTED', () => {
+      expect(mapToGovernanceState('COMPLETED', [], false)).toBe('EXECUTED');
     });
 
-    it('should map FAILED to EXECUTED_READ_ONLY', () => {
-      expect(mapToGovernanceState('FAILED', [], false)).toBe('EXECUTED_READ_ONLY');
+    it('should map FAILED to EXECUTED', () => {
+      expect(mapToGovernanceState('FAILED', [], false)).toBe('EXECUTED');
     });
 
-    it('should map ARCHIVED to EXECUTED_READ_ONLY', () => {
-      expect(mapToGovernanceState('ARCHIVED', [], false)).toBe('EXECUTED_READ_ONLY');
+    it('should map ARCHIVED to EXECUTED', () => {
+      expect(mapToGovernanceState('ARCHIVED', [], false)).toBe('EXECUTED');
     });
 
-    it('should keep COMPLETED as EXECUTED_READ_ONLY even with blocking reasons', () => {
+    it('should keep COMPLETED as EXECUTED even with blocking reasons', () => {
       // Execution states should not become BLOCKED
-      expect(mapToGovernanceState('COMPLETED', ['SOME_BLOCKER'], false)).toBe('EXECUTED_READ_ONLY');
+      expect(mapToGovernanceState('COMPLETED', ['SOME_BLOCKER'], false)).toBe('EXECUTED');
     });
   });
 
@@ -106,8 +106,8 @@ describe('getGovernanceStateLabel', () => {
     expect(getGovernanceStateLabel('BLOCKED')).toBe('Blocked');
   });
 
-  it('should return correct label for EXECUTED_READ_ONLY', () => {
-    expect(getGovernanceStateLabel('EXECUTED_READ_ONLY')).toBe('Executed (Read-Only)');
+  it('should return correct label for EXECUTED', () => {
+    expect(getGovernanceStateLabel('EXECUTED')).toBe('Executed');
   });
 });
 
@@ -402,10 +402,10 @@ describe('getPrimaryAction', () => {
     });
   });
 
-  describe('EXECUTED_READ_ONLY state', () => {
+  describe('EXECUTED state', () => {
     it('should return read-only action', () => {
-      const action = getPrimaryAction('EXECUTED_READ_ONLY', false, false);
-      expect(action.label).toBe('Executed (Read-Only)');
+      const action = getPrimaryAction('EXECUTED', false, false);
+      expect(action.label).toBe('Executed');
       expect(action.action).toBe('read_only');
       expect(action.disabled).toBe(true);
     });

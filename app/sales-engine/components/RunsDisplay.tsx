@@ -17,12 +17,9 @@ const statusColors: Record<CampaignRun['status'], { bg: string; text: string; bo
 };
 
 /**
- * RunsDisplay - Execution run history (Read-Only).
+ * RunsDisplay - Execution run history.
  * 
- * Updated for target-state architecture:
- * - Uses "Qualified Leads Processed" terminology
- * - Includes provenance indicators
- * - Emphasizes read-only observability
+ * Uses "Qualified Leads Processed" terminology.
  * 
  * LEAD MODEL DISTINCTION:
  * - "Qualified Leads" shown here represent records that passed lead qualification
@@ -31,9 +28,6 @@ const statusColors: Record<CampaignRun['status'], { bg: string; text: string; bo
  *   of email validity or qualification status
  * - The leads_processed count comes directly from the backend execution record
  *   and is not filtered client-side
- * 
- * See: isQualifiedLead() and isValidLeadEmail() in campaign-state.ts for
- * the qualification logic documentation.
  */
 export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
   return (
@@ -63,22 +57,8 @@ export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
             color: NSD_COLORS.primary,
           }}
         >
-          Execution History (Observed)
+          Execution History
         </h4>
-        <span
-          style={{
-            padding: '4px 10px',
-            fontSize: '10px',
-            fontWeight: 600,
-            backgroundColor: '#EFF6FF',
-            color: '#1E40AF',
-            borderRadius: NSD_RADIUS.sm,
-            textTransform: 'uppercase',
-            letterSpacing: '0.03em',
-          }}
-        >
-          Read-Only
-        </span>
       </div>
 
       <div style={{ padding: '20px' }}>
