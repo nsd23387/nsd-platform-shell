@@ -1,25 +1,23 @@
 /**
- * M68-03: Synthetic Test Campaign for Execution Validation
+ * Synthetic Test Campaign for Execution Validation
  * 
  * This module provides a frontend-only test campaign for validating
  * execution-related actions (Approve, Run, Reset) without touching
  * any backend systems.
  * 
- * HARD CONSTRAINTS:
+ * CONSTRAINTS:
  * - NOT persisted to Supabase
  * - Does NOT call any APIs
  * - Does NOT trigger side effects
  * - Only appears in Preview/Development environments
- * - Easy to remove after M68-03 validation
  * 
  * Usage:
  * - Import getTestCampaigns() and merge with real campaigns
  * - Test campaigns have execution flags enabled
- * - Clicking actions triggers guardRuntimeAction() and confirmation modal
  */
 
 import type { Campaign, CampaignDetail, ThroughputConfig } from '../types/campaign';
-import { canRuntimeExecute, deploymentMode } from '../../../config/appConfig';
+import { deploymentMode } from '../../../config/appConfig';
 import { getMockReadinessStatus, getMockThroughputConfig } from './readiness-resolver';
 
 /**
@@ -193,7 +191,6 @@ export async function handleTestCampaignAction(
 
   // Log the action for debugging
   console.log(`[TEST CAMPAIGN] Action "${action}" triggered on campaign "${campaignId}"`);
-  console.log('[TEST CAMPAIGN] Runtime permitted:', canRuntimeExecute());
   console.log('[TEST CAMPAIGN] This is a no-op - no actual execution occurs.');
 
   // Simulate a small delay

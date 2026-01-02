@@ -13,7 +13,6 @@ import {
   createReadOnlyFetch,
   ALLOWED_METHODS,
   FORBIDDEN_METHODS,
-  READ_ONLY_MESSAGE,
 } from '../read-only-guard';
 
 describe('isAllowedMethod', () => {
@@ -202,10 +201,5 @@ describe('Constants', () => {
     expect(FORBIDDEN_METHODS).toContain('PUT');
     expect(FORBIDDEN_METHODS).toContain('PATCH');
     expect(FORBIDDEN_METHODS).toContain('DELETE');
-  });
-
-  it('READ_ONLY_MESSAGE should be defined', () => {
-    expect(READ_ONLY_MESSAGE).toBeDefined();
-    expect(READ_ONLY_MESSAGE).toContain('read-only');
   });
 });

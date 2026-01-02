@@ -16,7 +16,7 @@
 
 
 import type { ReadinessStatus, ThroughputConfig, BlockingReason } from '../types/campaign';
-import { isRuntimeKillSwitchActive } from '../../../config/appConfig';
+// Kill switch is no longer used
 
 // =============================================================================
 // TYPES
@@ -244,23 +244,11 @@ function checkThroughput(
 
 /**
  * Evaluate kill switch status.
- * Checks both campaign-level and global runtime kill switch.
+ * Checks campaign-level kill switch.
  */
 function checkKillSwitch(
   readiness: ReadinessStatus | null | undefined
 ): ReadinessCheckResult {
-  // Check global runtime kill switch first (M68-03)
-  if (isRuntimeKillSwitchActive) {
-    return {
-      check: 'kill_switch',
-      passed: false,
-      status: 'Active (Global)',
-      message: 'Global runtime kill switch is active. All execution is disabled.',
-      severity: 'error',
-      value: true,
-    };
-  }
-
   // Check campaign-level kill switch
   if (readiness?.kill_switch_enabled === true) {
     return {

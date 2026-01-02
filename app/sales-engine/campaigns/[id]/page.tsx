@@ -1,15 +1,9 @@
 'use client';
 
 /**
- * Campaign Detail Page - Target-State Architecture
+ * Campaign Detail Page
  * 
- * IMPORTANT ARCHITECTURAL NOTES:
- * 1. This page is READ-ONLY. No mutations are performed.
- * 2. Governance State and Readiness Level are ORTHOGONAL:
- *    - Governance: approval workflow stage
- *    - Readiness: system capability (from backend readiness check)
- * 3. Missing data is shown as UNKNOWN, never inferred as READY/SAFE.
- * 4. Confidence is derived from actual backend metadata, not hardcoded.
+ * Displays campaign details, metrics, and action buttons.
  */
 
 import { useState, useEffect } from 'react';
@@ -38,15 +32,12 @@ import {
 import {
   mapToGovernanceState,
   computeReadinessLevel,
-  deriveConfidence,
   type CampaignGovernanceState,
   type ReadinessLevel,
 } from '../../lib/campaign-state';
 import { resolveReadiness } from '../../lib/readiness-resolver';
 import { ReadinessResolutionPanel } from '../../components/ReadinessResolutionPanel';
 import {
-  CampaignStateBadge,
-  ReadOnlyBanner,
   ExecutionReadinessPanel,
   LearningSignalsPanel,
   GovernanceActionsPanel,
@@ -56,8 +47,6 @@ import {
   isTestCampaign, 
   getTestCampaignDetail, 
   getTestCampaignThroughput,
-  TEST_CAMPAIGN_BANNER,
-  shouldShowTestCampaigns,
 } from '../../lib/test-campaign';
 
 type TabType = 'overview' | 'readiness' | 'monitoring' | 'learning';
@@ -178,33 +167,12 @@ export default function CampaignDetailPage() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
-        {/* M68-03: Test campaign banner */}
-        {isTest && (
-          <div style={{ 
-            marginBottom: '16px', 
-            padding: '12px 16px', 
-            backgroundColor: '#FEF3C7', 
-            borderRadius: NSD_RADIUS.md,
-            border: '2px dashed #F59E0B',
-          }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#92400E', fontWeight: 500 }}>
-              {TEST_CAMPAIGN_BANNER}
-            </p>
-          </div>
-        )}
-
-        {/* Read-only banner */}
-        <div style={{ marginBottom: '24px' }}>
-          <ReadOnlyBanner variant="info" compact />
-        </div>
-
-        {/* Header with governance state badge */}
+        {/* Header */}
         <PageHeader
           title={campaign.name}
           description={campaign.description}
           backHref="/sales-engine"
           backLabel="Back to Campaigns"
-          actions={<CampaignStateBadge state={governanceState} size="lg" />}
         />
 
         {/* Navigation tabs */}
@@ -419,16 +387,7 @@ function ReadinessTab({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Readiness vs Governance State explanation */}
-      <div style={{ padding: '14px 20px', backgroundColor: '#FEF3C7', borderRadius: NSD_RADIUS.md }}>
-        <p style={{ margin: 0, fontSize: '13px', color: '#92400E' }}>
-          <strong>Note:</strong> Readiness status is determined by backend validation checks and is independent
-          of governance approval state. A campaign may be approved but still show &quot;Unknown&quot; readiness if
-          validation has not been performed.
-        </p>
-      </div>
-
-      {/* M68-04.1: New Readiness Resolution Panel */}
+      {/* Readiness Resolution Panel */}
       <ReadinessResolutionPanel resolution={resolution} />
 
       {/* Legacy: Keep ExecutionReadinessPanel for additional details */}
@@ -491,14 +450,6 @@ function MonitoringTab({
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Read-only observability notice */}
-      <div style={{ padding: '14px 20px', backgroundColor: '#EFF6FF', borderRadius: NSD_RADIUS.md }}>
-        <p style={{ margin: 0, fontSize: '13px', color: '#1E40AF' }}>
-          <strong>Observability Mode:</strong> This view displays execution outcomes observed from backend systems.
-          The UI does not trigger or control execution. Metrics confidence is determined by backend validation status.
-        </p>
-      </div>
-
       {/* Metrics using MetricsDisplay component with actual backend data */}
       {metrics ? (
         <MetricsDisplay metrics={metrics} history={metricsHistory} />

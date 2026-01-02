@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { Icon } from '../../../design/components/Icon';
-import { ReadOnlyBanner } from './governance';
 import {
   getDashboardReadiness,
   getDashboardThroughput,
@@ -79,9 +78,6 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginBottom: '32px' }}>
-      {/* Read-only mode banner */}
-      <ReadOnlyBanner variant="info" compact />
-
       {/* System notices */}
       {activeNotice && (
         <div

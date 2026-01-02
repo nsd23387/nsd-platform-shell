@@ -34,9 +34,8 @@ import type {
 import {
   assertReadOnly,
   ReadOnlyViolationError,
-  READ_ONLY_MESSAGE,
 } from './read-only-guard';
-import { isApiDisabled, isReadOnly, READ_ONLY_BANNER_MESSAGE } from '../../../config/appConfig';
+import { isApiDisabled } from '../../../config/appConfig';
 
 const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
@@ -98,7 +97,7 @@ const MOCK_DASHBOARD_THROUGHPUT: DashboardThroughput = {
 const MOCK_SYSTEM_NOTICE: SystemNotice = {
   id: 'api-disabled-notice',
   type: 'info',
-  message: READ_ONLY_BANNER_MESSAGE,
+  message: 'API mode is disabled for this deployment.',
   active: true,
   createdAt: new Date().toISOString(),
 };
@@ -396,33 +395,7 @@ export async function startCampaignRun(): Promise<never> {
 }
 
 // =============================================================================
-// READ-ONLY STATUS EXPORTS
+// EXPORTS
 // =============================================================================
 
-export { READ_ONLY_MESSAGE, ReadOnlyViolationError };
-
-/**
- * Check if an action is available in the read-only UI.
- * Always returns false for mutation actions.
- */
-export function isActionAvailable(action: string): boolean {
-  const mutationActions = [
-    'create',
-    'update',
-    'submit',
-    'approve',
-    'reject',
-    'start',
-    'run',
-    'execute',
-    'delete',
-  ];
-  return !mutationActions.some(m => action.toLowerCase().includes(m));
-}
-
-/**
- * Get a message explaining why an action is not available.
- */
-export function getUnavailableActionMessage(action: string): string {
-  return `The "${action}" action is not available. ${READ_ONLY_MESSAGE}`;
-}
+export { ReadOnlyViolationError };

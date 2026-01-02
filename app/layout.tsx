@@ -3,19 +3,15 @@
  * 
  * Provides global context and styles for the application.
  * Bootstrap context is initialized here via Providers.
- * 
- * M67.9-01: Includes VercelReadOnlyBanner for read-only mode indication.
- * SECURITY NOTE: No authentication - access controlled via Vercel Password Protection.
  */
 
 import './globals.css';
 import type { Metadata } from 'next';
 import { Providers } from './providers';
-import { VercelReadOnlyBanner } from './sales-engine/components/VercelReadOnlyBanner';
 
 export const metadata: Metadata = {
   title: 'NSD Command Center',
-  description: 'Read-only analytics dashboards powered by Activity Spine',
+  description: 'Sales Engine Campaign Management',
 };
 
 export default function RootLayout({
@@ -26,7 +22,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <VercelReadOnlyBanner />
         <Providers>{children}</Providers>
       </body>
     </html>
