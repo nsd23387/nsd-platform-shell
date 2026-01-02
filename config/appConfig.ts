@@ -1,20 +1,30 @@
 /**
- * Application Configuration - M67.9-01 Vercel Hosting Setup + M68-02/03 Runtime Gating
+ * Application Configuration - M67.9-01 Vercel Hosting Setup + M68-02/03/04 Runtime Gating
  * 
  * Centralized configuration module for environment variable gating.
  * This module controls read-only mode and API access for Vercel deployment.
  * 
- * HARD CONSTRAINTS (M67.9-01):
- * - READ-ONLY ONLY. No writes. No mutations. No pipeline execution.
- * - No Supabase, Smartlead, Apollo, Make, or backend service connections.
- * - No secrets or real API keys.
- * - All network calls disabled when API mode is disabled.
- * - This milestone is hosting-only - does NOT enable M68 functionality.
+ * EXECUTION CONTROL (M68-04):
+ * Execution is controlled by environment variables:
+ * - NEXT_PUBLIC_API_MODE: Set to 'disabled' to block all API calls
+ * - NEXT_PUBLIC_READ_ONLY: Set to 'true' to enable read-only mode
+ * - NEXT_PUBLIC_RUNTIME_ENABLED: Set to 'true' to enable runtime actions
+ * - NEXT_PUBLIC_RUNTIME_KILL_SWITCH: Set to 'true' for emergency shutdown
+ * 
+ * For read-only deployments:
+ *   NEXT_PUBLIC_API_MODE=disabled
+ *   NEXT_PUBLIC_READ_ONLY=true
+ *   NEXT_PUBLIC_RUNTIME_ENABLED=false
+ * 
+ * For execution-enabled deployments:
+ *   NEXT_PUBLIC_API_MODE=enabled (or any value other than 'disabled')
+ *   NEXT_PUBLIC_READ_ONLY=false
+ *   NEXT_PUBLIC_RUNTIME_ENABLED=true
+ *   NEXT_PUBLIC_RUNTIME_KILL_SWITCH=false
  * 
  * M68-02 RUNTIME GATING:
  * - canRuntimeExecute() is the SINGLE SOURCE OF TRUTH for runtime permission
- * - Production MUST evaluate false (READ_ONLY=true, API_MODE=disabled)
- * - Preview environments may enable runtime with explicit RUNTIME_ENABLED=true
+ * - All four conditions must be satisfied for runtime to be permitted
  * 
  * M68-03 EXECUTION CONFIRMATION:
  * - All runtime actions require explicit user confirmation
@@ -127,27 +137,34 @@ export const apiConfig = {
 // =============================================================================
 
 /**
- * Feature flags for M67.9-01 Vercel hosting.
- * All execution features are disabled.
+ * Feature flags for execution control.
+ * 
+ * M68-04: Updated to respect environment variables instead of hard-coded false.
+ * Execution features are enabled when:
+ * - API mode is not disabled (isApiDisabled === false)
+ * - Runtime is explicitly enabled (isRuntimeEnabled === true)
+ * 
+ * For read-only deployments, set NEXT_PUBLIC_API_MODE=disabled or
+ * NEXT_PUBLIC_RUNTIME_ENABLED=false to disable execution features.
  */
 export const featureFlags = {
   /** Can create campaigns (allowed in M67-14 exception) */
   canCreateCampaign: !isApiDisabled,
   
-  /** Can execute/run campaigns */
-  canExecuteCampaign: false,
+  /** Can execute/run campaigns - requires API enabled AND runtime enabled */
+  canExecuteCampaign: !isApiDisabled && isRuntimeEnabled,
   
-  /** Can approve campaigns */
-  canApproveCampaign: false,
+  /** Can approve campaigns - requires API enabled AND runtime enabled */
+  canApproveCampaign: !isApiDisabled && isRuntimeEnabled,
   
-  /** Can submit campaigns for review */
-  canSubmitCampaign: false,
+  /** Can submit campaigns for review - requires API enabled AND runtime enabled */
+  canSubmitCampaign: !isApiDisabled && isRuntimeEnabled,
   
-  /** Can start campaign runs */
-  canStartRun: false,
+  /** Can start campaign runs - requires API enabled AND runtime enabled */
+  canStartRun: !isApiDisabled && isRuntimeEnabled,
   
-  /** Can reset campaigns */
-  canResetCampaign: false,
+  /** Can reset campaigns - requires API enabled AND runtime enabled */
+  canResetCampaign: !isApiDisabled && isRuntimeEnabled,
   
   /** API calls are enabled */
   apiEnabled: !isApiDisabled,
@@ -195,7 +212,7 @@ export function logConfigState(): void {
 // =============================================================================
 
 /**
- * M68-02/03: SINGLE SOURCE OF TRUTH for runtime execution permission.
+ * M68-02/03/04: SINGLE SOURCE OF TRUTH for runtime execution permission.
  * 
  * Returns true ONLY when ALL of the following conditions are met:
  * - NEXT_PUBLIC_RUNTIME_KILL_SWITCH !== "true" (M68-03: kill switch overrides all)
@@ -203,9 +220,8 @@ export function logConfigState(): void {
  * - NEXT_PUBLIC_READ_ONLY !== "true"
  * - NEXT_PUBLIC_API_MODE !== "disabled"
  * 
- * Production MUST evaluate false because:
- * - READ_ONLY will be true in production
- * - API_MODE will be disabled in production
+ * To enable execution in any environment (preview, staging, or production),
+ * set the appropriate environment variables as documented at the top of this file.
  * 
  * This function is the ONLY authority for determining if runtime
  * actions (start, approve, reset, run) are permitted.
