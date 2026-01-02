@@ -42,6 +42,8 @@ import {
   type CampaignGovernanceState,
   type ReadinessLevel,
 } from '../../lib/campaign-state';
+import { resolveReadiness } from '../../lib/readiness-resolver';
+import { ReadinessResolutionPanel } from '../../components/ReadinessResolutionPanel';
 import {
   CampaignStateBadge,
   ReadOnlyBanner,
@@ -53,6 +55,7 @@ import { MetricsDisplay } from '../../components/MetricsDisplay';
 import { 
   isTestCampaign, 
   getTestCampaignDetail, 
+  getTestCampaignThroughput,
   TEST_CAMPAIGN_BANNER,
   shouldShowTestCampaigns,
 } from '../../lib/test-campaign';
@@ -106,13 +109,14 @@ export default function CampaignDetailPage() {
           const testCampaign = getTestCampaignDetail(campaignId);
           if (testCampaign) {
             setCampaign(testCampaign);
+            // M68-04.1: Get mock throughput for test campaigns
+            setThroughput(getTestCampaignThroughput(campaignId));
             // Test campaigns don't have real metrics/runs/variants
             setMetrics(null);
             setMetricsHistory([]);
             setRuns([]);
             setLatestRun(null);
             setVariants([]);
-            setThroughput(null);
           } else {
             setError('Test campaign not found or not available in this environment');
           }
@@ -365,6 +369,8 @@ function OverviewTab({
  * CRITICAL: Readiness is computed from backend readiness payload ONLY.
  * It is NOT derived from governance state. A campaign can be APPROVED_READY
  * but still have readiness UNKNOWN if backend has not validated readiness.
+ * 
+ * M68-04.1: Now uses ReadinessResolver for comprehensive evaluation.
  */
 function ReadinessTab({
   campaign,
@@ -373,8 +379,10 @@ function ReadinessTab({
   campaign: CampaignDetail;
   throughput: ThroughputConfig | null;
 }) {
-  // Compute readiness level from backend readiness payload ONLY
-  // DO NOT use governance state to infer readiness
+  // M68-04.1: Use readiness resolver for comprehensive evaluation
+  const resolution = resolveReadiness(campaign.readiness, throughput);
+
+  // Legacy: Also compute readiness level for backward compatibility
   const readinessLevel: ReadinessLevel = computeReadinessLevel(campaign.readiness);
 
   // Build readiness data from ACTUAL backend fields only
@@ -420,6 +428,10 @@ function ReadinessTab({
         </p>
       </div>
 
+      {/* M68-04.1: New Readiness Resolution Panel */}
+      <ReadinessResolutionPanel resolution={resolution} />
+
+      {/* Legacy: Keep ExecutionReadinessPanel for additional details */}
       <ExecutionReadinessPanel data={readinessData} />
 
       {/* Throughput details */}
