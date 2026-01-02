@@ -1,18 +1,19 @@
 /**
- * M68-04.1: Readiness Resolver (Non-Executing)
- * 
- * This module provides a comprehensive readiness evaluation system that:
- * - Evaluates mailbox_health, deliverability, throughput, kill_switch
- * - Returns explicit states: READY | NOT_READY
- * - Provides explainable blocking reasons
- * - Works with mock data when API_MODE is enabled but runtime is gated
- * 
- * HARD CONSTRAINTS:
- * - No execution, no writes, no side effects
- * - All logic is read-only and reversible
- * - Does NOT change execution guards or runtime gating
- * - Independent of governance state (orthogonal concern)
+ * EXECUTION CONTEXT (LIVE)
+ *
+ * This module participates in real execution in production.
+ *
+ * Guarantees:
+ * - Execution MAY trigger side effects and durable writes
+ * - Logic is no longer read-only or reversible
+ * - Runtime gating is enforced upstream (not here)
+ * - Governance and execution are decoupled concerns
+ *
+ * IMPORTANT:
+ * This file must assume PROD execution is enabled.
+ * Do NOT introduce preview-only or read-only assumptions here.
  */
+
 
 import type { ReadinessStatus, ThroughputConfig, BlockingReason } from '../types/campaign';
 import { isRuntimeKillSwitchActive } from '../../../config/appConfig';
