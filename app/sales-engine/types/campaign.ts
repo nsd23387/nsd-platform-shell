@@ -1,8 +1,7 @@
 /**
- * Campaign Types - Target-State Architecture
+ * Campaign Types
  * 
  * Type definitions for the Sales Engine UI.
- * Updated to support governance-first, read-only architecture.
  */
 
 /**
@@ -54,7 +53,7 @@ export interface CampaignPersonalization {
 }
 
 /**
- * @deprecated Campaign creation is not supported in read-only UI.
+ * Payload for creating a new campaign.
  */
 export interface CampaignCreatePayload {
   name: string;
@@ -64,7 +63,7 @@ export interface CampaignCreatePayload {
 }
 
 /**
- * @deprecated Campaign updates are not supported in read-only UI.
+ * Payload for updating a campaign.
  */
 export interface CampaignUpdatePayload {
   name?: string;
@@ -220,7 +219,7 @@ export interface NeedsAttentionItem {
   primaryAction: {
     label: string;
     href: string;
-    type: 'view' | 'review'; // Actions are read-only navigation only
+    type: 'view' | 'review';
   };
 }
 
@@ -233,6 +232,9 @@ export interface UserBootstrap {
     sales_engine?: boolean;
     [key: string]: boolean | undefined;
   };
+  // M68-03: Optional additional keys that some UI components may access
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 /**

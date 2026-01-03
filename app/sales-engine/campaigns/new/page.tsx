@@ -24,7 +24,7 @@ import type {
   ValidationError,
   isCampaignCreateSuccess,
 } from '../../types/campaign-create';
-import { isApiDisabled, featureFlags, getDisabledMessage } from '../../../../config/appConfig';
+import { isApiDisabled, featureFlags } from '../../../../config/appConfig';
 
 const WIZARD_STEPS = [
   { id: 'identity', label: 'Campaign Identity' },
@@ -186,17 +186,7 @@ export default function NewCampaignPage() {
                 lineHeight: 1.6,
               }}
             >
-              {getDisabledMessage('create')}
-            </p>
-
-            <p
-              style={{
-                margin: '0',
-                fontSize: '13px',
-                color: NSD_COLORS.text.muted,
-              }}
-            >
-              Runtime will be enabled in Milestone M68.
+              Campaign creation is currently unavailable.
             </p>
           </div>
         </div>
@@ -494,31 +484,6 @@ export default function NewCampaignPage() {
                   {submitResult.sourceEligible ? 'Yes' : 'No'} — Campaign is not eligible for sourcing in DRAFT state
                 </p>
               </div>
-            </div>
-
-            <div
-              style={{
-                backgroundColor: '#FFFBEB',
-                borderRadius: NSD_RADIUS.md,
-                padding: '16px',
-                marginBottom: '32px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-              }}
-            >
-              <Icon name="info" size={20} color="#92400E" />
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '13px',
-                  color: '#92400E',
-                  lineHeight: 1.5,
-                  textAlign: 'left',
-                }}
-              >
-                This UI is read-only for campaign lifecycle. Governance transitions, approvals, and execution are managed by backend systems.
-              </p>
             </div>
 
             <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>

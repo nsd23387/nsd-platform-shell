@@ -288,29 +288,6 @@ export function ExecutionReadinessPanel({ data, onViewDetails }: ExecutionReadin
           )}
         </div>
 
-        {/* Read-only notice */}
-        <div
-          style={{
-            marginTop: '16px',
-            padding: '12px 16px',
-            backgroundColor: '#EFF6FF',
-            borderRadius: NSD_RADIUS.md,
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '10px',
-          }}
-        >
-          <span style={{ fontSize: '14px' }}>ℹ️</span>
-          <div>
-            <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: '#1E40AF' }}>
-              Observational Only
-            </p>
-            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#1E40AF', opacity: 0.9, lineHeight: 1.5 }}>
-              Readiness is computed from backend validation data and is independent of governance approval.
-              This UI does not initiate execution. Execution is managed by backend systems.
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );

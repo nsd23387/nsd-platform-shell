@@ -1,15 +1,9 @@
 'use client';
 
 /**
- * Campaign Detail Page - Target-State Architecture
+ * Campaign Detail Page
  * 
- * IMPORTANT ARCHITECTURAL NOTES:
- * 1. This page is READ-ONLY. No mutations are performed.
- * 2. Governance State and Readiness Level are ORTHOGONAL:
- *    - Governance: approval workflow stage
- *    - Readiness: system capability (from backend readiness check)
- * 3. Missing data is shown as UNKNOWN, never inferred as READY/SAFE.
- * 4. Confidence is derived from actual backend metadata, not hardcoded.
+ * Displays campaign details, metrics, and action buttons.
  */
 
 import { useState, useEffect } from 'react';
@@ -38,18 +32,22 @@ import {
 import {
   mapToGovernanceState,
   computeReadinessLevel,
-  deriveConfidence,
   type CampaignGovernanceState,
   type ReadinessLevel,
 } from '../../lib/campaign-state';
+import { resolveReadiness } from '../../lib/readiness-resolver';
+import { ReadinessResolutionPanel } from '../../components/ReadinessResolutionPanel';
 import {
-  CampaignStateBadge,
-  ReadOnlyBanner,
   ExecutionReadinessPanel,
   LearningSignalsPanel,
   GovernanceActionsPanel,
 } from '../../components/governance';
 import { MetricsDisplay } from '../../components/MetricsDisplay';
+import { 
+  isTestCampaign, 
+  getTestCampaignDetail, 
+  getTestCampaignThroughput,
+} from '../../lib/test-campaign';
 
 type TabType = 'overview' | 'readiness' | 'monitoring' | 'learning';
 
@@ -87,11 +85,34 @@ export default function CampaignDetailPage() {
       )
     : 'BLOCKED';
 
+  // Check if this is a test campaign
+  const isTest = isTestCampaign(campaignId);
+
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError(null);
       try {
+        // M68-03: Handle test campaigns separately - no API calls
+        if (isTestCampaign(campaignId)) {
+          const testCampaign = getTestCampaignDetail(campaignId);
+          if (testCampaign) {
+            setCampaign(testCampaign);
+            // M68-04.1: Get mock throughput for test campaigns
+            setThroughput(getTestCampaignThroughput(campaignId));
+            // Test campaigns don't have real metrics/runs/variants
+            setMetrics(null);
+            setMetricsHistory([]);
+            setRuns([]);
+            setLatestRun(null);
+            setVariants([]);
+          } else {
+            setError('Test campaign not found or not available in this environment');
+          }
+          setLoading(false);
+          return;
+        }
+
         const campaignData = await getCampaign(campaignId);
         setCampaign(campaignData);
 
@@ -146,18 +167,12 @@ export default function CampaignDetailPage() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
-        {/* Read-only banner */}
-        <div style={{ marginBottom: '24px' }}>
-          <ReadOnlyBanner variant="info" compact />
-        </div>
-
-        {/* Header with governance state badge */}
+        {/* Header */}
         <PageHeader
           title={campaign.name}
           description={campaign.description}
           backHref="/sales-engine"
           backLabel="Back to Campaigns"
-          actions={<CampaignStateBadge state={governanceState} size="lg" />}
         />
 
         {/* Navigation tabs */}
@@ -322,6 +337,8 @@ function OverviewTab({
  * CRITICAL: Readiness is computed from backend readiness payload ONLY.
  * It is NOT derived from governance state. A campaign can be APPROVED_READY
  * but still have readiness UNKNOWN if backend has not validated readiness.
+ * 
+ * M68-04.1: Now uses ReadinessResolver for comprehensive evaluation.
  */
 function ReadinessTab({
   campaign,
@@ -330,8 +347,10 @@ function ReadinessTab({
   campaign: CampaignDetail;
   throughput: ThroughputConfig | null;
 }) {
-  // Compute readiness level from backend readiness payload ONLY
-  // DO NOT use governance state to infer readiness
+  // M68-04.1: Use readiness resolver for comprehensive evaluation
+  const resolution = resolveReadiness(campaign.readiness, throughput);
+
+  // Legacy: Also compute readiness level for backward compatibility
   const readinessLevel: ReadinessLevel = computeReadinessLevel(campaign.readiness);
 
   // Build readiness data from ACTUAL backend fields only
@@ -368,15 +387,10 @@ function ReadinessTab({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Readiness vs Governance State explanation */}
-      <div style={{ padding: '14px 20px', backgroundColor: '#FEF3C7', borderRadius: NSD_RADIUS.md }}>
-        <p style={{ margin: 0, fontSize: '13px', color: '#92400E' }}>
-          <strong>Note:</strong> Readiness status is determined by backend validation checks and is independent
-          of governance approval state. A campaign may be approved but still show &quot;Unknown&quot; readiness if
-          validation has not been performed.
-        </p>
-      </div>
+      {/* Readiness Resolution Panel */}
+      <ReadinessResolutionPanel resolution={resolution} />
 
+      {/* Legacy: Keep ExecutionReadinessPanel for additional details */}
       <ExecutionReadinessPanel data={readinessData} />
 
       {/* Throughput details */}
@@ -436,14 +450,6 @@ function MonitoringTab({
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Read-only observability notice */}
-      <div style={{ padding: '14px 20px', backgroundColor: '#EFF6FF', borderRadius: NSD_RADIUS.md }}>
-        <p style={{ margin: 0, fontSize: '13px', color: '#1E40AF' }}>
-          <strong>Observability Mode:</strong> This view displays execution outcomes observed from backend systems.
-          The UI does not trigger or control execution. Metrics confidence is determined by backend validation status.
-        </p>
-      </div>
-
       {/* Metrics using MetricsDisplay component with actual backend data */}
       {metrics ? (
         <MetricsDisplay metrics={metrics} history={metricsHistory} />

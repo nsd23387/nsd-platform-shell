@@ -9,6 +9,7 @@ import { STATUS_FILTER_OPTIONS } from './lib/statusLabels';
 import { PageHeader, SectionCard, StatusChip, Button, DataTable, NavBar } from './components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from './lib/design-tokens';
 import { Icon } from '../../design/components/Icon';
+import { getTestCampaigns, shouldShowTestCampaigns, isTestCampaign } from './lib/test-campaign';
 
 export default function SalesEnginePage() {
   const router = useRouter();
@@ -25,9 +26,19 @@ export default function SalesEnginePage() {
       try {
         const status = statusFilter === 'ALL' ? undefined : statusFilter;
         const data = await listCampaigns(status);
-        setCampaigns(data);
+        
+        // M68-03: Merge test campaigns in dev/preview environments
+        const testCampaigns = getTestCampaigns();
+        const allCampaigns = [...testCampaigns, ...data];
+        
+        setCampaigns(allCampaigns);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load campaigns');
+        
+        // M68-03: Still show test campaigns even if API fails
+        if (shouldShowTestCampaigns()) {
+          setCampaigns(getTestCampaigns());
+        }
       } finally {
         setLoading(false);
       }

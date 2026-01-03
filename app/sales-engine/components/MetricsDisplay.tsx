@@ -206,29 +206,6 @@ export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
           </div>
         )}
 
-        <div
-          style={{
-            marginTop: '20px',
-            padding: '12px 16px',
-            backgroundColor: '#EFF6FF',
-            borderRadius: NSD_RADIUS.md,
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '10px',
-          }}
-        >
-          <span style={{ fontSize: '14px' }}>ℹ️</span>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '12px',
-              color: '#1E40AF',
-              lineHeight: 1.5,
-            }}
-          >
-            Metrics are observed from backend systems. This UI is read-only and does not modify any data.
-          </p>
-        </div>
       </div>
     </div>
   );

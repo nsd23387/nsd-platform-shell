@@ -34,9 +34,8 @@ import type {
 import {
   assertReadOnly,
   ReadOnlyViolationError,
-  READ_ONLY_MESSAGE,
 } from './read-only-guard';
-import { isApiDisabled, isReadOnly, READ_ONLY_BANNER_MESSAGE } from '../../../config/appConfig';
+import { isApiDisabled } from '../../../config/appConfig';
 
 const getApiBaseUrl = () => {
   if (typeof window !== 'undefined') {
@@ -98,7 +97,7 @@ const MOCK_DASHBOARD_THROUGHPUT: DashboardThroughput = {
 const MOCK_SYSTEM_NOTICE: SystemNotice = {
   id: 'api-disabled-notice',
   type: 'info',
-  message: READ_ONLY_BANNER_MESSAGE,
+  message: 'API mode is disabled for this deployment.',
   active: true,
   createdAt: new Date().toISOString(),
 };
@@ -149,13 +148,30 @@ async function apiRequest<T>(
 // =============================================================================
 
 /**
+ * M68-03: Mock bootstrap data for API-disabled mode.
+ * Includes all required top-level keys to prevent UI crashes.
+ */
+const MOCK_USER_BOOTSTRAP: UserBootstrap = {
+  id: 'mock-user',
+  email: 'mock@nsd.local',
+  name: 'Mock User',
+  permissions: [],
+  feature_visibility: {
+    sales_engine: true,
+  },
+  // M68-03: Additional required keys to prevent "Cannot read properties of undefined" errors
+  payload: {},
+  metadata: {},
+};
+
+/**
  * Get bootstrap information for the current user.
  */
 export async function getBootstrap(): Promise<UserBootstrap | null> {
-  // M67.9-01: Return null when API is disabled
+  // M68-03: Return mock bootstrap data when API is disabled (instead of null)
   if (isApiDisabled) {
-    console.log('[API] API mode disabled - returning null for bootstrap');
-    return null;
+    console.log('[API] API mode disabled - returning mock bootstrap data');
+    return MOCK_USER_BOOTSTRAP;
   }
 
   const odsUrl = getOdsApiUrl();
@@ -379,33 +395,7 @@ export async function startCampaignRun(): Promise<never> {
 }
 
 // =============================================================================
-// READ-ONLY STATUS EXPORTS
+// EXPORTS
 // =============================================================================
 
-export { READ_ONLY_MESSAGE, ReadOnlyViolationError };
-
-/**
- * Check if an action is available in the read-only UI.
- * Always returns false for mutation actions.
- */
-export function isActionAvailable(action: string): boolean {
-  const mutationActions = [
-    'create',
-    'update',
-    'submit',
-    'approve',
-    'reject',
-    'start',
-    'run',
-    'execute',
-    'delete',
-  ];
-  return !mutationActions.some(m => action.toLowerCase().includes(m));
-}
-
-/**
- * Get a message explaining why an action is not available.
- */
-export function getUnavailableActionMessage(action: string): string {
-  return `The "${action}" action is not available. ${READ_ONLY_MESSAGE}`;
-}
+export { ReadOnlyViolationError };

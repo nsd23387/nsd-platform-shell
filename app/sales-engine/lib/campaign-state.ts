@@ -1,13 +1,8 @@
 /**
- * Campaign State Machine - Target-State Architecture
+ * Campaign State Machine
  * 
  * This module provides the canonical campaign state types and deterministic
  * mapping functions for deriving campaign governance states from backend data.
- * 
- * Non-negotiable constraints:
- * - UI is read-only; execution is observed, not initiated
- * - States reflect governance/approval stages, not execution triggers
- * - Provenance must be explicitly tracked (Canonical vs Legacy)
  * 
  * IMPORTANT DISTINCTION:
  * - Governance State: Reflects approval/workflow stage (DRAFT, PENDING_APPROVAL, etc.)
@@ -25,7 +20,7 @@ export type CampaignGovernanceState =
   | 'PENDING_APPROVAL'       // Submitted for review, awaiting approval
   | 'APPROVED_READY'         // Approved by governance, execution observed externally
   | 'BLOCKED'                // Cannot proceed due to readiness/governance issues
-  | 'EXECUTED_READ_ONLY';    // Has been executed, now in observability-only mode
+  | 'EXECUTED';             // Has been executed
 
 /**
  * Legacy backend status values that may still appear in API responses.
@@ -103,8 +98,8 @@ export interface BackendReadinessPayload {
  * - DRAFT -> DRAFT (editable)
  * - PENDING_REVIEW -> PENDING_APPROVAL (awaiting governance)
  * - RUNNABLE -> APPROVED_READY (approved, execution observed externally)
- * - RUNNING/COMPLETED/FAILED -> EXECUTED_READ_ONLY (observability only)
- * - ARCHIVED -> EXECUTED_READ_ONLY (historical, read-only)
+ * - RUNNING/COMPLETED/FAILED -> EXECUTED
+ * - ARCHIVED -> EXECUTED
  * - If blocking reasons present -> BLOCKED (regardless of backend status)
  * 
  * NOTE: This function maps GOVERNANCE state only. It does NOT imply READINESS.
@@ -140,8 +135,7 @@ export function mapToGovernanceState(
     case 'COMPLETED':
     case 'FAILED':
     case 'ARCHIVED':
-      // All execution states are read-only observability
-      return 'EXECUTED_READ_ONLY';
+      return 'EXECUTED';
 
     default:
       // Unknown status treated as blocked for safety
@@ -211,7 +205,7 @@ export function getGovernanceStateLabel(state: CampaignGovernanceState): string 
     PENDING_APPROVAL: 'Pending Approval',
     APPROVED_READY: 'Approved (Execution Observed)',
     BLOCKED: 'Blocked',
-    EXECUTED_READ_ONLY: 'Executed (Read-Only)',
+    EXECUTED: 'Executed',
   };
   return labels[state] || state;
 }
@@ -229,7 +223,7 @@ export function getGovernanceStateStyle(state: CampaignGovernanceState): {
     PENDING_APPROVAL: { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
     APPROVED_READY: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
     BLOCKED: { bg: '#FEE2E2', text: '#991B1B', border: '#FECACA' },
-    EXECUTED_READ_ONLY: { bg: '#F3F4F6', text: '#4B5563', border: '#D1D5DB' },
+    EXECUTED: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
   };
   return styles[state] || styles.BLOCKED;
 }
@@ -534,9 +528,9 @@ export function getPrimaryAction(
         explanation: 'This campaign is blocked due to unresolved governance or readiness issues.',
       };
 
-    case 'EXECUTED_READ_ONLY':
+    case 'EXECUTED':
       return {
-        label: 'Executed (Read-Only)',
+        label: 'Executed',
         action: 'read_only',
         disabled: true,
         explanation: 'This campaign has been executed. View run history for observability data.',

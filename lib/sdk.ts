@@ -105,6 +105,15 @@ function getAuthToken(): string | undefined {
 // The mock data below is for UI rendering only - no user assumed.
 // =============================================================================
 
+/**
+ * M68-03: Mock bootstrap response for API-disabled mode.
+ * 
+ * IMPORTANT: This mock includes all required top-level keys to prevent UI crashes:
+ * - user, organization, roles, permissions, environment, feature_visibility (standard)
+ * - payload, metadata (required by some UI components)
+ * 
+ * No real data is included. This is for UI rendering only.
+ */
 const MOCK_BOOTSTRAP_RESPONSE: BootstrapResponse = {
   user: null as unknown as BootstrapResponse['user'], // No user assumed - Vercel Password Protection handles access
   organization: null as unknown as BootstrapResponse['organization'],
@@ -120,6 +129,9 @@ const MOCK_BOOTSTRAP_RESPONSE: BootstrapResponse = {
     approvals: false,
     execution: false,
   },
+  // M68-03: Additional required keys to prevent "Cannot read properties of undefined (reading 'payload')" errors
+  payload: {},
+  metadata: {},
 };
 
 /**

@@ -1,21 +1,17 @@
 'use client';
 
 /**
- * Approvals Page - Target-State Architecture
+ * Approvals Page
  * 
- * This page displays campaigns pending approval in read-only mode.
- * Per target-state constraints, approvals are managed by backend governance systems.
- * The UI only displays status; it does not execute approval actions.
+ * This page displays campaigns pending approval.
  */
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Icon } from '../../../design/components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
-import { ReadOnlyBanner, CampaignStateBadge } from '../components/governance';
 import { NavBar, PageHeader } from '../components/ui';
 import { listCampaigns } from '../lib/api';
-import { mapToGovernanceState } from '../lib/campaign-state';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../lib/design-tokens';
 import type { Campaign } from '../types/campaign';
 
@@ -42,17 +38,9 @@ export default function ApprovalsPage() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#fafafa' }}>
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '40px 32px' }}>
-        {/* Read-only banner */}
-        <div style={{ marginBottom: '24px' }}>
-          <ReadOnlyBanner
-            variant="info"
-            message="Approvals are managed by backend governance systems. This UI displays pending campaigns for review only."
-          />
-        </div>
-
         <PageHeader
           title="Pending Approvals"
-          description="Review campaigns awaiting governance authorization"
+          description="Review campaigns awaiting approval"
         />
 
         <NavBar active="approvals" />
@@ -77,14 +65,7 @@ export default function ApprovalsPage() {
 
         {!loading && campaigns.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {campaigns.map((campaign) => {
-              const governanceState = mapToGovernanceState(
-                campaign.status,
-                [],
-                campaign.isRunnable
-              );
-
-              return (
+            {campaigns.map((campaign) => (
                 <div
                   key={campaign.id}
                   style={{
@@ -102,7 +83,7 @@ export default function ApprovalsPage() {
                       {campaign.name}
                     </h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                      <CampaignStateBadge state={governanceState} size="sm" />
+                      <StatusBadge status={campaign.status} />
                       <span style={{ fontSize: '13px', color: '#6b7280' }}>
                         Created {new Date(campaign.created_at).toLocaleDateString()}
                       </span>
@@ -130,8 +111,7 @@ export default function ApprovalsPage() {
                     </Link>
                   </div>
                 </div>
-              );
-            })}
+            ))}
           </div>
         )}
 

@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
 
+/**
+ * Mock bootstrap endpoint for development/preview environments.
+ * 
+ * M68-03: Includes all required top-level keys to prevent UI crashes:
+ * - Standard keys: user, organization, roles, permissions, environment, feature_visibility
+ * - Additional keys: payload, metadata (required by some UI components)
+ */
 export async function GET() {
   const mockBootstrapResponse = {
     user: {
@@ -31,7 +38,12 @@ export async function GET() {
       design_dashboard: true,
       media_dashboard: true,
       sales_dashboard: true,
+      sales_engine: true,
+      campaigns: true,
     },
+    // M68-03: Additional required keys to prevent "Cannot read properties of undefined" errors
+    payload: {},
+    metadata: {},
   };
 
   return NextResponse.json(mockBootstrapResponse);
