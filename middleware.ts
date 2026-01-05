@@ -120,17 +120,19 @@ export function middleware(request: NextRequest): NextResponse {
 
 /**
  * Configure which routes the middleware applies to.
- * Excludes static assets and Next.js internals.
+ * Excludes static assets, Next.js internals, and API routes.
  */
 export const config = {
   matcher: [
     /*
      * Match all request paths except:
+     * - api (API routes - need Node runtime for Supabase service role)
+     * - functions (Edge Functions)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - images (public images)
      */
-    '/((?!_next/static|_next/image|favicon.ico|images).*)',
+    '/((?!api|functions|_next/static|_next/image|favicon.ico|images).*)',
   ],
 };
