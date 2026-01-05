@@ -25,7 +25,14 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, isSupabaseConfigured, CampaignRow } from '../../../lib/supabase-server';
+import { 
+  createServerClient, 
+  isSupabaseConfigured, 
+  CampaignRow,
+  ICPConfig,
+  SourcingConfig,
+  LeadQualificationConfig,
+} from '../../../lib/supabase-server';
 import type {
   CampaignCreatePayload,
   CampaignCreateSuccessResponse,
@@ -85,24 +92,59 @@ function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
 /**
  * Map UI payload to database row structure.
  * 
- * GOVERNANCE: Only maps to allowed columns.
- * Status is ALWAYS 'draft' - no other status allowed from this endpoint.
+ * CANONICAL SCHEMA ALIGNMENT:
+ * - icp → JSONB containing keywords, geographies, industries, company_size
+ * - sourcing_config → JSONB containing targets (benchmarks only)
+ * - lead_qualification_config → JSONB containing job_titles, seniority, etc.
+ * 
+ * GOVERNANCE: 
+ * - Status is ALWAYS 'draft' - no other status allowed from this endpoint
+ * - Targets are benchmarks only (benchmarks_only: true)
+ * - No flattened ICP fields as top-level columns
  */
 function mapPayloadToRow(payload: CampaignCreatePayload): Omit<CampaignRow, 'id' | 'created_at' | 'updated_at'> {
+  // Build ICP config JSONB
+  const icp: ICPConfig = {
+    keywords: payload.icp.keywords,
+    geographies: payload.icp.geographies,
+    industries: payload.icp.industries || undefined,
+    company_size: payload.icp.company_size ? {
+      min: payload.icp.company_size.min,
+      max: payload.icp.company_size.max,
+    } : undefined,
+  };
+
+  // Build sourcing config JSONB
+  // NOTE: benchmarks_only is ALWAYS true - targets never gate execution
+  const sourcing_config: SourcingConfig = {
+    benchmarks_only: true,
+    targets: {
+      target_leads: payload.campaign_targets?.target_leads ?? null,
+      target_emails: payload.campaign_targets?.target_emails ?? null,
+      target_reply_rate: payload.campaign_targets?.target_reply_rate ?? null,
+    },
+  };
+
+  // Build lead qualification config JSONB
+  const lead_qualification_config: LeadQualificationConfig | null = 
+    (payload.icp.job_titles?.length || 
+     payload.icp.seniority_levels?.length ||
+     payload.contact_targeting?.roles?.length ||
+     payload.contact_targeting?.seniority?.length) ? {
+      job_titles: payload.icp.job_titles || undefined,
+      seniority_levels: payload.icp.seniority_levels || undefined,
+      roles: payload.contact_targeting?.roles || undefined,
+      require_verified_email: payload.contact_targeting?.email_requirements?.require_verified,
+      max_contacts_per_org: payload.contact_targeting?.max_contacts_per_org,
+    } : null;
+
   return {
     name: payload.campaign_identity.name.trim(),
-    status: 'draft', // ALWAYS draft - governance requirement
-    keywords: payload.icp.keywords,
-    target_locations: payload.icp.geographies,
     description: payload.campaign_identity.description || null,
-    industries: payload.icp.industries || null,
-    job_titles: payload.icp.job_titles || null,
-    seniority_levels: payload.icp.seniority_levels || null,
-    company_size_min: payload.icp.company_size?.min || null,
-    company_size_max: payload.icp.company_size?.max || null,
-    target_leads: payload.campaign_targets?.target_leads || null,
-    target_emails: payload.campaign_targets?.target_emails || null,
-    target_reply_rate: payload.campaign_targets?.target_reply_rate || null,
+    status: 'draft', // ALWAYS draft - governance requirement
+    icp,
+    sourcing_config,
+    lead_qualification_config,
   };
 }
 

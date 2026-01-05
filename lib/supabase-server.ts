@@ -68,23 +68,60 @@ export function isSupabaseConfigured(): boolean {
 }
 
 /**
+ * ICP (Ideal Customer Profile) JSONB structure
+ * Stored in core.campaigns.icp column
+ */
+export interface ICPConfig {
+  keywords: string[];
+  geographies: string[];
+  industries?: string[];
+  company_size?: {
+    min?: number;
+    max?: number;
+  };
+}
+
+/**
+ * Sourcing configuration JSONB structure
+ * Stored in core.campaigns.sourcing_config column
+ * 
+ * NOTE: Targets are benchmarks only - they do NOT gate execution
+ */
+export interface SourcingConfig {
+  benchmarks_only: true; // Always true - targets never gate execution
+  targets?: {
+    target_leads?: number | null;
+    target_emails?: number | null;
+    target_reply_rate?: number | null;
+  };
+}
+
+/**
+ * Lead qualification configuration JSONB structure
+ * Stored in core.campaigns.lead_qualification_config column
+ */
+export interface LeadQualificationConfig {
+  job_titles?: string[];
+  seniority_levels?: string[];
+  roles?: string[];
+  require_verified_email?: boolean;
+  max_contacts_per_org?: number;
+}
+
+/**
  * Campaign row structure for core.campaigns table
+ * 
+ * CANONICAL SCHEMA - Do not add columns that don't exist in the database.
+ * ICP, sourcing, and lead qualification are stored as JSONB objects.
  */
 export interface CampaignRow {
   id?: string;
   name: string;
-  status: 'draft' | 'active' | 'paused' | 'completed' | 'archived';
-  keywords: string[];
-  target_locations: string[];
   description?: string | null;
-  industries?: string[] | null;
-  job_titles?: string[] | null;
-  seniority_levels?: string[] | null;
-  company_size_min?: number | null;
-  company_size_max?: number | null;
-  target_leads?: number | null;
-  target_emails?: number | null;
-  target_reply_rate?: number | null;
+  status: 'draft' | 'active' | 'paused' | 'completed' | 'archived';
+  icp: ICPConfig;
+  sourcing_config: SourcingConfig;
+  lead_qualification_config?: LeadQualificationConfig | null;
   created_at?: string;
   updated_at?: string;
 }

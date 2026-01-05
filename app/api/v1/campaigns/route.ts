@@ -95,10 +95,10 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createServerClient();
 
-    // Build query
+    // Build query - use canonical JSONB columns
     let query = supabase
       .from('campaigns')
-      .select('id, name, description, status, keywords, target_locations, created_at, updated_at')
+      .select('id, name, description, status, icp, sourcing_config, lead_qualification_config, created_at, updated_at')
       .order('created_at', { ascending: false });
 
     // Filter by status if provided
@@ -115,21 +115,25 @@ export async function GET(request: NextRequest) {
     }
 
     // Map database rows to UI format
-    const campaigns = (data || []).map((row) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      status: mapStatusToGovernanceState(row.status),
-      keywords: row.keywords,
-      target_locations: row.target_locations,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      // UI state flags based on status
-      canEdit: row.status === 'draft',
-      canSubmit: row.status === 'draft',
-      canApprove: false, // Approval not implemented
-      isRunnable: row.status === 'active',
-    }));
+    // Extract keywords and geographies from icp JSONB
+    const campaigns = (data || []).map((row) => {
+      const icp = row.icp as { keywords?: string[]; geographies?: string[] } | null;
+      return {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        status: mapStatusToGovernanceState(row.status),
+        keywords: icp?.keywords || [],
+        geographies: icp?.geographies || [],
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        // UI state flags based on status
+        canEdit: row.status === 'draft',
+        canSubmit: row.status === 'draft',
+        canApprove: false, // Approval not implemented
+        isRunnable: row.status === 'active',
+      };
+    });
 
     console.log('[campaigns] Returning', campaigns.length, 'campaigns from database');
     return NextResponse.json(campaigns);
