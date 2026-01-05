@@ -22,7 +22,13 @@ import { createClient } from '@supabase/supabase-js';
  * Create a Supabase client with service role credentials.
  * This client has full database access - use with caution.
  * 
- * Note: We use the 'core' schema for campaigns table.
+ * SCHEMA BINDING (REQUIRED):
+ * The client is explicitly bound to the 'core' schema because:
+ * - The campaigns table is in core.campaigns, not public.campaigns
+ * - PostgREST requires explicit schema selection for non-public schemas
+ * - Use .from('campaigns') NOT .from('core.campaigns')
+ * 
+ * Without db.schema: 'core', you will get: "Invalid schema: core"
  */
 export function createServerClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -44,11 +50,11 @@ export function createServerClient() {
 
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
-      autoRefreshToken: false,
       persistSession: false,
+      autoRefreshToken: false,
     },
     db: {
-      schema: 'core', // Use core schema for campaigns
+      schema: 'core', // REQUIRED — campaigns table is in core schema
     },
   });
 }

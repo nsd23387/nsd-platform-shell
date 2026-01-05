@@ -232,6 +232,23 @@ The API route:
 3. Inserts exactly one row into `core.campaigns`
 4. Sets `status = 'draft'` (always)
 
+### Schema Binding (REQUIRED)
+
+The Supabase client is **explicitly bound to the `core` schema**:
+
+```typescript
+createClient(supabaseUrl, serviceRoleKey, {
+  db: {
+    schema: 'core', // REQUIRED for non-public schemas
+  },
+});
+```
+
+This is required because:
+- The `campaigns` table is in the `core` schema, not `public`
+- PostgREST requires explicit schema selection via the `db.schema` option
+- Table access uses `.from('campaigns')` (NOT `.from('core.campaigns')`)
+
 **Required Environment Variables:**
 - `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY` — Service role key (server-side only)
