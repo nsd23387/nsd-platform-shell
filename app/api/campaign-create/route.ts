@@ -87,14 +87,6 @@ function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
     });
   }
 
-  if (!payload.readiness_requirements) {
-    errors.push({
-      field: 'readiness_requirements',
-      message: 'Readiness requirements are required',
-      code: 'REQUIRED_FIELD',
-    });
-  }
-
   return errors;
 }
 

@@ -33,7 +33,6 @@ const WIZARD_STEPS = [
   { id: 'targeting', label: 'Contact Targeting' },
   { id: 'qualification', label: 'Lead Qualification' },
   { id: 'outreach', label: 'Outreach Context' },
-  { id: 'readiness', label: 'Readiness' },
   { id: 'targets', label: 'Targets (Optional)' },
 ];
 
@@ -59,8 +58,6 @@ type FormData = {
   valuePropositions: string[];
   painPoints: string[];
   callToAction: string;
-  mailboxHealthRequired: boolean;
-  deliverabilityThreshold: number;
   targetOrganizations: number | null;
   targetContacts: number | null;
   targetLeads: number | null;
@@ -90,8 +87,6 @@ const initialFormData: FormData = {
   valuePropositions: [],
   painPoints: [],
   callToAction: '',
-  mailboxHealthRequired: true,
-  deliverabilityThreshold: 80,
   targetOrganizations: null,
   targetContacts: null,
   targetLeads: null,
@@ -247,10 +242,6 @@ export default function NewCampaignPage() {
       value_propositions: formData.valuePropositions,
       pain_points: formData.painPoints,
       call_to_action: formData.callToAction,
-    },
-    readiness_requirements: {
-      mailbox_health_required: formData.mailboxHealthRequired,
-      deliverability_threshold: formData.deliverabilityThreshold,
     },
     campaign_targets: {
       target_organizations: formData.targetOrganizations,
@@ -810,27 +801,10 @@ export default function NewCampaignPage() {
         </WizardStep>
 
         <WizardStep
-          title="Readiness Requirements"
-          description="Prerequisites for campaign execution"
-          isActive={currentStep === 6}
-          stepNumber={7}
-          totalSteps={WIZARD_STEPS.length}
-        >
-          <FormField
-            label="Deliverability Threshold (%)"
-            name="deliverabilityThreshold"
-            type="number"
-            value={formData.deliverabilityThreshold}
-            onChange={(v) => updateField('deliverabilityThreshold', Number(v))}
-            helpText="Minimum deliverability score required"
-          />
-        </WizardStep>
-
-        <WizardStep
           title="Campaign Targets (Optional)"
           description="Benchmarks only — do not affect campaign execution"
-          isActive={currentStep === 7}
-          stepNumber={8}
+          isActive={currentStep === 6}
+          stepNumber={7}
           totalSteps={WIZARD_STEPS.length}
         >
           <div

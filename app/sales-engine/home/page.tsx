@@ -6,14 +6,12 @@ import { Icon } from '../../../design/components/Icon';
 import { PageHeader, SectionCard, StatCard, StatusChip, Button, NavBar } from '../components/ui';
 import { NSD_COLORS, NSD_TYPOGRAPHY, NSD_RADIUS } from '../lib/design-tokens';
 import {
-  getDashboardReadiness,
   getDashboardThroughput,
   getSystemNotices,
   getRecentRuns,
   getNeedsAttention,
 } from '../lib/api';
 import type {
-  DashboardReadiness,
   DashboardThroughput,
   SystemNotice,
   RecentRunOutcome,
@@ -22,7 +20,6 @@ import type {
 import { isApiDisabled, featureFlags } from '../../../config/appConfig';
 
 export default function SalesEngineHomePage() {
-  const [readiness, setReadiness] = useState<DashboardReadiness | null>(null);
   const [throughput, setThroughput] = useState<DashboardThroughput | null>(null);
   const [notices, setNotices] = useState<SystemNotice[]>([]);
   const [recentRuns, setRecentRuns] = useState<RecentRunOutcome[]>([]);
@@ -32,14 +29,12 @@ export default function SalesEngineHomePage() {
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [readinessData, throughputData, noticesData, runsData, attentionData] = await Promise.all([
-          getDashboardReadiness(),
+        const [throughputData, noticesData, runsData, attentionData] = await Promise.all([
           getDashboardThroughput(),
           getSystemNotices(),
           getRecentRuns(),
           getNeedsAttention(),
         ]);
-        setReadiness(readinessData);
         setThroughput(throughputData);
         setNotices(noticesData);
         setRecentRuns(runsData);
@@ -112,22 +107,6 @@ export default function SalesEngineHomePage() {
             <span style={{ flex: 1, fontSize: '14px', color: activeNotice.type === 'warning' ? '#854d0e' : activeNotice.type === 'error' ? '#991b1b' : '#1e40af' }}>
               {activeNotice.message}
             </span>
-          </div>
-        )}
-
-        {readiness && (
-          <div style={{ marginBottom: '32px' }}>
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 600, color: NSD_COLORS.text.secondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Campaign Overview
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px' }}>
-              <StatCard label="Drafts" value={readiness.draft} icon="draft" color="#F59E0B" size="sm" />
-              <StatCard label="In Review" value={readiness.pendingReview} icon="review" color="#3B82F6" size="sm" />
-              <StatCard label="Approved & Ready" value={readiness.runnable} icon="check" color="#10B981" size="sm" />
-              <StatCard label="Running" value={readiness.running || 0} icon="runs" color={NSD_COLORS.secondary} size="sm" />
-              <StatCard label="Completed (7d)" value={readiness.completed || 0} icon="check" color="#10B981" size="sm" />
-              <StatCard label="Failed" value={readiness.failed || 0} icon="warning" color="#EF4444" size="sm" />
-            </div>
           </div>
         )}
 

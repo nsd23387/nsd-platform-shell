@@ -4,26 +4,23 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Icon } from '../../../design/components/Icon';
 import { NavBar, PageHeader } from '../components/ui';
-import { getRecentRuns, getDashboardThroughput, getDashboardReadiness } from '../lib/api';
-import type { RecentRunOutcome, DashboardThroughput, DashboardReadiness } from '../types/campaign';
+import { getRecentRuns, getDashboardThroughput } from '../lib/api';
+import type { RecentRunOutcome, DashboardThroughput } from '../types/campaign';
 
 export default function MonitoringPage() {
   const [runs, setRuns] = useState<RecentRunOutcome[]>([]);
   const [throughput, setThroughput] = useState<DashboardThroughput | null>(null);
-  const [readiness, setReadiness] = useState<DashboardReadiness | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [runsData, throughputData, readinessData] = await Promise.all([
+        const [runsData, throughputData] = await Promise.all([
           getRecentRuns(),
           getDashboardThroughput(),
-          getDashboardReadiness(),
         ]);
         setRuns(runsData);
         setThroughput(throughputData);
-        setReadiness(readinessData);
       } catch (err) {
         console.error('Failed to load monitoring data:', err);
       } finally {
@@ -47,7 +44,6 @@ export default function MonitoringPage() {
   const safetyMetrics = {
     blockedByThroughput: throughput?.blockedByThroughput || 0,
     totalBlocked: runs.reduce((sum, r) => sum + r.leadsBlocked, 0),
-    blockerCount: readiness?.blockers?.length || 0,
   };
 
   if (loading) {
@@ -109,7 +105,6 @@ export default function MonitoringPage() {
             metrics={[
               { label: 'Blocked by Throughput', value: safetyMetrics.blockedByThroughput },
               { label: 'Leads Blocked (Recent)', value: safetyMetrics.totalBlocked },
-              { label: 'Active Blockers', value: safetyMetrics.blockerCount },
             ]}
           />
         </div>

@@ -67,12 +67,6 @@ export interface OutreachContext {
   personalization_fields?: string[];
 }
 
-export interface ReadinessRequirements {
-  mailbox_health_required?: boolean;
-  deliverability_threshold?: number;
-  warmup_complete?: boolean;
-}
-
 export interface CampaignTargets {
   target_organizations?: number | null;
   target_contacts?: number | null;
@@ -88,7 +82,6 @@ export interface CampaignCreatePayload {
   contact_targeting: ContactTargeting;
   lead_qualification: LeadQualification;
   outreach_context: OutreachContext;
-  readiness_requirements: ReadinessRequirements;
   campaign_targets?: CampaignTargets;
 }
 

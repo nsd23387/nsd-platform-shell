@@ -3,12 +3,6 @@
  * 
  * This module provides the canonical campaign state types and deterministic
  * mapping functions for deriving campaign governance states from backend data.
- * 
- * IMPORTANT DISTINCTION:
- * - Governance State: Reflects approval/workflow stage (DRAFT, PENDING_APPROVAL, etc.)
- * - Readiness Level: Reflects system capability to execute (READY, NOT_READY, UNKNOWN)
- * These are ORTHOGONAL. A campaign can be APPROVED_READY but still NOT_READY or UNKNOWN
- * for execution if readiness checks have not passed or have not been performed.
  */
 
 /**
@@ -19,7 +13,7 @@ export type CampaignGovernanceState =
   | 'DRAFT'                  // Campaign is being authored, editable
   | 'PENDING_APPROVAL'       // Submitted for review, awaiting approval
   | 'APPROVED_READY'         // Approved by governance, execution observed externally
-  | 'BLOCKED'                // Cannot proceed due to readiness/governance issues
+  | 'BLOCKED'                // Cannot proceed due to governance issues
   | 'EXECUTED';             // Has been executed
 
 /**
@@ -51,15 +45,6 @@ export type ProvenanceType = 'CANONICAL' | 'LEGACY_OBSERVED';
 export type MetricConfidence = 'SAFE' | 'CONDITIONAL' | 'BLOCKED';
 
 /**
- * Readiness status for execution readiness panel.
- * 
- * IMPORTANT: This is INDEPENDENT of CampaignGovernanceState.
- * A campaign can be APPROVED_READY but have readiness level UNKNOWN or NOT_READY
- * if the backend has not provided explicit readiness validation.
- */
-export type ReadinessLevel = 'READY' | 'NOT_READY' | 'UNKNOWN';
-
-/**
  * Autonomy levels for learning signals (L0-L2 only per constraints).
  * UI must not imply autonomous optimization beyond L2.
  */
@@ -71,24 +56,8 @@ export type AutonomyLevel = 'L0' | 'L1' | 'L2';
 export interface CampaignGovernanceMetadata {
   governanceState: CampaignGovernanceState;
   provenance: ProvenanceType;
-  readinessLevel: ReadinessLevel;
-  blockingReasons: string[];
-  lastReadinessCheck?: string;
   approvedAt?: string;
   approvedBy?: string;
-}
-
-/**
- * Readiness payload from backend.
- * All fields are optional - if not provided, readiness is UNKNOWN.
- */
-export interface BackendReadinessPayload {
-  is_ready?: boolean;
-  blocking_reasons?: string[];
-  last_checked?: string;
-  mailbox_healthy?: boolean;
-  deliverability_score?: number;
-  kill_switch_enabled?: boolean;
 }
 
 /**
@@ -100,26 +69,15 @@ export interface BackendReadinessPayload {
  * - RUNNABLE -> APPROVED_READY (approved, execution observed externally)
  * - RUNNING/COMPLETED/FAILED -> EXECUTED
  * - ARCHIVED -> EXECUTED
- * - If blocking reasons present -> BLOCKED (regardless of backend status)
- * 
- * NOTE: This function maps GOVERNANCE state only. It does NOT imply READINESS.
- * A campaign with APPROVED_READY governance state may still have UNKNOWN readiness.
  * 
  * @param legacyStatus - Backend status value
- * @param blockingReasons - List of blocking reasons from readiness check
  * @param isRunnable - Backend-provided runnable flag
  * @returns Target-state governance state
  */
 export function mapToGovernanceState(
   legacyStatus: LegacyCampaignStatus | string,
-  blockingReasons: string[] = [],
   isRunnable: boolean = false
 ): CampaignGovernanceState {
-  // If there are blocking reasons, the campaign is blocked regardless of status
-  if (blockingReasons.length > 0 && legacyStatus !== 'COMPLETED' && legacyStatus !== 'FAILED') {
-    return 'BLOCKED';
-  }
-
   switch (legacyStatus) {
     case 'DRAFT':
       return 'DRAFT';
@@ -128,7 +86,6 @@ export function mapToGovernanceState(
       return 'PENDING_APPROVAL';
 
     case 'RUNNABLE':
-      // RUNNABLE without blocking reasons = approved and ready
       return isRunnable ? 'APPROVED_READY' : 'BLOCKED';
 
     case 'RUNNING':
@@ -141,59 +98,6 @@ export function mapToGovernanceState(
       // Unknown status treated as blocked for safety
       return 'BLOCKED';
   }
-}
-
-/**
- * Compute readiness level from backend readiness payload.
- * 
- * CRITICAL: This function does NOT use governance state to infer readiness.
- * Readiness is determined ONLY by explicit backend readiness data.
- * 
- * Rules:
- * 1. If payload is null/undefined -> UNKNOWN
- * 2. If blocking_reasons has items -> NOT_READY
- * 3. If kill_switch_enabled is true -> NOT_READY
- * 4. If is_ready is explicitly true AND all required fields are present -> READY
- * 5. Otherwise -> UNKNOWN
- * 
- * @param readiness - Backend readiness payload (may be partial or absent)
- * @returns Readiness level
- */
-export function computeReadinessLevel(
-  readiness: BackendReadinessPayload | null | undefined
-): ReadinessLevel {
-  // No readiness data provided -> UNKNOWN
-  if (!readiness) {
-    return 'UNKNOWN';
-  }
-
-  // Blocking reasons present -> NOT_READY
-  if (readiness.blocking_reasons && readiness.blocking_reasons.length > 0) {
-    return 'NOT_READY';
-  }
-
-  // Kill switch enabled -> NOT_READY
-  if (readiness.kill_switch_enabled === true) {
-    return 'NOT_READY';
-  }
-
-  // Check if backend explicitly says ready
-  if (readiness.is_ready === true) {
-    // Verify required fields are present for a valid READY determination
-    // If any required field is missing, we cannot confirm readiness
-    if (readiness.mailbox_healthy === undefined) {
-      return 'UNKNOWN'; // Cannot confirm ready without mailbox health
-    }
-    return 'READY';
-  }
-
-  // is_ready explicitly false -> NOT_READY
-  if (readiness.is_ready === false) {
-    return 'NOT_READY';
-  }
-
-  // is_ready not provided, no blocking reasons, but we can't confirm readiness
-  return 'UNKNOWN';
 }
 
 /**
@@ -525,7 +429,7 @@ export function getPrimaryAction(
         label: 'Blocked',
         action: 'blocked',
         disabled: true,
-        explanation: 'This campaign is blocked due to unresolved governance or readiness issues.',
+        explanation: 'This campaign is blocked due to unresolved governance issues.',
       };
 
     case 'EXECUTED':

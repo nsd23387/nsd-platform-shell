@@ -127,7 +127,7 @@ export default function ApprovalsPage() {
           }}
         >
           <strong>Note:</strong> Campaign approvals are processed by the governance backend.
-          Review campaign details and readiness status by clicking &quot;Review Campaign&quot;.
+          Review campaign details by clicking &quot;Review Campaign&quot;.
           Approval decisions are recorded in the canonical ODS.
         </div>
       </div>

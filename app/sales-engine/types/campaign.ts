@@ -72,14 +72,6 @@ export interface CampaignUpdatePayload {
   personalization?: CampaignPersonalization;
 }
 
-export type BlockingReason =
-  | 'MISSING_HUMAN_APPROVAL'
-  | 'PERSISTENCE_ERRORS'
-  | 'NO_LEADS_PERSISTED'
-  | 'KILL_SWITCH_ENABLED'
-  | 'SMARTLEAD_NOT_CONFIGURED'
-  | 'INSUFFICIENT_CREDITS';
-
 export type ThroughputBlockCode =
   | 'DAILY_LIMIT_EXCEEDED'
   | 'HOURLY_LIMIT_EXCEEDED'
@@ -148,34 +140,12 @@ export interface ThroughputConfig {
   block_reason?: ThroughputBlockCode;
 }
 
-export interface ReadinessStatus {
-  is_ready: boolean;
-  blocking_reasons: BlockingReason[];
-  last_checked?: string;
-  mailbox_healthy?: boolean;
-  deliverability_score?: number;
-  kill_switch_enabled?: boolean;
-}
-
 export interface CampaignDetail extends Campaign {
-  readiness?: ReadinessStatus;
   icp?: CampaignICP;
   personalization?: CampaignPersonalization;
   submitted_at?: string;
   approved_at?: string;
   approved_by?: string;
-}
-
-export interface DashboardReadiness {
-  total: number;
-  draft: number;
-  pendingReview: number;
-  runnable: number;
-  running: number;
-  completed: number;
-  failed: number;
-  archived: number;
-  blockers: { reason: string; count: number }[];
 }
 
 export interface DashboardThroughput {

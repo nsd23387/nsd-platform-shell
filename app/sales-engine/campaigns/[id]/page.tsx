@@ -31,14 +31,9 @@ import {
 } from '../../lib/api';
 import {
   mapToGovernanceState,
-  computeReadinessLevel,
   type CampaignGovernanceState,
-  type ReadinessLevel,
 } from '../../lib/campaign-state';
-import { resolveReadiness } from '../../lib/readiness-resolver';
-import { ReadinessResolutionPanel } from '../../components/ReadinessResolutionPanel';
 import {
-  ExecutionReadinessPanel,
   LearningSignalsPanel,
   GovernanceActionsPanel,
 } from '../../components/governance';
@@ -49,11 +44,10 @@ import {
   getTestCampaignThroughput,
 } from '../../lib/test-campaign';
 
-type TabType = 'overview' | 'readiness' | 'monitoring' | 'learning';
+type TabType = 'overview' | 'monitoring' | 'learning';
 
 const TAB_CONFIG: { id: TabType; label: string; icon: string }[] = [
   { id: 'overview', label: 'Overview', icon: 'campaigns' },
-  { id: 'readiness', label: 'Readiness', icon: 'shield' },
   { id: 'monitoring', label: 'Observability', icon: 'metrics' },
   { id: 'learning', label: 'Learning Signals', icon: 'chart' },
 ];
@@ -76,13 +70,8 @@ export default function CampaignDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
   // Derive governance state from backend data
-  // NOTE: This is INDEPENDENT of readiness level
   const governanceState: CampaignGovernanceState = campaign
-    ? mapToGovernanceState(
-        campaign.status,
-        campaign.readiness?.blocking_reasons || [],
-        campaign.isRunnable
-      )
+    ? mapToGovernanceState(campaign.status, campaign.isRunnable)
     : 'BLOCKED';
 
   // Check if this is a test campaign
@@ -216,13 +205,6 @@ export default function CampaignDetailPage() {
           />
         )}
 
-        {activeTab === 'readiness' && (
-          <ReadinessTab
-            campaign={campaign}
-            throughput={throughput}
-          />
-        )}
-
         {activeTab === 'monitoring' && (
           <MonitoringTab
             campaign={campaign}
@@ -327,103 +309,6 @@ function OverviewTab({
           runsCount={runsCount}
         />
       </div>
-    </div>
-  );
-}
-
-/**
- * ReadinessTab - Displays execution readiness status
- * 
- * CRITICAL: Readiness is computed from backend readiness payload ONLY.
- * It is NOT derived from governance state. A campaign can be APPROVED_READY
- * but still have readiness UNKNOWN if backend has not validated readiness.
- * 
- * M68-04.1: Now uses ReadinessResolver for comprehensive evaluation.
- */
-function ReadinessTab({
-  campaign,
-  throughput,
-}: {
-  campaign: CampaignDetail;
-  throughput: ThroughputConfig | null;
-}) {
-  // M68-04.1: Use readiness resolver for comprehensive evaluation
-  const resolution = resolveReadiness(campaign.readiness, throughput);
-
-  // Legacy: Also compute readiness level for backward compatibility
-  const readinessLevel: ReadinessLevel = computeReadinessLevel(campaign.readiness);
-
-  // Build readiness data from ACTUAL backend fields only
-  // No hardcoding or inference - if data is missing, show UNKNOWN
-  const readinessData = {
-    // Use actual backend mailbox_healthy field, default to undefined (unknown)
-    mailboxHealthy: campaign.readiness?.mailbox_healthy,
-    mailboxHealthStatus: campaign.readiness?.mailbox_healthy === undefined
-      ? 'Unknown (Not Validated)'
-      : campaign.readiness.mailbox_healthy
-        ? 'Healthy'
-        : 'Unhealthy',
-    
-    // Use actual backend deliverability_score - NO HARDCODING
-    deliverabilityScore: campaign.readiness?.deliverability_score,
-    deliverabilityThreshold: 95,
-    
-    // Throughput from actual backend data
-    currentThroughput: throughput?.current_daily_usage,
-    maxThroughput: throughput?.daily_limit,
-    
-    // Use actual backend kill_switch_enabled field
-    killSwitchEnabled: campaign.readiness?.kill_switch_enabled ?? false,
-    
-    // Use actual last_checked timestamp from backend
-    lastReadinessCheck: campaign.readiness?.last_checked,
-    
-    // Readiness level computed from backend data, not governance state
-    readinessLevel,
-    
-    // Blocking reasons from backend
-    blockingReasons: campaign.readiness?.blocking_reasons?.map(r => r.replace(/_/g, ' ')) || [],
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Readiness Resolution Panel */}
-      <ReadinessResolutionPanel resolution={resolution} />
-
-      {/* Legacy: Keep ExecutionReadinessPanel for additional details */}
-      <ExecutionReadinessPanel data={readinessData} />
-
-      {/* Throughput details */}
-      {throughput && (
-        <SectionCard title="Throughput Configuration" icon="clock" iconColor={NSD_COLORS.info}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-            <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
-              <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Daily Limit</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.text.primary }}>{throughput.daily_limit}</div>
-            </div>
-            <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
-              <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Daily Used</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.info }}>{throughput.current_daily_usage}</div>
-            </div>
-            <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
-              <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Hourly Limit</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.text.primary }}>{throughput.hourly_limit}</div>
-            </div>
-            <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
-              <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Mailbox Limit</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.text.primary }}>{throughput.mailbox_limit}</div>
-            </div>
-          </div>
-
-          {throughput.is_blocked && (
-            <div style={{ marginTop: '16px', padding: '14px 16px', backgroundColor: '#FEE2E2', borderRadius: NSD_RADIUS.md }}>
-              <p style={{ margin: 0, fontSize: '13px', color: '#991B1B' }}>
-                <strong>Throughput Blocked:</strong> {throughput.block_reason?.replace(/_/g, ' ') || 'Unknown reason'}
-              </p>
-            </div>
-          )}
-        </SectionCard>
-      )}
     </div>
   );
 }

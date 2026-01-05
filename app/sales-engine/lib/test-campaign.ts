@@ -18,7 +18,6 @@
 
 import type { Campaign, CampaignDetail, ThroughputConfig } from '../types/campaign';
 import { deploymentMode } from '../../../config/appConfig';
-import { getMockReadinessStatus, getMockThroughputConfig } from './readiness-resolver';
 
 /**
  * Check if test campaigns should be shown.
@@ -110,8 +109,6 @@ export function getTestCampaigns(): Campaign[] {
 /**
  * Get a synthetic test campaign detail by ID.
  * Returns null if not a test campaign or not in dev/preview.
- * 
- * M68-04.1: Includes mock readiness data for resolver testing.
  */
 export function getTestCampaignDetail(campaignId: string): CampaignDetail | null {
   if (!shouldShowTestCampaigns() || !isTestCampaign(campaignId)) {
@@ -125,20 +122,9 @@ export function getTestCampaignDetail(campaignId: string): CampaignDetail | null
     return null;
   }
 
-  // M68-04.1: Determine readiness scenario based on campaign type
-  let readinessScenario: 'ready' | 'not_ready' | 'partial' = 'partial';
-  if (campaignId.includes('runnable')) {
-    readinessScenario = 'ready';
-  } else if (campaignId.includes('approve-ready')) {
-    readinessScenario = 'partial'; // Pending approval, partial readiness
-  } else if (campaignId.includes('draft-submit')) {
-    readinessScenario = 'not_ready'; // Draft, not ready
-  }
-
   // Extend with CampaignDetail fields
   return {
     ...campaign,
-    readiness: getMockReadinessStatus(readinessScenario),
     icp: {
       keywords: ['test', 'validation', 'm68'],
       industries: ['Technology'],
@@ -154,24 +140,22 @@ export function getTestCampaignDetail(campaignId: string): CampaignDetail | null
 
 /**
  * Get mock throughput config for a test campaign.
- * M68-04.1: Used for readiness resolver testing.
  */
 export function getTestCampaignThroughput(campaignId: string): ThroughputConfig | null {
   if (!shouldShowTestCampaigns() || !isTestCampaign(campaignId)) {
     return null;
   }
 
-  // M68-04.1: Determine throughput scenario based on campaign type
-  let throughputScenario: 'available' | 'limited' | 'blocked' = 'available';
-  if (campaignId.includes('runnable')) {
-    throughputScenario = 'available';
-  } else if (campaignId.includes('approve-ready')) {
-    throughputScenario = 'limited';
-  } else if (campaignId.includes('draft-submit')) {
-    throughputScenario = 'blocked';
-  }
-
-  return getMockThroughputConfig(throughputScenario);
+  // Return a mock throughput config
+  return {
+    campaign_id: campaignId,
+    daily_limit: 100,
+    hourly_limit: 20,
+    mailbox_limit: 50,
+    current_daily_usage: 25,
+    current_hourly_usage: 5,
+    is_blocked: false,
+  };
 }
 
 /**

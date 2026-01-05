@@ -14,10 +14,6 @@ const mockCampaigns: Record<string, any> = {
     canSubmit: true,
     canApprove: false,
     isRunnable: false,
-    readiness: {
-      is_ready: false,
-      blocking_reasons: ['MISSING_HUMAN_APPROVAL'],
-    },
     icp: {
       industries: ['Technology', 'Financial Services'],
       roles: ['CTO', 'VP Engineering'],
@@ -34,10 +30,6 @@ const mockCampaigns: Record<string, any> = {
     canSubmit: false,
     canApprove: true,
     isRunnable: false,
-    readiness: {
-      is_ready: false,
-      blocking_reasons: ['MISSING_HUMAN_APPROVAL'],
-    },
     icp: {
       industries: ['Retail', 'E-commerce'],
       roles: ['Marketing Director', 'CMO'],
@@ -54,10 +46,6 @@ const mockCampaigns: Record<string, any> = {
     canSubmit: false,
     canApprove: false,
     isRunnable: true,
-    readiness: {
-      is_ready: true,
-      blocking_reasons: [],
-    },
     icp: {
       industries: ['SaaS', 'Enterprise Software'],
       roles: ['VP Sales', 'Sales Director'],

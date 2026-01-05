@@ -23,13 +23,11 @@ import type {
   CampaignVariant,
   ThroughputConfig,
   CampaignStatus,
-  DashboardReadiness,
   DashboardThroughput,
   SystemNotice,
   RecentRunOutcome,
   NeedsAttentionItem,
   UserBootstrap,
-  ReadinessStatus,
 } from '../types/campaign';
 import {
   assertReadOnly,
@@ -74,18 +72,6 @@ function buildHeaders(): HeadersInit {
 // When NEXT_PUBLIC_API_MODE=disabled, these values are returned instead of
 // making network calls. This enables Vercel preview deployments.
 // =============================================================================
-
-const MOCK_DASHBOARD_READINESS: DashboardReadiness = {
-  total: 0,
-  draft: 0,
-  pendingReview: 0,
-  runnable: 0,
-  running: 0,
-  completed: 0,
-  failed: 0,
-  archived: 0,
-  blockers: [],
-};
 
 const MOCK_DASHBOARD_THROUGHPUT: DashboardThroughput = {
   usedToday: 0,
@@ -269,24 +255,6 @@ export async function getCampaignVariants(id: string): Promise<CampaignVariant[]
  */
 export async function getCampaignThroughput(id: string): Promise<ThroughputConfig> {
   return apiRequest<ThroughputConfig>(`/${id}/throughput`);
-}
-
-/**
- * Get campaign readiness status (read-only).
- */
-export async function getCampaignReadiness(id: string): Promise<ReadinessStatus> {
-  return apiRequest<ReadinessStatus>(`/${id}/readiness`);
-}
-
-/**
- * Get dashboard readiness summary (read-only).
- */
-export async function getDashboardReadiness(): Promise<DashboardReadiness> {
-  // M67.9-01: Return mock data when API is disabled
-  if (isApiDisabled) {
-    return MOCK_DASHBOARD_READINESS;
-  }
-  return apiRequest<DashboardReadiness>('/readiness');
 }
 
 /**
