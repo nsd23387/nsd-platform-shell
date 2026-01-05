@@ -222,9 +222,38 @@ Both files contain governance lock comments that must not be removed.
 POST /api/campaign-create
 ```
 
+### Database Persistence
+
+**This is a control-plane write, not execution.**
+
+The API route:
+1. Runs in Node.js runtime (not Edge)
+2. Uses `SUPABASE_SERVICE_ROLE_KEY` for authenticated writes
+3. Inserts exactly one row into `core.campaigns`
+4. Sets `status = 'draft'` (always)
+
+**Required Environment Variables:**
+- `NEXT_PUBLIC_SUPABASE_URL` — Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` — Service role key (server-side only)
+
+**Database Columns Written:**
+- `id` — UUID (auto-generated)
+- `name` — Campaign name
+- `status` — Always 'draft'
+- `keywords` — JSONB array
+- `target_locations` — JSONB array (from geographies)
+- `description`, `industries`, `job_titles`, `seniority_levels` — Optional
+- `target_leads`, `target_emails`, `target_reply_rate` — Benchmarks only
+
+**Governance Constraints:**
+- ❌ No writes to `activity.events`
+- ❌ No writes to leads, orgs, contacts
+- ❌ No execution, approval, sourcing, or readiness logic
+- ❌ No activity events emitted
+
 ### Allowed Behavior
 - Creates campaign in `governance_state = DRAFT`
-- Persists immutable ICP snapshot
+- Persists to `core.campaigns` in Supabase
 - No execution or sourcing occurs
 
 ### Success Response Shape
@@ -313,6 +342,12 @@ The following are strictly enforced:
 ---
 
 ## Recent Changes
+- January 5, 2026: M67-14 CampaignCreate Persistence Fix
+  - Added Supabase server client with service role key
+  - API route now writes to core.campaigns with status = 'draft'
+  - Campaigns list reads from Supabase
+  - Added Node.js runtime directive to API routes
+  - No mock responses when Supabase is configured
 - January 5, 2026: M67-14 CampaignCreate UI Submission (Field Governance)
   - REMOVED forbidden fields: technologies, sourceType, maxOrganizations, minimumSignals, targetOrganizations, targetContacts, targetReplies
   - REQUIRED: name, keywords[] (non-empty), geographies[] (non-empty)
