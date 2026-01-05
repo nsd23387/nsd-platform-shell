@@ -167,6 +167,28 @@ Border:     #E5E7EB
 
 ---
 
+## UX Governance Constraints
+
+### Campaign Creation Stepper (M67-14)
+
+**MANDATORY**: Campaign creation MUST use vertical left-hand navigation.
+
+**FORBIDDEN**: Horizontal steppers are explicitly forbidden in CampaignCreate.
+
+This constraint exists because:
+1. Users must always see completed and remaining steps
+2. Steps must be visible without scrolling
+3. Navigation must be scroll-independent from form content
+4. The vertical layout provides better UX for multi-step forms
+
+The vertical navigation is implemented in:
+- `app/sales-engine/components/wizard/WizardNav.tsx` (component)
+- `app/sales-engine/campaigns/new/page.tsx` (layout integration)
+
+Both files contain governance lock comments that must not be removed.
+
+---
+
 ## M67-14 CampaignCreate API
 
 ### Endpoint
@@ -265,6 +287,12 @@ The following are strictly enforced:
 ---
 
 ## Recent Changes
+- January 5, 2026: M67-14 Vertical Stepper Regression Fix
+  - Replaced horizontal stepper with vertical left-hand navigation
+  - Updated WizardNav component to render vertically with sticky positioning
+  - Changed page layout to two-column (nav left, content right)
+  - Added governance lock comments to prevent future regression
+  - Updated UX governance documentation
 - December 31, 2025: M67.9-01 Vercel Hosting Setup
   - Added centralized config module (config/appConfig.ts)
   - Implemented API short-circuit when NEXT_PUBLIC_API_MODE=disabled

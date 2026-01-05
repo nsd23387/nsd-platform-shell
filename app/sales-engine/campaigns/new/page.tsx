@@ -502,6 +502,16 @@ export default function NewCampaignPage() {
     );
   }
 
+  /**
+   * GOVERNANCE LOCK (M67-14)
+   * Campaign creation MUST use vertical left-hand navigation.
+   * Horizontal steppers are explicitly forbidden due to UX and governance requirements.
+   * Do not reintroduce a horizontal stepper under any condition.
+   * 
+   * Layout: Two-column with persistent left-hand vertical navigation
+   * - Left column: WizardNav (vertical step list, always visible)
+   * - Right column: Form content area
+   */
   return (
     <div
       style={{
@@ -510,7 +520,8 @@ export default function NewCampaignPage() {
         padding: '32px',
       }}
     >
-      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        {/* Header Section */}
         <div style={{ marginBottom: '24px' }}>
           <Link
             href="/sales-engine"
@@ -549,19 +560,31 @@ export default function NewCampaignPage() {
           Configure a new campaign. It will be created in Draft state.
         </p>
 
-        <WizardNav
-          steps={stepsWithCompletion}
-          currentStep={currentStep}
-          onStepClick={(step) => {
-            if (step > currentStep) {
-              if (!validateCurrentStep()) {
-                return;
-              }
-            }
-            setErrors({});
-            setCurrentStep(step);
+        {/* Two-column layout: Vertical Nav (left) + Content (right) */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '32px',
+            alignItems: 'flex-start',
           }}
-        />
+        >
+          {/* Left Column: Vertical Navigation (GOVERNANCE LOCK - must remain vertical) */}
+          <WizardNav
+            steps={stepsWithCompletion}
+            currentStep={currentStep}
+            onStepClick={(step) => {
+              if (step > currentStep) {
+                if (!validateCurrentStep()) {
+                  return;
+                }
+              }
+              setErrors({});
+              setCurrentStep(step);
+            }}
+          />
+
+          {/* Right Column: Form Content */}
+          <div style={{ flex: 1, minWidth: 0 }}>
 
         {(submitResult?.error || Object.keys(errors).length > 0) && (
           <div
@@ -930,6 +953,10 @@ export default function NewCampaignPage() {
             </button>
           )}
         </div>
+          </div>
+          {/* End Right Column */}
+        </div>
+        {/* End Two-column layout */}
       </div>
     </div>
   );
