@@ -187,6 +187,32 @@ The vertical navigation is implemented in:
 
 Both files contain governance lock comments that must not be removed.
 
+### Campaign Creation Fields (M67-14)
+
+**REQUIRED FIELDS** (validation will fail if missing or empty):
+- `name` — Campaign name
+- `keywords[]` — Non-empty array of keywords
+- `geographies[]` — Non-empty array of geographies
+
+**FORBIDDEN FIELDS** (must NOT appear anywhere in CampaignCreate):
+- ❌ `max_organizations` / `maxOrganizations`
+- ❌ `target_organizations` / `targetOrganizations`
+- ❌ `source_type` / `sourceType`
+- ❌ `technologies`
+- ❌ `minimum_signals` / `minimumSignals`
+- ❌ `target_contacts` / `targetContacts`
+- ❌ `target_replies` / `targetReplies`
+
+**ALLOWED TARGET FIELDS** (benchmarks only — do not affect execution):
+- `target_leads`
+- `target_emails`
+- `target_reply_rate`
+
+**ORGANIZATION SOURCING**:
+- Read-only display only
+- Derived automatically from ICP
+- No inputs, toggles, selectors, counts, or limits
+
 ---
 
 ## M67-14 CampaignCreate API
@@ -287,6 +313,13 @@ The following are strictly enforced:
 ---
 
 ## Recent Changes
+- January 5, 2026: M67-14 CampaignCreate UI Submission (Field Governance)
+  - REMOVED forbidden fields: technologies, sourceType, maxOrganizations, minimumSignals, targetOrganizations, targetContacts, targetReplies
+  - REQUIRED: name, keywords[] (non-empty), geographies[] (non-empty)
+  - ALLOWED targets: target_leads, target_emails, target_reply_rate (benchmarks only)
+  - Organization Sourcing changed to read-only display ("Derived automatically from ICP")
+  - Lead Qualification step removed entirely
+  - Updated type definitions and validation
 - January 5, 2026: M67-14 Vertical Stepper Regression Fix
   - Replaced horizontal stepper with vertical left-hand navigation
   - Updated WizardNav component to render vertically with sticky positioning

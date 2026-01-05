@@ -8,6 +8,16 @@
  * 
  * This is a proxy to the M60 Campaign Management API.
  * In development, returns mock response.
+ * 
+ * M67-14 REQUIRED FIELDS:
+ * - name
+ * - keywords[] (non-empty)
+ * - geographies[] (non-empty)
+ * 
+ * M67-14 REMOVED (forbidden):
+ * - organization_sourcing (derived from ICP)
+ * - lead_qualification (minimum_signals forbidden)
+ * - technologies, max_organizations, source_type
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -20,9 +30,22 @@ import type {
 
 const M60_API_URL = process.env.SALES_ENGINE_API_BASE_URL || '';
 
+/**
+ * M67-14 Payload Validation
+ * 
+ * REQUIRED:
+ * - campaign_identity.name (non-empty string)
+ * - icp.keywords (non-empty array)
+ * - icp.geographies (non-empty array)
+ * 
+ * REMOVED validation (per governance):
+ * - organization_sourcing (derived from ICP)
+ * - lead_qualification (minimum_signals forbidden)
+ */
 function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
   const errors: ValidationError[] = [];
 
+  // REQUIRED: Campaign name
   if (!payload.campaign_identity?.name?.trim()) {
     errors.push({
       field: 'campaign_identity.name',
@@ -31,6 +54,7 @@ function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
     });
   }
 
+  // REQUIRED: ICP with keywords and geographies
   if (!payload.icp) {
     errors.push({
       field: 'icp',
@@ -38,54 +62,26 @@ function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
       code: 'REQUIRED_FIELD',
     });
   } else {
-    if (!payload.icp.industries || payload.icp.industries.length === 0) {
+    // REQUIRED: keywords[] (non-empty)
+    if (!payload.icp.keywords || payload.icp.keywords.length === 0) {
       errors.push({
-        field: 'icp.industries',
-        message: 'At least one industry is required',
+        field: 'icp.keywords',
+        message: 'At least one keyword is required',
+        code: 'REQUIRED_FIELD',
+      });
+    }
+    // REQUIRED: geographies[] (non-empty)
+    if (!payload.icp.geographies || payload.icp.geographies.length === 0) {
+      errors.push({
+        field: 'icp.geographies',
+        message: 'At least one geography is required',
         code: 'REQUIRED_FIELD',
       });
     }
   }
 
-  if (!payload.organization_sourcing) {
-    errors.push({
-      field: 'organization_sourcing',
-      message: 'Organization sourcing configuration is required',
-      code: 'REQUIRED_FIELD',
-    });
-  } else {
-    if (!payload.organization_sourcing.source_type) {
-      errors.push({
-        field: 'organization_sourcing.source_type',
-        message: 'Source type is required',
-        code: 'REQUIRED_FIELD',
-      });
-    }
-  }
-
-  if (!payload.contact_targeting) {
-    errors.push({
-      field: 'contact_targeting',
-      message: 'Contact targeting configuration is required',
-      code: 'REQUIRED_FIELD',
-    });
-  }
-
-  if (!payload.lead_qualification) {
-    errors.push({
-      field: 'lead_qualification',
-      message: 'Lead qualification configuration is required',
-      code: 'REQUIRED_FIELD',
-    });
-  }
-
-  if (!payload.outreach_context) {
-    errors.push({
-      field: 'outreach_context',
-      message: 'Outreach context is required',
-      code: 'REQUIRED_FIELD',
-    });
-  }
+  // contact_targeting is optional but included
+  // outreach_context is optional but included
 
   return errors;
 }

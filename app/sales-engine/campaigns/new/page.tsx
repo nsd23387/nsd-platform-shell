@@ -26,16 +26,37 @@ import type {
 } from '../../types/campaign-create';
 import { isApiDisabled, featureFlags } from '../../../../config/appConfig';
 
+/**
+ * M67-14 CampaignCreate Wizard Steps
+ * 
+ * GOVERNANCE: Lead Qualification step removed (minimumSignals is forbidden)
+ * Organization Sourcing is read-only (derived from ICP)
+ */
 const WIZARD_STEPS = [
   { id: 'identity', label: 'Campaign Identity' },
   { id: 'icp', label: 'ICP Definition' },
   { id: 'sourcing', label: 'Organization Sourcing' },
   { id: 'targeting', label: 'Contact Targeting' },
-  { id: 'qualification', label: 'Lead Qualification' },
   { id: 'outreach', label: 'Outreach Context' },
   { id: 'targets', label: 'Targets (Optional)' },
 ];
 
+/**
+ * M67-14 CampaignCreate FormData
+ * 
+ * REMOVED FIELDS (per governance):
+ * - technologies (forbidden)
+ * - sourceType (forbidden - derived from ICP)
+ * - maxOrganizations (forbidden)
+ * - minimumSignals (forbidden)
+ * - targetOrganizations (forbidden)
+ * - targetContacts (forbidden)
+ * 
+ * REQUIRED FIELDS:
+ * - name
+ * - keywords[] (non-empty)
+ * - geographies[] (non-empty)
+ */
 type FormData = {
   name: string;
   description: string;
@@ -43,26 +64,21 @@ type FormData = {
   geographies: string[];
   jobTitles: string[];
   seniorityLevels: string[];
-  technologies: string[];
   keywords: string[];
   companySizeMin: number;
   companySizeMax: number;
-  sourceType: 'manual' | 'list' | 'criteria';
-  maxOrganizations: number;
   roles: string[];
   seniority: string[];
   maxContactsPerOrg: number;
   requireVerifiedEmail: boolean;
-  minimumSignals: number;
   tone: string;
   valuePropositions: string[];
   painPoints: string[];
   callToAction: string;
-  targetOrganizations: number | null;
-  targetContacts: number | null;
+  // Targets (benchmarks only - do not affect execution)
   targetLeads: number | null;
   targetEmails: number | null;
-  targetReplies: number | null;
+  targetReplyRate: number | null;
 };
 
 const initialFormData: FormData = {
@@ -72,26 +88,21 @@ const initialFormData: FormData = {
   geographies: [],
   jobTitles: [],
   seniorityLevels: [],
-  technologies: [],
   keywords: [],
   companySizeMin: 0,
   companySizeMax: 10000,
-  sourceType: 'criteria',
-  maxOrganizations: 100,
   roles: [],
   seniority: [],
   maxContactsPerOrg: 3,
   requireVerifiedEmail: true,
-  minimumSignals: 1,
   tone: 'professional',
   valuePropositions: [],
   painPoints: [],
   callToAction: '',
-  targetOrganizations: null,
-  targetContacts: null,
+  // Targets (benchmarks only)
   targetLeads: null,
   targetEmails: null,
-  targetReplies: null,
+  targetReplyRate: null,
 };
 
 export default function NewCampaignPage() {
@@ -200,6 +211,23 @@ export default function NewCampaignPage() {
     }
   };
 
+  /**
+   * M67-14 Payload Builder
+   * 
+   * REMOVED from payload (per governance):
+   * - technologies
+   * - organization_sourcing.source_type (derived from ICP)
+   * - organization_sourcing.max_organizations
+   * - lead_qualification.minimum_signals
+   * - campaign_targets.target_organizations
+   * - campaign_targets.target_contacts
+   * - campaign_targets.target_replies
+   * 
+   * REQUIRED:
+   * - name, keywords[], geographies[]
+   * 
+   * Targets are benchmarks only and do not affect campaign execution.
+   */
   const buildPayload = (): CampaignCreatePayload => ({
     campaign_identity: {
       name: formData.name,
@@ -214,16 +242,7 @@ export default function NewCampaignPage() {
       geographies: formData.geographies,
       job_titles: formData.jobTitles,
       seniority_levels: formData.seniorityLevels,
-      technologies: formData.technologies,
       keywords: formData.keywords,
-    },
-    organization_sourcing: {
-      source_type: formData.sourceType,
-      max_organizations: formData.maxOrganizations,
-      criteria: formData.sourceType === 'criteria' ? {
-        industries: formData.industries,
-        geographies: formData.geographies,
-      } : undefined,
     },
     contact_targeting: {
       roles: formData.roles,
@@ -234,35 +253,39 @@ export default function NewCampaignPage() {
         exclude_generic: true,
       },
     },
-    lead_qualification: {
-      minimum_signals: formData.minimumSignals,
-    },
     outreach_context: {
       tone: formData.tone,
       value_propositions: formData.valuePropositions,
       pain_points: formData.painPoints,
       call_to_action: formData.callToAction,
     },
+    // Targets are benchmarks only - do not affect execution
     campaign_targets: {
-      target_organizations: formData.targetOrganizations,
-      target_contacts: formData.targetContacts,
       target_leads: formData.targetLeads,
       target_emails: formData.targetEmails,
-      target_replies: formData.targetReplies,
+      target_reply_rate: formData.targetReplyRate,
     },
   });
 
+  /**
+   * M67-14 Validation
+   * 
+   * REQUIRED fields:
+   * - name (non-empty)
+   * - keywords[] (non-empty array)
+   * - geographies[] (non-empty array)
+   */
   const validateAllSteps = (): boolean => {
     const allErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) {
       allErrors['campaign_identity.name'] = 'Campaign name is required';
     }
-    if (formData.industries.length === 0) {
-      allErrors['icp.industries'] = 'At least one industry is required';
+    if (formData.keywords.length === 0) {
+      allErrors['icp.keywords'] = 'At least one keyword is required';
     }
-    if (!formData.sourceType) {
-      allErrors['organization_sourcing.source_type'] = 'Source type is required';
+    if (formData.geographies.length === 0) {
+      allErrors['icp.geographies'] = 'At least one geography is required';
     }
 
     if (Object.keys(allErrors).length > 0) {
@@ -321,6 +344,13 @@ export default function NewCampaignPage() {
     }
   };
 
+  /**
+   * M67-14 Step Validation
+   * 
+   * Step 0 (Identity): name required
+   * Step 1 (ICP): keywords[] and geographies[] required
+   * Step 2 (Sourcing): read-only, no validation
+   */
   const validateCurrentStep = (): boolean => {
     const stepErrors: Record<string, string> = {};
 
@@ -331,15 +361,14 @@ export default function NewCampaignPage() {
         }
         break;
       case 1:
-        if (formData.industries.length === 0) {
-          stepErrors['icp.industries'] = 'At least one industry is required';
+        if (formData.keywords.length === 0) {
+          stepErrors['icp.keywords'] = 'At least one keyword is required';
+        }
+        if (formData.geographies.length === 0) {
+          stepErrors['icp.geographies'] = 'At least one geography is required';
         }
         break;
-      case 2:
-        if (!formData.sourceType) {
-          stepErrors['organization_sourcing.source_type'] = 'Source type is required';
-        }
-        break;
+      // Step 2 (Organization Sourcing) is read-only - no validation needed
       default:
         break;
     }
@@ -647,21 +676,33 @@ export default function NewCampaignPage() {
           stepNumber={2}
           totalSteps={WIZARD_STEPS.length}
         >
+          {/* REQUIRED: Keywords */}
           <TagInput
-            label="Industries"
-            name="industries"
-            values={formData.industries}
-            onChange={(v) => updateField('industries', v)}
+            label="Keywords"
+            name="keywords"
+            values={formData.keywords}
+            onChange={(v) => updateField('keywords', v)}
             placeholder="Type and press Enter (required)"
-            helpText="Target industries for this campaign"
-            error={errors['icp.industries']}
+            helpText="Keywords are required for campaign targeting"
+            error={errors['icp.keywords']}
           />
+          {/* REQUIRED: Geographies */}
           <TagInput
             label="Geographies"
             name="geographies"
             values={formData.geographies}
             onChange={(v) => updateField('geographies', v)}
-            placeholder="e.g., United States, Europe"
+            placeholder="e.g., United States, Europe (required)"
+            helpText="At least one geography is required"
+            error={errors['icp.geographies']}
+          />
+          <TagInput
+            label="Industries"
+            name="industries"
+            values={formData.industries}
+            onChange={(v) => updateField('industries', v)}
+            placeholder="e.g., Technology, Healthcare"
+            helpText="Target industries for this campaign"
           />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <FormField
@@ -686,22 +727,13 @@ export default function NewCampaignPage() {
             onChange={(v) => updateField('jobTitles', v)}
             placeholder="e.g., VP of Sales, CRO"
           />
-          <TagInput
-            label="Technologies"
-            name="technologies"
-            values={formData.technologies}
-            onChange={(v) => updateField('technologies', v)}
-            placeholder="e.g., Salesforce, HubSpot"
-          />
-          <TagInput
-            label="Keywords"
-            name="keywords"
-            values={formData.keywords}
-            onChange={(v) => updateField('keywords', v)}
-            placeholder="Relevant keywords"
-          />
         </WizardStep>
 
+        {/* 
+          M67-14 GOVERNANCE: Organization Sourcing is READ-ONLY
+          - No inputs, toggles, selectors, counts, or limits
+          - Derived automatically from ICP
+        */}
         <WizardStep
           title="Organization Sourcing"
           description="How organizations will be sourced for this campaign"
@@ -709,28 +741,65 @@ export default function NewCampaignPage() {
           stepNumber={3}
           totalSteps={WIZARD_STEPS.length}
         >
-          <FormField
-            label="Source Type"
-            name="sourceType"
-            type="select"
-            value={formData.sourceType}
-            onChange={(v) => updateField('sourceType', v as 'manual' | 'list' | 'criteria')}
-            options={[
-              { value: 'criteria', label: 'By Criteria (ICP-based)' },
-              { value: 'list', label: 'From List' },
-              { value: 'manual', label: 'Manual Selection' },
-            ]}
-            required
-            error={errors['organization_sourcing.source_type']}
-          />
-          <FormField
-            label="Max Organizations"
-            name="maxOrganizations"
-            type="number"
-            value={formData.maxOrganizations}
-            onChange={(v) => updateField('maxOrganizations', Number(v))}
-            helpText="Maximum number of organizations to source"
-          />
+          <div
+            style={{
+              backgroundColor: '#F3F4F6',
+              borderRadius: NSD_RADIUS.md,
+              padding: '24px',
+              border: `1px solid ${NSD_COLORS.border.light}`,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '16px',
+              }}
+            >
+              <Icon name="info" size={20} color={NSD_COLORS.text.secondary} />
+              <span
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: NSD_COLORS.text.primary,
+                }}
+              >
+                Derived automatically from ICP
+              </span>
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '13px',
+                color: NSD_COLORS.text.secondary,
+                lineHeight: 1.6,
+              }}
+            >
+              Organization sourcing is determined by your ICP definition. 
+              Organizations matching your keywords, geographies, and other criteria 
+              will be automatically identified during campaign execution.
+            </p>
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '12px',
+                backgroundColor: NSD_COLORS.background,
+                borderRadius: NSD_RADIUS.sm,
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '12px',
+                  color: NSD_COLORS.text.muted,
+                  fontStyle: 'italic',
+                }}
+              >
+                No configuration required. This step is for your awareness only.
+              </p>
+            </div>
+          </div>
         </WizardStep>
 
         <WizardStep
@@ -763,28 +832,13 @@ export default function NewCampaignPage() {
           />
         </WizardStep>
 
-        <WizardStep
-          title="Lead Qualification"
-          description="Criteria for qualifying leads"
-          isActive={currentStep === 4}
-          stepNumber={5}
-          totalSteps={WIZARD_STEPS.length}
-        >
-          <FormField
-            label="Minimum Signals Required"
-            name="minimumSignals"
-            type="number"
-            value={formData.minimumSignals}
-            onChange={(v) => updateField('minimumSignals', Number(v))}
-            helpText="Number of intent signals required for qualification"
-          />
-        </WizardStep>
+        {/* M67-14: Lead Qualification step REMOVED - minimumSignals is forbidden */}
 
         <WizardStep
           title="Outreach Context"
           description="Messaging and positioning for outreach"
-          isActive={currentStep === 5}
-          stepNumber={6}
+          isActive={currentStep === 4}
+          stepNumber={5}
           totalSteps={WIZARD_STEPS.length}
         >
           <FormField
@@ -823,11 +877,18 @@ export default function NewCampaignPage() {
           />
         </WizardStep>
 
+        {/* 
+          M67-14 GOVERNANCE: Targets are BENCHMARKS ONLY
+          - Do not gate execution, sourcing, or approval
+          - Do not affect lifecycle
+          - Only target_leads, target_emails, target_reply_rate allowed
+          - target_organizations, target_contacts REMOVED
+        */}
         <WizardStep
           title="Campaign Targets (Optional)"
           description="Benchmarks only — do not affect campaign execution"
-          isActive={currentStep === 6}
-          stepNumber={7}
+          isActive={currentStep === 5}
+          stepNumber={6}
           totalSteps={WIZARD_STEPS.length}
         >
           <div
@@ -850,31 +911,18 @@ export default function NewCampaignPage() {
                 lineHeight: 1.5,
               }}
             >
-              Targets are benchmarks only. They do not enforce minimums, caps, or affect campaign execution in any way.
+              Targets are benchmarks only and do not affect campaign execution.
             </p>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <FormField
-              label="Target Organizations"
-              name="targetOrganizations"
-              type="number"
-              value={formData.targetOrganizations ?? ''}
-              onChange={(v) => updateField('targetOrganizations', v ? Number(v) : null)}
-            />
-            <FormField
-              label="Target Contacts"
-              name="targetContacts"
-              type="number"
-              value={formData.targetContacts ?? ''}
-              onChange={(v) => updateField('targetContacts', v ? Number(v) : null)}
-            />
             <FormField
               label="Target Leads"
               name="targetLeads"
               type="number"
               value={formData.targetLeads ?? ''}
               onChange={(v) => updateField('targetLeads', v ? Number(v) : null)}
+              helpText="Benchmark only"
             />
             <FormField
               label="Target Emails"
@@ -882,13 +930,15 @@ export default function NewCampaignPage() {
               type="number"
               value={formData.targetEmails ?? ''}
               onChange={(v) => updateField('targetEmails', v ? Number(v) : null)}
+              helpText="Benchmark only"
             />
             <FormField
-              label="Target Replies"
-              name="targetReplies"
+              label="Target Reply Rate (%)"
+              name="targetReplyRate"
               type="number"
-              value={formData.targetReplies ?? ''}
-              onChange={(v) => updateField('targetReplies', v ? Number(v) : null)}
+              value={formData.targetReplyRate ?? ''}
+              onChange={(v) => updateField('targetReplyRate', v ? Number(v) : null)}
+              helpText="Benchmark only (e.g., 5 for 5%)"
             />
           </div>
         </WizardStep>
