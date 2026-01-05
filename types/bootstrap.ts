@@ -55,6 +55,9 @@ export interface BootstrapResponse {
   permissions: string[];
   environment: BootstrapEnvironment;
   feature_visibility: Record<string, boolean>;
+  // M68-03: Optional additional keys that some UI components may access
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 /**

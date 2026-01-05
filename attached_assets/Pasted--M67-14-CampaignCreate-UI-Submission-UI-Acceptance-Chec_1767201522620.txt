@@ -1,0 +1,197 @@
+✅ M67-14 — CampaignCreate UI Submission
+UI Acceptance Checklist (Authoritative)
+1. Submission Flow
+✅ Campaign Submission
+
+ UI submits CampaignCreate payload only to
+POST /campaign-create
+
+ Submission includes all required sections:
+
+campaign_identity
+
+icp
+
+organization_sourcing
+
+contact_targeting
+
+lead_qualification
+
+outreach_context
+
+readiness_requirements
+
+campaign_targets (optional)
+
+ Payload matches canonical v1 contract exactly
+
+ No client-side mutation or reshaping of payload fields
+
+ No derived fields added by UI
+
+2. Success Response Handling
+✅ Response Consumption
+
+ UI consumes only fields returned by API response
+
+ UI displays:
+
+campaign.id
+
+governance_state (read-only)
+
+source_eligible (read-only)
+
+ UI optionally displays:
+
+icp_snapshot.id (confirmation/debug only)
+
+ UI does NOT:
+
+infer readiness
+
+infer progress
+
+infer execution state
+
+auto-navigate to execution views
+
+✅ Semantic Enforcement
+
+ governance_state = DRAFT is displayed as inert
+
+ source_eligible = false is clearly shown as not eligible
+
+ UI text confirms:
+
+“Campaign created in Draft state. No sourcing or execution has started.”
+
+3. Validation Error Handling
+✅ Error Rendering
+
+ UI renders all validation_errors returned by backend
+
+ Errors are bound to form fields using field
+
+ Multiple errors render simultaneously
+
+ Error messages displayed verbatim
+
+ UI does NOT:
+
+rewrite error messages
+
+collapse errors into generic alerts
+
+hide errors behind a single banner
+
+✅ UX Integrity
+
+ No client-side validation overrides backend rules
+
+ Backend remains sole authority for validation semantics
+
+4. Campaign Targets (Non-Gating)
+✅ Targets Handling
+
+ Targets are optional in UI
+
+ UI allows:
+
+null targets
+
+zero values
+
+high values
+
+ UI does NOT:
+
+require targets
+
+enforce minimums
+
+enforce caps
+
+block submission due to targets
+
+✅ Semantic Clarity
+
+ UI labels targets as:
+
+“Benchmarks only — do not affect campaign execution”
+
+ No progress indicators tied to targets
+
+5. Prohibited Behavior (Hard Fail)
+❌ The UI MUST NOT:
+
+ Call execution APIs
+
+ Call sourcing APIs
+
+ Poll campaign status
+
+ Consume analytics or learning endpoints
+
+ Display “running”, “active”, or “in progress”
+
+ Show performance, attainment, or success indicators
+
+ Trigger events or follow-on workflows
+
+Any item above = automatic rejection
+
+6. Data Flow & Governance
+✅ Data Authority
+
+ Backend is sole source of truth
+
+ UI performs no eligibility computation
+
+ UI performs no inference or classification
+
+ UI performs no retries beyond network failure
+
+✅ Observational Only
+
+ UI does not observe:
+
+sourcing results
+
+leads
+
+replies
+
+metrics
+
+learning insights
+
+7. UX Copy & Labeling
+✅ Copy Review
+
+ No language implying execution or success
+
+ No “Next steps” implying automation
+
+ No “Start campaign” language
+
+ Clear confirmation message after creation
+
+8. Final Acceptance Gate
+✅ Completion Criteria
+
+ Submission succeeds with valid payload
+
+ Validation errors handled correctly
+
+ UI remains inert post-creation
+
+ All governance constraints upheld
+
+ No future milestones pre-wired
+
+🟢 M67-14 ACCEPTANCE DECISION
+
+PASS only if ALL checklist items are satisfied.
+Any deviation requires remediation before merge.

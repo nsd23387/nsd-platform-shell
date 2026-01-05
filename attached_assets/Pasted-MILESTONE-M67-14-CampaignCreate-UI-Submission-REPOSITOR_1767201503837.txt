@@ -1,0 +1,127 @@
+MILESTONE: M67-14 — CampaignCreate UI Submission
+REPOSITORY: nsd-sales-engine (frontend / UI layer only)
+
+OBJECTIVE
+Implement the UI submission flow for CampaignCreate v1.
+This UI is a WRITE + OBSERVE surface only.
+No execution, sourcing, learning, or analytics behavior is allowed.
+
+────────────────────────────────────────
+ALLOWED API CONSUMPTION (EXPLICIT)
+────────────────────────────────────────
+
+1) SUBMIT CAMPAIGN (WRITE)
+
+Endpoint:
+POST /campaign-create
+
+Purpose:
+- Create a campaign in governance_state = DRAFT
+- Persist immutable ICP snapshot
+- No execution or sourcing occurs
+
+Expected Success Response (EXACT SHAPE):
+
+{
+  "success": true,
+  "data": {
+    "campaign": {
+      "id": "uuid",
+      "governance_state": "DRAFT",
+      "source_eligible": false
+    },
+    "icp_snapshot": {
+      "id": "uuid",
+      "campaign_id": "uuid"
+    }
+  },
+  "meta": {
+    "semantics": {
+      "governance_state": "DRAFT",
+      "source_eligible": false,
+      "targets_gating": false
+    }
+  }
+}
+
+UI CONSUMPTION RULES:
+- Display campaign.id
+- Display governance_state (read-only)
+- Display source_eligible (read-only)
+- Optionally display icp_snapshot.id for confirmation/debug
+- DO NOT infer readiness, progress, or next steps
+- DO NOT trigger any follow-on calls
+
+────────────────────────────────────────
+2) VALIDATION ERRORS (READ)
+────────────────────────────────────────
+
+Expected Error Response:
+
+{
+  "success": false,
+  "error": "Validation failed",
+  "validation_errors": [
+    {
+      "field": "icp.company_size",
+      "message": "company_size is required for ICP completeness",
+      "code": "REQUIRED_FIELD"
+    }
+  ]
+}
+
+UI CONSUMPTION RULES:
+- Render ALL validation_errors
+- Bind errors to form fields using `field`
+- Support multiple errors at once
+- Preserve backend error messages verbatim
+- Do NOT collapse into generic error messages
+- Do NOT reinterpret or rephrase errors
+
+────────────────────────────────────────
+STRICTLY PROHIBITED API CONSUMPTION
+────────────────────────────────────────
+
+You MUST NOT call, poll, or depend on:
+
+- Campaign execution APIs
+- Organization sourcing APIs
+- Lead, contact, or organization endpoints
+- Learning or analytics endpoints
+- Target attainment or expectation metrics
+- campaign.created event consumers
+- Any status polling endpoints
+
+This UI does NOT observe campaign progress beyond creation.
+
+────────────────────────────────────────
+UI SEMANTIC CONSTRAINTS
+────────────────────────────────────────
+
+- Campaign targets are NON-GATING metadata
+- Targets must NOT be interpreted as:
+  - minimums
+  - caps
+  - progress indicators
+- governance_state = DRAFT means:
+  - inert
+  - not source eligible
+  - not executable
+
+The UI must not imply:
+- campaign is “running”
+- campaign is “ready”
+- campaign will auto-start
+- campaign performance or success
+
+────────────────────────────────────────
+IMPLEMENTATION NOTES
+────────────────────────────────────────
+
+- No local computation of eligibility
+- No inferred status badges
+- No optimistic execution assumptions
+- No retries beyond network-level retry
+- Treat the backend as the sole authority
+
+This milestone ends at successful submission + response rendering.

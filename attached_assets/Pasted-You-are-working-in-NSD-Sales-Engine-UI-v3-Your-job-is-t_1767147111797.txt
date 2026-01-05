@@ -1,0 +1,119 @@
+You are working in NSD Sales Engine UI (v3). Your job is to produce v4 with the following non-negotiable requirements.
+
+GOAL
+- This Sales Engine UI must reflect the REAL Sales Engine lifecycle and M60 governed API contract.
+- Remove all “mock backend” behavior and align UI + copy to NSD brand (neonsignsdepot.com look/feel).
+- Add a Sales Engine “at-a-glance” dashboard on the Sales Engine Home page (permitted if it only reads governed metrics endpoints).
+
+A) ARCHITECTURE (NON-NEGOTIABLE)
+1) Remove local mock APIs and mock data sources
+- Identify ALL Next.js route handlers under app/api/v1/*
+- They currently return mockCampaigns and mocked responses.
+- Replace them with a thin API client layer that calls the REAL governed API (M60) via env var base URL.
+- No business logic in UI or in route handlers. If route handlers remain, they may ONLY proxy requests to M60 (no transforms beyond passthrough + error mapping).
+
+2) Environment configuration
+- Introduce env vars:
+  - NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL (staging first)
+  - NEXT_PUBLIC_ODS_API_URL (only if needed for /api/v1/me bootstrap)
+- Hard rule: UI must not talk to Supabase directly. No DB coupling. No service_role keys. No RLS bypass.
+
+3) Auth + Bootstrap (do not invent RBAC)
+- Bootstrap must come from GET {ODS_API}/api/v1/me (or the canonical identity endpoint used in Platform Shell).
+- Do not parse JWT. Do not infer permissions. Use permissions/feature_visibility from bootstrap only.
+- Feature gating: if user lacks Sales Engine access, show a clean “No access” state.
+
+B) GLOBAL COPY CHANGE (NON-NEGOTIABLE)
+- Eliminate the word “Runnable” everywhere in the UI.
+- Backend state may still be RUNNABLE in payloads, but UI must display:
+  - RUNNABLE => “Approved & Ready”
+- Fix lingering strings:
+  - app/sales-engine/campaigns/[id]/readiness/page.tsx: remove “Campaign is in RUNNABLE state.”
+  - app/sales-engine/campaigns/[id]/governance/page.tsx: remove “transition to RUNNABLE state”
+- Replace with operator language:
+  - “Approved & Ready: Eligible to start. All checks passed.”
+
+C) BEFORE/AFTER PAGE MAP (IN PR DESCRIPTION)
+Include a short before/after map in the PR description.
+
+BEFORE (v3)
+- /sales-engine/home
+- /sales-engine/campaigns
+- /sales-engine/campaigns/new
+- /sales-engine/campaigns/[id]
+- /sales-engine/campaigns/[id]/governance
+- /sales-engine/campaigns/[id]/readiness
+- /sales-engine/campaigns/[id]/execute
+- /sales-engine/monitoring
+
+AFTER (v4) – REQUIRED
+- /sales-engine/home  (now includes aggregate dashboard + “Needs Attention” queue)
+- /sales-engine/campaigns (table + filters + status chips + quick actions)
+- /sales-engine/campaigns/new (campaign form + AI generator)
+- /sales-engine/campaigns/[id] (overview + tabs)
+  Tabs:
+   - Setup (edit draft fields; read-only if not DRAFT)
+   - Review (governance checklist; submit to REVIEW)
+   - Approvals (approve/reject with confirmation; only when in REVIEW)
+   - Execution (start run with confirmations; only when Approved & Ready)
+   - Monitoring (run history, snapshots, errors; read-only)
+
+D) SALES ENGINE HOME DASHBOARD (NEW REQUIREMENT)
+On /sales-engine/home add:
+1) KPI strip (read-only):
+- Drafts
+- In Review
+- Approved & Ready
+- Running
+- Completed (last 7d)
+- Failed / Blocked (if available)
+2) “Needs Attention” queue (top 5–10 campaigns):
+- In Review older than X hours
+- Approved & Ready but not started
+- Runs with failures/errors
+Each row: Campaign name, status, last updated, primary CTA.
+
+IMPORTANT: all values must come from governed read endpoints.
+No calculations beyond basic formatting.
+
+E) NSD BRAND ALIGNMENT (MATCH NEONSIGNSDEPOT.COM)
+- Adopt NSD design tokens and spacing rules:
+  - Primary: Deep Indigo #020F5A
+  - Secondary: Violet #692BAA
+  - CTA only: Magenta #CC368F (sparingly)
+  - Background: white
+  - High whitespace, clean borders, minimal shadows
+  - No neon glow effects, no heavy gradients
+- Typography:
+  - Poppins headings, Inter body (already present)
+- Replace inline styles with a consistent component system.
+  - Introduce shared layout components (PageHeader, SectionCard, StatCard, StatusChip, DataTable).
+  - Ensure consistent paddings, margins, and responsive behavior.
+
+F) CAMPAIGN FORM + AI CAMPAIGN GENERATOR (CONFIRMATION)
+- The Campaign Creation flow MUST include:
+  - Full campaign form fields (as previously designed)
+  - AI Campaign Generator panel that can draft/populate the form
+  - Human remains authoritative: AI suggestions require explicit “Apply” action
+  - No auto-save from AI without user confirmation
+- Ensure the form aligns with the backend campaign schema (M52/M60) and supports DRAFT save + edit.
+
+G) UX SUCCESS CHECKLIST (IN PR DESCRIPTION)
+Include a “Sales Engine UX Success Checklist” in the PR description with checkboxes, including:
+- [ ] Home dashboard shows correct totals by status
+- [ ] “Needs Attention” queue routes to the correct next action
+- [ ] Status language uses Approved & Ready (never Runnable)
+- [ ] Campaign table supports filtering by status + search by name
+- [ ] Draft can be created, saved, re-opened, edited
+- [ ] Review step clearly explains what changes when submitting to review
+- [ ] Approval step requires explicit confirmation and logs result
+- [ ] Execution step requires explicit confirmation and shows safety warnings
+- [ ] Monitoring is read-only and shows run history + snapshots
+- [ ] Errors show user-friendly messages with retry where allowed
+- [ ] Brand tokens match NSD website look/feel (white space, indigo/violet, magenta CTA only)
+
+DELIVERABLES
+- Working v4 UI with real governed API wiring (staging base URL)
+- PR includes before/after page map + UX success checklist
+- No mock APIs remaining (or only proxy passthrough with real backend)
+- Runnable removed from UI copy globally
