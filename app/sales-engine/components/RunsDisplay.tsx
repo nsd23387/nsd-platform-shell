@@ -19,15 +19,20 @@ const statusColors: Record<CampaignRun['status'], { bg: string; text: string; bo
 /**
  * RunsDisplay - Execution run history.
  * 
- * Uses "Qualified Leads Processed" terminology.
+ * Uses "Promoted Leads Processed" terminology.
  * 
- * LEAD MODEL DISTINCTION:
- * - "Qualified Leads" shown here represent records that passed lead qualification
- *   checks (valid email, qualification state) at execution time
- * - This is distinct from "Contacts Observed" which shows all contacts regardless
- *   of email validity or qualification status
+ * CRITICAL SEMANTIC DISTINCTION (contacts vs leads):
+ * - Contacts and leads are distinct; leads are conditionally promoted.
+ * - "Promoted Leads" shown here = Tier A/B contacts that were promoted to leads
+ * - Promotion requires ICP fit AND real (non-placeholder) email
+ * - Tier C/D contacts are NEVER leads and are not included in these counts
+ * - Lead count is NOT derived from contact count (they are independent)
+ * 
+ * LEAD MODEL RULES:
  * - The leads_processed count comes directly from the backend execution record
- *   and is not filtered client-side
+ * - This reflects promoted leads only, not total contacts discovered
+ * - "Contacts Observed" is a separate concept showing all contacts regardless
+ *   of email validity or promotion status
  */
 export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
   return (
@@ -135,7 +140,8 @@ export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
                   <th style={{ textAlign: 'left', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Execution ID</th>
                   <th style={{ textAlign: 'left', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Status</th>
                   <th style={{ textAlign: 'left', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Observed At</th>
-                  <th style={{ textAlign: 'right', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Qualified Leads</th>
+                  {/* Promoted leads (Tier A/B) only, not total contacts */}
+                  <th style={{ textAlign: 'right', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Promoted Leads</th>
                   <th style={{ textAlign: 'right', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Sent</th>
                   <th style={{ textAlign: 'right', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Errors</th>
                   <th style={{ textAlign: 'center', padding: '12px 14px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Provenance</th>
@@ -261,7 +267,7 @@ function RunRow({ run }: { run: CampaignRun }) {
             letterSpacing: '0.03em',
           }}
         >
-          Qualified Leads Processed
+          Promoted Leads Processed
         </p>
         <p
           style={{

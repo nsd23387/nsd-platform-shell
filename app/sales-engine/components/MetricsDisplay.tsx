@@ -15,8 +15,14 @@ interface MetricsDisplayProps {
  * 
  * Updated for target-state architecture:
  * - Shows confidence classification for each metric
- * - Uses "Qualified Leads" terminology
+ * - Uses "Promoted Leads" terminology (not "Contacts")
  * - Displays provenance indicator
+ * 
+ * CRITICAL SEMANTIC DISTINCTION:
+ * - Contacts and leads are distinct; leads are conditionally promoted.
+ * - Lead count reflects PROMOTED leads only (Tier A/B), NOT total contacts.
+ * - Tier C/D contacts are never leads and are not included.
+ * - Promotion requires ICP fit AND real (non-placeholder) email.
  * 
  * IMPORTANT: Confidence is derived from ACTUAL backend metadata only.
  * - If metrics.confidence or metrics.validation_status is present, use it
@@ -82,11 +88,16 @@ export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
             marginBottom: '20px',
           }}
         >
+          {/* 
+            Promoted Leads count - distinct from total contacts.
+            Contacts and leads are distinct; leads are conditionally promoted.
+            This count reflects Tier A/B promoted leads only.
+          */}
           <MetricCard 
-            label="Qualified Leads" 
+            label="Promoted Leads" 
             value={metrics.total_leads}
             confidence={metricConfidence}
-            tooltip="Leads that passed qualification checks (valid email, qualification state)."
+            tooltip="Leads promoted from contacts (Tier A/B). Requires ICP fit and valid email. Does not include Tier C/D contacts."
           />
           <MetricCard 
             label="Emails Sent" 

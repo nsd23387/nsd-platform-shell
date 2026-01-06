@@ -23,7 +23,13 @@ interface SalesEngineDashboardProps {
  * Updated for target-state architecture:
  * - Governance-first terminology (no "run/start/launch")
  * - Read-only observability focus
- * - Qualified leads terminology
+ * - Promoted leads terminology (not "contacts")
+ * 
+ * CRITICAL SEMANTIC DISTINCTION:
+ * - Contacts and leads are distinct; leads are conditionally promoted.
+ * - Lead counts reflect promoted leads only (Tier A/B).
+ * - Tier C/D contacts are never leads.
+ * - Promotion requires ICP fit AND real (non-placeholder) email.
  */
 export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardProps) {
   const [throughput, setThroughput] = useState<DashboardThroughput | null>(null);
@@ -165,7 +171,8 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
                 <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Campaign</th>
                   <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Status</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Qualified Leads Attempted</th>
+                  {/* Lead count = promoted leads only, not total contacts */}
+                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Promoted Leads Attempted</th>
                   <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Sent</th>
                   <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Blocked</th>
                 </tr>

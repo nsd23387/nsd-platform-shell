@@ -167,24 +167,50 @@ deriveProvenance({}) // Returns 'LEGACY_OBSERVED' (default)
 
 ## Lead Model Integrity
 
-### Qualified Leads vs Contacts Observed
+### Promoted Leads vs Contacts Observed
 
-| View | Description | Email Filtering |
-|------|-------------|-----------------|
-| Qualified Leads | Only lead-ready/qualified records | Required: valid, non-filler email |
-| Contacts Observed | All observed contact records | No filtering - shows all records |
+**CRITICAL SEMANTIC DISTINCTION:**
+Contacts and leads are distinct entities. Leads are conditionally promoted from contacts.
+
+| View | Description | Criteria | Tiers |
+|------|-------------|----------|-------|
+| Promoted Leads | Only promoted lead records | ICP fit + valid email | Tier A/B only |
+| Contacts Observed | All observed contact records | No filtering | All tiers (A/B/C/D) |
+
+### Backend Truths (Authoritative)
+
+- **Organizations are global**; campaign linkage via `organization.sourced`
+- **Contacts are global**; campaign linkage via `contact.discovered`
+- **Contacts are evaluated deterministically**
+- **Leads exist only when contacts are promoted**
+- **Promotion requires**: ICP fit + real (non-placeholder) email
+- **Promotion produces**: `promotionTier` (A/B), `promotionScore`, `promotionReasons[]`
+- **Tier C/D contacts are never leads**
+- **Events are authoritative**; DB rows are snapshots
+
+### Promotion Tiers
+
+| Tier | Status | Meaning |
+|------|--------|---------|
+| A | Promoted | High-priority lead - Strong ICP fit |
+| B | Promoted | Standard lead - Good ICP fit |
+| C | Not Promoted | Partial ICP match - remains contact |
+| D | Not Promoted | Does not meet criteria - remains contact |
 
 ### Rules
 
-- `isValidLeadEmail()` - Use ONLY for Qualified Leads view
-- `isQualifiedLead()` - Verifies email validity AND qualification state
-- Contacts Observed shows records even without valid emails
+- `isValidLeadEmail()` - Use ONLY for Promoted Leads view
+- `isQualifiedLead()` - Verifies email validity AND promotion eligibility
+- Contacts Observed shows records even without valid emails or promotion
+- **Lead count is NOT derived from contact count** (independent metrics)
+- **UI must not imply all contacts become leads**
 
 ### Why This Matters
 
-- "Contact with email" ≠ Lead
-- Lead counts must be accurate (only truly qualified leads)
-- Contact observability must be complete (all data visible)
+- "Contact with email" ≠ Lead (a contact may have email but not qualify)
+- Lead counts must reflect promoted leads only (Tier A/B)
+- Contact observability must be complete (all data visible, all tiers)
+- Promotion rationale must be visible (read-only) on lead details
 
 ---
 
@@ -235,4 +261,6 @@ All governance logic has unit tests:
 | UNKNOWN is valid | Show "Unknown" when data missing |
 | No inferred confidence | `deriveConfidence()` defaults to CONDITIONAL |
 | Provenance precedence | Explicit field > heuristics |
-| Lead model integrity | Qualified Leads ≠ Contacts Observed |
+| Lead model integrity | Promoted Leads (Tier A/B) ≠ Contacts Observed (All Tiers) |
+| Contact vs Lead distinction | Leads are conditionally promoted; not all contacts become leads |
+| Promotion visibility | Promotion details (tier, score, reasons) displayed read-only |

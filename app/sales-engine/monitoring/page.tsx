@@ -30,6 +30,14 @@ export default function MonitoringPage() {
     loadData();
   }, []);
 
+  /**
+   * Yield metrics computed from run outcomes.
+   * 
+   * IMPORTANT: Contacts and leads are distinct; leads are conditionally promoted.
+   * - "Leads Attempted" = promoted leads (Tier A/B) that were processed
+   * - Tier C/D contacts are never leads and are not included in these counts
+   * - Lead counts reflect promoted leads only, not total contacts
+   */
   const yieldMetrics = runs.length > 0 ? {
     totalLeads: runs.reduce((sum, r) => sum + r.leadsAttempted, 0),
     totalSent: runs.reduce((sum, r) => sum + r.leadsSent, 0),
@@ -65,12 +73,17 @@ export default function MonitoringPage() {
         <NavBar active="monitoring" />
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px', marginBottom: '32px' }}>
+          {/* 
+            Yield metrics display promoted leads only.
+            Contacts and leads are distinct; leads are conditionally promoted.
+            Lead counts do NOT include Tier C/D contacts.
+          */}
           <MetricGroup
             title="Yield"
             icon="chart"
             color="#10b981"
             metrics={[
-              { label: 'Total Leads Attempted', value: yieldMetrics?.totalLeads || 0 },
+              { label: 'Promoted Leads Attempted', value: yieldMetrics?.totalLeads || 0 },
               { label: 'Successfully Sent', value: yieldMetrics?.totalSent || 0 },
               { label: 'Success Rate', value: `${yieldMetrics?.successRate || 0}%` },
             ]}

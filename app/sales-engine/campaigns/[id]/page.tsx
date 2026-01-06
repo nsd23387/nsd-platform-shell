@@ -360,7 +360,8 @@ function MonitoringTab({
               <tr style={{ borderBottom: `1px solid ${NSD_COLORS.border.light}` }}>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Observed At</th>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Status</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Qualified Leads Processed</th>
+                {/* Lead count = promoted leads (Tier A/B), not total contacts */}
+                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Promoted Leads Processed</th>
                 <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Emails Sent</th>
                 <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Errors</th>
               </tr>

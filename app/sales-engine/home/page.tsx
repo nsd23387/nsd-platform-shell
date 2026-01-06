@@ -207,11 +207,24 @@ export default function SalesEngineHomePage() {
   );
 }
 
+/**
+ * AttentionRow - Displays a campaign needing attention.
+ * 
+ * IMPORTANT: Copy must be governance-safe.
+ * - No "Ready to start" (implies execution initiation)
+ * - No "Auto-qualified" (leads require explicit promotion)
+ * - Use "Pending" or "Awaiting" terminology
+ */
 function AttentionRow({ item }: { item: NeedsAttentionItem }) {
+  // Governance-safe reason labels (no execution-first terminology)
   const reasonLabels: Record<string, string> = {
     in_review_stale: 'Awaiting review',
-    approved_not_started: 'Ready to start',
-    run_failed: 'Run failed',
+    pending_approval_stale: 'Awaiting review',
+    approved_not_started: 'Approved – awaiting execution',
+    approved_not_observed: 'Approved – not yet observed',
+    run_failed: 'Execution failed',
+    execution_failed: 'Execution failed',
+    blocked: 'Blocked',
   };
 
   return (
