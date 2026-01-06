@@ -33,19 +33,19 @@
  * - Observability UI reads events to display run status
  * - This is target-state compliant (event-sourced execution)
  * 
+ * EVENT EMISSION:
+ * All events are emitted via the canonical emitRunEvent() helper from activity-db.
+ * This ensures consistent population of ALL NOT NULL columns:
+ * - id (generated in emitActivityEvent)
+ * - event_type
+ * - entity_type (always 'campaign_run' for run events)
+ * - entity_id (the runId)
+ * - payload (contains campaignId, runId, and event-specific data)
+ * 
  * DATABASE ACCESS:
  * - activity.events is written via direct DB connection, not PostgREST.
  * - core.* tables are read via Supabase client (PostgREST).
  * - This separation is required because activity schema is not exposed via PostgREST.
- * 
- * NOTE: activity.events is event-sourced.
- * Identifiers such as campaignId and runId live in payload (JSONB),
- * not as physical columns.
- * 
- * EVENT SCHEMA:
- * - Only event_type and payload columns exist
- * - campaignId and runId are stored in payload
- * - All contextual data lives in payload
  * 
  * ARCHITECTURE:
  * - Execution is API-isolated (only triggered via POST /run)
@@ -62,7 +62,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { emitActivityEvent, isActivityDbConfigured } from './activity-db';
+import { emitRunEvent, isActivityDbConfigured } from './activity-db';
 
 type AnySupabaseClient = any;
 
@@ -115,47 +115,6 @@ function createCoreClient(): AnySupabaseClient {
 }
 
 // ============================================================================
-// Event Emission (via direct Postgres)
-// ============================================================================
-
-/**
- * Emit an activity event to the activity.events table.
- * 
- * IMPORTANT: activity.events is written via direct DB connection, not PostgREST.
- * 
- * NOTE: activity.events is event-sourced.
- * Identifiers such as campaignId and runId live in payload (JSONB),
- * not as physical columns.
- * 
- * The table only has: id (auto), event_type, payload, created_at (auto)
- * 
- * All state changes go through event emission.
- * This is an append-only operation - events are never updated or deleted.
- * 
- * Campaign runs are tracked via activity events, not relational tables.
- */
-async function emitEvent(
-  eventType: string,
-  campaignId: string,
-  runId: string,
-  additionalPayload: Record<string, unknown>
-): Promise<void> {
-  // NOTE: activity.events is event-sourced.
-  // Identifiers such as campaignId and runId live in payload (JSONB),
-  // not as physical columns.
-  const payload = {
-    campaignId,
-    runId,
-    ...additionalPayload,
-  };
-
-  await emitActivityEvent({
-    event_type: eventType,
-    payload,
-  });
-}
-
-// ============================================================================
 // Pipeline Execution
 // ============================================================================
 
@@ -171,12 +130,8 @@ async function emitEvent(
  * Note: Sending emails requires lead approval and is handled separately.
  * 
  * IMPORTANT: Run state is tracked via events, not a campaign_runs table.
- * Each stage emits events that observability UI can read.
- * Events are written via direct Postgres, not PostgREST.
- * 
- * NOTE: activity.events is event-sourced.
- * Identifiers such as campaignId and runId live in payload (JSONB),
- * not as physical columns.
+ * Each stage emits events via the canonical emitRunEvent() helper,
+ * which ensures all NOT NULL columns are populated.
  */
 async function executePipeline(
   coreClient: AnySupabaseClient,
@@ -188,15 +143,10 @@ async function executePipeline(
   try {
     // Emit run.running event (status change tracked via events)
     context.currentStage = 'sourcing';
-    await emitEvent(
-      'run.running',
-      campaignId,
-      runId,
-      { 
-        stage: 'sourcing',
-        triggeredBy: context.triggeredBy,
-      }
-    );
+    await emitRunEvent('run.running', runId, campaignId, {
+      stage: 'sourcing',
+      triggeredBy: context.triggeredBy,
+    });
 
     // ========================================================================
     // Stage 1: Sourcing Organizations
@@ -214,23 +164,19 @@ async function executePipeline(
       throw new Error('Campaign not found');
     }
 
-    await emitEvent(
-      'stage.started',
-      campaignId,
-      runId,
-      { stage: 'sourcing', icp: campaign.icp }
-    );
+    await emitRunEvent('stage.started', runId, campaignId, {
+      stage: 'sourcing',
+      icp: campaign.icp,
+    });
 
     // TODO: Integrate with actual sourcing logic (Apollo, etc.)
     // Placeholder for actual integration
     context.counters.orgsSourced = 0;
 
-    await emitEvent(
-      'stage.completed',
-      campaignId,
-      runId,
-      { stage: 'sourcing', orgsSourced: context.counters.orgsSourced }
-    );
+    await emitRunEvent('stage.completed', runId, campaignId, {
+      stage: 'sourcing',
+      orgsSourced: context.counters.orgsSourced,
+    });
 
     // ========================================================================
     // Stage 2: Contact Discovery
@@ -238,22 +184,17 @@ async function executePipeline(
     console.log(`[runtime] Stage 2: Contact discovery`);
     context.currentStage = 'discovery';
     
-    await emitEvent(
-      'stage.started',
-      campaignId,
-      runId,
-      { stage: 'discovery' }
-    );
+    await emitRunEvent('stage.started', runId, campaignId, {
+      stage: 'discovery',
+    });
 
     // Placeholder for actual discovery
     context.counters.contactsDiscovered = 0;
 
-    await emitEvent(
-      'stage.completed',
-      campaignId,
-      runId,
-      { stage: 'discovery', contactsDiscovered: context.counters.contactsDiscovered }
-    );
+    await emitRunEvent('stage.completed', runId, campaignId, {
+      stage: 'discovery',
+      contactsDiscovered: context.counters.contactsDiscovered,
+    });
 
     // ========================================================================
     // Stage 3: Contact Evaluation
@@ -261,22 +202,17 @@ async function executePipeline(
     console.log(`[runtime] Stage 3: Contact evaluation`);
     context.currentStage = 'evaluation';
 
-    await emitEvent(
-      'stage.started',
-      campaignId,
-      runId,
-      { stage: 'evaluation' }
-    );
+    await emitRunEvent('stage.started', runId, campaignId, {
+      stage: 'evaluation',
+    });
 
     // Placeholder for actual evaluation
     context.counters.contactsEvaluated = 0;
 
-    await emitEvent(
-      'stage.completed',
-      campaignId,
-      runId,
-      { stage: 'evaluation', contactsEvaluated: context.counters.contactsEvaluated }
-    );
+    await emitRunEvent('stage.completed', runId, campaignId, {
+      stage: 'evaluation',
+      contactsEvaluated: context.counters.contactsEvaluated,
+    });
 
     // ========================================================================
     // Stage 4: Lead Promotion
@@ -284,22 +220,17 @@ async function executePipeline(
     console.log(`[runtime] Stage 4: Lead promotion`);
     context.currentStage = 'promotion';
 
-    await emitEvent(
-      'stage.started',
-      campaignId,
-      runId,
-      { stage: 'promotion' }
-    );
+    await emitRunEvent('stage.started', runId, campaignId, {
+      stage: 'promotion',
+    });
 
     // Placeholder for actual promotion
     context.counters.leadsPromoted = 0;
 
-    await emitEvent(
-      'stage.completed',
-      campaignId,
-      runId,
-      { stage: 'promotion', leadsPromoted: context.counters.leadsPromoted }
-    );
+    await emitRunEvent('stage.completed', runId, campaignId, {
+      stage: 'promotion',
+      leadsPromoted: context.counters.leadsPromoted,
+    });
 
     // ========================================================================
     // Complete Run
@@ -308,33 +239,23 @@ async function executePipeline(
     context.currentStage = 'completed';
 
     // Emit run.completed event (this is how observability knows the run finished)
-    await emitEvent(
-      'run.completed',
-      campaignId,
-      runId,
-      {
-        completedAt: new Date().toISOString(),
-        orgsSourced: context.counters.orgsSourced,
-        contactsDiscovered: context.counters.contactsDiscovered,
-        contactsEvaluated: context.counters.contactsEvaluated,
-        leadsPromoted: context.counters.leadsPromoted,
-      }
-    );
+    await emitRunEvent('run.completed', runId, campaignId, {
+      completedAt: new Date().toISOString(),
+      orgsSourced: context.counters.orgsSourced,
+      contactsDiscovered: context.counters.contactsDiscovered,
+      contactsEvaluated: context.counters.contactsEvaluated,
+      leadsPromoted: context.counters.leadsPromoted,
+    });
 
   } catch (error) {
     console.error(`[runtime] Pipeline execution failed for run ${runId}:`, error);
     
     // Emit run.failed event (this is how observability knows the run failed)
-    await emitEvent(
-      'run.failed',
-      campaignId,
-      runId,
-      { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        failedAt: new Date().toISOString(),
-        lastStage: context.currentStage,
-      }
-    );
+    await emitRunEvent('run.failed', runId, campaignId, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      failedAt: new Date().toISOString(),
+      lastStage: context.currentStage,
+    });
   }
 }
 
@@ -352,13 +273,11 @@ async function executePipeline(
  * - All run state changes are tracked via events
  * - Observability derives state from event stream
  * 
- * DATABASE ACCESS:
- * - activity.events is written via direct DB connection, not PostgREST.
- * - This is required because activity schema is not exposed via PostgREST.
- * 
- * NOTE: activity.events is event-sourced.
- * Identifiers such as campaignId and runId live in payload (JSONB),
- * not as physical columns.
+ * EVENT EMISSION:
+ * All events use the canonical emitRunEvent() helper which ensures:
+ * - entity_type = 'campaign_run'
+ * - entity_id = runId
+ * - All NOT NULL columns are populated
  * 
  * This function:
  * 1. Generates a unique runId
@@ -406,19 +325,11 @@ export async function processCampaign(
   };
 
   // Step 1: Emit run.started event immediately (via direct Postgres)
-  // This is how observability knows a run has begun
-  // NOTE: activity.events is event-sourced.
-  // Identifiers such as campaignId and runId live in payload (JSONB),
-  // not as physical columns.
-  await emitEvent(
-    'run.started',
-    campaignId,
-    runId,
-    {
-      triggeredBy: options.triggeredBy,
-      startedAt,
-    }
-  );
+  // Uses canonical emitRunEvent() which ensures all NOT NULL columns are populated
+  await emitRunEvent('run.started', runId, campaignId, {
+    triggeredBy: options.triggeredBy,
+    startedAt,
+  });
 
   console.log(`[runtime] Emitted run.started for run ${runId}`);
 
