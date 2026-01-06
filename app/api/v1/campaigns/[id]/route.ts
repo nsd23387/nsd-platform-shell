@@ -19,6 +19,7 @@ import { createServerClient, isSupabaseConfigured } from '../../../../../lib/sup
 function mapStatusToGovernanceState(status: string): string {
   const statusMap: Record<string, string> = {
     draft: 'DRAFT',
+    pending_review: 'PENDING_REVIEW',
     active: 'APPROVED_READY',
     paused: 'BLOCKED',
     completed: 'EXECUTED',
@@ -148,7 +149,7 @@ export async function GET(
       // UI state flags based on status
       canEdit: data.status === 'draft',
       canSubmit: data.status === 'draft',
-      canApprove: false,
+      canApprove: data.status === 'pending_review',
       isRunnable: data.status === 'active',
     };
 

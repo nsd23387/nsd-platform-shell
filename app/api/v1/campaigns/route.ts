@@ -24,6 +24,7 @@ import { createServerClient, isSupabaseConfigured } from '../../../../lib/supaba
 function mapStatusToGovernanceState(status: string): string {
   const statusMap: Record<string, string> = {
     draft: 'DRAFT',
+    pending_review: 'PENDING_REVIEW',
     active: 'APPROVED_READY',
     paused: 'BLOCKED',
     completed: 'EXECUTED',
@@ -136,7 +137,7 @@ export async function GET(request: NextRequest) {
         // UI state flags based on status
         canEdit: row.status === 'draft',
         canSubmit: row.status === 'draft',
-        canApprove: false, // Approval not implemented
+        canApprove: row.status === 'pending_review',
         isRunnable: row.status === 'active',
       };
     });
