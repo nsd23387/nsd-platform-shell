@@ -76,6 +76,9 @@ export function isSupabaseConfigured(): boolean {
 /**
  * ICP (Ideal Customer Profile) JSONB structure
  * Stored in core.campaigns.icp column
+ * 
+ * NOTE: description is stored here as metadata since core.campaigns
+ * does NOT have a top-level description column.
  */
 export interface ICPConfig {
   keywords: string[];
@@ -84,6 +87,9 @@ export interface ICPConfig {
   company_size?: {
     min?: number;
     max?: number;
+  };
+  metadata?: {
+    description?: string;
   };
 }
 
@@ -119,15 +125,31 @@ export interface LeadQualificationConfig {
  * 
  * CANONICAL SCHEMA - Do not add columns that don't exist in the database.
  * ICP, sourcing, and lead qualification are stored as JSONB objects.
+ * 
+ * VALID COLUMNS (verified against core.campaigns):
+ * - id (uuid, auto-generated)
+ * - name (text, required)
+ * - status (text, required)
+ * - icp (jsonb)
+ * - sourcing_config (jsonb)
+ * - lead_qualification_config (jsonb)
+ * - smartlead_campaign_id (text, nullable)
+ * - created_at (timestamptz)
+ * - updated_at (timestamptz)
+ * 
+ * NOT VALID (do not use):
+ * - description (use icp.metadata.description instead)
+ * - keywords, geographies, industries (use icp JSONB)
+ * - target_* (use sourcing_config.targets)
  */
 export interface CampaignRow {
   id?: string;
   name: string;
-  description?: string | null;
   status: 'draft' | 'active' | 'paused' | 'completed' | 'archived';
   icp: ICPConfig;
   sourcing_config: SourcingConfig;
   lead_qualification_config?: LeadQualificationConfig | null;
+  smartlead_campaign_id?: string | null;
   created_at?: string;
   updated_at?: string;
 }

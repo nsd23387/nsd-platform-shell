@@ -95,10 +95,12 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createServerClient();
 
-    // Build query - use canonical JSONB columns
+    // Build query - use canonical JSONB columns only
+    // NOTE: description is NOT a column in core.campaigns
+    // It's stored in icp.metadata.description
     let query = supabase
       .from('campaigns')
-      .select('id, name, description, status, icp, sourcing_config, lead_qualification_config, created_at, updated_at')
+      .select('id, name, status, icp, sourcing_config, lead_qualification_config, created_at, updated_at')
       .order('created_at', { ascending: false });
 
     // Filter by status if provided
@@ -115,13 +117,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Map database rows to UI format
-    // Extract keywords and geographies from icp JSONB
+    // Extract keywords, geographies, and description from icp JSONB
     const campaigns = (data || []).map((row) => {
-      const icp = row.icp as { keywords?: string[]; geographies?: string[] } | null;
+      const icp = row.icp as { 
+        keywords?: string[]; 
+        geographies?: string[];
+        metadata?: { description?: string };
+      } | null;
       return {
         id: row.id,
         name: row.name,
-        description: row.description,
+        description: icp?.metadata?.description || null, // Extract from JSONB
         status: mapStatusToGovernanceState(row.status),
         keywords: icp?.keywords || [],
         geographies: icp?.geographies || [],

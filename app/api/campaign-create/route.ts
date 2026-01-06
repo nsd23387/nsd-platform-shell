@@ -102,8 +102,10 @@ function validatePayload(payload: CampaignCreatePayload): ValidationError[] {
  * - Targets are benchmarks only (benchmarks_only: true)
  * - No flattened ICP fields as top-level columns
  */
-function mapPayloadToRow(payload: CampaignCreatePayload): Omit<CampaignRow, 'id' | 'created_at' | 'updated_at'> {
+function mapPayloadToRow(payload: CampaignCreatePayload): Omit<CampaignRow, 'id' | 'created_at' | 'updated_at' | 'smartlead_campaign_id'> {
   // Build ICP config JSONB
+  // NOTE: description is stored in icp.metadata since core.campaigns
+  // does NOT have a top-level description column
   const icp: ICPConfig = {
     keywords: payload.icp.keywords,
     geographies: payload.icp.geographies,
@@ -111,6 +113,9 @@ function mapPayloadToRow(payload: CampaignCreatePayload): Omit<CampaignRow, 'id'
     company_size: payload.icp.company_size ? {
       min: payload.icp.company_size.min,
       max: payload.icp.company_size.max,
+    } : undefined,
+    metadata: payload.campaign_identity.description ? {
+      description: payload.campaign_identity.description,
     } : undefined,
   };
 
@@ -138,9 +143,10 @@ function mapPayloadToRow(payload: CampaignCreatePayload): Omit<CampaignRow, 'id'
       max_contacts_per_org: payload.contact_targeting?.max_contacts_per_org,
     } : null;
 
+  // CANONICAL SCHEMA: Only include columns that exist in core.campaigns
+  // DO NOT include: description (use icp.metadata.description)
   return {
     name: payload.campaign_identity.name.trim(),
-    description: payload.campaign_identity.description || null,
     status: 'draft', // ALWAYS draft - governance requirement
     icp,
     sourcing_config,
