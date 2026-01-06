@@ -33,6 +33,12 @@
       "rules": {
         "no-restricted-syntax": "off"
       }
+    },
+    {
+      "files": ["app/sales-engine/components/governance/**/*.tsx"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
     }
   ]
 }

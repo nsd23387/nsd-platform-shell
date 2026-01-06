@@ -50,6 +50,51 @@ export function GovernanceActionsPanel({
       return;
     }
     
+    // Handle real campaign actions via API
+    setActionLoading(true);
+    try {
+      let endpoint = '';
+      let successMsg = '';
+      
+      switch (action) {
+        case 'submit':
+          endpoint = `/api/v1/campaigns/${campaignId}/submit`;
+          successMsg = 'Campaign submitted for approval';
+          break;
+        case 'approve':
+          endpoint = `/api/v1/campaigns/${campaignId}/approve`;
+          successMsg = 'Campaign approved';
+          break;
+        case 'run':
+          // Run action would go to a different endpoint
+          endpoint = `/api/v1/campaigns/${campaignId}/run`;
+          successMsg = 'Campaign run initiated';
+          break;
+      }
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (response.ok) {
+        setSuccessMessage(successMsg);
+        // Refresh the page to show updated status
+        if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
+      } else {
+        const data = await response.json();
+        setSuccessMessage(`Error: ${data.error || 'Action failed'}`);
+      }
+    } catch (error) {
+      console.error('Action error:', error);
+      setSuccessMessage('Error: Failed to complete action');
+    } finally {
+      setActionLoading(false);
+    }
+    
+    // Also call the callback if provided (for backwards compatibility)
     if (action === 'submit') {
       onSubmitForApproval?.();
     }
