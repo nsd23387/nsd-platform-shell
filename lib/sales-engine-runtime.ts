@@ -33,11 +33,16 @@
  * - Observability UI reads events to display run status
  * - This is target-state compliant (event-sourced execution)
  * 
+ * DATABASE ACCESS:
+ * - activity.events is written via direct DB connection, not PostgREST.
+ * - core.* tables are read via Supabase client (PostgREST).
+ * - This separation is required because activity schema is not exposed via PostgREST.
+ * 
  * ARCHITECTURE:
  * - Execution is API-isolated (only triggered via POST /run)
  * - UI remains observational + approval-only
  * - All state changes are event-driven (append-only)
- * - Events are written to activity.events schema
+ * - Events are written to activity.events via direct Postgres
  * - Run tracking is event-based, not table-based
  * 
  * GOVERNANCE:
@@ -48,6 +53,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { emitActivityEvent, isActivityDbConfigured } from './activity-db';
 
 type AnySupabaseClient = any;
 
@@ -77,24 +83,13 @@ export interface PipelineContext {
   };
 }
 
-export interface ActivityEvent {
-  id?: string;
-  event_type: string;
-  entity_type: string;
-  entity_id: string;
-  campaign_id: string;
-  run_id?: string;
-  payload: Record<string, unknown>;
-  created_at?: string;
-}
-
 // ============================================================================
-// Supabase Client Factory
+// Supabase Client Factory (for core.* reads only)
 // ============================================================================
 
 /**
  * Create a Supabase client for the core schema (campaigns, organizations, contacts, leads).
- * NOTE: This is used for READS only. Run tracking is event-based.
+ * NOTE: This is used for READS only. Event writes go through direct Postgres.
  */
 function createCoreClient(): AnySupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -110,30 +105,14 @@ function createCoreClient(): AnySupabaseClient {
   });
 }
 
-/**
- * Create a Supabase client for the activity schema (events).
- * All run tracking and state changes go through this client.
- */
-function createActivityClient(): AnySupabaseClient {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Supabase not configured for execution');
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    db: { schema: 'activity' },
-  });
-}
-
 // ============================================================================
-// Event Emission
+// Event Emission (via direct Postgres)
 // ============================================================================
 
 /**
  * Emit an activity event to the activity.events table.
+ * 
+ * IMPORTANT: activity.events is written via direct DB connection, not PostgREST.
  * 
  * All state changes go through event emission.
  * This is an append-only operation - events are never updated or deleted.
@@ -141,27 +120,21 @@ function createActivityClient(): AnySupabaseClient {
  * Campaign runs are tracked via activity events, not relational tables.
  */
 async function emitEvent(
-  activityClient: AnySupabaseClient,
-  event: Omit<ActivityEvent, 'id' | 'created_at'>
+  eventType: string,
+  entityType: string,
+  entityId: string,
+  campaignId: string,
+  runId: string,
+  payload: Record<string, unknown>
 ): Promise<void> {
-  const { error } = await activityClient
-    .from('events')
-    .insert({
-      event_type: event.event_type,
-      entity_type: event.entity_type,
-      entity_id: event.entity_id,
-      campaign_id: event.campaign_id,
-      run_id: event.run_id,
-      payload: event.payload,
-      created_at: new Date().toISOString(),
-    });
-
-  if (error) {
-    console.error(`[runtime] Failed to emit event ${event.event_type}:`, error);
-    throw error;
-  }
-
-  console.log(`[runtime] Emitted event: ${event.event_type} for ${event.entity_type}/${event.entity_id}`);
+  await emitActivityEvent({
+    event_type: eventType,
+    entity_type: entityType,
+    entity_id: entityId,
+    campaign_id: campaignId,
+    run_id: runId,
+    payload,
+  });
 }
 
 // ============================================================================
@@ -181,10 +154,10 @@ async function emitEvent(
  * 
  * IMPORTANT: Run state is tracked via events, not a campaign_runs table.
  * Each stage emits events that observability UI can read.
+ * Events are written via direct Postgres, not PostgREST.
  */
 async function executePipeline(
   coreClient: AnySupabaseClient,
-  activityClient: AnySupabaseClient,
   context: PipelineContext
 ): Promise<void> {
   const { runId, campaignId } = context;
@@ -193,24 +166,24 @@ async function executePipeline(
   try {
     // Emit run.running event (status change tracked via events)
     context.currentStage = 'sourcing';
-    await emitEvent(activityClient, {
-      event_type: 'run.running',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: { 
+    await emitEvent(
+      'run.running',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      { 
         stage: 'sourcing',
         triggered_by: context.triggeredBy,
-      },
-    });
+      }
+    );
 
     // ========================================================================
     // Stage 1: Sourcing Organizations
     // ========================================================================
     console.log(`[runtime] Stage 1: Sourcing organizations`);
     
-    // Get campaign ICP configuration (READ from core.campaigns)
+    // Get campaign ICP configuration (READ from core.campaigns via Supabase)
     const { data: campaign } = await coreClient
       .from('campaigns')
       .select('id, name, icp, sourcing_config')
@@ -221,27 +194,27 @@ async function executePipeline(
       throw new Error('Campaign not found');
     }
 
-    await emitEvent(activityClient, {
-      event_type: 'stage.started',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: { stage: 'sourcing', icp: campaign.icp },
-    });
+    await emitEvent(
+      'stage.started',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      { stage: 'sourcing', icp: campaign.icp }
+    );
 
     // TODO: Integrate with actual sourcing logic (Apollo, etc.)
     // Placeholder for actual integration
     context.counters.orgsSourced = 0;
 
-    await emitEvent(activityClient, {
-      event_type: 'stage.completed',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: { stage: 'sourcing', orgs_sourced: context.counters.orgsSourced },
-    });
+    await emitEvent(
+      'stage.completed',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      { stage: 'sourcing', orgs_sourced: context.counters.orgsSourced }
+    );
 
     // ========================================================================
     // Stage 2: Contact Discovery
@@ -249,26 +222,26 @@ async function executePipeline(
     console.log(`[runtime] Stage 2: Contact discovery`);
     context.currentStage = 'discovery';
     
-    await emitEvent(activityClient, {
-      event_type: 'stage.started',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: { stage: 'discovery' },
-    });
+    await emitEvent(
+      'stage.started',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      { stage: 'discovery' }
+    );
 
     // Placeholder for actual discovery
     context.counters.contactsDiscovered = 0;
 
-    await emitEvent(activityClient, {
-      event_type: 'stage.completed',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: { stage: 'discovery', contacts_discovered: context.counters.contactsDiscovered },
-    });
+    await emitEvent(
+      'stage.completed',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      { stage: 'discovery', contacts_discovered: context.counters.contactsDiscovered }
+    );
 
     // ========================================================================
     // Stage 3: Contact Evaluation
@@ -276,26 +249,26 @@ async function executePipeline(
     console.log(`[runtime] Stage 3: Contact evaluation`);
     context.currentStage = 'evaluation';
 
-    await emitEvent(activityClient, {
-      event_type: 'stage.started',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: { stage: 'evaluation' },
-    });
+    await emitEvent(
+      'stage.started',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      { stage: 'evaluation' }
+    );
 
     // Placeholder for actual evaluation
     context.counters.contactsEvaluated = 0;
 
-    await emitEvent(activityClient, {
-      event_type: 'stage.completed',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: { stage: 'evaluation', contacts_evaluated: context.counters.contactsEvaluated },
-    });
+    await emitEvent(
+      'stage.completed',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      { stage: 'evaluation', contacts_evaluated: context.counters.contactsEvaluated }
+    );
 
     // ========================================================================
     // Stage 4: Lead Promotion
@@ -303,26 +276,26 @@ async function executePipeline(
     console.log(`[runtime] Stage 4: Lead promotion`);
     context.currentStage = 'promotion';
 
-    await emitEvent(activityClient, {
-      event_type: 'stage.started',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: { stage: 'promotion' },
-    });
+    await emitEvent(
+      'stage.started',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      { stage: 'promotion' }
+    );
 
     // Placeholder for actual promotion
     context.counters.leadsPromoted = 0;
 
-    await emitEvent(activityClient, {
-      event_type: 'stage.completed',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: { stage: 'promotion', leads_promoted: context.counters.leadsPromoted },
-    });
+    await emitEvent(
+      'stage.completed',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      { stage: 'promotion', leads_promoted: context.counters.leadsPromoted }
+    );
 
     // ========================================================================
     // Complete Run
@@ -331,37 +304,37 @@ async function executePipeline(
     context.currentStage = 'completed';
 
     // Emit run.completed event (this is how observability knows the run finished)
-    await emitEvent(activityClient, {
-      event_type: 'run.completed',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: {
+    await emitEvent(
+      'run.completed',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      {
         completed_at: new Date().toISOString(),
         orgs_sourced: context.counters.orgsSourced,
         contacts_discovered: context.counters.contactsDiscovered,
         contacts_evaluated: context.counters.contactsEvaluated,
         leads_promoted: context.counters.leadsPromoted,
-      },
-    });
+      }
+    );
 
   } catch (error) {
     console.error(`[runtime] Pipeline execution failed for run ${runId}:`, error);
     
     // Emit run.failed event (this is how observability knows the run failed)
-    await emitEvent(activityClient, {
-      event_type: 'run.failed',
-      entity_type: 'campaign_run',
-      entity_id: runId,
-      campaign_id: campaignId,
-      run_id: runId,
-      payload: { 
+    await emitEvent(
+      'run.failed',
+      'campaign_run',
+      runId,
+      campaignId,
+      runId,
+      { 
         error: error instanceof Error ? error.message : 'Unknown error',
         failed_at: new Date().toISOString(),
         last_stage: context.currentStage,
-      },
-    });
+      }
+    );
   }
 }
 
@@ -375,13 +348,17 @@ async function executePipeline(
  * EXECUTION MODEL:
  * Campaign runs are tracked via activity events, not relational tables.
  * - runId is generated in code (UUID)
- * - run.started event is emitted immediately
+ * - run.started event is emitted immediately via direct Postgres
  * - All run state changes are tracked via events
  * - Observability derives state from event stream
  * 
+ * DATABASE ACCESS:
+ * - activity.events is written via direct DB connection, not PostgREST.
+ * - This is required because activity schema is not exposed via PostgREST.
+ * 
  * This function:
  * 1. Generates a unique runId
- * 2. Emits run.started event immediately
+ * 2. Emits run.started event immediately (via direct Postgres)
  * 3. Triggers pipeline execution (non-blocking)
  * 
  * The caller should NOT await pipeline completion - this function
@@ -397,12 +374,16 @@ export async function processCampaign(
 ): Promise<{ run_id: string; status: string }> {
   console.log(`[runtime] processCampaign called for ${campaignId} by ${options.triggeredBy}`);
 
+  // Verify DATABASE_URL is configured for activity event writes
+  if (!isActivityDbConfigured()) {
+    throw new Error('DATABASE_URL is not configured. Required for activity.events writes.');
+  }
+
   // Generate runId in code (no database table needed)
   const runId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
 
-  // Create activity client for event emission
-  const activityClient = createActivityClient();
+  // Create core client for reading campaign data
   const coreClient = createCoreClient();
 
   // Create pipeline context (passed through all stages)
@@ -420,19 +401,19 @@ export async function processCampaign(
     },
   };
 
-  // Step 1: Emit run.started event immediately
+  // Step 1: Emit run.started event immediately (via direct Postgres)
   // This is how observability knows a run has begun
-  await emitEvent(activityClient, {
-    event_type: 'run.started',
-    entity_type: 'campaign_run',
-    entity_id: runId,
-    campaign_id: campaignId,
-    run_id: runId,
-    payload: {
+  await emitEvent(
+    'run.started',
+    'campaign_run',
+    runId,
+    campaignId,
+    runId,
+    {
       triggered_by: options.triggeredBy,
       started_at: startedAt,
-    },
-  });
+    }
+  );
 
   console.log(`[runtime] Emitted run.started for run ${runId}`);
 
@@ -440,7 +421,7 @@ export async function processCampaign(
   // We use setImmediate to ensure the response is returned first
   // This is critical for Vercel serverless - we return 202 immediately
   setImmediate(() => {
-    executePipeline(coreClient, activityClient, context)
+    executePipeline(coreClient, context)
       .catch((error) => {
         console.error(`[runtime] Background pipeline execution failed:`, error);
       });
@@ -454,15 +435,17 @@ export async function processCampaign(
 }
 
 /**
- * Check if the runtime is ready (Supabase configured).
+ * Check if the runtime is ready (Supabase and DATABASE_URL configured).
  */
 export function isRuntimeReady(): boolean {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const databaseUrl = process.env.DATABASE_URL;
 
   return Boolean(
     supabaseUrl &&
     supabaseUrl !== 'https://placeholder.supabase.co' &&
-    serviceRoleKey
+    serviceRoleKey &&
+    databaseUrl
   );
 }

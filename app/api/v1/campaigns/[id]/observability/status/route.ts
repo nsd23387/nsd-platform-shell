@@ -18,6 +18,10 @@
  * Campaign runs are tracked via activity events, not relational tables.
  * Status is derived from the event stream (run.started, run.running, run.completed, run.failed).
  * 
+ * DATABASE ACCESS:
+ * - activity.events is read via direct DB connection, not PostgREST.
+ * - core.* tables are read via Supabase client (PostgREST).
+ * 
  * GOVERNANCE:
  * - Read-only
  * - UI must derive all execution display from this endpoint
@@ -28,20 +32,12 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getLatestRunEvent, isActivityDbConfigured } from '../../../../../../../lib/activity-db';
 
 function isSupabaseConfigured(): boolean {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   return Boolean(supabaseUrl && supabaseUrl !== 'https://placeholder.supabase.co' && serviceRoleKey);
-}
-
-function createActivityClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    db: { schema: 'activity' },
-  });
 }
 
 function createCoreClient() {
@@ -59,8 +55,8 @@ export async function GET(
 ) {
   const campaignId = params.id;
 
-  if (!isSupabaseConfigured()) {
-    // Return idle status when Supabase is not configured
+  if (!isSupabaseConfigured() || !isActivityDbConfigured()) {
+    // Return idle status when not configured
     return NextResponse.json({
       campaign_id: campaignId,
       status: 'idle',
@@ -70,9 +66,8 @@ export async function GET(
 
   try {
     const coreClient = createCoreClient();
-    const activityClient = createActivityClient();
 
-    // Check if campaign exists
+    // Check if campaign exists (via Supabase/PostgREST)
     const { data: campaign, error: campaignError } = await coreClient
       .from('campaigns')
       .select('id, status')
@@ -83,17 +78,12 @@ export async function GET(
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     }
 
-    // Get the latest run events to determine execution status
-    // We look for run.started, run.running, run.completed, run.failed events
-    const { data: latestRunEvent } = await activityClient
-      .from('events')
-      .select('event_type, entity_id, run_id, payload, created_at')
-      .eq('campaign_id', campaignId)
-      .eq('entity_type', 'campaign_run')
-      .in('event_type', ['run.started', 'run.running', 'run.completed', 'run.failed'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    // Get the latest run event via direct Postgres
+    // activity.events is read via direct DB connection, not PostgREST.
+    const latestRunEvent = await getLatestRunEvent(
+      campaignId,
+      ['run.started', 'run.running', 'run.completed', 'run.failed']
+    );
 
     // Determine execution status from event stream
     let executionStatus: string = 'idle';
@@ -104,16 +94,16 @@ export async function GET(
 
     if (latestRunEvent) {
       lastObservedAt = latestRunEvent.created_at || lastObservedAt;
-      const payload = latestRunEvent.payload as Record<string, unknown> || {};
+      const payload = latestRunEvent.payload || {};
       
       switch (latestRunEvent.event_type) {
         case 'run.started':
           executionStatus = 'run_requested';
-          activeRunId = latestRunEvent.run_id;
+          activeRunId = latestRunEvent.run_id || undefined;
           break;
         case 'run.running':
           executionStatus = 'running';
-          activeRunId = latestRunEvent.run_id;
+          activeRunId = latestRunEvent.run_id || undefined;
           currentStage = payload.stage as string | undefined;
           break;
         case 'run.completed':
