@@ -13,6 +13,10 @@
  * - activity.events is read via direct DB connection, not PostgREST.
  * - core.* tables are read via Supabase client (PostgREST).
  * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
+ * 
  * EMPTY STATE:
  * When runs is [], show "No runs observed yet" in UI.
  * 
@@ -89,7 +93,9 @@ export async function GET(
     }
 
     // Get all run.started events via direct Postgres
-    // activity.events is read via direct DB connection, not PostgREST.
+    // NOTE: activity.events is event-sourced.
+    // Identifiers such as campaignId and runId live in payload (JSONB),
+    // not as physical columns.
     const startedEvents = await getRunStartedEvents(campaignId, 50);
 
     if (!startedEvents || startedEvents.length === 0) {
@@ -100,18 +106,18 @@ export async function GET(
       });
     }
 
-    // Get run IDs from started events (run_id is in payload, not as column)
+    // Get run IDs from started events (runId is in payload, camelCase)
     const runIds = startedEvents
-      .map((event) => (event.payload?.run_id as string) || event.entity_id)
+      .map((event) => event.payload?.runId as string)
       .filter((id): id is string => Boolean(id));
 
     // Get completion events for these runs
     const completionEvents = await getCompletionEvents(campaignId, runIds);
 
-    // Build a map of completion events by run_id (run_id is in payload)
+    // Build a map of completion events by runId (from payload)
     const completionMap = new Map<string, StoredEvent>();
     for (const event of completionEvents) {
-      const eventRunId = (event.payload?.run_id as string) || event.entity_id;
+      const eventRunId = event.payload?.runId as string;
       if (eventRunId) {
         completionMap.set(eventRunId, event);
       }
@@ -121,12 +127,12 @@ export async function GET(
     const runs: RunRecord[] = [];
 
     for (const startEvent of startedEvents) {
-      // run_id is in payload, not as a separate column
-      const runId = (startEvent.payload?.run_id as string) || startEvent.entity_id;
+      // runId is in payload (camelCase)
+      const runId = startEvent.payload?.runId as string;
       if (!runId) continue;
 
       const startPayload = startEvent.payload || {};
-      const startedAt = (startPayload.started_at as string) || startEvent.created_at;
+      const startedAt = (startPayload.startedAt as string) || startEvent.created_at;
 
       const completionEvent = completionMap.get(runId);
       
@@ -141,15 +147,16 @@ export async function GET(
 
         if (completionEvent.event_type === 'run.completed') {
           runRecord.status = 'completed';
-          runRecord.completed_at = (compPayload.completed_at as string) || completionEvent.created_at;
-          runRecord.orgs_sourced = compPayload.orgs_sourced as number | undefined;
-          runRecord.contacts_discovered = compPayload.contacts_discovered as number | undefined;
-          runRecord.leads_promoted = compPayload.leads_promoted as number | undefined;
-          runRecord.leads_approved = compPayload.leads_approved as number | undefined;
-          runRecord.emails_sent = compPayload.emails_sent as number | undefined;
+          runRecord.completed_at = (compPayload.completedAt as string) || completionEvent.created_at;
+          // Use camelCase keys from payload
+          runRecord.orgs_sourced = compPayload.orgsSourced as number | undefined;
+          runRecord.contacts_discovered = compPayload.contactsDiscovered as number | undefined;
+          runRecord.leads_promoted = compPayload.leadsPromoted as number | undefined;
+          runRecord.leads_approved = compPayload.leadsApproved as number | undefined;
+          runRecord.emails_sent = compPayload.emailsSent as number | undefined;
         } else if (completionEvent.event_type === 'run.failed') {
           runRecord.status = 'failed';
-          runRecord.completed_at = (compPayload.failed_at as string) || completionEvent.created_at;
+          runRecord.completed_at = (compPayload.failedAt as string) || completionEvent.created_at;
           runRecord.errors = compPayload.error as string | undefined;
         }
       }

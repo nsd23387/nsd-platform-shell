@@ -8,15 +8,18 @@
  * All writes and reads to activity.events MUST use this module,
  * which connects directly to Postgres via DATABASE_URL.
  * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
+ * 
  * SCHEMA (activity.events):
  * - id: uuid (auto-generated)
  * - event_type: text (e.g., 'run.started', 'run.completed')
- * - entity_type: text (e.g., 'campaign_run')
- * - entity_id: uuid (the run ID or other entity ID)
- * - payload: jsonb (contains campaign_id, run_id, and other data)
- * - created_at: timestamptz
+ * - payload: jsonb (contains campaignId, runId, and all event data)
+ * - created_at: timestamptz (auto-generated)
  * 
- * NOTE: campaign_id and run_id are stored in the payload, not as columns.
+ * There are NO physical columns for campaign_id, run_id, entity_type, entity_id, etc.
+ * ALL contextual identifiers live inside payload.
  * 
  * ARCHITECTURE:
  * - Supabase client is used for core.* schema (campaigns, organizations, etc.)
@@ -81,8 +84,6 @@ export function isActivityDbConfigured(): boolean {
 
 export interface ActivityEvent {
   event_type: string;
-  entity_type: string;
-  entity_id: string;
   payload: Record<string, unknown>;
 }
 
@@ -96,39 +97,32 @@ export interface ActivityEvent {
  * Uses direct Postgres connection (not PostgREST/Supabase client).
  * This is the ONLY way to write to activity.events.
  * 
- * activity.events is written via direct DB connection, not PostgREST.
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
  * 
- * NOTE: campaign_id and run_id should be included in the payload.
- * 
- * @param event - The event to emit (without id and created_at)
+ * @param event - The event to emit (event_type + payload only)
  */
 export async function emitActivityEvent(event: ActivityEvent): Promise<void> {
   const pool = getPool();
-  const createdAt = new Date().toISOString();
 
-  // The table has: id, event_type, entity_type, entity_id, payload, created_at
-  // campaign_id and run_id are stored in the payload
+  // NOTE: activity.events is event-sourced.
+  // Identifiers such as campaignId and runId live in payload (JSONB),
+  // not as physical columns.
+  // The table only has: id (auto), event_type, payload, created_at (auto)
   const query = `
-    INSERT INTO activity.events (
-      event_type,
-      entity_type,
-      entity_id,
-      payload,
-      created_at
-    ) VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO activity.events (event_type, payload)
+    VALUES ($1, $2)
   `;
 
   const values = [
     event.event_type,
-    event.entity_type,
-    event.entity_id,
     JSON.stringify(event.payload),
-    createdAt,
   ];
 
   try {
     await pool.query(query, values);
-    console.log(`[activity-db] Emitted event: ${event.event_type} for ${event.entity_type}/${event.entity_id}`);
+    console.log(`[activity-db] Emitted event: ${event.event_type}`);
   } catch (error) {
     console.error(`[activity-db] Failed to emit event ${event.event_type}:`, error);
     throw error;
@@ -142,8 +136,6 @@ export async function emitActivityEvent(event: ActivityEvent): Promise<void> {
 export interface StoredEvent {
   id: string;
   event_type: string;
-  entity_type: string;
-  entity_id: string;
   payload: Record<string, unknown>;
   created_at: string;
 }
@@ -152,7 +144,10 @@ export interface StoredEvent {
  * Get the latest run event for a campaign.
  * 
  * Uses direct Postgres connection to read from activity.events.
- * Filters by campaign_id stored in the payload JSONB field.
+ * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
  * 
  * @param campaignId - The campaign UUID
  * @param eventTypes - Array of event types to filter by
@@ -164,12 +159,13 @@ export async function getLatestRunEvent(
 ): Promise<StoredEvent | null> {
   const pool = getPool();
 
-  // Query filtering by payload->>'campaign_id' since campaign_id is in payload
+  // NOTE: activity.events is event-sourced.
+  // Identifiers such as campaignId and runId live in payload (JSONB),
+  // not as physical columns.
   const query = `
-    SELECT id, event_type, entity_type, entity_id, payload, created_at
+    SELECT id, event_type, payload, created_at
     FROM activity.events
-    WHERE payload->>'campaign_id' = $1
-      AND entity_type = 'campaign_run'
+    WHERE payload->>'campaignId' = $1
       AND event_type = ANY($2)
     ORDER BY created_at DESC
     LIMIT 1
@@ -190,6 +186,10 @@ export async function getLatestRunEvent(
 /**
  * Get run started events for a campaign.
  * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
+ * 
  * @param campaignId - The campaign UUID
  * @param limit - Maximum number of events to return
  * @returns Array of run.started events
@@ -200,12 +200,13 @@ export async function getRunStartedEvents(
 ): Promise<StoredEvent[]> {
   const pool = getPool();
 
-  // Query filtering by payload->>'campaign_id'
+  // NOTE: activity.events is event-sourced.
+  // Identifiers such as campaignId and runId live in payload (JSONB),
+  // not as physical columns.
   const query = `
-    SELECT id, event_type, entity_type, entity_id, payload, created_at
+    SELECT id, event_type, payload, created_at
     FROM activity.events
-    WHERE payload->>'campaign_id' = $1
-      AND entity_type = 'campaign_run'
+    WHERE payload->>'campaignId' = $1
       AND event_type = 'run.started'
     ORDER BY created_at DESC
     LIMIT $2
@@ -223,6 +224,10 @@ export async function getRunStartedEvents(
 /**
  * Get completion events for specific run IDs.
  * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
+ * 
  * @param campaignId - The campaign UUID
  * @param runIds - Array of run IDs to check
  * @returns Array of completion/failure events
@@ -237,14 +242,15 @@ export async function getCompletionEvents(
 
   const pool = getPool();
 
-  // Query filtering by payload->>'campaign_id' and payload->>'run_id'
+  // NOTE: activity.events is event-sourced.
+  // Identifiers such as campaignId and runId live in payload (JSONB),
+  // not as physical columns.
   const query = `
-    SELECT id, event_type, entity_type, entity_id, payload, created_at
+    SELECT id, event_type, payload, created_at
     FROM activity.events
-    WHERE payload->>'campaign_id' = $1
-      AND entity_type = 'campaign_run'
+    WHERE payload->>'campaignId' = $1
       AND event_type IN ('run.completed', 'run.failed')
-      AND payload->>'run_id' = ANY($2)
+      AND payload->>'runId' = ANY($2)
   `;
 
   try {
@@ -259,6 +265,10 @@ export async function getCompletionEvents(
 /**
  * Get stage completed events for a campaign.
  * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
+ * 
  * @param campaignId - The campaign UUID
  * @param limit - Maximum number of events to return
  * @returns Array of stage.completed events
@@ -269,12 +279,13 @@ export async function getStageCompletedEvents(
 ): Promise<StoredEvent[]> {
   const pool = getPool();
 
-  // Query filtering by payload->>'campaign_id'
+  // NOTE: activity.events is event-sourced.
+  // Identifiers such as campaignId and runId live in payload (JSONB),
+  // not as physical columns.
   const query = `
-    SELECT id, event_type, entity_type, entity_id, payload, created_at
+    SELECT id, event_type, payload, created_at
     FROM activity.events
-    WHERE payload->>'campaign_id' = $1
-      AND entity_type = 'campaign_run'
+    WHERE payload->>'campaignId' = $1
       AND event_type = 'stage.completed'
     ORDER BY created_at DESC
     LIMIT $2

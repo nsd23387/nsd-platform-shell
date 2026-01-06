@@ -14,6 +14,10 @@
  * - activity.events is read via direct DB connection, not PostgREST.
  * - core.* tables are read via Supabase client (PostgREST).
  * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
+ * 
  * GOVERNANCE:
  * - Read-only
  * - Backend-authoritative counts and status
@@ -86,7 +90,9 @@ export async function GET(
     }
 
     // Get the latest run event via direct Postgres
-    // activity.events is read via direct DB connection, not PostgREST.
+    // NOTE: activity.events is event-sourced.
+    // Identifiers such as campaignId and runId live in payload (JSONB),
+    // not as physical columns.
     const latestRunEvent = await getLatestRunEvent(
       campaignId,
       ['run.started', 'run.running', 'run.completed', 'run.failed']
@@ -102,8 +108,8 @@ export async function GET(
     if (latestRunEvent) {
       lastObservedAt = latestRunEvent.created_at || lastObservedAt;
       const payload = latestRunEvent.payload || {};
-      // run_id is stored in payload, not as a separate column
-      const runIdFromPayload = (payload.run_id as string) || latestRunEvent.entity_id || null;
+      // NOTE: runId is in payload, not as a column (camelCase)
+      const runIdFromPayload = (payload.runId as string) || null;
       
       switch (latestRunEvent.event_type) {
         case 'run.started':
@@ -116,18 +122,18 @@ export async function GET(
           currentStage = payload.stage as string | undefined;
           break;
         case 'run.completed':
-          const leadsPromoted = payload.leads_promoted as number || 0;
+          const leadsPromoted = payload.leadsPromoted as number || 0;
           if (leadsPromoted > 0) {
             executionStatus = 'awaiting_approvals';
           } else {
             executionStatus = 'completed';
           }
-          lastObservedAt = (payload.completed_at as string) || lastObservedAt;
+          lastObservedAt = (payload.completedAt as string) || lastObservedAt;
           break;
         case 'run.failed':
           executionStatus = 'failed';
           errorMessage = payload.error as string | undefined;
-          lastObservedAt = (payload.failed_at as string) || lastObservedAt;
+          lastObservedAt = (payload.failedAt as string) || lastObservedAt;
           break;
         default:
           executionStatus = 'idle';
@@ -146,11 +152,12 @@ export async function GET(
     if (latestCompletionEvent && latestCompletionEvent.event_type === 'run.completed') {
       const payload = latestCompletionEvent.payload || {};
 
+      // Use camelCase keys from payload
       const stageDefinitions = [
-        { stage: 'orgs_sourced', label: 'Organizations sourced', count: payload.orgs_sourced as number | undefined },
-        { stage: 'contacts_discovered', label: 'Contacts discovered', count: payload.contacts_discovered as number | undefined },
-        { stage: 'contacts_evaluated', label: 'Contacts evaluated', count: payload.contacts_evaluated as number | undefined },
-        { stage: 'leads_promoted', label: 'Leads promoted', count: payload.leads_promoted as number | undefined },
+        { stage: 'orgs_sourced', label: 'Organizations sourced', count: payload.orgsSourced as number | undefined },
+        { stage: 'contacts_discovered', label: 'Contacts discovered', count: payload.contactsDiscovered as number | undefined },
+        { stage: 'contacts_evaluated', label: 'Contacts evaluated', count: payload.contactsEvaluated as number | undefined },
+        { stage: 'leads_promoted', label: 'Leads promoted', count: payload.leadsPromoted as number | undefined },
       ];
 
       for (const stageDef of stageDefinitions) {
@@ -168,13 +175,14 @@ export async function GET(
       const stageEvents = await getStageCompletedEvents(campaignId, 10);
 
       if (stageEvents && stageEvents.length > 0) {
+        // Use camelCase keys from payload
         const counts: Record<string, number> = {};
         for (const event of stageEvents) {
           const payload = event.payload || {};
-          if (payload.orgs_sourced !== undefined) counts.orgs_sourced = payload.orgs_sourced as number;
-          if (payload.contacts_discovered !== undefined) counts.contacts_discovered = payload.contacts_discovered as number;
-          if (payload.contacts_evaluated !== undefined) counts.contacts_evaluated = payload.contacts_evaluated as number;
-          if (payload.leads_promoted !== undefined) counts.leads_promoted = payload.leads_promoted as number;
+          if (payload.orgsSourced !== undefined) counts.orgs_sourced = payload.orgsSourced as number;
+          if (payload.contactsDiscovered !== undefined) counts.contacts_discovered = payload.contactsDiscovered as number;
+          if (payload.contactsEvaluated !== undefined) counts.contacts_evaluated = payload.contactsEvaluated as number;
+          if (payload.leadsPromoted !== undefined) counts.leads_promoted = payload.leadsPromoted as number;
         }
 
         const stageDefinitions = [

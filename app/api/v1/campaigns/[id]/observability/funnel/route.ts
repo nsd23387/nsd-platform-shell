@@ -19,6 +19,10 @@
  * - activity.events is read via direct DB connection, not PostgREST.
  * - core.* tables are read via Supabase client (PostgREST).
  * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
+ * 
  * GOVERNANCE:
  * - Read-only
  * - Counts are backend-authoritative
@@ -88,7 +92,9 @@ export async function GET(
     }
 
     // Get the latest run.completed or run.failed event via direct Postgres
-    // activity.events is read via direct DB connection, not PostgREST.
+    // NOTE: activity.events is event-sourced.
+    // Identifiers such as campaignId and runId live in payload (JSONB),
+    // not as physical columns.
     const latestCompletionEvent = await getLatestRunEvent(
       campaignId,
       ['run.completed', 'run.failed']
@@ -102,11 +108,11 @@ export async function GET(
       lastUpdatedAt = latestCompletionEvent.created_at || lastUpdatedAt;
       const payload = latestCompletionEvent.payload || {};
 
-      // Extract counts from the run.completed payload
-      const orgsSourced = payload.orgs_sourced as number | undefined;
-      const contactsDiscovered = payload.contacts_discovered as number | undefined;
-      const contactsEvaluated = payload.contacts_evaluated as number | undefined;
-      const leadsPromoted = payload.leads_promoted as number | undefined;
+      // Extract counts from the run.completed payload (camelCase keys)
+      const orgsSourced = payload.orgsSourced as number | undefined;
+      const contactsDiscovered = payload.contactsDiscovered as number | undefined;
+      const contactsEvaluated = payload.contactsEvaluated as number | undefined;
+      const leadsPromoted = payload.leadsPromoted as number | undefined;
 
       // Build stage definitions
       const stageDefinitions = [
@@ -135,14 +141,14 @@ export async function GET(
       if (stageEvents && stageEvents.length > 0) {
         lastUpdatedAt = stageEvents[0].created_at || lastUpdatedAt;
 
-        // Aggregate counts from stage events
+        // Aggregate counts from stage events (camelCase keys in payload)
         const counts: Record<string, number> = {};
         for (const event of stageEvents) {
           const payload = event.payload || {};
-          if (payload.orgs_sourced !== undefined) counts.orgs_sourced = payload.orgs_sourced as number;
-          if (payload.contacts_discovered !== undefined) counts.contacts_discovered = payload.contacts_discovered as number;
-          if (payload.contacts_evaluated !== undefined) counts.contacts_evaluated = payload.contacts_evaluated as number;
-          if (payload.leads_promoted !== undefined) counts.leads_promoted = payload.leads_promoted as number;
+          if (payload.orgsSourced !== undefined) counts.orgs_sourced = payload.orgsSourced as number;
+          if (payload.contactsDiscovered !== undefined) counts.contacts_discovered = payload.contactsDiscovered as number;
+          if (payload.contactsEvaluated !== undefined) counts.contacts_evaluated = payload.contactsEvaluated as number;
+          if (payload.leadsPromoted !== undefined) counts.leads_promoted = payload.leadsPromoted as number;
         }
 
         const stageDefinitions = [

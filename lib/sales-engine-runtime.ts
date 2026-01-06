@@ -38,10 +38,14 @@
  * - core.* tables are read via Supabase client (PostgREST).
  * - This separation is required because activity schema is not exposed via PostgREST.
  * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
+ * 
  * EVENT SCHEMA:
- * - campaign_id and run_id are stored in the payload JSONB field
- * - entity_id is set to the run_id for campaign_run events
- * - This matches the production activity.events table structure
+ * - Only event_type and payload columns exist
+ * - campaignId and runId are stored in payload
+ * - All contextual data lives in payload
  * 
  * ARCHITECTURE:
  * - Execution is API-isolated (only triggered via POST /run)
@@ -119,10 +123,11 @@ function createCoreClient(): AnySupabaseClient {
  * 
  * IMPORTANT: activity.events is written via direct DB connection, not PostgREST.
  * 
- * EVENT SCHEMA:
- * - entity_id is set to runId for campaign_run events
- * - campaign_id and run_id are included in the payload
- * - This matches the production activity.events table structure
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
+ * 
+ * The table only has: id (auto), event_type, payload, created_at (auto)
  * 
  * All state changes go through event emission.
  * This is an append-only operation - events are never updated or deleted.
@@ -131,23 +136,21 @@ function createCoreClient(): AnySupabaseClient {
  */
 async function emitEvent(
   eventType: string,
-  entityType: string,
-  entityId: string,
   campaignId: string,
   runId: string,
   additionalPayload: Record<string, unknown>
 ): Promise<void> {
-  // Include campaign_id and run_id in the payload (not as separate columns)
+  // NOTE: activity.events is event-sourced.
+  // Identifiers such as campaignId and runId live in payload (JSONB),
+  // not as physical columns.
   const payload = {
-    campaign_id: campaignId,
-    run_id: runId,
+    campaignId,
+    runId,
     ...additionalPayload,
   };
 
   await emitActivityEvent({
     event_type: eventType,
-    entity_type: entityType,
-    entity_id: entityId,
     payload,
   });
 }
@@ -170,7 +173,10 @@ async function emitEvent(
  * IMPORTANT: Run state is tracked via events, not a campaign_runs table.
  * Each stage emits events that observability UI can read.
  * Events are written via direct Postgres, not PostgREST.
- * campaign_id and run_id are stored in the payload JSONB field.
+ * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
  */
 async function executePipeline(
   coreClient: AnySupabaseClient,
@@ -184,13 +190,11 @@ async function executePipeline(
     context.currentStage = 'sourcing';
     await emitEvent(
       'run.running',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
       { 
         stage: 'sourcing',
-        triggered_by: context.triggeredBy,
+        triggeredBy: context.triggeredBy,
       }
     );
 
@@ -212,8 +216,6 @@ async function executePipeline(
 
     await emitEvent(
       'stage.started',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
       { stage: 'sourcing', icp: campaign.icp }
@@ -225,11 +227,9 @@ async function executePipeline(
 
     await emitEvent(
       'stage.completed',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
-      { stage: 'sourcing', orgs_sourced: context.counters.orgsSourced }
+      { stage: 'sourcing', orgsSourced: context.counters.orgsSourced }
     );
 
     // ========================================================================
@@ -240,8 +240,6 @@ async function executePipeline(
     
     await emitEvent(
       'stage.started',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
       { stage: 'discovery' }
@@ -252,11 +250,9 @@ async function executePipeline(
 
     await emitEvent(
       'stage.completed',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
-      { stage: 'discovery', contacts_discovered: context.counters.contactsDiscovered }
+      { stage: 'discovery', contactsDiscovered: context.counters.contactsDiscovered }
     );
 
     // ========================================================================
@@ -267,8 +263,6 @@ async function executePipeline(
 
     await emitEvent(
       'stage.started',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
       { stage: 'evaluation' }
@@ -279,11 +273,9 @@ async function executePipeline(
 
     await emitEvent(
       'stage.completed',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
-      { stage: 'evaluation', contacts_evaluated: context.counters.contactsEvaluated }
+      { stage: 'evaluation', contactsEvaluated: context.counters.contactsEvaluated }
     );
 
     // ========================================================================
@@ -294,8 +286,6 @@ async function executePipeline(
 
     await emitEvent(
       'stage.started',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
       { stage: 'promotion' }
@@ -306,11 +296,9 @@ async function executePipeline(
 
     await emitEvent(
       'stage.completed',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
-      { stage: 'promotion', leads_promoted: context.counters.leadsPromoted }
+      { stage: 'promotion', leadsPromoted: context.counters.leadsPromoted }
     );
 
     // ========================================================================
@@ -322,16 +310,14 @@ async function executePipeline(
     // Emit run.completed event (this is how observability knows the run finished)
     await emitEvent(
       'run.completed',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
       {
-        completed_at: new Date().toISOString(),
-        orgs_sourced: context.counters.orgsSourced,
-        contacts_discovered: context.counters.contactsDiscovered,
-        contacts_evaluated: context.counters.contactsEvaluated,
-        leads_promoted: context.counters.leadsPromoted,
+        completedAt: new Date().toISOString(),
+        orgsSourced: context.counters.orgsSourced,
+        contactsDiscovered: context.counters.contactsDiscovered,
+        contactsEvaluated: context.counters.contactsEvaluated,
+        leadsPromoted: context.counters.leadsPromoted,
       }
     );
 
@@ -341,14 +327,12 @@ async function executePipeline(
     // Emit run.failed event (this is how observability knows the run failed)
     await emitEvent(
       'run.failed',
-      'campaign_run',
-      runId,
       campaignId,
       runId,
       { 
         error: error instanceof Error ? error.message : 'Unknown error',
-        failed_at: new Date().toISOString(),
-        last_stage: context.currentStage,
+        failedAt: new Date().toISOString(),
+        lastStage: context.currentStage,
       }
     );
   }
@@ -371,7 +355,10 @@ async function executePipeline(
  * DATABASE ACCESS:
  * - activity.events is written via direct DB connection, not PostgREST.
  * - This is required because activity schema is not exposed via PostgREST.
- * - campaign_id and run_id are stored in the payload JSONB field.
+ * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
  * 
  * This function:
  * 1. Generates a unique runId
@@ -420,16 +407,16 @@ export async function processCampaign(
 
   // Step 1: Emit run.started event immediately (via direct Postgres)
   // This is how observability knows a run has begun
-  // campaign_id and run_id are stored in the payload
+  // NOTE: activity.events is event-sourced.
+  // Identifiers such as campaignId and runId live in payload (JSONB),
+  // not as physical columns.
   await emitEvent(
     'run.started',
-    'campaign_run',
-    runId,
     campaignId,
     runId,
     {
-      triggered_by: options.triggeredBy,
-      started_at: startedAt,
+      triggeredBy: options.triggeredBy,
+      startedAt,
     }
   );
 

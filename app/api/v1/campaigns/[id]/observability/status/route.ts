@@ -22,6 +22,10 @@
  * - activity.events is read via direct DB connection, not PostgREST.
  * - core.* tables are read via Supabase client (PostgREST).
  * 
+ * NOTE: activity.events is event-sourced.
+ * Identifiers such as campaignId and runId live in payload (JSONB),
+ * not as physical columns.
+ * 
  * GOVERNANCE:
  * - Read-only
  * - UI must derive all execution display from this endpoint
@@ -79,7 +83,9 @@ export async function GET(
     }
 
     // Get the latest run event via direct Postgres
-    // activity.events is read via direct DB connection, not PostgREST.
+    // NOTE: activity.events is event-sourced.
+    // Identifiers such as campaignId and runId live in payload (JSONB),
+    // not as physical columns.
     const latestRunEvent = await getLatestRunEvent(
       campaignId,
       ['run.started', 'run.running', 'run.completed', 'run.failed']
@@ -95,33 +101,33 @@ export async function GET(
     if (latestRunEvent) {
       lastObservedAt = latestRunEvent.created_at || lastObservedAt;
       const payload = latestRunEvent.payload || {};
-      // run_id is stored in payload, not as a separate column
-      const runIdFromPayload = payload.run_id as string | undefined;
+      // NOTE: runId is in payload, not as a column
+      const runIdFromPayload = payload.runId as string | undefined;
       
       switch (latestRunEvent.event_type) {
         case 'run.started':
           executionStatus = 'run_requested';
-          activeRunId = runIdFromPayload || latestRunEvent.entity_id || undefined;
+          activeRunId = runIdFromPayload;
           break;
         case 'run.running':
           executionStatus = 'running';
-          activeRunId = runIdFromPayload || latestRunEvent.entity_id || undefined;
+          activeRunId = runIdFromPayload;
           currentStage = payload.stage as string | undefined;
           break;
         case 'run.completed':
           // Check if there are leads awaiting approval
-          const leadsPromoted = payload.leads_promoted as number || 0;
+          const leadsPromoted = payload.leadsPromoted as number || 0;
           if (leadsPromoted > 0) {
             executionStatus = 'awaiting_approvals';
           } else {
             executionStatus = 'completed';
           }
-          lastObservedAt = (payload.completed_at as string) || lastObservedAt;
+          lastObservedAt = (payload.completedAt as string) || lastObservedAt;
           break;
         case 'run.failed':
           executionStatus = 'failed';
           errorMessage = payload.error as string | undefined;
-          lastObservedAt = (payload.failed_at as string) || lastObservedAt;
+          lastObservedAt = (payload.failedAt as string) || lastObservedAt;
           break;
         default:
           executionStatus = 'idle';
