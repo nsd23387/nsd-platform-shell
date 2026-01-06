@@ -77,15 +77,32 @@ export function GovernanceActionsPanel({
         headers: { 'Content-Type': 'application/json' },
       });
       
+      // 200 = success (status changed)
+      // 202 = accepted (execution delegated, e.g., /run)
       if (response.ok) {
         setSuccessMessage(successMsg);
-        // Refresh the page to show updated status
-        if (typeof window !== 'undefined') {
-          window.location.reload();
+        
+        // For /run (202), don't reload immediately - execution is async
+        // For submit/approve (200), reload to show new status
+        if (response.status === 202) {
+          // Execution was delegated - show message but don't assume completion
+          setSuccessMessage(`${successMsg}. Execution has been delegated to the Sales Engine.`);
+        } else {
+          // Status changed - refresh to show updated state
+          if (typeof window !== 'undefined') {
+            window.location.reload();
+          }
         }
       } else {
         const data = await response.json();
-        setSuccessMessage(`Error: ${data.error || 'Action failed'}`);
+        // Provide more context for specific error codes
+        if (response.status === 409) {
+          setSuccessMessage(`Error: ${data.reason || data.error || 'Campaign not in correct state'}`);
+        } else if (response.status === 503) {
+          setSuccessMessage(`Error: ${data.message || 'Service unavailable'}`);
+        } else {
+          setSuccessMessage(`Error: ${data.error || 'Action failed'}`);
+        }
       }
     } catch (error) {
       console.error('Action error:', error);
