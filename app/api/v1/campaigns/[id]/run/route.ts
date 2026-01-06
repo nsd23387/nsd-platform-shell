@@ -1,38 +1,35 @@
 /**
- * Campaign Run API Route — Execution Handoff
+ * Campaign Run API Route — Inline Execution
  * 
  * POST /api/v1/campaigns/[id]/run
  * 
- * ARCHITECTURE:
- * - Platform Shell = command issuer (intent only)
- * - Sales Engine = execution authority
- * - ODS = immutable system of record
+ * NOTE:
+ * Execution is intentionally co-located with the Platform Shell
+ * for cost and simplicity reasons.
+ *
+ * This file represents a logical execution boundary and is
+ * designed to be extractable into a separate runtime in the future
+ * without changing semantics.
  * 
- * This endpoint does NOT execute campaigns. It delegates execution intent
- * to the Sales Engine, which is the only system with execution authority.
+ * ARCHITECTURE:
+ * - Platform Shell hosts execution (for deployment simplicity)
+ * - UI remains observational + approval-only
+ * - All state changes are event-driven
+ * - Execution writes to activity.events
+ * - Run records are written to core.campaign_runs
  * 
  * GOVERNANCE:
- * - UI issues intent; Sales Engine executes
- * - No sourcing logic runs in Platform Shell
- * - No execution state mutation locally
- * - No Smartlead or message sending
- * - No bypass of approvals
+ * - No UI state mutation from execution
+ * - No bypassing of approval semantics
+ * - All execution is event-driven and observable
  */
 
-// Force Node.js runtime for Supabase access
+// Force Node.js runtime for database access
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseConfigured } from '../../../../../../lib/supabase-server';
-
-/**
- * Sales Engine Runtime URL for execution delegation.
- * The Sales Engine (nsd-sales-engine-replit-agent) is the only system with execution authority.
- * 
- * IMPORTANT: This must point to the Sales Engine runtime, NOT the Platform Shell's
- * internal API routes. The Platform Shell delegates execution to the Sales Engine.
- */
-const SALES_ENGINE_RUNTIME_URL = process.env.SALES_ENGINE_RUNTIME_URL;
+import { processCampaign, isRuntimeReady } from '../../../../../../lib/sales-engine-runtime';
 
 export async function POST(
   request: NextRequest,
@@ -42,13 +39,13 @@ export async function POST(
   console.log('[campaign-run] POST request for:', campaignId);
 
   // =========================================================================
-  // STEP 1: Validate campaign exists and is in ACTIVE status
+  // STEP 1: Validate runtime is ready
   // =========================================================================
   
-  if (!isSupabaseConfigured()) {
-    console.error('[campaign-run] Supabase not configured');
+  if (!isSupabaseConfigured() || !isRuntimeReady()) {
+    console.error('[campaign-run] Runtime not configured');
     return NextResponse.json(
-      { error: 'Database not configured' },
+      { error: 'Execution runtime not configured' },
       { status: 503 }
     );
   }
@@ -56,7 +53,10 @@ export async function POST(
   try {
     const supabase = createServerClient();
 
-    // Fetch campaign from ODS (core.campaigns)
+    // =========================================================================
+    // STEP 2: Validate campaign exists and is in ACTIVE status
+    // =========================================================================
+    
     const { data: campaign, error: fetchError } = await supabase
       .from('campaigns')
       .select('id, name, status')
@@ -85,7 +85,7 @@ export async function POST(
     }
 
     // =========================================================================
-    // STEP 2: Validate campaign is ACTIVE (approved and ready for execution)
+    // STEP 3: Validate campaign is ACTIVE (approved and ready for execution)
     // =========================================================================
     
     if (campaign.status !== 'active') {
@@ -97,106 +97,46 @@ export async function POST(
           required_status: 'active',
           current_status: campaign.status,
         },
-        { status: 409 }  // Conflict - campaign not in correct state
+        { status: 409 }
       );
     }
 
     // =========================================================================
-    // STEP 3: Delegate execution to Sales Engine
-    // UI issues intent; Sales Engine executes.
+    // STEP 4: Execute campaign via processCampaign()
+    // This creates a run, emits run.started, and triggers pipeline execution.
+    // The pipeline runs in the background - we return 202 immediately.
     // =========================================================================
     
-    if (!SALES_ENGINE_RUNTIME_URL) {
-      console.warn('[campaign-run] SALES_ENGINE_RUNTIME_URL not configured');
-      
-      // In development/preview without Sales Engine, return mock acceptance
-      // This allows UI testing without the full backend
-      console.log('[campaign-run] Returning mock 202 (Sales Engine not configured)');
-      return NextResponse.json(
-        { 
-          status: 'run_requested',
-          campaign_id: campaignId,
-          message: 'Execution request accepted (Sales Engine not configured - mock response)',
-          delegated_to: null,
-        },
-        { status: 202 }
-      );
-    }
+    console.log('[campaign-run] Starting execution for:', campaignId);
+    
+    const result = await processCampaign(campaignId, {
+      triggeredBy: 'platform-shell',
+    });
 
-    // Delegate to Sales Engine
-    // The Sales Engine will:
-    // 1. Create a new campaign_run record
-    // 2. Emit campaign.run.started event
-    // 3. Begin execution starting with sourcing
-    const salesEngineUrl = `${SALES_ENGINE_RUNTIME_URL}/campaigns/${campaignId}/run`;
-    console.log('[campaign-run] Delegating to Sales Engine:', salesEngineUrl);
+    console.log('[campaign-run] Execution started:', result);
 
-    try {
-      const delegateResponse = await fetch(salesEngineUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Forward authorization if present
-          ...(request.headers.get('authorization') 
-            ? { 'Authorization': request.headers.get('authorization')! }
-            : {}),
-        },
-        body: JSON.stringify({
-          campaign_id: campaignId,
-          requested_at: new Date().toISOString(),
-          source: 'platform-shell',
-        }),
-      });
-
-      if (!delegateResponse.ok) {
-        const errorData = await delegateResponse.json().catch(() => ({}));
-        console.error('[campaign-run] Sales Engine error:', delegateResponse.status, errorData);
-        return NextResponse.json(
-          { 
-            error: 'Sales Engine rejected execution request',
-            sales_engine_status: delegateResponse.status,
-            details: errorData,
-          },
-          { status: delegateResponse.status }
-        );
-      }
-
-      // Sales Engine accepted the execution request
-      const responseData = await delegateResponse.json().catch(() => ({}));
-      console.log('[campaign-run] Sales Engine accepted:', responseData);
-
-      // =========================================================================
-      // STEP 4: Return 202 Accepted
-      // Do NOT wait for execution to complete.
-      // =========================================================================
-      
-      return NextResponse.json(
-        { 
-          status: 'run_requested',
-          campaign_id: campaignId,
-          message: 'Execution request delegated to Sales Engine',
-          delegated_to: 'sales-engine',
-          sales_engine_response: responseData,
-        },
-        { status: 202 }
-      );
-
-    } catch (delegateError) {
-      // Sales Engine could not be reached
-      console.error('[campaign-run] Failed to reach Sales Engine:', delegateError);
-      return NextResponse.json(
-        { 
-          error: 'Sales Engine unavailable',
-          message: 'Could not delegate execution request to Sales Engine',
-        },
-        { status: 503 }
-      );
-    }
+    // =========================================================================
+    // STEP 5: Return 202 Accepted immediately
+    // Do NOT await execution completion.
+    // =========================================================================
+    
+    return NextResponse.json(
+      { 
+        status: 'run_started',
+        campaignId: campaignId,
+        run_id: result.run_id,
+        message: 'Campaign execution started',
+      },
+      { status: 202 }
+    );
 
   } catch (error) {
-    console.error('[campaign-run] Unexpected error:', error);
+    console.error('[campaign-run] Execution error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Execution failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     );
   }
