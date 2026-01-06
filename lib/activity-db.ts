@@ -101,6 +101,9 @@ export interface ActivityEvent {
  * Identifiers such as campaignId and runId live in payload (JSONB),
  * not as physical columns.
  * 
+ * NOTE: The id column does NOT have a DEFAULT value in the database,
+ * so we must generate it explicitly in application code using crypto.randomUUID().
+ * 
  * @param event - The event to emit (event_type + payload only)
  */
 export async function emitActivityEvent(event: ActivityEvent): Promise<void> {
@@ -109,20 +112,25 @@ export async function emitActivityEvent(event: ActivityEvent): Promise<void> {
   // NOTE: activity.events is event-sourced.
   // Identifiers such as campaignId and runId live in payload (JSONB),
   // not as physical columns.
-  // The table only has: id (auto), event_type, payload, created_at (auto)
+  //
+  // IMPORTANT: The id column does NOT have a DEFAULT value.
+  // We must generate the UUID explicitly in application code.
+  const eventId = crypto.randomUUID();
+
   const query = `
-    INSERT INTO activity.events (event_type, payload)
-    VALUES ($1, $2)
+    INSERT INTO activity.events (id, event_type, payload)
+    VALUES ($1, $2, $3)
   `;
 
   const values = [
+    eventId,
     event.event_type,
     JSON.stringify(event.payload),
   ];
 
   try {
     await pool.query(query, values);
-    console.log(`[activity-db] Emitted event: ${event.event_type}`);
+    console.log(`[activity-db] Emitted event: ${event.event_type} (id: ${eventId})`);
   } catch (error) {
     console.error(`[activity-db] Failed to emit event ${event.event_type}:`, error);
     throw error;
