@@ -208,9 +208,45 @@ export interface UserBootstrap {
 }
 
 /**
+ * Lead promotion tier.
+ * 
+ * IMPORTANT: Contacts and leads are distinct; leads are conditionally promoted.
+ * - Tier A/B: Promoted leads (eligible for outreach)
+ * - Tier C/D: Contacts that do NOT qualify as leads (never appear in lead views)
+ * 
+ * Promotion requires:
+ * - ICP fit
+ * - Real (non-placeholder) email
+ */
+export type PromotionTier = 'A' | 'B' | 'C' | 'D';
+
+/**
+ * Promotion details for a lead.
+ * These fields are set by the backend during deterministic contact evaluation.
+ * UI displays these as read-only snapshots.
+ */
+export interface PromotionDetails {
+  /** Promotion tier (A/B = promoted leads, C/D = non-promoted contacts) */
+  promotionTier: PromotionTier;
+  /** Numeric score assigned during promotion (0-100) */
+  promotionScore: number;
+  /** Array of reasons explaining why this contact was promoted to lead status */
+  promotionReasons: string[];
+  /** Timestamp when promotion was evaluated */
+  promotedAt?: string;
+}
+
+/**
  * Qualified lead record.
+ * 
+ * CRITICAL DISTINCTION:
+ * - Contacts are global; campaign linkage via contact.discovered
+ * - Leads exist ONLY when contacts are promoted
+ * - Promotion requires ICP fit AND real (non-placeholder) email
+ * - Tier C/D contacts are NEVER leads and should never appear in lead views
+ * 
  * Per target-state constraints: Lead views must only show records in
- * "lead-ready/qualified" canonical state.
+ * "lead-ready/qualified" canonical state with promotionTier A or B.
  */
 export interface QualifiedLead {
   id: string;
@@ -221,11 +257,27 @@ export interface QualifiedLead {
   provenance: ProvenanceType;
   created_at: string;
   updated_at: string;
+  
+  /**
+   * Promotion details (read-only snapshot from backend).
+   * Present only for promoted leads (Tier A/B).
+   * Contacts and leads are distinct; leads are conditionally promoted.
+   */
+  promotion?: PromotionDetails;
 }
 
 /**
  * Contact record (distinct from Lead).
+ * 
+ * CRITICAL DISTINCTION (contacts vs leads):
+ * - Organizations are global; campaign linkage via organization.sourced
+ * - Contacts are global; campaign linkage via contact.discovered
+ * - Contacts are evaluated deterministically
+ * - Leads exist ONLY when contacts are promoted (requires ICP fit + real email)
+ * - Tier C/D contacts never become leads
+ * 
  * Per target-state constraints: Do not treat "contact with email" as a Lead.
+ * A contact may have an email but still not qualify as a lead.
  */
 export interface ContactObserved {
   id: string;
@@ -236,6 +288,13 @@ export interface ContactObserved {
   title?: string;
   provenance: ProvenanceType;
   observed_at: string;
+  
+  /**
+   * If present, indicates this contact was evaluated for promotion.
+   * - Tier A/B: Contact was promoted to lead status
+   * - Tier C/D: Contact was NOT promoted (remains contact only)
+   */
+  evaluationTier?: PromotionTier;
 }
 
 /**
@@ -255,3 +314,71 @@ export interface LearningSignal {
  * Autonomy levels (L0-L2 only per constraints).
  */
 export type AutonomyLevel = 'L0' | 'L1' | 'L2';
+
+// ============================================
+// Lead Approval Types
+// ============================================
+
+/**
+ * Lead approval status.
+ * 
+ * BACKEND ENFORCEMENT:
+ * - Leads start as `pending_approval`
+ * - Only approved leads can be sent/exported
+ * - Approval/rejection are explicit actions
+ * - UI reflects this state, does not auto-approve
+ */
+export type LeadApprovalStatus = 'pending_approval' | 'approved' | 'rejected';
+
+/**
+ * Lead approval action type.
+ */
+export type LeadApprovalAction = 'approve' | 'reject';
+
+/**
+ * Lead record with approval status.
+ * 
+ * IMPORTANT: Approval is gated by backend.
+ * - Leads start as pending_approval
+ * - Only approved leads can be sent/exported
+ * - UI must not imply auto-approval
+ */
+export interface LeadWithApproval extends QualifiedLead {
+  /** Current approval status (backend-authoritative) */
+  approval_status: LeadApprovalStatus;
+  /** When approval/rejection occurred */
+  approval_updated_at?: string;
+  /** Who approved/rejected (user ID or system) */
+  approval_updated_by?: string;
+  /** Optional rejection reason */
+  rejection_reason?: string;
+}
+
+/**
+ * Bulk approval request payload.
+ */
+export interface BulkApprovalRequest {
+  campaign_id: string;
+  lead_ids: string[];
+  action: LeadApprovalAction;
+}
+
+/**
+ * Bulk approval response from backend.
+ */
+export interface BulkApprovalResponse {
+  success: boolean;
+  processed: number;
+  failed: number;
+  errors?: Array<{ lead_id: string; error: string }>;
+}
+
+/**
+ * Lead counts by approval status for a campaign.
+ */
+export interface LeadApprovalCounts {
+  pending_approval: number;
+  approved: number;
+  rejected: number;
+  total: number;
+}

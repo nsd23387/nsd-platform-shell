@@ -13,12 +13,22 @@ export { ICPEditor } from './ICPEditor';
 export { PersonalizationEditor } from './PersonalizationEditor';
 export { SalesEngineDashboard } from './SalesEngineDashboard';
 
-// Action and panel components
+// Governance components
 export {
   ProvenancePill,
   ConfidenceBadge,
   LearningSignalsPanel,
   GovernanceActionsPanel,
+  PromotionDetailsPanel,
 } from './governance';
 
 export { GovernanceActions } from './GovernanceActions';
+
+// Lead approval components
+// BACKEND ENFORCEMENT: Leads start as pending_approval, approval is explicit
+export {
+  LeadStatusBadge,
+  ApprovalConfirmationModal,
+  LeadApprovalActions,
+  BulkApprovalPanel,
+} from './leads';

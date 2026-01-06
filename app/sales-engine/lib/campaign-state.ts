@@ -292,13 +292,21 @@ export function deriveConfidence(metric: {
 /**
  * Check if an email is a valid lead email (not a filler/placeholder).
  * 
- * IMPORTANT: This function is intended for use with QUALIFIED LEAD views ONLY.
+ * CRITICAL SEMANTIC DISTINCTION (contacts vs leads):
+ * - Contacts and leads are distinct; leads are conditionally promoted.
+ * - Organizations are global; campaign linkage via organization.sourced
+ * - Contacts are global; campaign linkage via contact.discovered
+ * - Leads exist ONLY when contacts are promoted
+ * - Promotion requires ICP fit AND real (non-placeholder) email
+ * - Tier C/D contacts are NEVER leads
+ * 
+ * IMPORTANT: This function is intended for use with PROMOTED LEAD views ONLY.
  * "Contacts Observed" views should NOT filter by email validity - they display
- * all observed contact records regardless of email status.
+ * all observed contact records regardless of email or promotion status.
  * 
  * Use this function when:
- * - Filtering leads for the "Qualified Leads" view
- * - Validating lead eligibility
+ * - Filtering leads for the "Promoted Leads" view
+ * - Validating lead promotion eligibility
  * 
  * Do NOT use this function when:
  * - Displaying "Contacts Observed" (all contacts should be shown)
@@ -322,19 +330,29 @@ export function isValidLeadEmail(email: string | null | undefined): boolean {
 }
 
 /**
- * Determine if a record qualifies as a lead (not just a contact).
+ * Determine if a record qualifies as a promoted lead (not just a contact).
  * 
- * Per constraints: Lead views must only show records in "lead-ready/qualified" state.
+ * CRITICAL SEMANTIC DISTINCTION (contacts vs leads):
+ * - Contacts and leads are distinct; leads are conditionally promoted.
+ * - NOT all contacts become leads (Tier C/D are never leads)
+ * - Lead count is NOT derived from contact count
+ * - Promotion requires: ICP fit AND real (non-placeholder) email
+ * - Promotion produces: promotionTier (A/B), promotionScore, promotionReasons[]
+ * 
+ * Per constraints: Lead views must only show records that are:
+ * - Promoted (Tier A/B)
+ * - Have valid non-placeholder email
+ * - In "lead-ready/qualified" state
  * 
  * IMPORTANT DISTINCTION:
- * - "Qualified Leads" view: Use this function. Only shows records that pass all checks.
+ * - "Promoted Leads" view: Use this function. Only shows promoted Tier A/B records.
  * - "Contacts Observed" view: Do NOT use this function. Shows all observed contacts,
- *   even those without valid emails or qualification status.
+ *   even those without valid emails or without promotion status.
  * 
  * This distinction ensures:
- * - Lead counts are accurate (only truly qualified leads)
+ * - Lead counts are accurate (only promoted leads, not total contacts)
  * - Contact observability is complete (all data visible)
- * - UI does not conflate contacts with qualified leads
+ * - UI does not conflate contacts with promoted leads
  */
 export function isQualifiedLead(record: {
   email?: string | null;
