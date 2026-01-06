@@ -214,6 +214,60 @@ Contacts and leads are distinct entities. Leads are conditionally promoted from 
 
 ---
 
+## Lead Approval Workflow
+
+### Backend Enforcement (Authoritative)
+
+- **Leads start as `pending_approval`**
+- **Only approved leads can be sent/exported**
+- **Approval/rejection are explicit actions**
+- UI reflects this state, does not auto-approve
+
+### Approval Status
+
+| Status | UI Label | Meaning |
+|--------|----------|---------|
+| `pending_approval` | "Awaiting approval" | Lead requires explicit approval |
+| `approved` | "Approved for outreach" | Lead eligible for campaign execution |
+| `rejected` | "Rejected" | Lead excluded from outreach |
+
+### UI Components
+
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| `LeadStatusBadge` | Display approval status | Lead list, lead detail |
+| `LeadApprovalActions` | Approve/Reject buttons | Lead detail view |
+| `BulkApprovalPanel` | Bulk approve pending leads | Campaign view |
+| `ApprovalConfirmationModal` | Confirm before action | All approval actions |
+
+### Rules
+
+1. **Approve/Reject buttons visible only for `pending_approval` status**
+2. **Buttons disabled once approved or rejected** (status transitions are one-way)
+3. **Confirmation modal required** for all approval actions
+4. **Promotion rationale remains read-only** (no scoring controls)
+5. **No send/export buttons** in approval UI
+
+### Copy Alignment (Exact Language)
+
+Use these exact labels:
+
+| Status | ✅ Correct | ❌ Incorrect |
+|--------|-----------|-------------|
+| Pending | "Awaiting approval" | "Pending", "Qualified", "Ready" |
+| Approved | "Approved for outreach" | "Ready to send", "Qualified" |
+| Rejected | "Rejected" | "Failed", "Disqualified" |
+
+### Bulk Approval
+
+- "Approve all pending leads" button in campaign view
+- **Visible only if pending leads exist**
+- Shows before/after counts
+- Confirmation modal shows lead count
+- No auto-approval behavior
+
+---
+
 ## API Guard
 
 The `read-only-guard.ts` module enforces read-only constraints:
@@ -264,3 +318,6 @@ All governance logic has unit tests:
 | Lead model integrity | Promoted Leads (Tier A/B) ≠ Contacts Observed (All Tiers) |
 | Contact vs Lead distinction | Leads are conditionally promoted; not all contacts become leads |
 | Promotion visibility | Promotion details (tier, score, reasons) displayed read-only |
+| Lead approval gating | Leads start pending; approval is explicit action |
+| No auto-approval | UI never implies leads are auto-approved |
+| Confirmation required | All approval actions require modal confirmation |

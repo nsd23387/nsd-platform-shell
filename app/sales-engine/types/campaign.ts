@@ -314,3 +314,71 @@ export interface LearningSignal {
  * Autonomy levels (L0-L2 only per constraints).
  */
 export type AutonomyLevel = 'L0' | 'L1' | 'L2';
+
+// ============================================
+// Lead Approval Types
+// ============================================
+
+/**
+ * Lead approval status.
+ * 
+ * BACKEND ENFORCEMENT:
+ * - Leads start as `pending_approval`
+ * - Only approved leads can be sent/exported
+ * - Approval/rejection are explicit actions
+ * - UI reflects this state, does not auto-approve
+ */
+export type LeadApprovalStatus = 'pending_approval' | 'approved' | 'rejected';
+
+/**
+ * Lead approval action type.
+ */
+export type LeadApprovalAction = 'approve' | 'reject';
+
+/**
+ * Lead record with approval status.
+ * 
+ * IMPORTANT: Approval is gated by backend.
+ * - Leads start as pending_approval
+ * - Only approved leads can be sent/exported
+ * - UI must not imply auto-approval
+ */
+export interface LeadWithApproval extends QualifiedLead {
+  /** Current approval status (backend-authoritative) */
+  approval_status: LeadApprovalStatus;
+  /** When approval/rejection occurred */
+  approval_updated_at?: string;
+  /** Who approved/rejected (user ID or system) */
+  approval_updated_by?: string;
+  /** Optional rejection reason */
+  rejection_reason?: string;
+}
+
+/**
+ * Bulk approval request payload.
+ */
+export interface BulkApprovalRequest {
+  campaign_id: string;
+  lead_ids: string[];
+  action: LeadApprovalAction;
+}
+
+/**
+ * Bulk approval response from backend.
+ */
+export interface BulkApprovalResponse {
+  success: boolean;
+  processed: number;
+  failed: number;
+  errors?: Array<{ lead_id: string; error: string }>;
+}
+
+/**
+ * Lead counts by approval status for a campaign.
+ */
+export interface LeadApprovalCounts {
+  pending_approval: number;
+  approved: number;
+  rejected: number;
+  total: number;
+}
