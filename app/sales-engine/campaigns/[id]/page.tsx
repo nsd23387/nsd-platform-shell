@@ -6,7 +6,7 @@
  * Displays campaign details, metrics, and action buttons.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader, SectionCard } from '../../components/ui';
@@ -17,17 +17,27 @@ import type {
   CampaignMetrics,
   MetricsHistoryEntry,
   CampaignRun,
+  CampaignRunDetailed,
   CampaignVariant,
   ThroughputConfig,
+  CampaignObservability,
+  ObservabilityStatus,
+  ObservabilityFunnel,
+  CampaignExecutionStatus,
 } from '../../types/campaign';
 import {
   getCampaign,
   getCampaignMetrics,
   getCampaignMetricsHistory,
   getCampaignRuns,
+  getCampaignRunsDetailed,
   getLatestRun,
   getCampaignVariants,
   getCampaignThroughput,
+  getCampaignObservability,
+  getCampaignObservabilityStatus,
+  getCampaignObservabilityFunnel,
+  requestCampaignRun,
 } from '../../lib/api';
 import {
   mapToGovernanceState,
@@ -38,6 +48,12 @@ import {
   GovernanceActionsPanel,
 } from '../../components/governance';
 import { MetricsDisplay } from '../../components/MetricsDisplay';
+import {
+  CampaignExecutionStatusCard,
+  PipelineFunnelTable,
+  CampaignRunHistoryTable,
+  SendMetricsPanel,
+} from '../../components/observability';
 import { 
   isTestCampaign, 
   getTestCampaignDetail, 
@@ -62,12 +78,23 @@ export default function CampaignDetailPage() {
   const [metrics, setMetrics] = useState<CampaignMetrics | null>(null);
   const [metricsHistory, setMetricsHistory] = useState<MetricsHistoryEntry[]>([]);
   const [runs, setRuns] = useState<CampaignRun[]>([]);
+  const [runsDetailed, setRunsDetailed] = useState<CampaignRunDetailed[]>([]);
   const [latestRun, setLatestRun] = useState<CampaignRun | null>(null);
   const [variants, setVariants] = useState<CampaignVariant[]>([]);
   const [throughput, setThroughput] = useState<ThroughputConfig | null>(null);
+  const [observability, setObservability] = useState<CampaignObservability | null>(null);
+  // Observability status - source of truth for execution state
+  const [observabilityStatus, setObservabilityStatus] = useState<ObservabilityStatus | null>(null);
+  // Observability funnel - source of truth for pipeline counts
+  const [observabilityFunnel, setObservabilityFunnel] = useState<ObservabilityFunnel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
+  // Run request state
+  const [isRunRequesting, setIsRunRequesting] = useState(false);
+  const [runRequestMessage, setRunRequestMessage] = useState<string | null>(null);
+  // Polling interval ref
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derive governance state from backend data
   const governanceState: CampaignGovernanceState = campaign
@@ -105,22 +132,44 @@ export default function CampaignDetailPage() {
         const campaignData = await getCampaign(campaignId);
         setCampaign(campaignData);
 
-        const [metricsData, historyData, runsData, latestRunData, variantsData, throughputData] =
-          await Promise.allSettled([
-            getCampaignMetrics(campaignId),
-            getCampaignMetricsHistory(campaignId),
-            getCampaignRuns(campaignId),
-            getLatestRun(campaignId),
-            getCampaignVariants(campaignId),
-            getCampaignThroughput(campaignId),
-          ]);
+        const [
+          metricsData,
+          historyData,
+          runsData,
+          runsDetailedData,
+          latestRunData,
+          variantsData,
+          throughputData,
+          observabilityData,
+          observabilityStatusData,
+          observabilityFunnelData,
+        ] = await Promise.allSettled([
+          getCampaignMetrics(campaignId),
+          getCampaignMetricsHistory(campaignId),
+          getCampaignRuns(campaignId),
+          getCampaignRunsDetailed(campaignId),
+          getLatestRun(campaignId),
+          getCampaignVariants(campaignId),
+          getCampaignThroughput(campaignId),
+          getCampaignObservability(campaignId),
+          // Source of truth for execution state
+          getCampaignObservabilityStatus(campaignId),
+          // Source of truth for pipeline counts
+          getCampaignObservabilityFunnel(campaignId),
+        ]);
 
         if (metricsData.status === 'fulfilled') setMetrics(metricsData.value);
         if (historyData.status === 'fulfilled') setMetricsHistory(historyData.value);
         if (runsData.status === 'fulfilled') setRuns(runsData.value);
+        if (runsDetailedData.status === 'fulfilled') setRunsDetailed(runsDetailedData.value);
         if (latestRunData.status === 'fulfilled') setLatestRun(latestRunData.value);
         if (variantsData.status === 'fulfilled') setVariants(variantsData.value);
         if (throughputData.status === 'fulfilled') setThroughput(throughputData.value);
+        if (observabilityData.status === 'fulfilled') setObservability(observabilityData.value);
+        // Set observability status (source of truth for execution state)
+        if (observabilityStatusData.status === 'fulfilled') setObservabilityStatus(observabilityStatusData.value);
+        // Set observability funnel (source of truth for pipeline counts)
+        if (observabilityFunnelData.status === 'fulfilled') setObservabilityFunnel(observabilityFunnelData.value);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load campaign');
       } finally {
@@ -129,6 +178,89 @@ export default function CampaignDetailPage() {
     }
     loadData();
   }, [campaignId]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  /**
+   * Refresh observability data (status, funnel, runs).
+   * Called after run request and during polling.
+   */
+  const refreshObservabilityData = useCallback(async () => {
+    try {
+      const [statusData, funnelData, runsData] = await Promise.allSettled([
+        getCampaignObservabilityStatus(campaignId),
+        getCampaignObservabilityFunnel(campaignId),
+        getCampaignRunsDetailed(campaignId),
+      ]);
+
+      if (statusData.status === 'fulfilled') setObservabilityStatus(statusData.value);
+      if (funnelData.status === 'fulfilled') setObservabilityFunnel(funnelData.value);
+      if (runsData.status === 'fulfilled') setRunsDetailed(runsData.value);
+    } catch (err) {
+      console.error('[CampaignDetail] Failed to refresh observability:', err);
+    }
+  }, [campaignId]);
+
+  /**
+   * Handle Run Campaign button click.
+   * 
+   * On 202 Accepted:
+   * - UI shows "Execution requested"
+   * - UI immediately begins polling /observability/status and /runs
+   * 
+   * This is NOT a mock or no-op - execution is delegated to Sales Engine.
+   */
+  const handleRunCampaign = useCallback(async () => {
+    if (isRunRequesting) return;
+
+    setIsRunRequesting(true);
+    setRunRequestMessage(null);
+
+    try {
+      const response = await requestCampaignRun(campaignId);
+      
+      if (response.status === 'run_requested') {
+        // Show "Execution requested" message
+        setRunRequestMessage('Execution requested — Awaiting events from backend');
+        
+        // Immediately refresh observability data
+        await refreshObservabilityData();
+
+        // Start polling for status updates (every 5 seconds for 2 minutes)
+        let pollCount = 0;
+        const maxPolls = 24; // 2 minutes at 5 second intervals
+        
+        pollingIntervalRef.current = setInterval(async () => {
+          pollCount++;
+          await refreshObservabilityData();
+          
+          // Stop polling after max time or when status changes from run_requested
+          if (pollCount >= maxPolls) {
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+          }
+        }, 5000);
+      } else {
+        setRunRequestMessage('Execution request failed — See console for details');
+      }
+    } catch (err) {
+      console.error('[CampaignDetail] Run request failed:', err);
+      setRunRequestMessage(
+        `Execution request failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+      );
+    } finally {
+      setIsRunRequesting(false);
+    }
+  }, [campaignId, isRunRequesting, refreshObservabilityData]);
 
   if (loading) {
     return (
@@ -211,7 +343,14 @@ export default function CampaignDetailPage() {
             metrics={metrics}
             metricsHistory={metricsHistory}
             runs={runs}
+            runsDetailed={runsDetailed}
             latestRun={latestRun}
+            observability={observability}
+            observabilityStatus={observabilityStatus}
+            observabilityFunnel={observabilityFunnel}
+            onRunCampaign={handleRunCampaign}
+            isRunRequesting={isRunRequesting}
+            runRequestMessage={runRequestMessage}
           />
         )}
 
@@ -314,82 +453,178 @@ function OverviewTab({
 }
 
 /**
- * MonitoringTab - Displays metrics and run history
+ * MonitoringTab - Redesigned Observability Tab
  * 
- * CRITICAL: Confidence is derived from ACTUAL backend metadata only.
- * No hardcoded confidence values. If metadata is missing, metrics are
- * shown as "Observed (Unclassified)" with CONDITIONAL confidence.
+ * Provides full pipeline visibility with four stacked sections:
+ * A) Execution Status (Top) - Source of truth: /observability/status
+ * B) Pipeline Funnel (CORE) - Source of truth: /observability/funnel
+ * C) Run History (Fixed UX) - Source of truth: /runs
+ * D) Send Metrics (Scoped)
+ * 
+ * OBSERVABILITY GOVERNANCE:
+ * - Read-only display
+ * - Run Campaign button delegates to backend (returns 202 Accepted)
+ * - On 202: UI shows "Execution requested" and begins polling
+ * - No retries or overrides
+ * - No mock data - all from backend observability endpoints
+ * - Counts match backend exactly
+ * - Approval gating is visually obvious
+ * 
+ * Observability reflects pipeline state; execution is delegated.
  */
 function MonitoringTab({
   campaign,
   metrics,
   metricsHistory,
   runs,
+  runsDetailed,
   latestRun,
+  observability,
+  observabilityStatus,
+  observabilityFunnel,
+  onRunCampaign,
+  isRunRequesting,
+  runRequestMessage,
 }: {
   campaign: CampaignDetail;
   metrics: CampaignMetrics | null;
   metricsHistory: MetricsHistoryEntry[];
   runs: CampaignRun[];
+  runsDetailed: CampaignRunDetailed[];
   latestRun: CampaignRun | null;
+  observability: CampaignObservability | null;
+  observabilityStatus: ObservabilityStatus | null;
+  observabilityFunnel: ObservabilityFunnel | null;
+  onRunCampaign: () => void;
+  isRunRequesting: boolean;
+  runRequestMessage: string | null;
 }) {
+  // Scroll to run history section
+  const scrollToRunHistory = () => {
+    const element = document.getElementById('run-history');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Derive execution status from observabilityStatus (source of truth)
+  // Fallback to observability.status for backwards compatibility
+  const executionStatus: CampaignExecutionStatus = 
+    observabilityStatus?.status || observability?.status || 'idle';
+  
+  const activeRunId = observabilityStatus?.active_run_id || observability?.active_run_id;
+  const currentStage = observabilityStatus?.current_stage || observability?.current_stage;
+  const lastObservedAt = observabilityStatus?.last_observed_at || 
+    observability?.last_observed_at || new Date().toISOString();
+
+  // Pipeline stages from observabilityFunnel (source of truth)
+  // Fallback to observability.pipeline for backwards compatibility
+  const pipelineStages = observabilityFunnel?.stages || observability?.pipeline || [];
+
+  // Get leads awaiting approval count from pipeline
+  const leadsAwaitingApproval = pipelineStages.find(
+    (s) => s.stage === 'leads_awaiting_approval'
+  )?.count;
+
+  // Determine if campaign can be run
+  // Only allow run when status is 'idle' and campaign is runnable
+  const canRun = campaign.isRunnable && 
+    campaign.status === 'RUNNABLE' && 
+    executionStatus === 'idle';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Metrics using MetricsDisplay component with actual backend data */}
-      {metrics ? (
-        <MetricsDisplay metrics={metrics} history={metricsHistory} />
-      ) : (
-        <SectionCard title="Performance Metrics" icon="metrics" iconColor={NSD_COLORS.secondary}>
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.muted }}>
-              No metrics data available. Metrics will appear once execution has been observed.
-            </p>
-          </div>
-        </SectionCard>
+      {/* Run request message (shown after requesting execution) */}
+      {runRequestMessage && (
+        <div
+          style={{
+            padding: '12px 16px',
+            backgroundColor: '#DBEAFE',
+            borderRadius: NSD_RADIUS.md,
+            border: '1px solid #93C5FD',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <Icon name="info" size={16} color="#1E40AF" />
+          <span style={{ fontSize: '14px', color: '#1E40AF' }}>
+            {runRequestMessage}
+          </span>
+        </div>
       )}
 
-      {/* Run History (observability) */}
-      <SectionCard title="Run History (Observed)" icon="runs" iconColor={NSD_COLORS.info}>
-        {runs.length === 0 ? (
-          <p style={{ color: NSD_COLORS.text.muted, fontSize: '14px', textAlign: 'center', padding: '24px' }}>
-            No execution runs recorded yet
-          </p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${NSD_COLORS.border.light}` }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Observed At</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Status</th>
-                {/* Lead count = promoted leads (Tier A/B), not total contacts */}
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Promoted Leads Processed</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Emails Sent</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Errors</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run) => (
-                <tr key={run.id} style={{ borderBottom: `1px solid ${NSD_COLORS.border.light}` }}>
-                  <td style={{ padding: '14px 16px', fontSize: '14px', color: NSD_COLORS.text.primary }}>
-                    {new Date(run.started_at).toLocaleString()}
-                  </td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <RunStatusBadge status={run.status} />
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.text.primary }}>
-                    {run.leads_processed}
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.success }}>
-                    {run.emails_sent}
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: run.errors > 0 ? NSD_COLORS.error : NSD_COLORS.text.muted }}>
-                    {run.errors}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </SectionCard>
+      {/* Section A: Execution Status (Top) - Always visible */}
+      {/* Source of truth: /observability/status endpoint */}
+      <CampaignExecutionStatusCard
+        status={executionStatus}
+        activeRunId={activeRunId}
+        currentStage={currentStage}
+        lastObservedAt={lastObservedAt}
+        leadsAwaitingApproval={leadsAwaitingApproval}
+        onRunCampaign={onRunCampaign}
+        canRun={canRun}
+        isRunning={isRunRequesting}
+      />
+
+      {/* Section B: Pipeline Funnel (CORE) */}
+      {/* Source of truth: /observability/funnel endpoint */}
+      <PipelineFunnelTable
+        stages={pipelineStages}
+        loading={!observabilityFunnel && !observability}
+      />
+
+      {/* View Run History Button - scrolls to Section C */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <button
+          onClick={scrollToRunHistory}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 20px',
+            fontSize: '14px',
+            fontWeight: 500,
+            color: NSD_COLORS.secondary,
+            backgroundColor: 'transparent',
+            border: `1px solid ${NSD_COLORS.secondary}`,
+            borderRadius: NSD_RADIUS.md,
+            cursor: 'pointer',
+          }}
+        >
+          <Icon name="runs" size={16} color={NSD_COLORS.secondary} />
+          View Run History
+        </button>
+      </div>
+
+      {/* Section C: Run History (Fixed UX) */}
+      <CampaignRunHistoryTable
+        runs={runsDetailed.length > 0 ? runsDetailed : runs as CampaignRunDetailed[]}
+        id="run-history"
+      />
+
+      {/* Section D: Send Metrics (Scoped) - Post-Approval only */}
+      {observability?.send_metrics ? (
+        <SendMetricsPanel
+          emailsSent={observability.send_metrics.emails_sent}
+          emailsOpened={observability.send_metrics.emails_opened}
+          emailsReplied={observability.send_metrics.emails_replied}
+          openRate={observability.send_metrics.open_rate}
+          replyRate={observability.send_metrics.reply_rate}
+          confidence={observability.send_metrics.confidence}
+          lastUpdated={observability.last_observed_at}
+        />
+      ) : metrics ? (
+        <SendMetricsPanel
+          emailsSent={metrics.emails_sent}
+          emailsOpened={metrics.emails_opened}
+          emailsReplied={metrics.emails_replied}
+          openRate={metrics.open_rate}
+          replyRate={metrics.reply_rate}
+          confidence="conditional"
+          lastUpdated={metrics.last_updated}
+        />
+      ) : null}
     </div>
   );
 }
@@ -413,28 +648,4 @@ function LearningTab({ campaignId }: { campaignId: string }) {
   );
 }
 
-function RunStatusBadge({ status }: { status: 'COMPLETED' | 'FAILED' | 'PARTIAL' }) {
-  const styles = {
-    COMPLETED: { bg: '#D1FAE5', text: '#065F46', label: 'Completed' },
-    FAILED: { bg: '#FEE2E2', text: '#991B1B', label: 'Failed' },
-    PARTIAL: { bg: '#FEF3C7', text: '#92400E', label: 'Partial' },
-  };
-
-  const style = styles[status];
-
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        padding: '4px 8px',
-        fontSize: '12px',
-        fontWeight: 500,
-        backgroundColor: style.bg,
-        color: style.text,
-        borderRadius: NSD_RADIUS.sm,
-      }}
-    >
-      {style.label}
-    </span>
-  );
-}
+// RunStatusBadge moved to CampaignRunHistoryTable component

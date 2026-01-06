@@ -32,3 +32,12 @@ export {
   LeadApprovalActions,
   BulkApprovalPanel,
 } from './leads';
+
+// Observability components
+// OBSERVABILITY GOVERNANCE: Read-only, pipeline-first, no execution control
+export {
+  CampaignExecutionStatusCard,
+  PipelineFunnelTable,
+  CampaignRunHistoryTable,
+  SendMetricsPanel,
+} from './observability';

@@ -20,6 +20,7 @@ import type {
   CampaignMetrics,
   MetricsHistoryEntry,
   CampaignRun,
+  CampaignRunDetailed,
   CampaignVariant,
   ThroughputConfig,
   CampaignStatus,
@@ -28,6 +29,10 @@ import type {
   RecentRunOutcome,
   NeedsAttentionItem,
   UserBootstrap,
+  CampaignObservability,
+  RunRequestResponse,
+  ObservabilityStatus,
+  ObservabilityFunnel,
 } from '../types/campaign';
 import {
   assertReadOnly,
@@ -299,6 +304,207 @@ export async function getNeedsAttention(): Promise<NeedsAttentionItem[]> {
     return [];
   }
   return apiRequest<NeedsAttentionItem[]>('/attention');
+}
+
+// =============================================================================
+// PIPELINE OBSERVABILITY API FUNCTIONS
+// These provide read-only visibility into campaign pipeline state.
+// Observability reflects pipeline state; execution is delegated.
+// =============================================================================
+
+/**
+ * Mock observability data for API-disabled mode.
+ * 
+ * When API is disabled, show empty pipeline with proper zero-state.
+ * No mock data should imply activity that hasn't occurred.
+ */
+const MOCK_OBSERVABILITY: CampaignObservability = {
+  campaign_id: 'mock',
+  status: 'idle',
+  last_observed_at: new Date().toISOString(),
+  pipeline: [], // Empty pipeline - no activity observed yet
+};
+
+/**
+ * Mock observability status for API-disabled mode.
+ */
+const MOCK_OBSERVABILITY_STATUS: ObservabilityStatus = {
+  campaign_id: 'mock',
+  status: 'idle',
+  last_observed_at: new Date().toISOString(),
+};
+
+/**
+ * Mock observability funnel for API-disabled mode.
+ * Empty stages indicate no activity observed yet.
+ */
+const MOCK_OBSERVABILITY_FUNNEL: ObservabilityFunnel = {
+  campaign_id: 'mock',
+  stages: [], // Empty - "No activity observed yet"
+  last_updated_at: new Date().toISOString(),
+};
+
+/**
+ * Get campaign observability data (read-only).
+ * 
+ * Data source: GET /api/v1/campaigns/{id}/observability
+ * 
+ * OBSERVABILITY GOVERNANCE:
+ * - Read-only display
+ * - No execution control
+ * - No retries or overrides
+ * - Counts come directly from backend, never inferred
+ */
+export async function getCampaignObservability(id: string): Promise<CampaignObservability> {
+  // M67.9-01: Return mock data when API is disabled
+  if (isApiDisabled) {
+    return { ...MOCK_OBSERVABILITY, campaign_id: id };
+  }
+  return apiRequest<CampaignObservability>(`/${id}/observability`);
+}
+
+/**
+ * Get detailed campaign runs with full pipeline visibility (read-only).
+ * 
+ * Data source: GET /api/v1/campaigns/{id}/runs
+ * 
+ * Extended from getCampaignRuns to include per-run pipeline counts.
+ * 
+ * Empty state: Returns [] when no run.started events exist.
+ * UI should show "No runs observed yet" in this case.
+ */
+export async function getCampaignRunsDetailed(id: string): Promise<CampaignRunDetailed[]> {
+  // M67.9-01: Return empty array when API is disabled
+  if (isApiDisabled) {
+    return [];
+  }
+  return apiRequest<CampaignRunDetailed[]>(`/${id}/runs`);
+}
+
+// =============================================================================
+// OBSERVABILITY STATUS & FUNNEL API FUNCTIONS
+// These provide the source of truth for execution state.
+// UI must derive all execution display from these endpoints.
+// =============================================================================
+
+/**
+ * Get campaign execution status (read-only).
+ * 
+ * Data source: GET /api/v1/campaigns/{id}/observability/status
+ * 
+ * This is the SOURCE OF TRUTH for execution state:
+ * - "idle": No active run
+ * - "run_requested": Execution request sent
+ * - "running": Run in progress
+ * - "awaiting_approvals": Run completed, leads pending approval
+ * - "completed": Last run completed
+ * - "failed": Last run failed
+ * 
+ * UI MUST NOT derive status from any other source.
+ */
+export async function getCampaignObservabilityStatus(id: string): Promise<ObservabilityStatus> {
+  if (isApiDisabled) {
+    return { ...MOCK_OBSERVABILITY_STATUS, campaign_id: id };
+  }
+  return apiRequest<ObservabilityStatus>(`/${id}/observability/status`);
+}
+
+/**
+ * Get campaign observability funnel (read-only).
+ * 
+ * Data source: GET /api/v1/campaigns/{id}/observability/funnel
+ * 
+ * UI must render counts directly from this response.
+ * No local math or inference is allowed.
+ * 
+ * Empty state: When stages is [], show "No activity observed yet".
+ */
+export async function getCampaignObservabilityFunnel(id: string): Promise<ObservabilityFunnel> {
+  if (isApiDisabled) {
+    return { ...MOCK_OBSERVABILITY_FUNNEL, campaign_id: id };
+  }
+  return apiRequest<ObservabilityFunnel>(`/${id}/observability/funnel`);
+}
+
+// =============================================================================
+// RUN REQUEST FUNCTION
+// This is the ONLY mutation allowed from the UI - requesting execution.
+// Execution itself is delegated to the Sales Engine backend.
+// =============================================================================
+
+/**
+ * Request campaign execution (async handoff).
+ * 
+ * Endpoint: POST /api/v1/campaigns/{id}/run
+ * 
+ * IMPORTANT: This does NOT execute the campaign. It delegates execution
+ * intent to the Sales Engine, which is the only system with execution authority.
+ * 
+ * On 202 Accepted:
+ * - UI shows "Execution requested"
+ * - UI immediately begins polling /observability/status
+ * - UI refetches /runs to check for new run
+ * 
+ * This is NOT a no-op or mock. The request is forwarded to Sales Engine.
+ * 
+ * @returns RunRequestResponse with status and delegation info
+ * @throws Error if request fails or campaign cannot be run
+ */
+export async function requestCampaignRun(id: string): Promise<RunRequestResponse> {
+  // When API is disabled, return a mock response indicating the action would occur
+  if (isApiDisabled) {
+    console.log(`[API] API mode disabled - mock run request for campaign ${id}`);
+    return {
+      status: 'run_requested',
+      campaign_id: id,
+      message: 'Execution request accepted (API disabled - mock response)',
+      delegated_to: null,
+    };
+  }
+
+  // This is the one allowed POST request - it delegates to backend
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/${id}/run`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: buildHeaders(),
+      body: JSON.stringify({
+        requested_at: new Date().toISOString(),
+        source: 'platform-shell-ui',
+      }),
+    });
+
+    if (response.status === 202) {
+      // Async execution accepted
+      const data = await response.json();
+      return {
+        status: 'run_requested',
+        campaign_id: id,
+        message: data.message || 'Execution request delegated to Sales Engine',
+        delegated_to: data.delegated_to || 'sales-engine',
+        run_id: data.run_id,
+      };
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errorData.error || `Request failed: ${response.status}`);
+    }
+
+    // Other success status (should be 202 for async)
+    const data = await response.json();
+    return {
+      status: 'run_requested',
+      campaign_id: id,
+      message: data.message || 'Execution request accepted',
+      delegated_to: data.delegated_to || 'sales-engine',
+    };
+  } catch (error) {
+    console.error('[API] requestCampaignRun error:', error);
+    throw error;
+  }
 }
 
 // =============================================================================
