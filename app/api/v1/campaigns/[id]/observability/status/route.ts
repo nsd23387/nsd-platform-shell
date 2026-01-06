@@ -22,9 +22,14 @@
  * - activity.events is read via direct DB connection, not PostgREST.
  * - core.* tables are read via Supabase client (PostgREST).
  * 
- * NOTE: activity.events is event-sourced.
- * Identifiers such as campaignId and runId live in payload (JSONB),
- * not as physical columns.
+ * activity.events SCHEMA:
+ * - id: uuid (NOT NULL, no default)
+ * - event_type: text (NOT NULL)
+ * - entity_type: text (NOT NULL) - 'campaign_run' for run events
+ * - entity_id: uuid (NOT NULL) - the runId
+ * - actor_id: uuid (nullable)
+ * - payload: jsonb (nullable) - contains campaignId, runId, etc.
+ * - created_at: timestamptz (NOT NULL, default now())
  * 
  * GOVERNANCE:
  * - Read-only
@@ -83,9 +88,7 @@ export async function GET(
     }
 
     // Get the latest run event via direct Postgres
-    // NOTE: activity.events is event-sourced.
-    // Identifiers such as campaignId and runId live in payload (JSONB),
-    // not as physical columns.
+    // Uses entity_type = 'campaign_run' column for efficient filtering
     const latestRunEvent = await getLatestRunEvent(
       campaignId,
       ['run.started', 'run.running', 'run.completed', 'run.failed']
@@ -101,17 +104,17 @@ export async function GET(
     if (latestRunEvent) {
       lastObservedAt = latestRunEvent.created_at || lastObservedAt;
       const payload = latestRunEvent.payload || {};
-      // NOTE: runId is in payload, not as a column
-      const runIdFromPayload = payload.runId as string | undefined;
+      // entity_id IS the runId (it's a physical column)
+      const runId = latestRunEvent.entity_id;
       
       switch (latestRunEvent.event_type) {
         case 'run.started':
           executionStatus = 'run_requested';
-          activeRunId = runIdFromPayload;
+          activeRunId = runId;
           break;
         case 'run.running':
           executionStatus = 'running';
-          activeRunId = runIdFromPayload;
+          activeRunId = runId;
           currentStage = payload.stage as string | undefined;
           break;
         case 'run.completed':
