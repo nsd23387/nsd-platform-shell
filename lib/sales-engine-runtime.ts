@@ -1,3 +1,20 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * NOTE:
+ * This file intentionally disables `@typescript-eslint/no-explicit-any`.
+ *
+ * Reason:
+ * - This module is a server-only runtime orchestration layer.
+ * - It interfaces with heterogeneous pipeline payloads and execution contexts.
+ * - The repository does not enforce @typescript-eslint rules globally.
+ * - Enabling the rule here causes Vercel build failures due to missing plugin resolution.
+ *
+ * Scope:
+ * - This disable applies ONLY to this file.
+ * - No UI code, shared types, or client bundles are affected.
+ * - No runtime behavior is changed by this lint override.
+ */
+
 /**
  * Sales Engine Runtime — Inline Execution
  * 
@@ -24,7 +41,6 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabaseClient = any;
 
 // ============================================================================
