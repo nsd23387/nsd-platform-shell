@@ -6,17 +6,14 @@
  * Returns the full observability state for a campaign, combining
  * execution status and pipeline funnel data.
  * 
- * EXECUTION MODEL:
- * Campaign runs are tracked via activity events, not relational tables.
- * All observability data is derived from activity.events.
- * 
- * DATABASE ACCESS:
- * - activity.events is read via direct DB connection, not PostgREST.
- * - core.* tables are read via Supabase client (PostgREST).
- * 
- * NOTE: activity.events is event-sourced.
- * Identifiers such as campaignId and runId live in payload (JSONB),
- * not as physical columns.
+ * activity.events SCHEMA:
+ * - id: uuid (NOT NULL, no default)
+ * - event_type: text (NOT NULL)
+ * - entity_type: text (NOT NULL) - 'campaign_run' for run events
+ * - entity_id: uuid (NOT NULL) - the runId
+ * - actor_id: uuid (nullable)
+ * - payload: jsonb (nullable) - contains campaignId, counts, etc.
+ * - created_at: timestamptz (NOT NULL, default now())
  * 
  * GOVERNANCE:
  * - Read-only
@@ -63,7 +60,6 @@ export async function GET(
   const campaignId = params.id;
 
   if (!isSupabaseConfigured() || !isActivityDbConfigured()) {
-    // Return empty observability data when not configured
     return NextResponse.json({
       campaign_id: campaignId,
       execution: {
@@ -90,9 +86,7 @@ export async function GET(
     }
 
     // Get the latest run event via direct Postgres
-    // NOTE: activity.events is event-sourced.
-    // Identifiers such as campaignId and runId live in payload (JSONB),
-    // not as physical columns.
+    // Uses entity_type = 'campaign_run' column for efficient filtering
     const latestRunEvent = await getLatestRunEvent(
       campaignId,
       ['run.started', 'run.running', 'run.completed', 'run.failed']
@@ -108,17 +102,17 @@ export async function GET(
     if (latestRunEvent) {
       lastObservedAt = latestRunEvent.created_at || lastObservedAt;
       const payload = latestRunEvent.payload || {};
-      // NOTE: runId is in payload, not as a column (camelCase)
-      const runIdFromPayload = (payload.runId as string) || null;
+      // entity_id IS the runId (physical column)
+      const runId = latestRunEvent.entity_id;
       
       switch (latestRunEvent.event_type) {
         case 'run.started':
           executionStatus = 'run_requested';
-          activeRunId = runIdFromPayload;
+          activeRunId = runId;
           break;
         case 'run.running':
           executionStatus = 'running';
-          activeRunId = runIdFromPayload;
+          activeRunId = runId;
           currentStage = payload.stage as string | undefined;
           break;
         case 'run.completed':
@@ -152,7 +146,6 @@ export async function GET(
     if (latestCompletionEvent && latestCompletionEvent.event_type === 'run.completed') {
       const payload = latestCompletionEvent.payload || {};
 
-      // Use camelCase keys from payload
       const stageDefinitions = [
         { stage: 'orgs_sourced', label: 'Organizations sourced', count: payload.orgsSourced as number | undefined },
         { stage: 'contacts_discovered', label: 'Contacts discovered', count: payload.contactsDiscovered as number | undefined },
@@ -175,7 +168,6 @@ export async function GET(
       const stageEvents = await getStageCompletedEvents(campaignId, 10);
 
       if (stageEvents && stageEvents.length > 0) {
-        // Use camelCase keys from payload
         const counts: Record<string, number> = {};
         for (const event of stageEvents) {
           const payload = event.payload || {};

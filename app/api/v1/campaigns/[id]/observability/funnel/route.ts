@@ -11,17 +11,14 @@
  * 
  * Empty state: When stages is [], show "No activity observed yet".
  * 
- * EXECUTION MODEL:
- * Campaign runs are tracked via activity events, not relational tables.
- * Pipeline counts are derived from stage.completed events.
- * 
- * DATABASE ACCESS:
- * - activity.events is read via direct DB connection, not PostgREST.
- * - core.* tables are read via Supabase client (PostgREST).
- * 
- * NOTE: activity.events is event-sourced.
- * Identifiers such as campaignId and runId live in payload (JSONB),
- * not as physical columns.
+ * activity.events SCHEMA:
+ * - id: uuid (NOT NULL, no default)
+ * - event_type: text (NOT NULL)
+ * - entity_type: text (NOT NULL) - 'campaign_run' for run events
+ * - entity_id: uuid (NOT NULL) - the runId
+ * - actor_id: uuid (nullable)
+ * - payload: jsonb (nullable) - contains campaignId, counts, etc.
+ * - created_at: timestamptz (NOT NULL, default now())
  * 
  * GOVERNANCE:
  * - Read-only
@@ -92,9 +89,7 @@ export async function GET(
     }
 
     // Get the latest run.completed or run.failed event via direct Postgres
-    // NOTE: activity.events is event-sourced.
-    // Identifiers such as campaignId and runId live in payload (JSONB),
-    // not as physical columns.
+    // Uses entity_type = 'campaign_run' column for efficient filtering
     const latestCompletionEvent = await getLatestRunEvent(
       campaignId,
       ['run.completed', 'run.failed']
@@ -172,7 +167,6 @@ export async function GET(
       }
     }
 
-    // If no stages found, this is an empty state - "No activity observed yet"
     return NextResponse.json({
       campaign_id: campaignId,
       stages: stages,

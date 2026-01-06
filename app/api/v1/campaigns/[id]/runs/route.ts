@@ -5,17 +5,17 @@
  * 
  * Returns the historical runs for a campaign.
  * 
- * EXECUTION MODEL:
- * Campaign runs are tracked via activity events, not relational tables.
+ * activity.events SCHEMA:
+ * - id: uuid (NOT NULL, no default)
+ * - event_type: text (NOT NULL)
+ * - entity_type: text (NOT NULL) - 'campaign_run' for run events
+ * - entity_id: uuid (NOT NULL) - the runId
+ * - actor_id: uuid (nullable)
+ * - payload: jsonb (nullable) - contains campaignId, counts, etc.
+ * - created_at: timestamptz (NOT NULL, default now())
+ * 
  * Run history is reconstructed from run.started + run.completed/run.failed events.
- * 
- * DATABASE ACCESS:
- * - activity.events is read via direct DB connection, not PostgREST.
- * - core.* tables are read via Supabase client (PostgREST).
- * 
- * NOTE: activity.events is event-sourced.
- * Identifiers such as campaignId and runId live in payload (JSONB),
- * not as physical columns.
+ * The entity_id column contains the runId.
  * 
  * EMPTY STATE:
  * When runs is [], show "No runs observed yet" in UI.
@@ -71,7 +71,6 @@ export async function GET(
   const campaignId = params.id;
 
   if (!isSupabaseConfigured() || !isActivityDbConfigured()) {
-    // Return empty runs when not configured
     return NextResponse.json({
       campaign_id: campaignId,
       runs: [],
@@ -93,33 +92,30 @@ export async function GET(
     }
 
     // Get all run.started events via direct Postgres
-    // NOTE: activity.events is event-sourced.
-    // Identifiers such as campaignId and runId live in payload (JSONB),
-    // not as physical columns.
+    // Uses entity_type = 'campaign_run' column for efficient filtering
     const startedEvents = await getRunStartedEvents(campaignId, 50);
 
     if (!startedEvents || startedEvents.length === 0) {
-      // No runs observed yet
       return NextResponse.json({
         campaign_id: campaignId,
         runs: [],
       });
     }
 
-    // Get run IDs from started events (runId is in payload, camelCase)
+    // Get run IDs from started events
+    // entity_id IS the runId (physical column)
     const runIds = startedEvents
-      .map((event) => event.payload?.runId as string)
+      .map((event) => event.entity_id)
       .filter((id): id is string => Boolean(id));
 
     // Get completion events for these runs
     const completionEvents = await getCompletionEvents(campaignId, runIds);
 
-    // Build a map of completion events by runId (from payload)
+    // Build a map of completion events by entity_id (runId)
     const completionMap = new Map<string, StoredEvent>();
     for (const event of completionEvents) {
-      const eventRunId = event.payload?.runId as string;
-      if (eventRunId) {
-        completionMap.set(eventRunId, event);
+      if (event.entity_id) {
+        completionMap.set(event.entity_id, event);
       }
     }
 
@@ -127,8 +123,8 @@ export async function GET(
     const runs: RunRecord[] = [];
 
     for (const startEvent of startedEvents) {
-      // runId is in payload (camelCase)
-      const runId = startEvent.payload?.runId as string;
+      // entity_id IS the runId (physical column)
+      const runId = startEvent.entity_id;
       if (!runId) continue;
 
       const startPayload = startEvent.payload || {};
@@ -148,7 +144,6 @@ export async function GET(
         if (completionEvent.event_type === 'run.completed') {
           runRecord.status = 'completed';
           runRecord.completed_at = (compPayload.completedAt as string) || completionEvent.created_at;
-          // Use camelCase keys from payload
           runRecord.orgs_sourced = compPayload.orgsSourced as number | undefined;
           runRecord.contacts_discovered = compPayload.contactsDiscovered as number | undefined;
           runRecord.leads_promoted = compPayload.leadsPromoted as number | undefined;
