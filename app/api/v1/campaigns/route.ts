@@ -21,13 +21,21 @@ import { createServerClient, isSupabaseConfigured } from '../../../../lib/supaba
 /**
  * Map database status to UI governance state
  */
+/**
+ * Map database status to UI status values.
+ * 
+ * IMPORTANT: These values must match the CampaignStatus type in the UI:
+ * 'DRAFT' | 'PENDING_REVIEW' | 'RUNNABLE' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'ARCHIVED'
+ */
 function mapStatusToGovernanceState(status: string): string {
   const statusMap: Record<string, string> = {
     draft: 'DRAFT',
     pending_review: 'PENDING_REVIEW',
-    active: 'APPROVED_READY',
-    paused: 'BLOCKED',
-    completed: 'EXECUTED',
+    active: 'RUNNABLE',        // UI expects RUNNABLE for approved/active campaigns
+    running: 'RUNNING',
+    paused: 'DRAFT',           // Paused campaigns shown as draft (editable)
+    completed: 'COMPLETED',
+    failed: 'FAILED',
     archived: 'ARCHIVED',
   };
   return statusMap[status?.toLowerCase()] || 'DRAFT';
