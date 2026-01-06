@@ -14,6 +14,10 @@
  * - "completed": Last run completed
  * - "failed": Last run failed
  * 
+ * EXECUTION MODEL:
+ * Campaign runs are tracked via activity events, not relational tables.
+ * Status is derived from the event stream (run.started, run.running, run.completed, run.failed).
+ * 
  * GOVERNANCE:
  * - Read-only
  * - UI must derive all execution display from this endpoint
@@ -23,7 +27,31 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, isSupabaseConfigured } from '../../../../../../../lib/supabase-server';
+import { createClient } from '@supabase/supabase-js';
+
+function isSupabaseConfigured(): boolean {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return Boolean(supabaseUrl && supabaseUrl !== 'https://placeholder.supabase.co' && serviceRoleKey);
+}
+
+function createActivityClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    db: { schema: 'activity' },
+  });
+}
+
+function createCoreClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    db: { schema: 'core' },
+  });
+}
 
 export async function GET(
   request: NextRequest,
@@ -41,10 +69,11 @@ export async function GET(
   }
 
   try {
-    const supabase = createServerClient();
+    const coreClient = createCoreClient();
+    const activityClient = createActivityClient();
 
     // Check if campaign exists
-    const { data: campaign, error: campaignError } = await supabase
+    const { data: campaign, error: campaignError } = await coreClient
       .from('campaigns')
       .select('id, status')
       .eq('id', campaignId)
@@ -54,55 +83,55 @@ export async function GET(
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     }
 
-    // Get the latest run to determine execution status
-    const { data: latestRun } = await supabase
-      .from('campaign_runs')
-      .select('id, status, started_at, completed_at, current_stage, error_message')
+    // Get the latest run events to determine execution status
+    // We look for run.started, run.running, run.completed, run.failed events
+    const { data: latestRunEvent } = await activityClient
+      .from('events')
+      .select('event_type, entity_id, run_id, payload, created_at')
       .eq('campaign_id', campaignId)
-      .order('started_at', { ascending: false })
+      .eq('entity_type', 'campaign_run')
+      .in('event_type', ['run.started', 'run.running', 'run.completed', 'run.failed'])
+      .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
-    // Determine execution status
+    // Determine execution status from event stream
     let executionStatus: string = 'idle';
     let activeRunId: string | undefined;
     let currentStage: string | undefined;
     let errorMessage: string | undefined;
     let lastObservedAt = new Date().toISOString();
 
-    if (latestRun) {
-      lastObservedAt = latestRun.started_at || lastObservedAt;
+    if (latestRunEvent) {
+      lastObservedAt = latestRunEvent.created_at || lastObservedAt;
+      const payload = latestRunEvent.payload as Record<string, unknown> || {};
       
-      switch (latestRun.status) {
-        case 'REQUESTED':
+      switch (latestRunEvent.event_type) {
+        case 'run.started':
           executionStatus = 'run_requested';
-          activeRunId = latestRun.id;
+          activeRunId = latestRunEvent.run_id;
           break;
-        case 'RUNNING':
+        case 'run.running':
           executionStatus = 'running';
-          activeRunId = latestRun.id;
-          currentStage = latestRun.current_stage;
-          lastObservedAt = latestRun.completed_at || latestRun.started_at || lastObservedAt;
+          activeRunId = latestRunEvent.run_id;
+          currentStage = payload.stage as string | undefined;
           break;
-        case 'AWAITING_APPROVALS':
-          executionStatus = 'awaiting_approvals';
-          lastObservedAt = latestRun.completed_at || latestRun.started_at || lastObservedAt;
+        case 'run.completed':
+          // Check if there are leads awaiting approval
+          const leadsPromoted = payload.leads_promoted as number || 0;
+          if (leadsPromoted > 0) {
+            executionStatus = 'awaiting_approvals';
+          } else {
+            executionStatus = 'completed';
+          }
+          lastObservedAt = (payload.completed_at as string) || lastObservedAt;
           break;
-        case 'COMPLETED':
-          executionStatus = 'completed';
-          lastObservedAt = latestRun.completed_at || latestRun.started_at || lastObservedAt;
-          break;
-        case 'FAILED':
+        case 'run.failed':
           executionStatus = 'failed';
-          errorMessage = latestRun.error_message;
-          lastObservedAt = latestRun.completed_at || latestRun.started_at || lastObservedAt;
-          break;
-        case 'PARTIAL':
-          executionStatus = 'partial';
-          lastObservedAt = latestRun.completed_at || latestRun.started_at || lastObservedAt;
+          errorMessage = payload.error as string | undefined;
+          lastObservedAt = (payload.failed_at as string) || lastObservedAt;
           break;
         default:
-          // Unknown status, default to idle
           executionStatus = 'idle';
       }
     }

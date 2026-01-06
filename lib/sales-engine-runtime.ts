@@ -16,7 +16,7 @@
  */
 
 /**
- * Sales Engine Runtime — Inline Execution
+ * Sales Engine Runtime — Inline Execution (Event-Sourced)
  * 
  * NOTE:
  * Execution is intentionally co-located with the Platform Shell
@@ -26,17 +26,25 @@
  * designed to be extractable into a separate runtime in the future
  * without changing semantics.
  * 
+ * EXECUTION MODEL:
+ * Campaign runs are tracked via activity events, not relational tables.
+ * - No core.campaign_runs table is used
+ * - All run state is derived from activity.events
+ * - Observability UI reads events to display run status
+ * - This is target-state compliant (event-sourced execution)
+ * 
  * ARCHITECTURE:
  * - Execution is API-isolated (only triggered via POST /run)
  * - UI remains observational + approval-only
- * - All state changes are event-driven
+ * - All state changes are event-driven (append-only)
  * - Events are written to activity.events schema
- * - Run records are written to core.campaign_runs
+ * - Run tracking is event-based, not table-based
  * 
  * GOVERNANCE:
  * - No UI state mutation
  * - No bypassing approval semantics
  * - All writes go through canonical event emission
+ * - Append-only writes only
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -51,22 +59,22 @@ export interface ProcessCampaignOptions {
   triggeredBy: 'platform-shell' | 'scheduler' | 'manual';
 }
 
-export interface CampaignRun {
-  id: string;
-  campaign_id: string;
-  status: 'REQUESTED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'PARTIAL';
-  started_at: string;
-  completed_at?: string;
-  current_stage?: string;
-  orgs_sourced?: number;
-  contacts_discovered?: number;
-  contacts_evaluated?: number;
-  leads_promoted?: number;
-  leads_approved?: number;
-  emails_sent?: number;
-  replies?: number;
-  errors?: number;
-  error_message?: string;
+/**
+ * Pipeline execution context.
+ * Passed through all pipeline stages to maintain run context.
+ */
+export interface PipelineContext {
+  runId: string;
+  campaignId: string;
+  triggeredBy: string;
+  startedAt: string;
+  currentStage: string;
+  counters: {
+    orgsSourced: number;
+    contactsDiscovered: number;
+    contactsEvaluated: number;
+    leadsPromoted: number;
+  };
 }
 
 export interface ActivityEvent {
@@ -85,7 +93,8 @@ export interface ActivityEvent {
 // ============================================================================
 
 /**
- * Create a Supabase client for the core schema (campaign_runs).
+ * Create a Supabase client for the core schema (campaigns, organizations, contacts, leads).
+ * NOTE: This is used for READS only. Run tracking is event-based.
  */
 function createCoreClient(): AnySupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -103,6 +112,7 @@ function createCoreClient(): AnySupabaseClient {
 
 /**
  * Create a Supabase client for the activity schema (events).
+ * All run tracking and state changes go through this client.
  */
 function createActivityClient(): AnySupabaseClient {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -124,7 +134,11 @@ function createActivityClient(): AnySupabaseClient {
 
 /**
  * Emit an activity event to the activity.events table.
+ * 
  * All state changes go through event emission.
+ * This is an append-only operation - events are never updated or deleted.
+ * 
+ * Campaign runs are tracked via activity events, not relational tables.
  */
 async function emitEvent(
   activityClient: AnySupabaseClient,
@@ -151,71 +165,6 @@ async function emitEvent(
 }
 
 // ============================================================================
-// Run Management
-// ============================================================================
-
-/**
- * Create a new campaign run record.
- */
-async function createRun(
-  coreClient: AnySupabaseClient,
-  campaignId: string,
-  options: ProcessCampaignOptions
-): Promise<CampaignRun> {
-  const runId = crypto.randomUUID();
-  const now = new Date().toISOString();
-
-  const run: Partial<CampaignRun> = {
-    id: runId,
-    campaign_id: campaignId,
-    status: 'REQUESTED',
-    started_at: now,
-    current_stage: 'initializing',
-    orgs_sourced: 0,
-    contacts_discovered: 0,
-    contacts_evaluated: 0,
-    leads_promoted: 0,
-    leads_approved: 0,
-    emails_sent: 0,
-    replies: 0,
-    errors: 0,
-  };
-
-  const { data, error } = await coreClient
-    .from('campaign_runs')
-    .insert(run)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('[runtime] Failed to create run:', error);
-    throw error;
-  }
-
-  console.log(`[runtime] Created run: ${runId} for campaign ${campaignId}`);
-  return data as CampaignRun;
-}
-
-/**
- * Update a campaign run record.
- */
-async function updateRun(
-  coreClient: AnySupabaseClient,
-  runId: string,
-  updates: Partial<CampaignRun>
-): Promise<void> {
-  const { error } = await coreClient
-    .from('campaign_runs')
-    .update(updates)
-    .eq('id', runId);
-
-  if (error) {
-    console.error('[runtime] Failed to update run:', error);
-    throw error;
-  }
-}
-
-// ============================================================================
 // Pipeline Execution
 // ============================================================================
 
@@ -229,30 +178,31 @@ async function updateRun(
  * 4. Promotion - Promote qualifying contacts to leads
  * 
  * Note: Sending emails requires lead approval and is handled separately.
+ * 
+ * IMPORTANT: Run state is tracked via events, not a campaign_runs table.
+ * Each stage emits events that observability UI can read.
  */
 async function executePipeline(
   coreClient: AnySupabaseClient,
   activityClient: AnySupabaseClient,
-  campaignId: string,
-  runId: string
+  context: PipelineContext
 ): Promise<void> {
+  const { runId, campaignId } = context;
   console.log(`[runtime] Starting pipeline execution for run ${runId}`);
 
   try {
-    // Update run status to RUNNING
-    await updateRun(coreClient, runId, {
-      status: 'RUNNING',
-      current_stage: 'sourcing',
-    });
-
-    // Emit run.running event
+    // Emit run.running event (status change tracked via events)
+    context.currentStage = 'sourcing';
     await emitEvent(activityClient, {
       event_type: 'run.running',
       entity_type: 'campaign_run',
       entity_id: runId,
       campaign_id: campaignId,
       run_id: runId,
-      payload: { stage: 'sourcing' },
+      payload: { 
+        stage: 'sourcing',
+        triggered_by: context.triggeredBy,
+      },
     });
 
     // ========================================================================
@@ -260,7 +210,7 @@ async function executePipeline(
     // ========================================================================
     console.log(`[runtime] Stage 1: Sourcing organizations`);
     
-    // Get campaign ICP configuration
+    // Get campaign ICP configuration (READ from core.campaigns)
     const { data: campaign } = await coreClient
       .from('campaigns')
       .select('id, name, icp, sourcing_config')
@@ -271,8 +221,6 @@ async function executePipeline(
       throw new Error('Campaign not found');
     }
 
-    // TODO: Integrate with actual sourcing logic (Apollo, etc.)
-    // For now, emit sourcing event and continue
     await emitEvent(activityClient, {
       event_type: 'stage.started',
       entity_type: 'campaign_run',
@@ -282,13 +230,9 @@ async function executePipeline(
       payload: { stage: 'sourcing', icp: campaign.icp },
     });
 
-    // Simulate sourcing results (placeholder for actual integration)
-    const orgsSourced = 0; // Will be populated by actual sourcing
-    
-    await updateRun(coreClient, runId, {
-      current_stage: 'discovery',
-      orgs_sourced: orgsSourced,
-    });
+    // TODO: Integrate with actual sourcing logic (Apollo, etc.)
+    // Placeholder for actual integration
+    context.counters.orgsSourced = 0;
 
     await emitEvent(activityClient, {
       event_type: 'stage.completed',
@@ -296,13 +240,14 @@ async function executePipeline(
       entity_id: runId,
       campaign_id: campaignId,
       run_id: runId,
-      payload: { stage: 'sourcing', orgs_sourced: orgsSourced },
+      payload: { stage: 'sourcing', orgs_sourced: context.counters.orgsSourced },
     });
 
     // ========================================================================
     // Stage 2: Contact Discovery
     // ========================================================================
     console.log(`[runtime] Stage 2: Contact discovery`);
+    context.currentStage = 'discovery';
     
     await emitEvent(activityClient, {
       event_type: 'stage.started',
@@ -314,12 +259,7 @@ async function executePipeline(
     });
 
     // Placeholder for actual discovery
-    const contactsDiscovered = 0;
-
-    await updateRun(coreClient, runId, {
-      current_stage: 'evaluation',
-      contacts_discovered: contactsDiscovered,
-    });
+    context.counters.contactsDiscovered = 0;
 
     await emitEvent(activityClient, {
       event_type: 'stage.completed',
@@ -327,13 +267,14 @@ async function executePipeline(
       entity_id: runId,
       campaign_id: campaignId,
       run_id: runId,
-      payload: { stage: 'discovery', contacts_discovered: contactsDiscovered },
+      payload: { stage: 'discovery', contacts_discovered: context.counters.contactsDiscovered },
     });
 
     // ========================================================================
     // Stage 3: Contact Evaluation
     // ========================================================================
     console.log(`[runtime] Stage 3: Contact evaluation`);
+    context.currentStage = 'evaluation';
 
     await emitEvent(activityClient, {
       event_type: 'stage.started',
@@ -345,12 +286,7 @@ async function executePipeline(
     });
 
     // Placeholder for actual evaluation
-    const contactsEvaluated = 0;
-
-    await updateRun(coreClient, runId, {
-      current_stage: 'promotion',
-      contacts_evaluated: contactsEvaluated,
-    });
+    context.counters.contactsEvaluated = 0;
 
     await emitEvent(activityClient, {
       event_type: 'stage.completed',
@@ -358,13 +294,14 @@ async function executePipeline(
       entity_id: runId,
       campaign_id: campaignId,
       run_id: runId,
-      payload: { stage: 'evaluation', contacts_evaluated: contactsEvaluated },
+      payload: { stage: 'evaluation', contacts_evaluated: context.counters.contactsEvaluated },
     });
 
     // ========================================================================
     // Stage 4: Lead Promotion
     // ========================================================================
     console.log(`[runtime] Stage 4: Lead promotion`);
+    context.currentStage = 'promotion';
 
     await emitEvent(activityClient, {
       event_type: 'stage.started',
@@ -376,12 +313,7 @@ async function executePipeline(
     });
 
     // Placeholder for actual promotion
-    const leadsPromoted = 0;
-
-    await updateRun(coreClient, runId, {
-      current_stage: 'awaiting_approval',
-      leads_promoted: leadsPromoted,
-    });
+    context.counters.leadsPromoted = 0;
 
     await emitEvent(activityClient, {
       event_type: 'stage.completed',
@@ -389,20 +321,16 @@ async function executePipeline(
       entity_id: runId,
       campaign_id: campaignId,
       run_id: runId,
-      payload: { stage: 'promotion', leads_promoted: leadsPromoted },
+      payload: { stage: 'promotion', leads_promoted: context.counters.leadsPromoted },
     });
 
     // ========================================================================
     // Complete Run
     // ========================================================================
     console.log(`[runtime] Pipeline execution completed for run ${runId}`);
+    context.currentStage = 'completed';
 
-    await updateRun(coreClient, runId, {
-      status: 'COMPLETED',
-      current_stage: 'completed',
-      completed_at: new Date().toISOString(),
-    });
-
+    // Emit run.completed event (this is how observability knows the run finished)
     await emitEvent(activityClient, {
       event_type: 'run.completed',
       entity_type: 'campaign_run',
@@ -410,31 +338,29 @@ async function executePipeline(
       campaign_id: campaignId,
       run_id: runId,
       payload: {
-        orgs_sourced: orgsSourced,
-        contacts_discovered: contactsDiscovered,
-        contacts_evaluated: contactsEvaluated,
-        leads_promoted: leadsPromoted,
+        completed_at: new Date().toISOString(),
+        orgs_sourced: context.counters.orgsSourced,
+        contacts_discovered: context.counters.contactsDiscovered,
+        contacts_evaluated: context.counters.contactsEvaluated,
+        leads_promoted: context.counters.leadsPromoted,
       },
     });
 
   } catch (error) {
     console.error(`[runtime] Pipeline execution failed for run ${runId}:`, error);
     
-    // Mark run as failed
-    await updateRun(coreClient, runId, {
-      status: 'FAILED',
-      completed_at: new Date().toISOString(),
-      error_message: error instanceof Error ? error.message : 'Unknown error',
-    });
-
-    // Emit run.failed event
+    // Emit run.failed event (this is how observability knows the run failed)
     await emitEvent(activityClient, {
       event_type: 'run.failed',
       entity_type: 'campaign_run',
       entity_id: runId,
       campaign_id: campaignId,
       run_id: runId,
-      payload: { error: error instanceof Error ? error.message : 'Unknown error' },
+      payload: { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        failed_at: new Date().toISOString(),
+        last_stage: context.currentStage,
+      },
     });
   }
 }
@@ -446,17 +372,24 @@ async function executePipeline(
 /**
  * Process a campaign execution request.
  * 
+ * EXECUTION MODEL:
+ * Campaign runs are tracked via activity events, not relational tables.
+ * - runId is generated in code (UUID)
+ * - run.started event is emitted immediately
+ * - All run state changes are tracked via events
+ * - Observability derives state from event stream
+ * 
  * This function:
- * 1. Creates a run record immediately
- * 2. Emits run.started event
+ * 1. Generates a unique runId
+ * 2. Emits run.started event immediately
  * 3. Triggers pipeline execution (non-blocking)
  * 
  * The caller should NOT await pipeline completion - this function
- * returns immediately after run creation and event emission.
+ * returns immediately after run.started event emission.
  * 
  * @param campaignId - The campaign UUID to execute
  * @param options - Execution options including triggeredBy source
- * @returns The created run record with run_id
+ * @returns The run_id and status
  */
 export async function processCampaign(
   campaignId: string,
@@ -464,31 +397,50 @@ export async function processCampaign(
 ): Promise<{ run_id: string; status: string }> {
   console.log(`[runtime] processCampaign called for ${campaignId} by ${options.triggeredBy}`);
 
-  // Create clients for each schema
-  const coreClient = createCoreClient();
+  // Generate runId in code (no database table needed)
+  const runId = crypto.randomUUID();
+  const startedAt = new Date().toISOString();
+
+  // Create activity client for event emission
   const activityClient = createActivityClient();
+  const coreClient = createCoreClient();
 
-  // Step 1: Create run record
-  const run = await createRun(coreClient, campaignId, options);
+  // Create pipeline context (passed through all stages)
+  const context: PipelineContext = {
+    runId,
+    campaignId,
+    triggeredBy: options.triggeredBy,
+    startedAt,
+    currentStage: 'initializing',
+    counters: {
+      orgsSourced: 0,
+      contactsDiscovered: 0,
+      contactsEvaluated: 0,
+      leadsPromoted: 0,
+    },
+  };
 
-  // Step 2: Emit run.started event immediately
+  // Step 1: Emit run.started event immediately
+  // This is how observability knows a run has begun
   await emitEvent(activityClient, {
     event_type: 'run.started',
     entity_type: 'campaign_run',
-    entity_id: run.id,
+    entity_id: runId,
     campaign_id: campaignId,
-    run_id: run.id,
+    run_id: runId,
     payload: {
       triggered_by: options.triggeredBy,
-      started_at: run.started_at,
+      started_at: startedAt,
     },
   });
 
-  // Step 3: Trigger pipeline execution (non-blocking)
-  // We use setImmediate/setTimeout to ensure the response is returned first
+  console.log(`[runtime] Emitted run.started for run ${runId}`);
+
+  // Step 2: Trigger pipeline execution (non-blocking)
+  // We use setImmediate to ensure the response is returned first
   // This is critical for Vercel serverless - we return 202 immediately
   setImmediate(() => {
-    executePipeline(coreClient, activityClient, campaignId, run.id)
+    executePipeline(coreClient, activityClient, context)
       .catch((error) => {
         console.error(`[runtime] Background pipeline execution failed:`, error);
       });
@@ -496,7 +448,7 @@ export async function processCampaign(
 
   // Return immediately with run info
   return {
-    run_id: run.id,
+    run_id: runId,
     status: 'run_started',
   };
 }
