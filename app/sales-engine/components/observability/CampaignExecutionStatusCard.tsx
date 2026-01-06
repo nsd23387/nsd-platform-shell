@@ -45,6 +45,15 @@ export interface CampaignExecutionStatusCardProps {
 
 /**
  * Get display configuration for execution status.
+ * 
+ * STATUS COPY (governance-aligned):
+ * - idle: "Ready for execution"
+ * - run_requested: "Execution requested — Awaiting events"
+ * - running: "Run in progress — [stage name]"
+ * - awaiting_approvals: "Run completed — Awaiting lead approvals"
+ * - completed: "Run completed"
+ * - failed: "Run failed — See run history"
+ * - partial: "Run partially completed — See run history"
  */
 function getStatusDisplay(
   status: CampaignExecutionStatus,
@@ -60,6 +69,15 @@ function getStatusDisplay(
         text: NSD_COLORS.text.secondary,
         border: NSD_COLORS.border.light,
       };
+    case 'run_requested':
+      // Execution requested but not yet started - awaiting backend events
+      return {
+        emoji: '🔵',
+        copy: 'Execution requested — Awaiting events',
+        bg: '#DBEAFE',
+        text: '#1E40AF',
+        border: '#93C5FD',
+      };
     case 'running':
       return {
         emoji: '🟡',
@@ -68,13 +86,22 @@ function getStatusDisplay(
         text: '#92400E',
         border: '#FCD34D',
       };
-    case 'completed':
-      const awaitingCopy = leadsAwaitingApproval && leadsAwaitingApproval > 0
-        ? ` — ${leadsAwaitingApproval} leads awaiting approval`
-        : ' — Awaiting lead approvals';
+    case 'awaiting_approvals':
+      // Run completed, leads pending approval
+      const awaitingCount = leadsAwaitingApproval && leadsAwaitingApproval > 0
+        ? ` (${leadsAwaitingApproval} leads)`
+        : '';
       return {
         emoji: '🟢',
-        copy: `Run completed${awaitingCopy}`,
+        copy: `Run completed — Awaiting lead approvals${awaitingCount}`,
+        bg: '#D1FAE5',
+        text: '#065F46',
+        border: '#6EE7B7',
+      };
+    case 'completed':
+      return {
+        emoji: '🟢',
+        copy: 'Run completed',
         bg: '#D1FAE5',
         text: '#065F46',
         border: '#6EE7B7',
@@ -98,7 +125,7 @@ function getStatusDisplay(
     default:
       return {
         emoji: '⚪',
-        copy: 'Status unknown',
+        copy: 'Awaiting events',
         bg: NSD_COLORS.surface,
         text: NSD_COLORS.text.muted,
         border: NSD_COLORS.border.light,

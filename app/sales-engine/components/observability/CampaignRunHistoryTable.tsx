@@ -191,7 +191,7 @@ export function CampaignRunHistoryTable({
         </span>
       </div>
 
-      {/* Empty state */}
+      {/* Empty state - explicit copy per governance requirements */}
       {runs.length === 0 ? (
         <div style={{ padding: '40px', textAlign: 'center' }}>
           <div
@@ -216,7 +216,7 @@ export function CampaignRunHistoryTable({
               color: NSD_COLORS.primary,
             }}
           >
-            No Runs Recorded
+            No runs observed yet
           </h5>
           <p
             style={{
@@ -225,7 +225,7 @@ export function CampaignRunHistoryTable({
               color: NSD_COLORS.text.secondary,
             }}
           >
-            Run history will appear here after campaign execution.
+            Run history will appear here when run.started events are received.
           </p>
         </div>
       ) : (

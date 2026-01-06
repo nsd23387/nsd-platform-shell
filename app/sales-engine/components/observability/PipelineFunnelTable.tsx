@@ -207,97 +207,136 @@ export function PipelineFunnelTable({
         </span>
       </div>
 
-      {/* Table */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ backgroundColor: NSD_COLORS.surface }}>
-              <th
-                style={{
-                  padding: '12px 20px',
-                  textAlign: 'left',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  color: NSD_COLORS.text.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.03em',
-                }}
-              >
-                Stage
-              </th>
-              <th
-                style={{
-                  padding: '12px 20px',
-                  textAlign: 'right',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  color: NSD_COLORS.text.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.03em',
-                }}
-              >
-                Count
-              </th>
-              <th
-                style={{
-                  padding: '12px 20px',
-                  textAlign: 'center',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  color: NSD_COLORS.text.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.03em',
-                }}
-              >
-                Confidence
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {stages.map((stage, index) => (
-              <tr
-                key={stage.stage}
-                style={{
-                  borderTop: index > 0 ? `1px solid ${NSD_COLORS.border.light}` : undefined,
-                }}
-              >
-                <td
+      {/* Empty state - No activity observed yet */}
+      {stages.length === 0 ? (
+        <div style={{ padding: '40px', textAlign: 'center' }}>
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              margin: '0 auto 16px',
+              backgroundColor: NSD_COLORS.surface,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name="chart" size={24} color={NSD_COLORS.text.muted} />
+          </div>
+          <h5
+            style={{
+              margin: '0 0 8px 0',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: NSD_COLORS.primary,
+            }}
+          >
+            No activity observed yet
+          </h5>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '13px',
+              color: NSD_COLORS.text.secondary,
+            }}
+          >
+            Pipeline activity will appear here after campaign execution begins.
+          </p>
+        </div>
+      ) : (
+        /* Table */
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ backgroundColor: NSD_COLORS.surface }}>
+                <th
                   style={{
-                    padding: '14px 20px',
-                    fontSize: '14px',
-                    color: NSD_COLORS.text.primary,
+                    padding: '12px 20px',
+                    textAlign: 'left',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: NSD_COLORS.text.muted,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <span>{stage.label}</span>
-                    {stage.tooltip && <StageTooltip tooltip={stage.tooltip} />}
-                  </div>
-                </td>
-                <td
+                  Stage
+                </th>
+                <th
                   style={{
-                    padding: '14px 20px',
+                    padding: '12px 20px',
                     textAlign: 'right',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-                    color: NSD_COLORS.primary,
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: NSD_COLORS.text.muted,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
                   }}
                 >
-                  {stage.count.toLocaleString()}
-                </td>
-                <td
+                  Count
+                </th>
+                <th
                   style={{
-                    padding: '14px 20px',
+                    padding: '12px 20px',
                     textAlign: 'center',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: NSD_COLORS.text.muted,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
                   }}
                 >
-                  <ConfidenceBadge confidence={stage.confidence} />
-                </td>
+                  Confidence
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {stages.map((stage, index) => (
+                <tr
+                  key={stage.stage}
+                  style={{
+                    borderTop: index > 0 ? `1px solid ${NSD_COLORS.border.light}` : undefined,
+                  }}
+                >
+                  <td
+                    style={{
+                      padding: '14px 20px',
+                      fontSize: '14px',
+                      color: NSD_COLORS.text.primary,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span>{stage.label}</span>
+                      {stage.tooltip && <StageTooltip tooltip={stage.tooltip} />}
+                    </div>
+                  </td>
+                  <td
+                    style={{
+                      padding: '14px 20px',
+                      textAlign: 'right',
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+                      color: NSD_COLORS.primary,
+                    }}
+                  >
+                    {stage.count.toLocaleString()}
+                  </td>
+                  <td
+                    style={{
+                      padding: '14px 20px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <ConfidenceBadge confidence={stage.confidence} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Governance note */}
       <div
