@@ -95,15 +95,17 @@ export async function GET(
     if (latestRunEvent) {
       lastObservedAt = latestRunEvent.created_at || lastObservedAt;
       const payload = latestRunEvent.payload || {};
+      // run_id is stored in payload, not as a separate column
+      const runIdFromPayload = payload.run_id as string | undefined;
       
       switch (latestRunEvent.event_type) {
         case 'run.started':
           executionStatus = 'run_requested';
-          activeRunId = latestRunEvent.run_id || undefined;
+          activeRunId = runIdFromPayload || latestRunEvent.entity_id || undefined;
           break;
         case 'run.running':
           executionStatus = 'running';
-          activeRunId = latestRunEvent.run_id || undefined;
+          activeRunId = runIdFromPayload || latestRunEvent.entity_id || undefined;
           currentStage = payload.stage as string | undefined;
           break;
         case 'run.completed':

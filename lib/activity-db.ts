@@ -8,6 +8,16 @@
  * All writes and reads to activity.events MUST use this module,
  * which connects directly to Postgres via DATABASE_URL.
  * 
+ * SCHEMA (activity.events):
+ * - id: uuid (auto-generated)
+ * - event_type: text (e.g., 'run.started', 'run.completed')
+ * - entity_type: text (e.g., 'campaign_run')
+ * - entity_id: uuid (the run ID or other entity ID)
+ * - payload: jsonb (contains campaign_id, run_id, and other data)
+ * - created_at: timestamptz
+ * 
+ * NOTE: campaign_id and run_id are stored in the payload, not as columns.
+ * 
  * ARCHITECTURE:
  * - Supabase client is used for core.* schema (campaigns, organizations, etc.)
  * - This module is used for activity.* schema (events)
@@ -19,7 +29,7 @@
  * - All event writes go through emitActivityEvent()
  */
 
-import { Pool, PoolClient } from 'pg';
+import { Pool } from 'pg';
 
 // ============================================================================
 // Connection Pool
@@ -73,8 +83,6 @@ export interface ActivityEvent {
   event_type: string;
   entity_type: string;
   entity_id: string;
-  campaign_id: string;
-  run_id?: string;
   payload: Record<string, unknown>;
 }
 
@@ -90,30 +98,30 @@ export interface ActivityEvent {
  * 
  * activity.events is written via direct DB connection, not PostgREST.
  * 
+ * NOTE: campaign_id and run_id should be included in the payload.
+ * 
  * @param event - The event to emit (without id and created_at)
  */
 export async function emitActivityEvent(event: ActivityEvent): Promise<void> {
   const pool = getPool();
   const createdAt = new Date().toISOString();
 
+  // The table has: id, event_type, entity_type, entity_id, payload, created_at
+  // campaign_id and run_id are stored in the payload
   const query = `
     INSERT INTO activity.events (
       event_type,
       entity_type,
       entity_id,
-      campaign_id,
-      run_id,
       payload,
       created_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ) VALUES ($1, $2, $3, $4, $5)
   `;
 
   const values = [
     event.event_type,
     event.entity_type,
     event.entity_id,
-    event.campaign_id,
-    event.run_id || null,
     JSON.stringify(event.payload),
     createdAt,
   ];
@@ -136,8 +144,6 @@ export interface StoredEvent {
   event_type: string;
   entity_type: string;
   entity_id: string;
-  campaign_id: string;
-  run_id: string | null;
   payload: Record<string, unknown>;
   created_at: string;
 }
@@ -146,6 +152,7 @@ export interface StoredEvent {
  * Get the latest run event for a campaign.
  * 
  * Uses direct Postgres connection to read from activity.events.
+ * Filters by campaign_id stored in the payload JSONB field.
  * 
  * @param campaignId - The campaign UUID
  * @param eventTypes - Array of event types to filter by
@@ -157,10 +164,11 @@ export async function getLatestRunEvent(
 ): Promise<StoredEvent | null> {
   const pool = getPool();
 
+  // Query filtering by payload->>'campaign_id' since campaign_id is in payload
   const query = `
-    SELECT id, event_type, entity_type, entity_id, campaign_id, run_id, payload, created_at
+    SELECT id, event_type, entity_type, entity_id, payload, created_at
     FROM activity.events
-    WHERE campaign_id = $1
+    WHERE payload->>'campaign_id' = $1
       AND entity_type = 'campaign_run'
       AND event_type = ANY($2)
     ORDER BY created_at DESC
@@ -192,10 +200,11 @@ export async function getRunStartedEvents(
 ): Promise<StoredEvent[]> {
   const pool = getPool();
 
+  // Query filtering by payload->>'campaign_id'
   const query = `
-    SELECT id, event_type, entity_type, entity_id, campaign_id, run_id, payload, created_at
+    SELECT id, event_type, entity_type, entity_id, payload, created_at
     FROM activity.events
-    WHERE campaign_id = $1
+    WHERE payload->>'campaign_id' = $1
       AND entity_type = 'campaign_run'
       AND event_type = 'run.started'
     ORDER BY created_at DESC
@@ -228,13 +237,14 @@ export async function getCompletionEvents(
 
   const pool = getPool();
 
+  // Query filtering by payload->>'campaign_id' and payload->>'run_id'
   const query = `
-    SELECT id, event_type, entity_type, entity_id, campaign_id, run_id, payload, created_at
+    SELECT id, event_type, entity_type, entity_id, payload, created_at
     FROM activity.events
-    WHERE campaign_id = $1
+    WHERE payload->>'campaign_id' = $1
       AND entity_type = 'campaign_run'
       AND event_type IN ('run.completed', 'run.failed')
-      AND run_id = ANY($2)
+      AND payload->>'run_id' = ANY($2)
   `;
 
   try {
@@ -259,10 +269,11 @@ export async function getStageCompletedEvents(
 ): Promise<StoredEvent[]> {
   const pool = getPool();
 
+  // Query filtering by payload->>'campaign_id'
   const query = `
-    SELECT id, event_type, entity_type, entity_id, campaign_id, run_id, payload, created_at
+    SELECT id, event_type, entity_type, entity_id, payload, created_at
     FROM activity.events
-    WHERE campaign_id = $1
+    WHERE payload->>'campaign_id' = $1
       AND entity_type = 'campaign_run'
       AND event_type = 'stage.completed'
     ORDER BY created_at DESC

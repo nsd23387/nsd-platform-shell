@@ -38,6 +38,11 @@
  * - core.* tables are read via Supabase client (PostgREST).
  * - This separation is required because activity schema is not exposed via PostgREST.
  * 
+ * EVENT SCHEMA:
+ * - campaign_id and run_id are stored in the payload JSONB field
+ * - entity_id is set to the run_id for campaign_run events
+ * - This matches the production activity.events table structure
+ * 
  * ARCHITECTURE:
  * - Execution is API-isolated (only triggered via POST /run)
  * - UI remains observational + approval-only
@@ -114,6 +119,11 @@ function createCoreClient(): AnySupabaseClient {
  * 
  * IMPORTANT: activity.events is written via direct DB connection, not PostgREST.
  * 
+ * EVENT SCHEMA:
+ * - entity_id is set to runId for campaign_run events
+ * - campaign_id and run_id are included in the payload
+ * - This matches the production activity.events table structure
+ * 
  * All state changes go through event emission.
  * This is an append-only operation - events are never updated or deleted.
  * 
@@ -125,14 +135,19 @@ async function emitEvent(
   entityId: string,
   campaignId: string,
   runId: string,
-  payload: Record<string, unknown>
+  additionalPayload: Record<string, unknown>
 ): Promise<void> {
+  // Include campaign_id and run_id in the payload (not as separate columns)
+  const payload = {
+    campaign_id: campaignId,
+    run_id: runId,
+    ...additionalPayload,
+  };
+
   await emitActivityEvent({
     event_type: eventType,
     entity_type: entityType,
     entity_id: entityId,
-    campaign_id: campaignId,
-    run_id: runId,
     payload,
   });
 }
@@ -155,6 +170,7 @@ async function emitEvent(
  * IMPORTANT: Run state is tracked via events, not a campaign_runs table.
  * Each stage emits events that observability UI can read.
  * Events are written via direct Postgres, not PostgREST.
+ * campaign_id and run_id are stored in the payload JSONB field.
  */
 async function executePipeline(
   coreClient: AnySupabaseClient,
@@ -355,6 +371,7 @@ async function executePipeline(
  * DATABASE ACCESS:
  * - activity.events is written via direct DB connection, not PostgREST.
  * - This is required because activity schema is not exposed via PostgREST.
+ * - campaign_id and run_id are stored in the payload JSONB field.
  * 
  * This function:
  * 1. Generates a unique runId
@@ -403,6 +420,7 @@ export async function processCampaign(
 
   // Step 1: Emit run.started event immediately (via direct Postgres)
   // This is how observability knows a run has begun
+  // campaign_id and run_id are stored in the payload
   await emitEvent(
     'run.started',
     'campaign_run',

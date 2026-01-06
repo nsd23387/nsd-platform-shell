@@ -100,19 +100,20 @@ export async function GET(
       });
     }
 
-    // Get run IDs from started events
+    // Get run IDs from started events (run_id is in payload, not as column)
     const runIds = startedEvents
-      .map((event) => event.run_id)
+      .map((event) => (event.payload?.run_id as string) || event.entity_id)
       .filter((id): id is string => Boolean(id));
 
     // Get completion events for these runs
     const completionEvents = await getCompletionEvents(campaignId, runIds);
 
-    // Build a map of completion events by run_id
+    // Build a map of completion events by run_id (run_id is in payload)
     const completionMap = new Map<string, StoredEvent>();
     for (const event of completionEvents) {
-      if (event.run_id) {
-        completionMap.set(event.run_id, event);
+      const eventRunId = (event.payload?.run_id as string) || event.entity_id;
+      if (eventRunId) {
+        completionMap.set(eventRunId, event);
       }
     }
 
@@ -120,7 +121,8 @@ export async function GET(
     const runs: RunRecord[] = [];
 
     for (const startEvent of startedEvents) {
-      const runId = startEvent.run_id;
+      // run_id is in payload, not as a separate column
+      const runId = (startEvent.payload?.run_id as string) || startEvent.entity_id;
       if (!runId) continue;
 
       const startPayload = startEvent.payload || {};
