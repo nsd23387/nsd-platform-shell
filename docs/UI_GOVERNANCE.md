@@ -268,6 +268,61 @@ Use these exact labels:
 
 ---
 
+## Pipeline Observability
+
+### Observability Tab Layout
+
+The Observability tab provides full pipeline visibility with four stacked sections:
+
+| Section | Component | Purpose |
+|---------|-----------|---------|
+| A | `CampaignExecutionStatusCard` | Dynamic execution state (top) |
+| B | `PipelineFunnelTable` | Pipeline funnel with stage counts (CORE) |
+| C | `CampaignRunHistoryTable` | Run history with full details |
+| D | `SendMetricsPanel` | Send metrics (post-approval only) |
+
+### Data Sources (Backend Authoritative)
+
+| Endpoint | Data |
+|----------|------|
+| `GET /campaigns/{id}/observability` | Pipeline state, status, stages |
+| `GET /campaigns/{id}/runs` | Run history with full details |
+
+### Pipeline Stages
+
+| Stage | Label | Confidence |
+|-------|-------|------------|
+| `orgs_sourced` | Organizations sourced | Observed |
+| `contacts_discovered` | Contacts discovered | Observed |
+| `contacts_evaluated` | Contacts evaluated | Observed |
+| `leads_promoted` | Leads promoted | Observed |
+| `leads_awaiting_approval` | Leads awaiting approval | Observed |
+| `leads_approved` | Leads approved | Observed |
+| `emails_sent` | Emails sent | Conditional |
+| `replies` | Replies | Conditional |
+
+### Observability Governance Rules
+
+1. **Read-only display** - No mutation controls
+2. **No execution control** - Run Campaign disabled when running
+3. **No retries** - Cannot re-run failed executions from UI
+4. **No Smartlead editing** - Email content is backend-managed
+5. **No stage skipping** - Pipeline is sequential
+6. **No local math** - Counts come directly from backend
+7. **Confidence required** - Every count has a confidence badge
+
+### Execution Status Display
+
+| Status | Emoji | Copy Example |
+|--------|-------|--------------|
+| `idle` | ⚪ | "Ready for execution" |
+| `running` | 🟡 | "Run in progress — Contact discovery" |
+| `completed` | 🟢 | "Run completed — Awaiting lead approvals" |
+| `failed` | 🔴 | "Run failed — See run history" |
+| `partial` | 🟠 | "Run partially completed — See run history" |
+
+---
+
 ## API Guard
 
 The `read-only-guard.ts` module enforces read-only constraints:
@@ -321,3 +376,6 @@ All governance logic has unit tests:
 | Lead approval gating | Leads start pending; approval is explicit action |
 | No auto-approval | UI never implies leads are auto-approved |
 | Confirmation required | All approval actions require modal confirmation |
+| Pipeline observability | Full pipeline visibility with 8 stages |
+| No local math | Counts come from backend, never computed |
+| Execution status | Dynamic status display from backend |

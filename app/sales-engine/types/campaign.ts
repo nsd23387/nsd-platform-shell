@@ -382,3 +382,118 @@ export interface LeadApprovalCounts {
   rejected: number;
   total: number;
 }
+
+// ============================================
+// Pipeline Observability Types
+// ============================================
+
+/**
+ * Campaign execution status.
+ * 
+ * BACKEND AUTHORITATIVE:
+ * - Status reflects actual pipeline state
+ * - UI never infers or controls execution
+ * - Execution is delegated to backend systems
+ */
+export type CampaignExecutionStatus = 
+  | 'idle'           // No active run
+  | 'running'        // Run in progress
+  | 'completed'      // Last run completed
+  | 'failed'         // Last run failed
+  | 'partial';       // Last run partially completed
+
+/**
+ * Pipeline stage in the execution funnel.
+ * 
+ * IMPORTANT: Observability reflects pipeline state; execution is delegated.
+ * - Counts come directly from backend
+ * - UI never computes or infers counts
+ * - Confidence indicates data reliability
+ */
+export interface PipelineStage {
+  /** Stage identifier */
+  stage: string;
+  /** Display label for the stage */
+  label: string;
+  /** Count at this stage (backend-authoritative) */
+  count: number;
+  /** Confidence level for this count */
+  confidence: 'observed' | 'conditional';
+  /** Tooltip explaining this stage */
+  tooltip?: string;
+}
+
+/**
+ * Campaign observability data from backend.
+ * 
+ * Data source: GET /api/v1/campaigns/{id}/observability
+ * 
+ * UI GOVERNANCE:
+ * - Read-only display
+ * - No execution control
+ * - No retries or overrides
+ * - No stage skipping
+ */
+export interface CampaignObservability {
+  /** Campaign ID */
+  campaign_id: string;
+  
+  /** Current execution status */
+  status: CampaignExecutionStatus;
+  
+  /** Active run ID (if status === 'running') */
+  active_run_id?: string;
+  
+  /** Current pipeline stage (if running) */
+  current_stage?: string;
+  
+  /** Last observed event timestamp */
+  last_observed_at: string;
+  
+  /** Pipeline stages with counts */
+  pipeline: PipelineStage[];
+  
+  /** Send metrics (post-approval only) */
+  send_metrics?: {
+    emails_sent: number;
+    emails_opened: number;
+    emails_replied: number;
+    open_rate?: number;
+    reply_rate?: number;
+    confidence: 'observed' | 'conditional';
+  };
+}
+
+/**
+ * Extended campaign run with full pipeline visibility.
+ * 
+ * Data source: GET /api/v1/campaigns/{id}/runs
+ */
+export interface CampaignRunDetailed extends CampaignRun {
+  /** Organizations sourced in this run */
+  orgs_sourced?: number;
+  /** Contacts discovered in this run */
+  contacts_discovered?: number;
+  /** Contacts evaluated in this run */
+  contacts_evaluated?: number;
+  /** Leads promoted in this run */
+  leads_promoted?: number;
+  /** Leads approved in this run */
+  leads_approved?: number;
+}
+
+/**
+ * Execution status display configuration.
+ */
+export interface ExecutionStatusDisplay {
+  /** Status emoji */
+  emoji: string;
+  /** Status copy */
+  copy: string;
+  /** Background color */
+  bg: string;
+  /** Text color */
+  text: string;
+  /** Border color */
+  border: string;
+}
