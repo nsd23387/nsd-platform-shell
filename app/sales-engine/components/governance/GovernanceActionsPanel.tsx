@@ -178,7 +178,7 @@ export function GovernanceActionsPanel({
             </button>
           )}
 
-          {governanceState === 'PENDING_REVIEW' && (
+          {(governanceState === 'PENDING_REVIEW' || governanceState === 'PENDING_APPROVAL') && (
             <button
               onClick={() => handleAction('approve')}
               disabled={actionLoading || isArchived}
