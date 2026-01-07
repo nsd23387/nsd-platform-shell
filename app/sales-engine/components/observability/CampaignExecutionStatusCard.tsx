@@ -289,7 +289,7 @@ export function CampaignExecutionStatusCard({
             fontStyle: 'italic',
           }}
         >
-          Observability reflects pipeline state; execution is delegated to backend systems.
+          Read-only projection from activity events.
         </p>
       </div>
     </div>

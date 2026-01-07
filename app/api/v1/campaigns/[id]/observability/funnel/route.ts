@@ -6,22 +6,31 @@
  * Returns the pipeline funnel data for a campaign.
  * This is the SOURCE OF TRUTH for pipeline counts.
  * 
- * UI must render counts directly from this response.
- * No local math or inference is allowed.
+ * RESPONSE SHAPE (matches ObservabilityFunnel interface):
+ * {
+ *   campaign_id: string,
+ *   stages: PipelineStage[],
+ *   last_updated_at: string
+ * }
  * 
- * Empty state: When stages is [], show "No activity observed yet".
+ * PipelineStage: { stage, label, count, confidence, tooltip? }
+ * 
+ * IMPORTANT:
+ * - Stage names are derived from event payload, NOT hardcoded
+ * - UI must render counts directly from this response
+ * - No local math or inference is allowed
+ * - When stages is [], show "No activity observed yet"
  * 
  * activity.events SCHEMA:
  * - id: uuid (NOT NULL, no default)
  * - event_type: text (NOT NULL)
  * - entity_type: text (NOT NULL) - 'campaign_run' for run events
  * - entity_id: uuid (NOT NULL) - the runId
- * - actor_id: uuid (nullable)
- * - payload: jsonb (nullable) - contains campaignId, counts, etc.
+ * - payload: jsonb (nullable) - contains stage counts
  * - created_at: timestamptz (NOT NULL, default now())
  * 
  * GOVERNANCE:
- * - Read-only
+ * - Read-only projection from activity.events
  * - Counts are backend-authoritative
  * - No local computation in UI
  */
@@ -42,6 +51,44 @@ interface PipelineStage {
   count: number;
   confidence: 'observed' | 'conditional';
   tooltip?: string;
+}
+
+/**
+ * Convert camelCase payload key to display label.
+ * Does NOT hardcode stage names - derives from actual payload keys.
+ */
+function getStageLabel(stageKey: string): string {
+  const labels: Record<string, string> = {
+    orgsSourced: 'Organizations sourced',
+    contactsDiscovered: 'Contacts discovered',
+    contactsEvaluated: 'Contacts evaluated',
+    leadsPromoted: 'Leads promoted',
+    leadsApproved: 'Leads approved',
+    emailsSent: 'Emails sent',
+  };
+  return labels[stageKey] || stageKey.replace(/([A-Z])/g, ' $1').trim();
+}
+
+/**
+ * Convert camelCase payload key to stage ID.
+ */
+function getStageId(stageKey: string): string {
+  return stageKey.replace(/([A-Z])/g, '_$1').toLowerCase();
+}
+
+/**
+ * Get tooltip for a stage.
+ */
+function getStageTooltip(stageKey: string): string | undefined {
+  const tooltips: Record<string, string> = {
+    orgsSourced: 'Organizations matching ICP criteria',
+    contactsDiscovered: 'Contacts found within sourced organizations',
+    contactsEvaluated: 'Contacts evaluated for ICP fit',
+    leadsPromoted: 'Contacts promoted to leads (Tier A/B)',
+    leadsApproved: 'Leads approved for outreach',
+    emailsSent: 'Emails sent to approved leads',
+  };
+  return tooltips[stageKey];
 }
 
 function isSupabaseConfigured(): boolean {
@@ -65,8 +112,8 @@ export async function GET(
 ) {
   const campaignId = params.id;
 
+  // Default response when not configured
   if (!isSupabaseConfigured() || !isActivityDbConfigured()) {
-    // Return empty funnel when not configured
     return NextResponse.json({
       campaign_id: campaignId,
       stages: [],
@@ -77,7 +124,7 @@ export async function GET(
   try {
     const coreClient = createCoreClient();
 
-    // Check if campaign exists (via Supabase/PostgREST)
+    // Check if campaign exists (via Supabase/PostgREST for core schema)
     const { data: campaign, error: campaignError } = await coreClient
       .from('campaigns')
       .select('id, status')
@@ -89,7 +136,6 @@ export async function GET(
     }
 
     // Get the latest run.completed or run.failed event via direct Postgres
-    // Uses entity_type = 'campaign_run' column for efficient filtering
     const latestCompletionEvent = await getLatestRunEvent(
       campaignId,
       ['run.completed', 'run.failed']
@@ -99,74 +145,63 @@ export async function GET(
     const stages: PipelineStage[] = [];
     let lastUpdatedAt = new Date().toISOString();
 
-    if (latestCompletionEvent) {
+    if (latestCompletionEvent && latestCompletionEvent.event_type === 'run.completed') {
       lastUpdatedAt = latestCompletionEvent.created_at || lastUpdatedAt;
+      // Defensive payload access
       const payload = latestCompletionEvent.payload || {};
 
-      // Extract counts from the run.completed payload (camelCase keys)
-      const orgsSourced = payload.orgsSourced as number | undefined;
-      const contactsDiscovered = payload.contactsDiscovered as number | undefined;
-      const contactsEvaluated = payload.contactsEvaluated as number | undefined;
-      const leadsPromoted = payload.leadsPromoted as number | undefined;
-
-      // Build stage definitions
-      const stageDefinitions = [
-        { stage: 'orgs_sourced', label: 'Organizations sourced', count: orgsSourced, confidence: 'observed' as const, tooltip: 'Organizations matching ICP criteria' },
-        { stage: 'contacts_discovered', label: 'Contacts discovered', count: contactsDiscovered, confidence: 'observed' as const, tooltip: 'Contacts found within sourced organizations' },
-        { stage: 'contacts_evaluated', label: 'Contacts evaluated', count: contactsEvaluated, confidence: 'observed' as const, tooltip: 'Contacts evaluated for ICP fit' },
-        { stage: 'leads_promoted', label: 'Leads promoted', count: leadsPromoted, confidence: 'observed' as const, tooltip: 'Contacts promoted to leads (Tier A/B)' },
-      ];
-
-      // Add stages that have counts (>= 0)
-      for (const stageDef of stageDefinitions) {
-        if (stageDef.count !== null && stageDef.count !== undefined) {
+      // Dynamically extract stage counts from payload (not hardcoded)
+      const stageKeys = ['orgsSourced', 'contactsDiscovered', 'contactsEvaluated', 'leadsPromoted', 'leadsApproved', 'emailsSent'];
+      
+      for (const key of stageKeys) {
+        const count = payload[key];
+        if (count !== null && count !== undefined && typeof count === 'number') {
           stages.push({
-            stage: stageDef.stage,
-            label: stageDef.label,
-            count: stageDef.count,
-            confidence: stageDef.confidence,
-            tooltip: stageDef.tooltip,
+            stage: getStageId(key),
+            label: getStageLabel(key),
+            count: count,
+            confidence: 'observed',
+            tooltip: getStageTooltip(key),
           });
         }
       }
     } else {
       // No completion event yet - check for stage.completed events from ongoing run
-      const stageEvents = await getStageCompletedEvents(campaignId, 10);
+      const stageEvents = await getStageCompletedEvents(campaignId, 20);
 
       if (stageEvents && stageEvents.length > 0) {
         lastUpdatedAt = stageEvents[0].created_at || lastUpdatedAt;
 
-        // Aggregate counts from stage events (camelCase keys in payload)
+        // Aggregate counts from stage events (defensive payload access)
         const counts: Record<string, number> = {};
         for (const event of stageEvents) {
           const payload = event.payload || {};
-          if (payload.orgsSourced !== undefined) counts.orgs_sourced = payload.orgsSourced as number;
-          if (payload.contactsDiscovered !== undefined) counts.contacts_discovered = payload.contactsDiscovered as number;
-          if (payload.contactsEvaluated !== undefined) counts.contacts_evaluated = payload.contactsEvaluated as number;
-          if (payload.leadsPromoted !== undefined) counts.leads_promoted = payload.leadsPromoted as number;
+          // Extract any numeric counts from payload
+          for (const [key, value] of Object.entries(payload)) {
+            if (typeof value === 'number' && !counts[key]) {
+              counts[key] = value;
+            }
+          }
         }
 
-        const stageDefinitions = [
-          { stage: 'orgs_sourced', label: 'Organizations sourced', count: counts.orgs_sourced, confidence: 'observed' as const, tooltip: 'Organizations matching ICP criteria' },
-          { stage: 'contacts_discovered', label: 'Contacts discovered', count: counts.contacts_discovered, confidence: 'observed' as const, tooltip: 'Contacts found within sourced organizations' },
-          { stage: 'contacts_evaluated', label: 'Contacts evaluated', count: counts.contacts_evaluated, confidence: 'observed' as const, tooltip: 'Contacts evaluated for ICP fit' },
-          { stage: 'leads_promoted', label: 'Leads promoted', count: counts.leads_promoted, confidence: 'observed' as const, tooltip: 'Contacts promoted to leads (Tier A/B)' },
-        ];
-
-        for (const stageDef of stageDefinitions) {
-          if (stageDef.count !== null && stageDef.count !== undefined) {
+        // Build stages from aggregated counts
+        const stageKeys = ['orgsSourced', 'contactsDiscovered', 'contactsEvaluated', 'leadsPromoted', 'leadsApproved', 'emailsSent'];
+        for (const key of stageKeys) {
+          const count = counts[key];
+          if (count !== null && count !== undefined) {
             stages.push({
-              stage: stageDef.stage,
-              label: stageDef.label,
-              count: stageDef.count,
-              confidence: stageDef.confidence,
-              tooltip: stageDef.tooltip,
+              stage: getStageId(key),
+              label: getStageLabel(key),
+              count: count,
+              confidence: 'observed',
+              tooltip: getStageTooltip(key),
             });
           }
         }
       }
     }
 
+    // Return ObservabilityFunnel shape
     return NextResponse.json({
       campaign_id: campaignId,
       stages: stages,

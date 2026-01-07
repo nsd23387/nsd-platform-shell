@@ -85,8 +85,8 @@ export function GovernanceActionsPanel({
         // For /run (202), don't reload immediately - execution is async
         // For submit/approve (200), reload to show new status
         if (response.status === 202) {
-          // Execution was delegated - show message but don't assume completion
-          setSuccessMessage(`${successMsg}. Execution has been delegated to the Sales Engine.`);
+          // Run initiated - show message but don't assume completion
+          setSuccessMessage(`${successMsg}. Check the Observability tab for progress.`);
         } else {
           // Status changed - refresh to show updated state
           if (typeof window !== 'undefined') {

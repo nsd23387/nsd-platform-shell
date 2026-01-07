@@ -3,7 +3,8 @@
  * 
  * GET /api/v1/campaigns/[id]/runs
  * 
- * Returns the historical runs for a campaign.
+ * Returns the historical runs for a campaign as an ARRAY directly.
+ * The UI expects CampaignRun[] or CampaignRunDetailed[], not a wrapped object.
  * 
  * activity.events SCHEMA:
  * - id: uuid (NOT NULL, no default)
@@ -18,10 +19,11 @@
  * The entity_id column contains the runId.
  * 
  * EMPTY STATE:
- * When runs is [], show "No runs observed yet" in UI.
+ * When no runs exist, returns [] (empty array).
+ * UI should show "No runs observed yet".
  * 
  * GOVERNANCE:
- * - Read-only
+ * - Read-only projection from activity.events
  * - Runs are observed, not created via UI
  */
 
@@ -36,17 +38,31 @@ import {
   StoredEvent 
 } from '../../../../../../lib/activity-db';
 
+/**
+ * Run record matching CampaignRunDetailed interface expected by UI.
+ * 
+ * IMPORTANT: Field names must match the TypeScript types in types/campaign.ts:
+ * - id, campaign_id, status, started_at, completed_at
+ * - leads_processed (NOT leads_promoted - UI expects this name)
+ * - emails_sent, errors, error_details
+ * - Pipeline counts: orgs_sourced, contacts_discovered, contacts_evaluated, leads_promoted, leads_approved
+ */
 interface RunRecord {
   id: string;
-  status: 'running' | 'completed' | 'failed' | 'partial';
+  campaign_id: string;
+  status: 'COMPLETED' | 'FAILED' | 'PARTIAL' | 'RUNNING';
   started_at: string;
   completed_at?: string;
+  leads_processed: number;
+  emails_sent: number;
+  errors: number;
+  error_details?: string[];
+  // Extended fields for CampaignRunDetailed
   orgs_sourced?: number;
   contacts_discovered?: number;
+  contacts_evaluated?: number;
   leads_promoted?: number;
   leads_approved?: number;
-  emails_sent?: number;
-  errors?: string;
 }
 
 function isSupabaseConfigured(): boolean {
@@ -70,17 +86,15 @@ export async function GET(
 ) {
   const campaignId = params.id;
 
+  // When not configured, return empty array (UI expects array, not wrapped object)
   if (!isSupabaseConfigured() || !isActivityDbConfigured()) {
-    return NextResponse.json({
-      campaign_id: campaignId,
-      runs: [],
-    });
+    return NextResponse.json([]);
   }
 
   try {
     const coreClient = createCoreClient();
 
-    // Check if campaign exists (via Supabase/PostgREST)
+    // Check if campaign exists (via Supabase/PostgREST for core schema)
     const { data: campaign, error: campaignError } = await coreClient
       .from('campaigns')
       .select('id')
@@ -92,18 +106,15 @@ export async function GET(
     }
 
     // Get all run.started events via direct Postgres
-    // Uses entity_type = 'campaign_run' column for efficient filtering
+    // activity.events uses entity_type = 'campaign_run' for efficient filtering
     const startedEvents = await getRunStartedEvents(campaignId, 50);
 
     if (!startedEvents || startedEvents.length === 0) {
-      return NextResponse.json({
-        campaign_id: campaignId,
-        runs: [],
-      });
+      // Return empty array - UI shows "No runs observed yet"
+      return NextResponse.json([]);
     }
 
-    // Get run IDs from started events
-    // entity_id IS the runId (physical column)
+    // Get run IDs from started events (entity_id IS the runId)
     const runIds = startedEvents
       .map((event) => event.entity_id)
       .filter((id): id is string => Boolean(id));
@@ -123,46 +134,68 @@ export async function GET(
     const runs: RunRecord[] = [];
 
     for (const startEvent of startedEvents) {
-      // entity_id IS the runId (physical column)
       const runId = startEvent.entity_id;
       if (!runId) continue;
 
+      // Defensive payload access (payload may be null or missing keys)
       const startPayload = startEvent.payload || {};
       const startedAt = (startPayload.startedAt as string) || startEvent.created_at;
 
       const completionEvent = completionMap.get(runId);
       
+      // Default run record for in-progress runs
       let runRecord: RunRecord = {
         id: runId,
-        status: 'running',
+        campaign_id: campaignId,
+        status: 'RUNNING',
         started_at: startedAt,
+        leads_processed: 0,
+        emails_sent: 0,
+        errors: 0,
       };
 
       if (completionEvent) {
+        // Defensive payload access
         const compPayload = completionEvent.payload || {};
 
         if (completionEvent.event_type === 'run.completed') {
-          runRecord.status = 'completed';
-          runRecord.completed_at = (compPayload.completedAt as string) || completionEvent.created_at;
-          runRecord.orgs_sourced = compPayload.orgsSourced as number | undefined;
-          runRecord.contacts_discovered = compPayload.contactsDiscovered as number | undefined;
-          runRecord.leads_promoted = compPayload.leadsPromoted as number | undefined;
-          runRecord.leads_approved = compPayload.leadsApproved as number | undefined;
-          runRecord.emails_sent = compPayload.emailsSent as number | undefined;
+          const leadsPromoted = (compPayload.leadsPromoted as number) || 0;
+          
+          runRecord = {
+            ...runRecord,
+            status: 'COMPLETED',
+            completed_at: (compPayload.completedAt as string) || completionEvent.created_at,
+            // UI expects leads_processed
+            leads_processed: leadsPromoted,
+            emails_sent: (compPayload.emailsSent as number) || 0,
+            errors: 0,
+            // Extended pipeline counts
+            orgs_sourced: compPayload.orgsSourced as number | undefined,
+            contacts_discovered: compPayload.contactsDiscovered as number | undefined,
+            contacts_evaluated: compPayload.contactsEvaluated as number | undefined,
+            leads_promoted: leadsPromoted,
+            leads_approved: compPayload.leadsApproved as number | undefined,
+          };
         } else if (completionEvent.event_type === 'run.failed') {
-          runRecord.status = 'failed';
-          runRecord.completed_at = (compPayload.failedAt as string) || completionEvent.created_at;
-          runRecord.errors = compPayload.error as string | undefined;
+          const errorMessage = compPayload.error as string | undefined;
+          
+          runRecord = {
+            ...runRecord,
+            status: 'FAILED',
+            completed_at: (compPayload.failedAt as string) || completionEvent.created_at,
+            leads_processed: 0,
+            emails_sent: 0,
+            errors: 1,
+            error_details: errorMessage ? [errorMessage] : undefined,
+          };
         }
       }
 
       runs.push(runRecord);
     }
 
-    return NextResponse.json({
-      campaign_id: campaignId,
-      runs: runs,
-    });
+    // Return array directly - UI expects CampaignRun[] or CampaignRunDetailed[]
+    return NextResponse.json(runs);
   } catch (error) {
     console.error('[runs] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

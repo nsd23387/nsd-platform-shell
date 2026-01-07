@@ -6,17 +6,27 @@
  * Returns the full observability state for a campaign, combining
  * execution status and pipeline funnel data.
  * 
+ * RESPONSE SHAPE (matches CampaignObservability interface):
+ * {
+ *   campaign_id: string,
+ *   status: CampaignExecutionStatus,
+ *   active_run_id?: string,
+ *   current_stage?: string,
+ *   last_observed_at: string,
+ *   pipeline: PipelineStage[],
+ *   send_metrics?: { ... }
+ * }
+ * 
  * activity.events SCHEMA:
  * - id: uuid (NOT NULL, no default)
  * - event_type: text (NOT NULL)
  * - entity_type: text (NOT NULL) - 'campaign_run' for run events
  * - entity_id: uuid (NOT NULL) - the runId
- * - actor_id: uuid (nullable)
  * - payload: jsonb (nullable) - contains campaignId, counts, etc.
  * - created_at: timestamptz (NOT NULL, default now())
  * 
  * GOVERNANCE:
- * - Read-only
+ * - Read-only projection from activity.events
  * - Backend-authoritative counts and status
  * - No local computation in UI
  */
@@ -36,6 +46,44 @@ interface PipelineStage {
   label: string;
   count: number;
   confidence: 'observed' | 'conditional';
+  tooltip?: string;
+}
+
+/**
+ * Convert camelCase payload key to display label.
+ */
+function getStageLabel(stageKey: string): string {
+  const labels: Record<string, string> = {
+    orgsSourced: 'Organizations sourced',
+    contactsDiscovered: 'Contacts discovered',
+    contactsEvaluated: 'Contacts evaluated',
+    leadsPromoted: 'Leads promoted',
+    leadsApproved: 'Leads approved',
+    emailsSent: 'Emails sent',
+  };
+  return labels[stageKey] || stageKey.replace(/([A-Z])/g, ' $1').trim();
+}
+
+/**
+ * Convert camelCase payload key to stage ID.
+ */
+function getStageId(stageKey: string): string {
+  return stageKey.replace(/([A-Z])/g, '_$1').toLowerCase();
+}
+
+/**
+ * Get tooltip for a stage.
+ */
+function getStageTooltip(stageKey: string): string | undefined {
+  const tooltips: Record<string, string> = {
+    orgsSourced: 'Organizations matching ICP criteria',
+    contactsDiscovered: 'Contacts found within sourced organizations',
+    contactsEvaluated: 'Contacts evaluated for ICP fit',
+    leadsPromoted: 'Contacts promoted to leads (Tier A/B)',
+    leadsApproved: 'Leads approved for outreach',
+    emailsSent: 'Emails sent to approved leads',
+  };
+  return tooltips[stageKey];
 }
 
 function isSupabaseConfigured(): boolean {
@@ -59,22 +107,20 @@ export async function GET(
 ) {
   const campaignId = params.id;
 
+  // Default response when not configured
   if (!isSupabaseConfigured() || !isActivityDbConfigured()) {
     return NextResponse.json({
       campaign_id: campaignId,
-      execution: {
-        status: 'idle',
-        last_observed_at: new Date().toISOString(),
-      },
+      status: 'idle',
+      last_observed_at: new Date().toISOString(),
       pipeline: [],
-      active_run: null,
     });
   }
 
   try {
     const coreClient = createCoreClient();
 
-    // Check if campaign exists (via Supabase/PostgREST)
+    // Check if campaign exists (via Supabase/PostgREST for core schema)
     const { data: campaign, error: campaignError } = await coreClient
       .from('campaigns')
       .select('id, status')
@@ -85,8 +131,7 @@ export async function GET(
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     }
 
-    // Get the latest run event via direct Postgres
-    // Uses entity_type = 'campaign_run' column for efficient filtering
+    // Get the latest run event via direct Postgres (activity schema)
     const latestRunEvent = await getLatestRunEvent(
       campaignId,
       ['run.started', 'run.running', 'run.completed', 'run.failed']
@@ -94,13 +139,13 @@ export async function GET(
 
     // Determine execution status from event stream
     let executionStatus: string = 'idle';
-    let activeRunId: string | null = null;
+    let activeRunId: string | undefined;
     let currentStage: string | undefined;
-    let errorMessage: string | undefined;
     let lastObservedAt = new Date().toISOString();
 
     if (latestRunEvent) {
       lastObservedAt = latestRunEvent.created_at || lastObservedAt;
+      // Defensive payload access
       const payload = latestRunEvent.payload || {};
       // entity_id IS the runId (physical column)
       const runId = latestRunEvent.entity_id;
@@ -113,10 +158,10 @@ export async function GET(
         case 'run.running':
           executionStatus = 'running';
           activeRunId = runId;
-          currentStage = payload.stage as string | undefined;
+          currentStage = (payload.stage as string) || (payload.stageName as string) || undefined;
           break;
         case 'run.completed':
-          const leadsPromoted = payload.leadsPromoted as number || 0;
+          const leadsPromoted = (payload.leadsPromoted as number) || 0;
           if (leadsPromoted > 0) {
             executionStatus = 'awaiting_approvals';
           } else {
@@ -126,7 +171,6 @@ export async function GET(
           break;
         case 'run.failed':
           executionStatus = 'failed';
-          errorMessage = payload.error as string | undefined;
           lastObservedAt = (payload.failedAt as string) || lastObservedAt;
           break;
         default:
@@ -144,70 +188,64 @@ export async function GET(
     );
 
     if (latestCompletionEvent && latestCompletionEvent.event_type === 'run.completed') {
+      // Defensive payload access
       const payload = latestCompletionEvent.payload || {};
 
-      const stageDefinitions = [
-        { stage: 'orgs_sourced', label: 'Organizations sourced', count: payload.orgsSourced as number | undefined },
-        { stage: 'contacts_discovered', label: 'Contacts discovered', count: payload.contactsDiscovered as number | undefined },
-        { stage: 'contacts_evaluated', label: 'Contacts evaluated', count: payload.contactsEvaluated as number | undefined },
-        { stage: 'leads_promoted', label: 'Leads promoted', count: payload.leadsPromoted as number | undefined },
-      ];
-
-      for (const stageDef of stageDefinitions) {
-        if (stageDef.count !== null && stageDef.count !== undefined) {
+      // Dynamically extract stage counts from payload
+      const stageKeys = ['orgsSourced', 'contactsDiscovered', 'contactsEvaluated', 'leadsPromoted', 'leadsApproved', 'emailsSent'];
+      
+      for (const key of stageKeys) {
+        const count = payload[key];
+        if (count !== null && count !== undefined && typeof count === 'number') {
           pipeline.push({
-            stage: stageDef.stage,
-            label: stageDef.label,
-            count: stageDef.count,
+            stage: getStageId(key),
+            label: getStageLabel(key),
+            count: count,
             confidence: 'observed',
+            tooltip: getStageTooltip(key),
           });
         }
       }
     } else {
       // No completion event - check stage.completed events for in-progress data
-      const stageEvents = await getStageCompletedEvents(campaignId, 10);
+      const stageEvents = await getStageCompletedEvents(campaignId, 20);
 
       if (stageEvents && stageEvents.length > 0) {
+        // Aggregate counts from stage events
         const counts: Record<string, number> = {};
         for (const event of stageEvents) {
           const payload = event.payload || {};
-          if (payload.orgsSourced !== undefined) counts.orgs_sourced = payload.orgsSourced as number;
-          if (payload.contactsDiscovered !== undefined) counts.contacts_discovered = payload.contactsDiscovered as number;
-          if (payload.contactsEvaluated !== undefined) counts.contacts_evaluated = payload.contactsEvaluated as number;
-          if (payload.leadsPromoted !== undefined) counts.leads_promoted = payload.leadsPromoted as number;
+          for (const [key, value] of Object.entries(payload)) {
+            if (typeof value === 'number' && !counts[key]) {
+              counts[key] = value;
+            }
+          }
         }
 
-        const stageDefinitions = [
-          { stage: 'orgs_sourced', label: 'Organizations sourced', count: counts.orgs_sourced },
-          { stage: 'contacts_discovered', label: 'Contacts discovered', count: counts.contacts_discovered },
-          { stage: 'contacts_evaluated', label: 'Contacts evaluated', count: counts.contacts_evaluated },
-          { stage: 'leads_promoted', label: 'Leads promoted', count: counts.leads_promoted },
-        ];
-
-        for (const stageDef of stageDefinitions) {
-          if (stageDef.count !== null && stageDef.count !== undefined) {
+        const stageKeys = ['orgsSourced', 'contactsDiscovered', 'contactsEvaluated', 'leadsPromoted', 'leadsApproved', 'emailsSent'];
+        for (const key of stageKeys) {
+          const count = counts[key];
+          if (count !== null && count !== undefined) {
             pipeline.push({
-              stage: stageDef.stage,
-              label: stageDef.label,
-              count: stageDef.count,
+              stage: getStageId(key),
+              label: getStageLabel(key),
+              count: count,
               confidence: 'observed',
+              tooltip: getStageTooltip(key),
             });
           }
         }
       }
     }
 
+    // Return CampaignObservability shape
     return NextResponse.json({
       campaign_id: campaignId,
-      execution: {
-        status: executionStatus,
-        active_run_id: activeRunId,
-        current_stage: currentStage,
-        error_message: errorMessage,
-        last_observed_at: lastObservedAt,
-      },
+      status: executionStatus,
+      active_run_id: activeRunId,
+      current_stage: currentStage,
+      last_observed_at: lastObservedAt,
       pipeline: pipeline,
-      active_run: activeRunId ? { id: activeRunId, status: executionStatus, stage: currentStage } : null,
     });
   } catch (error) {
     console.error('[observability] Error:', error);

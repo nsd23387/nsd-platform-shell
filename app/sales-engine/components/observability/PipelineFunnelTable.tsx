@@ -354,8 +354,7 @@ export function PipelineFunnelTable({
             fontStyle: 'italic',
           }}
         >
-          Counts are backend-authoritative. No local computation is performed.
-          Observability reflects pipeline state; execution is delegated.
+          Counts are backend-authoritative. Read-only projection from activity events.
         </p>
       </div>
     </div>

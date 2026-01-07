@@ -6,6 +6,16 @@
  * Returns the execution status for a campaign.
  * This is the SOURCE OF TRUTH for execution state.
  * 
+ * RESPONSE SHAPE (matches ObservabilityStatus interface):
+ * {
+ *   campaign_id: string,
+ *   status: CampaignExecutionStatus,
+ *   active_run_id?: string,
+ *   current_stage?: string,
+ *   last_observed_at: string,
+ *   error_message?: string
+ * }
+ * 
  * STATUS VALUES:
  * - "idle": No active run
  * - "run_requested": Execution request sent, awaiting events
@@ -14,25 +24,17 @@
  * - "completed": Last run completed
  * - "failed": Last run failed
  * 
- * EXECUTION MODEL:
- * Campaign runs are tracked via activity events, not relational tables.
- * Status is derived from the event stream (run.started, run.running, run.completed, run.failed).
- * 
- * DATABASE ACCESS:
- * - activity.events is read via direct DB connection, not PostgREST.
- * - core.* tables are read via Supabase client (PostgREST).
- * 
  * activity.events SCHEMA:
  * - id: uuid (NOT NULL, no default)
  * - event_type: text (NOT NULL)
  * - entity_type: text (NOT NULL) - 'campaign_run' for run events
  * - entity_id: uuid (NOT NULL) - the runId
  * - actor_id: uuid (nullable)
- * - payload: jsonb (nullable) - contains campaignId, runId, etc.
+ * - payload: jsonb (nullable) - contains campaignId, stage, etc.
  * - created_at: timestamptz (NOT NULL, default now())
  * 
  * GOVERNANCE:
- * - Read-only
+ * - Read-only projection from activity.events
  * - UI must derive all execution display from this endpoint
  * - No execution control
  */
@@ -64,8 +66,8 @@ export async function GET(
 ) {
   const campaignId = params.id;
 
+  // Default response when not configured
   if (!isSupabaseConfigured() || !isActivityDbConfigured()) {
-    // Return idle status when not configured
     return NextResponse.json({
       campaign_id: campaignId,
       status: 'idle',
@@ -76,7 +78,7 @@ export async function GET(
   try {
     const coreClient = createCoreClient();
 
-    // Check if campaign exists (via Supabase/PostgREST)
+    // Check if campaign exists (via Supabase/PostgREST for core schema)
     const { data: campaign, error: campaignError } = await coreClient
       .from('campaigns')
       .select('id, status')
@@ -87,8 +89,7 @@ export async function GET(
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     }
 
-    // Get the latest run event via direct Postgres
-    // Uses entity_type = 'campaign_run' column for efficient filtering
+    // Get the latest run event via direct Postgres (activity schema)
     const latestRunEvent = await getLatestRunEvent(
       campaignId,
       ['run.started', 'run.running', 'run.completed', 'run.failed']
@@ -103,8 +104,9 @@ export async function GET(
 
     if (latestRunEvent) {
       lastObservedAt = latestRunEvent.created_at || lastObservedAt;
+      // Defensive payload access
       const payload = latestRunEvent.payload || {};
-      // entity_id IS the runId (it's a physical column)
+      // entity_id IS the runId (physical column)
       const runId = latestRunEvent.entity_id;
       
       switch (latestRunEvent.event_type) {
@@ -115,11 +117,12 @@ export async function GET(
         case 'run.running':
           executionStatus = 'running';
           activeRunId = runId;
-          currentStage = payload.stage as string | undefined;
+          // Stage from payload (defensive access)
+          currentStage = (payload.stage as string) || (payload.stageName as string) || undefined;
           break;
         case 'run.completed':
           // Check if there are leads awaiting approval
-          const leadsPromoted = payload.leadsPromoted as number || 0;
+          const leadsPromoted = (payload.leadsPromoted as number) || 0;
           if (leadsPromoted > 0) {
             executionStatus = 'awaiting_approvals';
           } else {
@@ -129,7 +132,7 @@ export async function GET(
           break;
         case 'run.failed':
           executionStatus = 'failed';
-          errorMessage = payload.error as string | undefined;
+          errorMessage = (payload.error as string) || undefined;
           lastObservedAt = (payload.failedAt as string) || lastObservedAt;
           break;
         default:
@@ -137,6 +140,7 @@ export async function GET(
       }
     }
 
+    // Return ObservabilityStatus shape
     return NextResponse.json({
       campaign_id: campaignId,
       status: executionStatus,
