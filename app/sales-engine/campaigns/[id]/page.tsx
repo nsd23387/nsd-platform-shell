@@ -542,30 +542,30 @@ function MonitoringTab({
         <div
           style={{
             padding: '12px 16px',
-            backgroundColor: '#FEF3C7',
+            backgroundColor: NSD_COLORS.semantic.attention.bg,
             borderRadius: NSD_RADIUS.md,
-            border: '1px solid #FCD34D',
+            border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
             fontFamily: 'monospace',
             fontSize: '11px',
           }}
         >
-          <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#92400E' }}>
-            🔧 DEV DEBUG: Observability Wiring Status
+          <div style={{ fontWeight: 'bold', marginBottom: '8px', color: NSD_COLORS.semantic.attention.text }}>
+            DEV DEBUG: Observability Wiring Status
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', color: '#78350F' }}>
-            <div>📊 /observability/status:</div>
-            <div>{observabilityStatus ? `✅ status="${observabilityStatus.status}"` : '❌ null/undefined'}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', color: NSD_COLORS.semantic.attention.text }}>
+            <div>/observability/status:</div>
+            <div>{observabilityStatus ? `OK status="${observabilityStatus.status}"` : 'null/undefined'}</div>
             
-            <div>📈 /observability/funnel:</div>
-            <div>{observabilityFunnel ? `✅ stages.length=${observabilityFunnel.stages?.length ?? 0}` : '❌ null/undefined'}</div>
+            <div>/observability/funnel:</div>
+            <div>{observabilityFunnel ? `OK stages.length=${observabilityFunnel.stages?.length ?? 0}` : 'null/undefined'}</div>
             
-            <div>🏃 /runs:</div>
-            <div>{runsDetailed ? `✅ runs.length=${runsDetailed.length}` : '❌ null/undefined'}</div>
+            <div>/runs:</div>
+            <div>{runsDetailed ? `OK runs.length=${runsDetailed.length}` : 'null/undefined'}</div>
             
-            <div>📋 /observability:</div>
-            <div>{observability ? `✅ pipeline.length=${observability.pipeline?.length ?? 0}` : '❌ null/undefined'}</div>
+            <div>/observability:</div>
+            <div>{observability ? `OK pipeline.length=${observability.pipeline?.length ?? 0}` : 'null/undefined'}</div>
           </div>
-          <div style={{ marginTop: '8px', fontSize: '10px', color: '#92400E', fontStyle: 'italic' }}>
+          <div style={{ marginTop: '8px', fontSize: '10px', color: NSD_COLORS.semantic.attention.text, fontStyle: 'italic' }}>
             This banner is dev-only and will not appear in production.
           </div>
         </div>
@@ -667,18 +667,13 @@ function MonitoringTab({
 }
 
 function LearningTab({ campaignId }: { campaignId: string }) {
-  // Sample learning signals - in production, these would come from the backend
-  // NOTE: This is placeholder data for UI demonstration purposes
-  const sampleSignals = [
-    { id: '1', name: 'Reply Outcome', type: 'reply_outcome' as const, collected: true, eligibleForLearning: true, excludedFromAutomation: false },
-    { id: '2', name: 'Bounce Detection', type: 'bounce' as const, collected: true, eligibleForLearning: true, excludedFromAutomation: false },
-    { id: '3', name: 'Open Rate Tracking', type: 'open_rate' as const, collected: true, eligibleForLearning: false, excludedFromAutomation: true, reason: 'Privacy compliance' },
-    { id: '4', name: 'Engagement Score', type: 'engagement' as const, collected: false, eligibleForLearning: false, excludedFromAutomation: true, reason: 'Not yet implemented' },
-  ];
-
+  // Learning signals must come from the backend API.
+  // Do NOT use placeholder data - show empty state when data is not available.
+  // This ensures no mock/fake data appears in the UI.
+  
   return (
     <LearningSignalsPanel
-      signals={sampleSignals}
+      signals={undefined} // Will show "No Learning Signals Configured" state
       autonomyLevel="L1"
       campaignId={campaignId}
     />

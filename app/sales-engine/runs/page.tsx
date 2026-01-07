@@ -56,11 +56,11 @@ export default function RunsPage() {
               </div>
               <div style={{ padding: '16px', backgroundColor: '#f9fafb', borderRadius: '10px' }}>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Used Today</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: '#10b981' }}>{throughput.usedToday}</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: '#3730A3' }}>{throughput.usedToday}</div>
               </div>
               <div style={{ padding: '16px', backgroundColor: '#f9fafb', borderRadius: '10px' }}>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Remaining</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: throughput.dailyLimit - throughput.usedToday > 50 ? '#10b981' : '#f59e0b' }}>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: throughput.dailyLimit - throughput.usedToday > 50 ? '#3730A3' : '#92400E' }}>
                   {throughput.dailyLimit - throughput.usedToday}
                 </div>
               </div>
@@ -70,7 +70,7 @@ export default function RunsPage() {
 
         <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-            <Icon name="check" size={20} color="#10b981" />
+            <Icon name="check" size={20} color="#3730A3" />
             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#111827', fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
               Approved & Ready Campaigns
             </h3>
@@ -117,8 +117,8 @@ export default function RunsPage() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     {campaign.isRunnable && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#10b981', fontWeight: 500 }}>
-                        <Icon name="check" size={14} color="#10b981" />
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#3730A3', fontWeight: 500 }}>
+                        <Icon name="check" size={14} color="#3730A3" />
                         Ready
                       </span>
                     )}

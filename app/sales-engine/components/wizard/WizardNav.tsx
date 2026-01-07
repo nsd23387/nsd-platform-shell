@@ -108,7 +108,7 @@ export function WizardNav({ steps, currentStep, onStepClick }: WizardNavProps) {
                   backgroundColor: isActive
                     ? NSD_COLORS.secondary
                     : isCompleted
-                    ? NSD_COLORS.success
+                    ? NSD_COLORS.semantic.positive.text
                     : NSD_COLORS.border.light,
                   color: isActive || isCompleted ? '#fff' : NSD_COLORS.text.muted,
                   fontSize: '12px',
@@ -156,7 +156,7 @@ export function WizardNav({ steps, currentStep, onStepClick }: WizardNavProps) {
                   <div
                     style={{
                       fontSize: '11px',
-                      color: NSD_COLORS.success,
+                      color: NSD_COLORS.semantic.positive.text,
                       marginTop: '2px',
                     }}
                   >

@@ -77,47 +77,53 @@ export default function MonitoringPage() {
             Yield metrics display promoted leads only.
             Contacts and leads are distinct; leads are conditionally promoted.
             Lead counts do NOT include Tier C/D contacts.
+            
+            DEFENSIVE RENDERING: Only show metrics when data exists from API.
           */}
-          <MetricGroup
-            title="Yield"
-            icon="chart"
-            color="#10b981"
-            metrics={[
-              { label: 'Promoted Leads Attempted', value: yieldMetrics?.totalLeads || 0 },
-              { label: 'Successfully Sent', value: yieldMetrics?.totalSent || 0 },
-              { label: 'Success Rate', value: `${yieldMetrics?.successRate || 0}%` },
-            ]}
-          />
+          {yieldMetrics && (
+            <MetricGroup
+              title="Observed Yield"
+              icon="chart"
+              color="#3730A3"
+              metrics={[
+                { label: 'Promoted Leads Attempted', value: yieldMetrics.totalLeads },
+                { label: 'Successfully Sent', value: yieldMetrics.totalSent },
+                { label: 'Completed Runs', value: `${runs.filter(r => r.status === 'COMPLETED').length}` },
+              ]}
+            />
+          )}
 
           <MetricGroup
             title="Efficiency"
             icon="clock"
-            color="#8b5cf6"
+            color="#692BAA"
             metrics={[
-              { label: 'Daily Utilization', value: `${efficiencyMetrics?.utilizationRate || 0}%` },
-              { label: 'Active Campaigns', value: efficiencyMetrics?.activeCampaigns || 0 },
-              { label: 'Throughput Used', value: throughput?.usedToday || 0 },
+              { label: 'Daily Utilization', value: efficiencyMetrics ? `${efficiencyMetrics.utilizationRate}%` : 'Not observed' },
+              { label: 'Active Campaigns', value: efficiencyMetrics?.activeCampaigns ?? 'Not observed' },
+              { label: 'Throughput Used', value: throughput?.usedToday ?? 'Not observed' },
             ]}
           />
 
-          <MetricGroup
-            title="Quality"
-            icon="star"
-            color="#f59e0b"
-            metrics={[
-              { label: 'Completed Runs', value: runs.filter(r => r.status === 'COMPLETED').length },
-              { label: 'Partial Runs', value: runs.filter(r => r.status === 'PARTIAL').length },
-              { label: 'Failed Runs', value: runs.filter(r => r.status === 'FAILED').length },
-            ]}
-          />
+          {runs.length > 0 && (
+            <MetricGroup
+              title="Run Quality"
+              icon="star"
+              color="#3730A3"
+              metrics={[
+                { label: 'Completed Runs', value: runs.filter(r => r.status === 'COMPLETED').length },
+                { label: 'Partial Runs', value: runs.filter(r => r.status === 'PARTIAL').length },
+                { label: 'Failed Runs', value: runs.filter(r => r.status === 'FAILED').length },
+              ]}
+            />
+          )}
 
           <MetricGroup
             title="Safety"
             icon="shield"
-            color="#ef4444"
+            color="#991B1B"
             metrics={[
               { label: 'Blocked by Throughput', value: safetyMetrics.blockedByThroughput },
-              { label: 'Leads Blocked (Recent)', value: safetyMetrics.totalBlocked },
+              { label: 'Leads Blocked (Recent)', value: runs.length > 0 ? safetyMetrics.totalBlocked : 'Not observed' },
             ]}
           />
         </div>
@@ -158,8 +164,9 @@ export default function MonitoringPage() {
                       <span
                         style={{
                           padding: '4px 10px',
-                          backgroundColor: run.status === 'COMPLETED' ? '#d1fae5' : run.status === 'FAILED' ? '#fef2f2' : '#fef3c7',
-                          color: run.status === 'COMPLETED' ? '#065f46' : run.status === 'FAILED' ? '#991b1b' : '#92400e',
+                          backgroundColor: run.status === 'COMPLETED' ? '#E0E7FF' : run.status === 'FAILED' ? '#FEE2E2' : '#FEF3C7',
+                          color: run.status === 'COMPLETED' ? '#3730A3' : run.status === 'FAILED' ? '#991B1B' : '#92400E',
+                          border: `1px solid ${run.status === 'COMPLETED' ? '#A5B4FC' : run.status === 'FAILED' ? '#FECACA' : '#FCD34D'}`,
                           borderRadius: '6px',
                           fontSize: '12px',
                           fontWeight: 500,
@@ -171,10 +178,10 @@ export default function MonitoringPage() {
                     <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: '#6b7280' }}>
                       {run.leadsAttempted}
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: '#10b981', fontWeight: 500 }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: '#3730A3', fontWeight: 500 }}>
                       {run.leadsSent}
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: run.leadsBlocked > 0 ? '#ef4444' : '#6b7280' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: run.leadsBlocked > 0 ? '#991B1B' : '#6b7280' }}>
                       {run.leadsBlocked}
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '13px', color: '#6b7280' }}>

@@ -109,7 +109,7 @@ function BlockedMetricModal({ onClose }: { onClose: () => void }) {
             margin: '0 0 16px 0',
             fontSize: '18px',
             fontWeight: 600,
-            color: NSD_COLORS.error,
+            color: NSD_COLORS.semantic.critical.text,
             fontFamily: NSD_TYPOGRAPHY.fontDisplay,
           }}
         >

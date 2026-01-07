@@ -39,23 +39,22 @@ export interface SendMetricsPanelProps {
 }
 
 /**
- * Get confidence badge styling.
+ * Get confidence badge styling - uses brand-aligned semantic colors.
  */
 function getConfidenceBadgeStyle(confidence: 'observed' | 'conditional'): {
   bg: string;
   text: string;
+  border: string;
   label: string;
 } {
   if (confidence === 'observed') {
     return {
-      bg: '#D1FAE5',
-      text: '#065F46',
+      ...NSD_COLORS.semantic.positive,
       label: 'Observed',
     };
   } else {
     return {
-      bg: '#FEF3C7',
-      text: '#92400E',
+      ...NSD_COLORS.semantic.attention,
       label: 'Conditional',
     };
   }
@@ -203,6 +202,7 @@ export function SendMetricsPanel({
             fontWeight: 500,
             backgroundColor: confidenceStyle.bg,
             color: confidenceStyle.text,
+            border: `1px solid ${confidenceStyle.border}`,
             borderRadius: NSD_RADIUS.full,
           }}
         >
@@ -214,19 +214,19 @@ export function SendMetricsPanel({
       <div
         style={{
           padding: '12px 20px',
-          backgroundColor: '#EFF6FF',
+          backgroundColor: NSD_COLORS.semantic.info.bg,
           borderBottom: `1px solid ${NSD_COLORS.border.light}`,
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
         }}
       >
-        <Icon name="info" size={16} color="#1E40AF" />
+        <Icon name="info" size={16} color={NSD_COLORS.semantic.info.text} />
         <p
           style={{
             margin: 0,
             fontSize: '13px',
-            color: '#1E40AF',
+            color: NSD_COLORS.semantic.info.text,
           }}
         >
           Send metrics only apply to approved leads.
@@ -253,12 +253,12 @@ export function SendMetricsPanel({
             label="Replies"
             value={emailsReplied}
             suffix={replyRate !== undefined ? `(${(replyRate * 100).toFixed(1)}%)` : undefined}
-            color={NSD_COLORS.success}
+            color={NSD_COLORS.semantic.positive.text}
           />
           <MetricCard
             label="Reply Rate"
             value={replyRate !== undefined ? `${(replyRate * 100).toFixed(1)}%` : '—'}
-            color={NSD_COLORS.success}
+            color={NSD_COLORS.semantic.positive.text}
           />
         </div>
 

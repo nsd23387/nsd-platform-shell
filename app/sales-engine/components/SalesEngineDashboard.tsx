@@ -125,7 +125,7 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
                   style={{
                     width: `${(throughput.usedToday / throughput.dailyLimit) * 100}%`,
                     height: '100%',
-                    backgroundColor: '#10b981',
+                    backgroundColor: '#692BAA',
                     transition: 'width 0.3s ease',
                   }}
                 />
@@ -138,11 +138,11 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
             <div style={{ display: 'flex', gap: '16px' }}>
               <div style={{ flex: 1, padding: '12px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
                 <div style={{ fontSize: '12px', color: '#6b7280' }}>Approved Campaigns</div>
-                <div style={{ fontSize: '20px', fontWeight: 600, color: '#10b981' }}>{throughput.activeCampaigns}</div>
+                <div style={{ fontSize: '20px', fontWeight: 600, color: '#3730A3' }}>{throughput.activeCampaigns}</div>
               </div>
               <div style={{ flex: 1, padding: '12px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
                 <div style={{ fontSize: '12px', color: '#6b7280' }}>Blocked by Throughput</div>
-                <div style={{ fontSize: '20px', fontWeight: 600, color: '#ef4444' }}>{throughput.blockedByThroughput}</div>
+                <div style={{ fontSize: '20px', fontWeight: 600, color: '#991B1B' }}>{throughput.blockedByThroughput}</div>
               </div>
             </div>
 
@@ -185,8 +185,9 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
                       <span
                         style={{
                           padding: '4px 8px',
-                          backgroundColor: run.status === 'COMPLETED' ? '#d1fae5' : run.status === 'FAILED' ? '#fee2e2' : '#fef3c7',
-                          color: run.status === 'COMPLETED' ? '#065f46' : run.status === 'FAILED' ? '#991b1b' : '#92400e',
+                          backgroundColor: run.status === 'COMPLETED' ? '#E0E7FF' : run.status === 'FAILED' ? '#FEE2E2' : '#FEF3C7',
+                          color: run.status === 'COMPLETED' ? '#3730A3' : run.status === 'FAILED' ? '#991B1B' : '#92400E',
+                          border: `1px solid ${run.status === 'COMPLETED' ? '#A5B4FC' : run.status === 'FAILED' ? '#FECACA' : '#FCD34D'}`,
                           borderRadius: '4px',
                           fontSize: '12px',
                           fontWeight: 500,
@@ -196,8 +197,8 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
                       </span>
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#6b7280' }}>{run.leadsAttempted}</td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#10b981' }}>{run.leadsSent}</td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#ef4444' }}>{run.leadsBlocked}</td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#3730A3' }}>{run.leadsSent}</td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#991B1B' }}>{run.leadsBlocked}</td>
                   </tr>
                 ))}
               </tbody>

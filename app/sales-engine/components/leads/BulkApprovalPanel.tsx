@@ -261,7 +261,7 @@ export function BulkApprovalPanel({
                 fontSize: '24px',
                 fontWeight: 700,
                 fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-                color: NSD_COLORS.success,
+                color: NSD_COLORS.semantic.positive.text,
               }}
             >
               {counts.approved}
@@ -295,7 +295,7 @@ export function BulkApprovalPanel({
                 fontSize: '24px',
                 fontWeight: 700,
                 fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-                color: counts.rejected > 0 ? NSD_COLORS.error : NSD_COLORS.text.muted,
+                color: counts.rejected > 0 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.text.muted,
               }}
             >
               {counts.rejected}
@@ -340,7 +340,7 @@ export function BulkApprovalPanel({
               textAlign: 'center',
             }}
           >
-            <Icon name="check" size={24} color={NSD_COLORS.success} />
+            <Icon name="check" size={24} color={NSD_COLORS.semantic.positive.text} />
             <p
               style={{
                 margin: '8px 0 0 0',

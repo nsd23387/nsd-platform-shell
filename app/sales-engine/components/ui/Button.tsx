@@ -46,7 +46,7 @@ export function Button({
       border: 'none',
     },
     danger: {
-      backgroundColor: NSD_COLORS.error,
+      backgroundColor: NSD_COLORS.semantic.critical.text,
       color: NSD_COLORS.text.inverse,
       border: 'none',
     },

@@ -139,7 +139,7 @@ export default function SalesEngineHomePage() {
                     style={{
                       width: `${Math.min((throughput.usedToday / throughput.dailyLimit) * 100, 100)}%`,
                       height: '100%',
-                      backgroundColor: throughput.usedToday > throughput.dailyLimit * 0.9 ? NSD_COLORS.error : NSD_COLORS.success,
+                      backgroundColor: throughput.usedToday > throughput.dailyLimit * 0.9 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.secondary,
                       transition: 'width 0.3s ease',
                     }}
                   />
@@ -148,14 +148,14 @@ export default function SalesEngineHomePage() {
                   {throughput.dailyLimit - throughput.usedToday} remaining today
                 </p>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
                   <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Active Campaigns</div>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.success }}>{throughput.activeCampaigns}</div>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.semantic.positive.text }}>{throughput.activeCampaigns}</div>
                 </div>
                 <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
                   <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Blocked</div>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: throughput.blockedByThroughput > 0 ? NSD_COLORS.error : NSD_COLORS.text.muted }}>{throughput.blockedByThroughput}</div>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: throughput.blockedByThroughput > 0 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.text.muted }}>{throughput.blockedByThroughput}</div>
                 </div>
               </div>
             </SectionCard>
@@ -194,8 +194,8 @@ export default function SalesEngineHomePage() {
                     <td style={{ padding: '14px 16px' }}>
                       <StatusChip status={run.status} size="sm" />
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.success, fontWeight: 500 }}>{run.leadsSent}</td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: run.leadsBlocked > 0 ? NSD_COLORS.error : NSD_COLORS.text.muted }}>{run.leadsBlocked}</td>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.semantic.positive.text, fontWeight: 500 }}>{run.leadsSent}</td>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: run.leadsBlocked > 0 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.text.muted }}>{run.leadsBlocked}</td>
                   </tr>
                 ))}
               </tbody>

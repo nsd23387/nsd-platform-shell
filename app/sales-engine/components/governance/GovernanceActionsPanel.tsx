@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { Icon } from '../../../../design/components/Icon';
 import { isTestCampaign, handleTestCampaignAction } from '../../lib/test-campaign';
 
 interface GovernanceActionsPanelProps {
@@ -154,14 +155,19 @@ export function GovernanceActionsPanel({
           <div
             style={{
               padding: '12px 16px',
-              backgroundColor: '#DCFCE7',
+              backgroundColor: NSD_COLORS.semantic.positive.bg,
               borderRadius: NSD_RADIUS.md,
               marginBottom: '16px',
               fontSize: '13px',
-              color: '#166534',
+              color: NSD_COLORS.semantic.positive.text,
+              border: `1px solid ${NSD_COLORS.semantic.positive.border}`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
             }}
           >
-            ✅ {successMessage}
+            <Icon name="check" size={16} color={NSD_COLORS.semantic.positive.text} />
+            {successMessage}
           </div>
         )}
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { Icon } from '../../../../design/components/Icon';
 import type { AutonomyLevel } from '../../lib/campaign-state';
 import { getAutonomyLevelDescription } from '../../lib/campaign-state';
 
@@ -20,13 +21,14 @@ interface LearningSignalsPanelProps {
   campaignId: string;
 }
 
-const SIGNAL_ICONS: Record<string, string> = {
-  reply_outcome: '💬',
-  bounce: '↩️',
-  open_rate: '👁️',
-  click_rate: '🔗',
-  engagement: '📊',
-  other: '📝',
+/** Icon mapping for signal types - uses proper icon names, not emojis */
+const SIGNAL_ICON_MAP: Record<string, 'message' | 'mail' | 'chart' | 'target' | 'info'> = {
+  reply_outcome: 'message',
+  bounce: 'mail',
+  open_rate: 'mail',
+  click_rate: 'target',
+  engagement: 'chart',
+  other: 'info',
 };
 
 /**
@@ -69,7 +71,7 @@ export function LearningSignalsPanel({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '18px' }}>🧠</span>
+          <Icon name="chart" size={18} color={NSD_COLORS.secondary} />
           <h4
             style={{
               margin: 0,
@@ -87,8 +89,8 @@ export function LearningSignalsPanel({
             padding: '4px 10px',
             fontSize: '11px',
             fontWeight: 500,
-            backgroundColor: '#EFF6FF',
-            color: '#1E40AF',
+            backgroundColor: NSD_COLORS.semantic.info.bg,
+            color: NSD_COLORS.semantic.info.text,
             borderRadius: NSD_RADIUS.sm,
           }}
         >
@@ -104,19 +106,20 @@ export function LearningSignalsPanel({
             alignItems: 'flex-start',
             gap: '14px',
             padding: '14px 16px',
-            backgroundColor: '#FEF3C7',
+            backgroundColor: NSD_COLORS.semantic.attention.bg,
             borderRadius: NSD_RADIUS.md,
+            border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
             marginBottom: '20px',
           }}
         >
-          <span style={{ fontSize: '16px' }}>⚠️</span>
+          <Icon name="info" size={16} color={NSD_COLORS.semantic.attention.text} />
           <div>
             <p
               style={{
                 margin: 0,
                 fontSize: '13px',
                 fontWeight: 600,
-                color: '#92400E',
+                color: NSD_COLORS.semantic.attention.text,
               }}
             >
               Autonomy Level: {autonomyLevel}
@@ -125,7 +128,7 @@ export function LearningSignalsPanel({
               style={{
                 margin: '4px 0 0 0',
                 fontSize: '12px',
-                color: '#92400E',
+                color: NSD_COLORS.semantic.attention.text,
                 opacity: 0.9,
               }}
             >
@@ -136,7 +139,7 @@ export function LearningSignalsPanel({
                 margin: '8px 0 0 0',
                 fontSize: '11px',
                 fontWeight: 500,
-                color: '#92400E',
+                color: NSD_COLORS.semantic.attention.text,
               }}
             >
               No automated write-backs are performed by this UI.
@@ -156,17 +159,17 @@ export function LearningSignalsPanel({
           <SummaryCard
             label="Signals Collected"
             value={collected}
-            color={NSD_COLORS.info}
+            color={NSD_COLORS.semantic.info.text}
           />
           <SummaryCard
             label="Eligible for Learning"
             value={eligible}
-            color={NSD_COLORS.success}
+            color={NSD_COLORS.semantic.positive.text}
           />
           <SummaryCard
             label="Excluded from Automation"
             value={excluded}
-            color={NSD_COLORS.warning}
+            color={NSD_COLORS.semantic.attention.text}
           />
         </div>
 
@@ -212,10 +215,9 @@ export function LearningSignalsPanel({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '20px',
               }}
             >
-              🧠
+              <Icon name="chart" size={24} color={NSD_COLORS.text.muted} />
             </div>
             <h5
               style={{
@@ -249,20 +251,20 @@ export function LearningSignalsPanel({
         <div
           style={{
             padding: '14px 16px',
-            backgroundColor: '#EFF6FF',
+            backgroundColor: NSD_COLORS.semantic.info.bg,
             borderRadius: NSD_RADIUS.md,
-            border: '1px solid #BFDBFE',
+            border: `1px solid ${NSD_COLORS.semantic.info.border}`,
             display: 'flex',
             alignItems: 'flex-start',
             gap: '12px',
           }}
         >
-          <span style={{ fontSize: '14px' }}>ℹ️</span>
+          <Icon name="info" size={16} color={NSD_COLORS.semantic.info.text} />
           <div>
-            <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: '#1E40AF' }}>
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: 500, color: NSD_COLORS.semantic.info.text }}>
               Governance Note
             </p>
-            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#1E40AF', opacity: 0.9, lineHeight: 1.5 }}>
+            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: NSD_COLORS.semantic.info.text, opacity: 0.9, lineHeight: 1.5 }}>
               Learning signals are collected for observability and offline analysis only.
               This UI does not trigger automated optimization or model updates.
               All learning is human-supervised and governed by the data governance team.
@@ -328,7 +330,7 @@ function SummaryCard({
 }
 
 function SignalRow({ signal }: { signal: LearningSignal }) {
-  const icon = SIGNAL_ICONS[signal.type] || SIGNAL_ICONS.other;
+  const iconName = SIGNAL_ICON_MAP[signal.type] || SIGNAL_ICON_MAP.other;
   
   return (
     <div
@@ -341,7 +343,7 @@ function SignalRow({ signal }: { signal: LearningSignal }) {
         borderRadius: NSD_RADIUS.sm,
       }}
     >
-      <span style={{ fontSize: '14px' }}>{icon}</span>
+      <Icon name={iconName} size={16} color={NSD_COLORS.secondary} />
       <div style={{ flex: 1 }}>
         <p
           style={{

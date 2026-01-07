@@ -60,7 +60,7 @@ export function StatCard({ label, value, icon, color, trend, size = 'md' }: Stat
             style={{
               fontSize: '12px',
               fontWeight: 500,
-              color: trend.direction === 'up' ? NSD_COLORS.success : NSD_COLORS.error,
+              color: trend.direction === 'up' ? NSD_COLORS.semantic.positive.text : NSD_COLORS.semantic.critical.text,
             }}
           >
             {trend.direction === 'up' ? '+' : '-'}{Math.abs(trend.value)}%

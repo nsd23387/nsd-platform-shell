@@ -21,6 +21,7 @@
 
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { Icon } from '../../../../design/components/Icon';
 import type { PromotionDetails, PromotionTier } from '../../types/campaign';
 
 export interface PromotionDetailsPanelProps {
@@ -144,20 +145,21 @@ export function PromotionDetailsPanel({
         <div
           style={{
             padding: '10px 12px',
-            backgroundColor: '#EFF6FF',
+            backgroundColor: NSD_COLORS.semantic.info.bg,
             borderRadius: NSD_RADIUS.md,
             marginBottom: '16px',
             display: 'flex',
             alignItems: 'flex-start',
             gap: '8px',
+            border: `1px solid ${NSD_COLORS.semantic.info.border}`,
           }}
         >
-          <span style={{ fontSize: '14px' }}>ℹ️</span>
+          <Icon name="info" size={14} color={NSD_COLORS.semantic.info.text} />
           <p
             style={{
               margin: 0,
               fontSize: '12px',
-              color: '#1E40AF',
+              color: NSD_COLORS.semantic.info.text,
               lineHeight: 1.5,
             }}
           >
@@ -302,7 +304,7 @@ export function PromotionDetailsPanel({
                     color: NSD_COLORS.text.primary,
                   }}
                 >
-                  <span style={{ color: '#10B981', flexShrink: 0 }}>✓</span>
+                  <Icon name="check" size={14} color={NSD_COLORS.semantic.positive.text} />
                   <span>{reason}</span>
                 </li>
               ))}

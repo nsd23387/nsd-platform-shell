@@ -151,18 +151,19 @@ export function StepReview() {
         style={{
           marginTop: '24px',
           padding: '16px',
-          backgroundColor: '#f0fdf4',
+          backgroundColor: NSD_COLORS.semantic.info.bg,
           borderRadius: NSD_RADIUS.md,
+          border: `1px solid ${NSD_COLORS.semantic.info.border}`,
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
         }}
       >
-        <Icon name="info" size={20} color={NSD_COLORS.success} />
+        <Icon name="info" size={20} color={NSD_COLORS.semantic.info.text} />
         <span
           style={{
             fontSize: '14px',
-            color: '#166534',
+            color: NSD_COLORS.semantic.info.text,
             fontFamily: NSD_TYPOGRAPHY.fontBody,
           }}
         >

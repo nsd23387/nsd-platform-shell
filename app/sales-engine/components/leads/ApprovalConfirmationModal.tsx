@@ -55,7 +55,7 @@ function getActionContent(action: LeadApprovalAction, leadCount: number, leadIde
       description: `You are about to approve ${target} for outreach. Approved leads become eligible for campaign execution.`,
       confirmLabel: isBulk ? `Approve ${leadCount} Leads` : 'Approve Lead',
       icon: 'check',
-      iconColor: NSD_COLORS.success,
+      iconColor: NSD_COLORS.semantic.positive.text,
       variant: 'primary',
     };
   } else {
@@ -64,7 +64,7 @@ function getActionContent(action: LeadApprovalAction, leadCount: number, leadIde
       description: `You are about to reject ${target}. Rejected leads will not be included in campaign outreach.`,
       confirmLabel: isBulk ? `Reject ${leadCount} Leads` : 'Reject Lead',
       icon: 'close',
-      iconColor: NSD_COLORS.error,
+      iconColor: NSD_COLORS.semantic.critical.text,
       variant: 'danger',
     };
   }
