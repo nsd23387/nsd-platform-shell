@@ -36,7 +36,7 @@ export function FormField({
     fontSize: '14px',
     color: NSD_COLORS.text.primary,
     backgroundColor: NSD_COLORS.background,
-    border: `1px solid ${error ? '#EF4444' : NSD_COLORS.border.default}`,
+    border: `1px solid ${error ? NSD_COLORS.semantic.critical.border : NSD_COLORS.border.default}`,
     borderRadius: NSD_RADIUS.md,
     fontFamily: NSD_TYPOGRAPHY.fontBody,
     outline: 'none',
@@ -58,7 +58,7 @@ export function FormField({
       >
         {label}
         {required && (
-          <span style={{ color: '#EF4444', marginLeft: '4px' }}>*</span>
+          <span style={{ color: NSD_COLORS.semantic.critical.text, marginLeft: '4px' }}>*</span>
         )}
       </label>
 
@@ -119,7 +119,7 @@ export function FormField({
           style={{
             margin: '6px 0 0 0',
             fontSize: '12px',
-            color: '#EF4444',
+            color: NSD_COLORS.semantic.critical.text,
             fontFamily: NSD_TYPOGRAPHY.fontBody,
           }}
         >

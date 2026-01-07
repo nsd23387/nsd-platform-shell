@@ -36,7 +36,7 @@ export interface PromotionDetailsPanelProps {
  */
 function getTierStyle(tier: PromotionTier): { bg: string; text: string; border: string } {
   const styles: Record<PromotionTier, { bg: string; text: string; border: string }> = {
-    A: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
+    A: NSD_COLORS.semantic.positive,
     B: { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
     // Tier C/D should never appear in lead views, but included for completeness
     C: { bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },

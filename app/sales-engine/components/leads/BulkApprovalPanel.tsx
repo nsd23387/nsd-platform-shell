@@ -150,7 +150,7 @@ export function BulkApprovalPanel({
           <div
             style={{
               padding: '14px 16px',
-              backgroundColor: result.failed === 0 ? '#D1FAE5' : '#FEF3C7',
+              backgroundColor: result.failed === 0 ? NSD_COLORS.semantic.positive.bg : NSD_COLORS.semantic.attention.bg,
               borderRadius: NSD_RADIUS.md,
               marginBottom: '16px',
               display: 'flex',
@@ -162,7 +162,7 @@ export function BulkApprovalPanel({
               <Icon 
                 name={result.failed === 0 ? 'check' : 'warning'} 
                 size={18} 
-                color={result.failed === 0 ? '#065F46' : '#92400E'} 
+                color={result.failed === 0 ? NSD_COLORS.semantic.positive.text : NSD_COLORS.semantic.attention.text} 
               />
             </span>
             <div>
@@ -171,7 +171,7 @@ export function BulkApprovalPanel({
                   margin: 0,
                   fontSize: '14px',
                   fontWeight: 500,
-                  color: result.failed === 0 ? '#065F46' : '#92400E',
+                  color: result.failed === 0 ? NSD_COLORS.semantic.positive.text : NSD_COLORS.semantic.attention.text,
                 }}
               >
                 Bulk Approval Complete
@@ -180,7 +180,7 @@ export function BulkApprovalPanel({
                 style={{
                   margin: '4px 0 0 0',
                   fontSize: '13px',
-                  color: result.failed === 0 ? '#065F46' : '#92400E',
+                  color: result.failed === 0 ? NSD_COLORS.semantic.positive.text : NSD_COLORS.semantic.attention.text,
                   opacity: 0.9,
                 }}
               >

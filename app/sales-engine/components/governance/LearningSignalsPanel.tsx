@@ -388,8 +388,8 @@ function SignalRow({ signal }: { signal: LearningSignal }) {
               padding: '2px 6px',
               fontSize: '10px',
               fontWeight: 500,
-              backgroundColor: '#D1FAE5',
-              color: '#065F46',
+              backgroundColor: NSD_COLORS.semantic.positive.bg,
+              color: NSD_COLORS.semantic.positive.text,
               borderRadius: NSD_RADIUS.sm,
             }}
           >

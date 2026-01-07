@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { Campaign } from '../types/campaign';
 import { StatusBadge } from './StatusBadge';
+import { NSD_COLORS } from '../lib/design-tokens';
 
 interface CampaignCardProps {
   campaign: Campaign;
@@ -86,8 +87,8 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
             style={{
               fontSize: '11px',
               padding: '2px 8px',
-              backgroundColor: '#d1fae5',
-              color: '#065f46',
+              backgroundColor: NSD_COLORS.semantic.positive.bg,
+              color: NSD_COLORS.semantic.positive.text,
               borderRadius: '4px',
             }}
           >

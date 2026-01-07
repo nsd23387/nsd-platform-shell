@@ -128,7 +128,7 @@ export function ApprovalConfirmationModal({
               width: '56px',
               height: '56px',
               borderRadius: '50%',
-              backgroundColor: action === 'approve' ? '#D1FAE5' : '#FEE2E2',
+              backgroundColor: action === 'approve' ? NSD_COLORS.semantic.positive.bg : NSD_COLORS.semantic.critical.bg,
               margin: '0 auto 20px',
             }}
           >

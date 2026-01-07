@@ -17,7 +17,7 @@
  */
 
 import React from 'react';
-import { NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import type { LeadApprovalStatus } from '../../types/campaign';
 
 export interface LeadStatusBadgeProps {
@@ -49,9 +49,9 @@ function getStatusStyle(status: LeadApprovalStatus): {
   border: string;
 } {
   const styles: Record<LeadApprovalStatus, { bg: string; text: string; border: string }> = {
-    pending_approval: { bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },
-    approved: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
-    rejected: { bg: '#FEE2E2', text: '#991B1B', border: '#FECACA' },
+    pending_approval: NSD_COLORS.semantic.attention,
+    approved: NSD_COLORS.semantic.positive,
+    rejected: NSD_COLORS.semantic.critical,
   };
   return styles[status] || styles.pending_approval;
 }

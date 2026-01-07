@@ -20,12 +20,12 @@ import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens'
 import { Icon } from '../../../../design/components/Icon';
 
 export interface SendMetricsPanelProps {
-  /** Emails sent count */
-  emailsSent: number;
-  /** Emails opened count */
-  emailsOpened: number;
-  /** Emails replied count */
-  emailsReplied: number;
+  /** Emails sent count - undefined means not observed yet */
+  emailsSent?: number;
+  /** Emails opened count - undefined means not observed yet */
+  emailsOpened?: number;
+  /** Emails replied count - undefined means not observed yet */
+  emailsReplied?: number;
   /** Open rate (0-1) */
   openRate?: number;
   /** Reply rate (0-1) */
@@ -36,6 +36,8 @@ export interface SendMetricsPanelProps {
   lastUpdated?: string;
   /** Whether data is loading */
   loading?: boolean;
+  /** Whether the pipeline has reached the email sending stage */
+  hasReachedSendStage?: boolean;
 }
 
 /**
@@ -139,8 +141,13 @@ export function SendMetricsPanel({
   confidence,
   lastUpdated,
   loading = false,
+  hasReachedSendStage = false,
 }: SendMetricsPanelProps) {
   const confidenceStyle = getConfidenceBadgeStyle(confidence);
+  
+  // Determine if we have any send data to display
+  const hasData = emailsSent !== undefined && emailsSent > 0;
+  const showNotObservedState = !hasData && !hasReachedSendStage;
 
   if (loading) {
     return (
@@ -156,6 +163,87 @@ export function SendMetricsPanel({
         <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.muted }}>
           Loading send metrics...
         </p>
+      </div>
+    );
+  }
+
+  // Show "Not observed yet" state if pipeline hasn't reached send stage
+  if (showNotObservedState) {
+    return (
+      <div
+        style={{
+          backgroundColor: NSD_COLORS.background,
+          borderRadius: NSD_RADIUS.lg,
+          border: `1px solid ${NSD_COLORS.border.light}`,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            borderBottom: `1px solid ${NSD_COLORS.border.light}`,
+            backgroundColor: NSD_COLORS.surface,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Icon name="send" size={18} color={NSD_COLORS.text.muted} />
+            <h4
+              style={{
+                margin: 0,
+                fontSize: '14px',
+                fontWeight: 600,
+                fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+                color: NSD_COLORS.text.secondary,
+              }}
+            >
+              Send Metrics (Post-Approval)
+            </h4>
+          </div>
+        </div>
+        
+        {/* Not observed state */}
+        <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              margin: '0 auto 16px',
+              backgroundColor: NSD_COLORS.surface,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name="send" size={24} color={NSD_COLORS.text.muted} />
+          </div>
+          <h5
+            style={{
+              margin: '0 0 8px 0',
+              fontSize: '14px',
+              fontWeight: 600,
+              color: NSD_COLORS.text.secondary,
+            }}
+          >
+            Not Observed Yet
+          </h5>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '13px',
+              color: NSD_COLORS.text.muted,
+              maxWidth: '320px',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+            }}
+          >
+            Send metrics will appear here after leads are approved and emails are dispatched.
+          </p>
+        </div>
       </div>
     );
   }
@@ -242,16 +330,20 @@ export function SendMetricsPanel({
             gap: '16px',
           }}
         >
-          <MetricCard label="Emails Sent" value={emailsSent} color={NSD_COLORS.primary} />
+          <MetricCard 
+            label="Emails Sent" 
+            value={emailsSent ?? '—'} 
+            color={NSD_COLORS.primary} 
+          />
           <MetricCard
             label="Emails Opened"
-            value={emailsOpened}
+            value={emailsOpened ?? '—'}
             suffix={openRate !== undefined ? `(${(openRate * 100).toFixed(1)}%)` : undefined}
             color={NSD_COLORS.text.primary}
           />
           <MetricCard
             label="Replies"
-            value={emailsReplied}
+            value={emailsReplied ?? '—'}
             suffix={replyRate !== undefined ? `(${(replyRate * 100).toFixed(1)}%)` : undefined}
             color={NSD_COLORS.semantic.positive.text}
           />

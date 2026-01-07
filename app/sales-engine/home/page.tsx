@@ -111,7 +111,7 @@ export default function SalesEngineHomePage() {
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
-          <SectionCard title="Needs Attention" icon="warning" iconColor="#F59E0B">
+          <SectionCard title="Needs Attention" icon="warning" iconColor={NSD_COLORS.semantic.attention.text}>
             {attention.length === 0 ? (
               <p style={{ color: NSD_COLORS.text.muted, fontSize: '14px', textAlign: 'center', padding: '24px' }}>
                 No items require attention

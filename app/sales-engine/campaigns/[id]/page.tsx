@@ -640,28 +640,24 @@ function MonitoringTab({
         id="run-history"
       />
 
-      {/* Section D: Send Metrics (Scoped) - Post-Approval only */}
-      {observability?.send_metrics ? (
-        <SendMetricsPanel
-          emailsSent={observability.send_metrics.emails_sent}
-          emailsOpened={observability.send_metrics.emails_opened}
-          emailsReplied={observability.send_metrics.emails_replied}
-          openRate={observability.send_metrics.open_rate}
-          replyRate={observability.send_metrics.reply_rate}
-          confidence={observability.send_metrics.confidence}
-          lastUpdated={observability.last_observed_at}
-        />
-      ) : metrics ? (
-        <SendMetricsPanel
-          emailsSent={metrics.emails_sent}
-          emailsOpened={metrics.emails_opened}
-          emailsReplied={metrics.emails_replied}
-          openRate={metrics.open_rate}
-          replyRate={metrics.reply_rate}
-          confidence="conditional"
-          lastUpdated={metrics.last_updated}
-        />
-      ) : null}
+      {/* Section D: Send Metrics (Scoped) - Post-Approval only 
+          IMPORTANT: Only show actual metrics from API, never fabricated.
+          If no send metrics exist, show "Not Observed Yet" state.
+      */}
+      <SendMetricsPanel
+        emailsSent={observability?.send_metrics?.emails_sent ?? metrics?.emails_sent}
+        emailsOpened={observability?.send_metrics?.emails_opened ?? metrics?.emails_opened}
+        emailsReplied={observability?.send_metrics?.emails_replied ?? metrics?.emails_replied}
+        openRate={observability?.send_metrics?.open_rate ?? metrics?.open_rate}
+        replyRate={observability?.send_metrics?.reply_rate ?? metrics?.reply_rate}
+        confidence={observability?.send_metrics?.confidence ?? 'conditional'}
+        lastUpdated={observability?.last_observed_at ?? metrics?.last_updated}
+        hasReachedSendStage={
+          // Check if pipeline has email_sent stage with count > 0
+          pipelineStages.some(s => s.stage === 'emails_sent' && s.count > 0) ||
+          (observability?.send_metrics?.emails_sent ?? 0) > 0
+        }
+      />
     </div>
   );
 }

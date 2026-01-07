@@ -428,12 +428,12 @@ export default function NewCampaignPage() {
                 justifyContent: 'center',
                 width: '64px',
                 height: '64px',
-                backgroundColor: '#D1FAE5',
+                backgroundColor: NSD_COLORS.semantic.positive.bg,
                 borderRadius: '50%',
                 margin: '0 auto 24px',
               }}
             >
-              <Icon name="check" size={32} color="#065F46" />
+              <Icon name="check" size={32} color={NSD_COLORS.semantic.positive.text} />
             </div>
 
             <h1

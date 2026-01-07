@@ -53,7 +53,7 @@ export default function ApprovalsPage() {
 
         {!loading && campaigns.length === 0 && (
           <div style={{ textAlign: 'center', padding: '64px', backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e5e7eb' }}>
-            <Icon name="check" size={48} color="#10b981" />
+            <Icon name="check" size={48} color="#3730A3" />
             <h3 style={{ margin: '16px 0 8px 0', fontSize: '18px', fontWeight: 600, color: '#111827' }}>
               All caught up!
             </h3>

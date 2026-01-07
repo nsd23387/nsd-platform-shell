@@ -414,6 +414,36 @@ export type CampaignExecutionStatus =
   | 'partial';           // Last run partially completed
 
 /**
+ * Adapter execution status.
+ * 
+ * IMPORTANT: Adapter status must come ONLY from event payload fields.
+ * UI must not infer adapter behavior.
+ */
+export type AdapterExecutionStatus = 
+  | 'not_called'       // Adapter was not invoked
+  | 'called_success'   // Adapter called, returned results
+  | 'called_no_results'// Adapter called, returned zero results
+  | 'adapter_error';   // Adapter call failed
+
+/**
+ * Adapter execution details from event payload.
+ * 
+ * Fields extracted from details.adapterRequestMade and reason.
+ */
+export interface AdapterExecutionDetails {
+  /** Whether the adapter was called */
+  adapterRequestMade: boolean;
+  /** Adapter name (e.g., "apollo", "linkedin") */
+  adapterName?: string;
+  /** Number of results returned */
+  resultCount?: number;
+  /** Reason for not calling adapter or error message */
+  reason?: string;
+  /** Derived status for display */
+  status: AdapterExecutionStatus;
+}
+
+/**
  * Pipeline stage in the execution funnel.
  * 
  * IMPORTANT: Observability reflects pipeline state; execution is delegated.
@@ -432,6 +462,8 @@ export interface PipelineStage {
   confidence: 'observed' | 'conditional';
   /** Tooltip explaining this stage */
   tooltip?: string;
+  /** Adapter execution details (if stage involves adapter call) */
+  adapterDetails?: AdapterExecutionDetails;
 }
 
 /**
