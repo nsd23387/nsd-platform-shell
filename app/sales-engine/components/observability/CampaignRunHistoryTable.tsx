@@ -108,6 +108,11 @@ export function CampaignRunHistoryTable({
   error = null,
   id = 'run-history',
 }: CampaignRunHistoryTableProps) {
+  // Sort runs by started_at DESC (most recent first)
+  const sortedRuns = [...runs].sort((a, b) => {
+    return new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
+  });
+
   if (loading) {
     return (
       <div
@@ -132,17 +137,17 @@ export function CampaignRunHistoryTable({
       <div
         id={id}
         style={{
-          backgroundColor: '#FEE2E2',
+          backgroundColor: NSD_COLORS.semantic.critical.bg,
           borderRadius: NSD_RADIUS.lg,
-          border: '1px solid #FECACA',
+          border: `1px solid ${NSD_COLORS.semantic.critical.border}`,
           padding: '20px',
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
         }}
       >
-        <Icon name="warning" size={20} color="#991B1B" />
-        <p style={{ margin: 0, fontSize: '14px', color: '#991B1B' }}>{error}</p>
+        <Icon name="warning" size={20} color={NSD_COLORS.semantic.critical.text} />
+        <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.semantic.critical.text }}>{error}</p>
       </div>
     );
   }
@@ -188,12 +193,12 @@ export function CampaignRunHistoryTable({
             color: NSD_COLORS.text.muted,
           }}
         >
-          {runs.length} run{runs.length !== 1 ? 's' : ''}
+          {sortedRuns.length} run{sortedRuns.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       {/* Empty state - explicit copy per governance requirements */}
-      {runs.length === 0 ? (
+      {sortedRuns.length === 0 ? (
         <div style={{ padding: '40px', textAlign: 'center' }}>
           <div
             style={{
@@ -268,7 +273,7 @@ export function CampaignRunHistoryTable({
               </tr>
             </thead>
             <tbody>
-              {runs.map((run, index) => (
+              {sortedRuns.map((run, index) => (
                 <tr
                   key={run.id}
                   style={{

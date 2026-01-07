@@ -6,6 +6,7 @@ import { Icon } from '../../../design/components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
 import { NavBar, PageHeader } from '../components/ui';
 import { listCampaigns, getDashboardThroughput } from '../lib/api';
+import { NSD_COLORS } from '../lib/design-tokens';
 import type { Campaign, DashboardThroughput } from '../types/campaign';
 
 export default function RunsPage() {
@@ -60,7 +61,7 @@ export default function RunsPage() {
               </div>
               <div style={{ padding: '16px', backgroundColor: '#f9fafb', borderRadius: '10px' }}>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Remaining</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: throughput.dailyLimit - throughput.usedToday > 50 ? '#3730A3' : '#92400E' }}>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: throughput.dailyLimit - throughput.usedToday > 50 ? NSD_COLORS.semantic.positive.text : NSD_COLORS.semantic.muted.text }}>
                   {throughput.dailyLimit - throughput.usedToday}
                 </div>
               </div>

@@ -464,6 +464,8 @@ export interface PipelineStage {
   tooltip?: string;
   /** Adapter execution details (if stage involves adapter call) */
   adapterDetails?: AdapterExecutionDetails;
+  /** Reason for zero count (e.g., "invalid_icp", "no_results", "adapter_error") */
+  reason?: string;
 }
 
 /**

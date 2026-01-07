@@ -164,12 +164,12 @@ export default function NewCampaignPage() {
                 justifyContent: 'center',
                 width: '64px',
                 height: '64px',
-                backgroundColor: '#FEF3C7',
+                backgroundColor: NSD_COLORS.semantic.muted.bg,
                 borderRadius: '50%',
                 margin: '0 auto 24px',
               }}
             >
-              <Icon name="warning" size={32} color="#92400E" />
+              <Icon name="warning" size={32} color={NSD_COLORS.semantic.muted.text} />
             </div>
 
             <h1
@@ -893,7 +893,7 @@ export default function NewCampaignPage() {
         >
           <div
             style={{
-              backgroundColor: '#EFF6FF',
+              backgroundColor: NSD_COLORS.semantic.info.bg,
               borderRadius: NSD_RADIUS.md,
               padding: '16px',
               marginBottom: '24px',
@@ -902,12 +902,12 @@ export default function NewCampaignPage() {
               gap: '12px',
             }}
           >
-            <Icon name="info" size={20} color="#1E40AF" />
+            <Icon name="info" size={20} color={NSD_COLORS.semantic.info.text} />
             <p
               style={{
                 margin: 0,
                 fontSize: '13px',
-                color: '#1E40AF',
+                color: NSD_COLORS.semantic.info.text,
                 lineHeight: 1.5,
               }}
             >

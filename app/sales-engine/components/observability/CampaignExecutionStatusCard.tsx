@@ -47,6 +47,12 @@ export interface CampaignExecutionStatusCardProps {
   canRun?: boolean;
   /** Whether the Run action is loading */
   isRunning?: boolean;
+  /** Message from run request (e.g., "Run requested successfully") */
+  runRequestMessage?: string | null;
+  /** Previous run count to detect if no new run was recorded */
+  previousRunCount?: number;
+  /** Current run count */
+  currentRunCount?: number;
 }
 
 /**
@@ -156,10 +162,20 @@ export function CampaignExecutionStatusCard({
   onRunCampaign,
   canRun = false,
   isRunning = false,
+  runRequestMessage,
+  previousRunCount,
+  currentRunCount,
 }: CampaignExecutionStatusCardProps) {
   const display = getStatusDisplay(status, currentStage, leadsAwaitingApproval);
   const isIdle = status === 'idle';
   const isActiveRun = status === 'running';
+  
+  // Detect if run was requested but no new run appeared
+  const runRequestedButNoNewRun = 
+    runRequestMessage && 
+    previousRunCount !== undefined && 
+    currentRunCount !== undefined && 
+    previousRunCount === currentRunCount;
 
   return (
     <div
@@ -224,6 +240,47 @@ export function CampaignExecutionStatusCard({
           >
             Last observed: {new Date(lastObservedAt).toLocaleString()}
           </p>
+          
+          {/* Informational note when run was requested but no new run appeared */}
+          {runRequestedButNoNewRun && (
+            <div
+              style={{
+                marginTop: '12px',
+                padding: '10px 14px',
+                backgroundColor: NSD_COLORS.semantic.info.bg,
+                borderRadius: NSD_RADIUS.md,
+                border: `1px solid ${NSD_COLORS.semantic.info.border}`,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px',
+              }}
+            >
+              <Icon name="info" size={16} color={NSD_COLORS.semantic.info.text} />
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: NSD_COLORS.semantic.info.text,
+                  }}
+                >
+                  No new execution was recorded
+                </p>
+                <p
+                  style={{
+                    margin: '4px 0 0 0',
+                    fontSize: '11px',
+                    color: NSD_COLORS.semantic.info.text,
+                    opacity: 0.9,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Execution is controlled by backend scheduling. The run may have been deduplicated or is pending.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Run Campaign button - only shown when idle */}

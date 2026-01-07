@@ -150,7 +150,7 @@ export function LeadApprovalActions({
             <div
               style={{
                 padding: '14px 16px',
-                backgroundColor: '#FEF3C7',
+                backgroundColor: NSD_COLORS.semantic.muted.bg,
                 borderRadius: NSD_RADIUS.md,
                 marginBottom: '20px',
                 display: 'flex',
@@ -159,7 +159,7 @@ export function LeadApprovalActions({
               }}
             >
               <span style={{ flexShrink: 0, marginTop: '2px', display: 'flex' }}>
-              <Icon name="clock" size={18} color="#92400E" />
+              <Icon name="clock" size={18} color={NSD_COLORS.semantic.muted.text} />
             </span>
               <div>
                 <p
@@ -167,7 +167,7 @@ export function LeadApprovalActions({
                     margin: 0,
                     fontSize: '14px',
                     fontWeight: 500,
-                    color: '#92400E',
+                    color: NSD_COLORS.text.primary,
                   }}
                 >
                   Awaiting Approval
@@ -176,8 +176,7 @@ export function LeadApprovalActions({
                   style={{
                     margin: '4px 0 0 0',
                     fontSize: '13px',
-                    color: '#92400E',
-                    opacity: 0.9,
+                    color: NSD_COLORS.text.secondary,
                   }}
                 >
                   This lead requires explicit approval before it can be included in outreach.

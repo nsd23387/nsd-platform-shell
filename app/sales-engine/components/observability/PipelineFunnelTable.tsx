@@ -41,6 +41,31 @@ export interface PipelineFunnelTableProps {
 }
 
 /**
+ * Format reason code to human-readable text.
+ * 
+ * Common reason codes:
+ * - invalid_icp: ICP configuration is invalid or missing
+ * - no_results: Query returned zero matches
+ * - adapter_error: External adapter call failed
+ * - gated: Stage was gated by governance rules
+ * - no_matches: No matching records found
+ */
+function formatReason(reason: string): string {
+  const reasonLabels: Record<string, string> = {
+    invalid_icp: 'ICP configuration is invalid or missing',
+    no_results: 'No matching organizations found',
+    adapter_error: 'External adapter call failed',
+    gated: 'Stage was gated by governance rules',
+    no_matches: 'No matching records found',
+    no_orgs: 'No organizations available',
+    no_contacts: 'No contacts discovered',
+    no_leads: 'No leads qualified for promotion',
+    config_error: 'Configuration error',
+  };
+  return reasonLabels[reason] || reason.replace(/_/g, ' ');
+}
+
+/**
  * Get confidence badge styling - uses brand-aligned semantic colors.
  */
 function getConfidenceBadgeStyle(confidence: 'observed' | 'conditional'): {
@@ -420,10 +445,24 @@ export function PipelineFunnelTable({
                         color: NSD_COLORS.text.primary,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        {/* Use stage.label if provided, otherwise fallback to getStageLabel for unknown stages */}
-                        <span>{stage.label || getStageLabel(stage.stage)}</span>
-                        {stage.tooltip && <StageTooltip tooltip={stage.tooltip} />}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          {/* Use stage.label if provided, otherwise fallback to getStageLabel for unknown stages */}
+                          <span>{stage.label || getStageLabel(stage.stage)}</span>
+                          {stage.tooltip && <StageTooltip tooltip={stage.tooltip} />}
+                        </div>
+                        {/* Show reason for zero counts */}
+                        {(stage.count ?? 0) === 0 && stage.reason && (
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              color: NSD_COLORS.text.muted,
+                              fontStyle: 'italic',
+                            }}
+                          >
+                            Reason: {formatReason(stage.reason)}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td
@@ -433,7 +472,7 @@ export function PipelineFunnelTable({
                         fontSize: '16px',
                         fontWeight: 600,
                         fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-                        color: NSD_COLORS.primary,
+                        color: (stage.count ?? 0) === 0 ? NSD_COLORS.text.muted : NSD_COLORS.primary,
                       }}
                     >
                       {(stage.count ?? 0).toLocaleString()}

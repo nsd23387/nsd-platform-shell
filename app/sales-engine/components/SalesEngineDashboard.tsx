@@ -185,9 +185,9 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
                       <span
                         style={{
                           padding: '4px 8px',
-                          backgroundColor: run.status === 'COMPLETED' ? '#E0E7FF' : run.status === 'FAILED' ? '#FEE2E2' : '#FEF3C7',
-                          color: run.status === 'COMPLETED' ? '#3730A3' : run.status === 'FAILED' ? '#991B1B' : '#92400E',
-                          border: `1px solid ${run.status === 'COMPLETED' ? '#A5B4FC' : run.status === 'FAILED' ? '#FECACA' : '#FCD34D'}`,
+                          backgroundColor: run.status === 'COMPLETED' ? NSD_COLORS.semantic.positive.bg : run.status === 'FAILED' ? NSD_COLORS.semantic.critical.bg : NSD_COLORS.semantic.muted.bg,
+                          color: run.status === 'COMPLETED' ? NSD_COLORS.semantic.positive.text : run.status === 'FAILED' ? NSD_COLORS.semantic.critical.text : NSD_COLORS.semantic.muted.text,
+                          border: `1px solid ${run.status === 'COMPLETED' ? NSD_COLORS.semantic.positive.border : run.status === 'FAILED' ? NSD_COLORS.semantic.critical.border : NSD_COLORS.semantic.muted.border}`,
                           borderRadius: '4px',
                           fontSize: '12px',
                           fontWeight: 500,

@@ -576,16 +576,16 @@ function MonitoringTab({
         <div
           style={{
             padding: '12px 16px',
-            backgroundColor: '#DBEAFE',
+            backgroundColor: NSD_COLORS.semantic.info.bg,
             borderRadius: NSD_RADIUS.md,
-            border: '1px solid #93C5FD',
+            border: `1px solid ${NSD_COLORS.semantic.info.border}`,
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
           }}
         >
-          <Icon name="info" size={16} color="#1E40AF" />
-          <span style={{ fontSize: '14px', color: '#1E40AF' }}>
+          <Icon name="info" size={16} color={NSD_COLORS.semantic.info.text} />
+          <span style={{ fontSize: '14px', color: NSD_COLORS.semantic.info.text }}>
             {runRequestMessage}
           </span>
         </div>
@@ -602,6 +602,8 @@ function MonitoringTab({
         onRunCampaign={onRunCampaign}
         canRun={canRun}
         isRunning={isRunRequesting}
+        runRequestMessage={runRequestMessage}
+        currentRunCount={runs.length}
       />
 
       {/* Section B: Pipeline Funnel (CORE) */}

@@ -145,9 +145,14 @@ export function SendMetricsPanel({
 }: SendMetricsPanelProps) {
   const confidenceStyle = getConfidenceBadgeStyle(confidence);
   
-  // Determine if we have any send data to display
-  const hasData = emailsSent !== undefined && emailsSent > 0;
-  const showNotObservedState = !hasData && !hasReachedSendStage;
+  // CRITICAL: Only show metrics if emailsSent exists AND is > 0
+  // This prevents fake data from appearing
+  const hasRealData = emailsSent !== undefined && emailsSent > 0;
+  
+  // Show "Not Observed Yet" if:
+  // 1. No real emailsSent data exists, OR
+  // 2. Pipeline hasn't reached send stage
+  const showNotObservedState = !hasRealData;
 
   if (loading) {
     return (
@@ -236,12 +241,13 @@ export function SendMetricsPanel({
               margin: 0,
               fontSize: '13px',
               color: NSD_COLORS.text.muted,
-              maxWidth: '320px',
+              maxWidth: '360px',
               marginLeft: 'auto',
               marginRight: 'auto',
+              lineHeight: 1.5,
             }}
           >
-            Send metrics will appear here after leads are approved and emails are dispatched.
+            Metrics appear only after backend-observed sends. No emails have been recorded for this campaign yet.
           </p>
         </div>
       </div>

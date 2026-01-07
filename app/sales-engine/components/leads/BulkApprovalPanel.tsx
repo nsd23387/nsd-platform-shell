@@ -204,7 +204,7 @@ export function BulkApprovalPanel({
           <div
             style={{
               padding: '14px',
-              backgroundColor: counts.pending_approval > 0 ? '#FEF3C7' : NSD_COLORS.surface,
+              backgroundColor: counts.pending_approval > 0 ? NSD_COLORS.semantic.muted.bg : NSD_COLORS.surface,
               borderRadius: NSD_RADIUS.md,
               textAlign: 'center',
             }}
@@ -214,7 +214,7 @@ export function BulkApprovalPanel({
                 display: 'block',
                 fontSize: '11px',
                 fontWeight: 500,
-                color: counts.pending_approval > 0 ? '#92400E' : NSD_COLORS.text.muted,
+                color: counts.pending_approval > 0 ? NSD_COLORS.text.primary : NSD_COLORS.text.muted,
                 textTransform: 'uppercase',
                 letterSpacing: '0.03em',
                 marginBottom: '4px',
@@ -227,7 +227,7 @@ export function BulkApprovalPanel({
                 fontSize: '24px',
                 fontWeight: 700,
                 fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-                color: counts.pending_approval > 0 ? '#92400E' : NSD_COLORS.text.muted,
+                color: counts.pending_approval > 0 ? NSD_COLORS.text.primary : NSD_COLORS.text.muted,
               }}
             >
               {counts.pending_approval}

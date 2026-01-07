@@ -99,27 +99,27 @@ export function LearningSignalsPanel({
       </div>
 
       <div style={{ padding: '20px' }}>
-        {/* Autonomy Level */}
+        {/* Autonomy Level - uses muted/info colors, NOT warning/attention */}
         <div
           style={{
             display: 'flex',
             alignItems: 'flex-start',
             gap: '14px',
             padding: '14px 16px',
-            backgroundColor: NSD_COLORS.semantic.attention.bg,
+            backgroundColor: NSD_COLORS.semantic.muted.bg,
             borderRadius: NSD_RADIUS.md,
-            border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
+            border: `1px solid ${NSD_COLORS.semantic.muted.border}`,
             marginBottom: '20px',
           }}
         >
-          <Icon name="info" size={16} color={NSD_COLORS.semantic.attention.text} />
+          <Icon name="info" size={16} color={NSD_COLORS.semantic.muted.text} />
           <div>
             <p
               style={{
                 margin: 0,
                 fontSize: '13px',
                 fontWeight: 600,
-                color: NSD_COLORS.semantic.attention.text,
+                color: NSD_COLORS.text.primary,
               }}
             >
               Autonomy Level: {autonomyLevel}
@@ -128,8 +128,7 @@ export function LearningSignalsPanel({
               style={{
                 margin: '4px 0 0 0',
                 fontSize: '12px',
-                color: NSD_COLORS.semantic.attention.text,
-                opacity: 0.9,
+                color: NSD_COLORS.text.secondary,
               }}
             >
               {autonomyDescription}
@@ -139,7 +138,7 @@ export function LearningSignalsPanel({
                 margin: '8px 0 0 0',
                 fontSize: '11px',
                 fontWeight: 500,
-                color: NSD_COLORS.semantic.attention.text,
+                color: NSD_COLORS.text.muted,
               }}
             >
               No automated write-backs are performed by this UI.
@@ -169,7 +168,7 @@ export function LearningSignalsPanel({
           <SummaryCard
             label="Excluded from Automation"
             value={excluded}
-            color={NSD_COLORS.semantic.attention.text}
+            color={NSD_COLORS.semantic.muted.text}
           />
         </div>
 
@@ -374,8 +373,8 @@ function SignalRow({ signal }: { signal: LearningSignal }) {
               padding: '2px 6px',
               fontSize: '10px',
               fontWeight: 500,
-              backgroundColor: '#DBEAFE',
-              color: '#1E40AF',
+              backgroundColor: NSD_COLORS.semantic.info.bg,
+              color: NSD_COLORS.semantic.info.text,
               borderRadius: NSD_RADIUS.sm,
             }}
           >
@@ -402,8 +401,8 @@ function SignalRow({ signal }: { signal: LearningSignal }) {
               padding: '2px 6px',
               fontSize: '10px',
               fontWeight: 500,
-              backgroundColor: '#FEF3C7',
-              color: '#92400E',
+              backgroundColor: NSD_COLORS.semantic.muted.bg,
+              color: NSD_COLORS.semantic.muted.text,
               borderRadius: NSD_RADIUS.sm,
             }}
           >

@@ -120,10 +120,10 @@ export default function ApprovalsPage() {
           style={{
             marginTop: '32px',
             padding: '16px 20px',
-            backgroundColor: '#EFF6FF',
+            backgroundColor: NSD_COLORS.semantic.info.bg,
             borderRadius: NSD_RADIUS.md,
             fontSize: '13px',
-            color: '#1E40AF',
+            color: NSD_COLORS.semantic.info.text,
           }}
         >
           <strong>Note:</strong> Campaign approvals are processed by the governance backend.

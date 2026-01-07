@@ -15,7 +15,7 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; b
   FAILED: { label: 'Failed', ...NSD_COLORS.status.failed },
   ARCHIVED: { label: 'Archived', ...NSD_COLORS.status.archived },
   // Run status labels
-  PARTIAL: { label: 'Partial', bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },
+  PARTIAL: { label: 'Partial', ...NSD_COLORS.semantic.muted },
 };
 
 interface StatusChipProps {

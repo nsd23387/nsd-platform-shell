@@ -154,7 +154,7 @@ function BlockedMetricModal({ onClose }: { onClose: () => void }) {
         <div
           style={{
             padding: '12px 16px',
-            backgroundColor: '#EFF6FF',
+            backgroundColor: NSD_COLORS.semantic.info.bg,
             borderRadius: NSD_RADIUS.sm,
             marginBottom: '20px',
           }}
@@ -163,7 +163,7 @@ function BlockedMetricModal({ onClose }: { onClose: () => void }) {
             style={{
               margin: 0,
               fontSize: '13px',
-              color: '#1E40AF',
+              color: NSD_COLORS.semantic.info.text,
             }}
           >
             <strong>Note:</strong> Blocked metrics should not be used for decision-making.
