@@ -532,8 +532,45 @@ function MonitoringTab({
     campaign.status === 'RUNNABLE' && 
     executionStatus === 'idle';
 
+  // Dev-only debug banner (not shown in production)
+  const showDebugBanner = process.env.NODE_ENV !== 'production';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* DEV-ONLY: Debug banner showing endpoint status */}
+      {showDebugBanner && (
+        <div
+          style={{
+            padding: '12px 16px',
+            backgroundColor: '#FEF3C7',
+            borderRadius: NSD_RADIUS.md,
+            border: '1px solid #FCD34D',
+            fontFamily: 'monospace',
+            fontSize: '11px',
+          }}
+        >
+          <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#92400E' }}>
+            🔧 DEV DEBUG: Observability Wiring Status
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', color: '#78350F' }}>
+            <div>📊 /observability/status:</div>
+            <div>{observabilityStatus ? `✅ status="${observabilityStatus.status}"` : '❌ null/undefined'}</div>
+            
+            <div>📈 /observability/funnel:</div>
+            <div>{observabilityFunnel ? `✅ stages.length=${observabilityFunnel.stages?.length ?? 0}` : '❌ null/undefined'}</div>
+            
+            <div>🏃 /runs:</div>
+            <div>{runsDetailed ? `✅ runs.length=${runsDetailed.length}` : '❌ null/undefined'}</div>
+            
+            <div>📋 /observability:</div>
+            <div>{observability ? `✅ pipeline.length=${observability.pipeline?.length ?? 0}` : '❌ null/undefined'}</div>
+          </div>
+          <div style={{ marginTop: '8px', fontSize: '10px', color: '#92400E', fontStyle: 'italic' }}>
+            This banner is dev-only and will not appear in production.
+          </div>
+        </div>
+      )}
+
       {/* Run request message (shown after requesting execution) */}
       {runRequestMessage && (
         <div

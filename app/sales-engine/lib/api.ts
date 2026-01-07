@@ -93,6 +93,85 @@ const MOCK_SYSTEM_NOTICE: SystemNotice = {
   createdAt: new Date().toISOString(),
 };
 
+// =============================================================================
+// DEFENSIVE NORMALIZATION HELPERS
+// Handle potential backend/frontend shape mismatches gracefully.
+// =============================================================================
+
+/**
+ * Normalize array response that might be wrapped in an object.
+ * 
+ * If response is already an array, return it directly.
+ * If response is { [key]: [...] }, extract and return the array.
+ * Log a warning in development if normalization was needed.
+ * 
+ * @param result - The API response (array or wrapped object)
+ * @param key - The key to look for if wrapped (e.g., 'runs', 'stages')
+ * @param context - Description for logging
+ */
+function normalizeArrayResponse<T>(
+  result: T[] | { [key: string]: T[] } | null | undefined,
+  key: string,
+  context: string
+): T[] {
+  // Handle null/undefined
+  if (result == null) {
+    return [];
+  }
+  
+  // If already an array, return directly
+  if (Array.isArray(result)) {
+    return result;
+  }
+  
+  // If wrapped in object, extract the array
+  if (typeof result === 'object' && key in result) {
+    const extracted = (result as Record<string, T[]>)[key];
+    if (Array.isArray(extracted)) {
+      // Log warning in development only
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[API NORMALIZATION] ${context}: Response was wrapped as { ${key}: [...] }. ` +
+          `Expected raw array. Normalizing to array.`
+        );
+      }
+      return extracted;
+    }
+  }
+  
+  // Fallback to empty array
+  console.error(`[API ERROR] ${context}: Unexpected response shape`, result);
+  return [];
+}
+
+/**
+ * Normalize object response with defensive defaults.
+ * 
+ * @param result - The API response object
+ * @param defaults - Default values if fields are missing
+ * @param context - Description for logging
+ */
+function normalizeObjectResponse<T>(
+  result: T | null | undefined,
+  defaults: T,
+  context: string
+): T {
+  if (result == null) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[API NORMALIZATION] ${context}: Response was null/undefined. Using defaults.`);
+    }
+    return defaults;
+  }
+  
+  if (typeof result !== 'object' || Array.isArray(result)) {
+    console.error(`[API ERROR] ${context}: Expected object, got`, typeof result);
+    return defaults;
+  }
+  
+  // Merge with defaults for any missing fields
+  return { ...defaults, ...result } as T;
+}
+
 /**
  * Read-only API request function.
  * Enforces GET-only constraint for the Sales Engine UI.
@@ -224,13 +303,18 @@ export async function getCampaignMetricsHistory(id: string): Promise<MetricsHist
 
 /**
  * Get campaign runs (read-only observability).
+ * 
+ * DEFENSIVE NORMALIZATION:
+ * If endpoint returns { runs: [...] } instead of [...], normalize to array.
+ * This handles potential backend/frontend shape mismatches gracefully.
  */
 export async function getCampaignRuns(id: string): Promise<CampaignRun[]> {
   // M67.9-01: Return empty array when API is disabled
   if (isApiDisabled) {
     return [];
   }
-  return apiRequest<CampaignRun[]>(`/${id}/runs`);
+  const result = await apiRequest<CampaignRun[] | { runs: CampaignRun[] }>(`/${id}/runs`);
+  return normalizeArrayResponse(result, 'runs', `getCampaignRuns(${id})`);
 }
 
 /**
@@ -354,13 +438,33 @@ const MOCK_OBSERVABILITY_FUNNEL: ObservabilityFunnel = {
  * - No execution control
  * - No retries or overrides
  * - Counts come directly from backend, never inferred
+ * 
+ * DEFENSIVE NORMALIZATION:
+ * Ensures response has all required fields with safe defaults.
  */
 export async function getCampaignObservability(id: string): Promise<CampaignObservability> {
   // M67.9-01: Return mock data when API is disabled
   if (isApiDisabled) {
     return { ...MOCK_OBSERVABILITY, campaign_id: id };
   }
-  return apiRequest<CampaignObservability>(`/${id}/observability`);
+  const defaults: CampaignObservability = {
+    campaign_id: id,
+    status: 'idle',
+    last_observed_at: new Date().toISOString(),
+    pipeline: [],
+  };
+  const result = await apiRequest<CampaignObservability>(`/${id}/observability`);
+  const normalized = normalizeObjectResponse(result, defaults, `getCampaignObservability(${id})`);
+  
+  // Extra safety: ensure pipeline is an array
+  if (!Array.isArray(normalized.pipeline)) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[API NORMALIZATION] getCampaignObservability(${id}): pipeline was not an array`);
+    }
+    normalized.pipeline = [];
+  }
+  
+  return normalized;
 }
 
 /**
@@ -372,13 +476,17 @@ export async function getCampaignObservability(id: string): Promise<CampaignObse
  * 
  * Empty state: Returns [] when no run.started events exist.
  * UI should show "No runs observed yet" in this case.
+ * 
+ * DEFENSIVE NORMALIZATION:
+ * If endpoint returns { runs: [...] } instead of [...], normalize to array.
  */
 export async function getCampaignRunsDetailed(id: string): Promise<CampaignRunDetailed[]> {
   // M67.9-01: Return empty array when API is disabled
   if (isApiDisabled) {
     return [];
   }
-  return apiRequest<CampaignRunDetailed[]>(`/${id}/runs`);
+  const result = await apiRequest<CampaignRunDetailed[] | { runs: CampaignRunDetailed[] }>(`/${id}/runs`);
+  return normalizeArrayResponse(result, 'runs', `getCampaignRunsDetailed(${id})`);
 }
 
 // =============================================================================
@@ -401,12 +509,21 @@ export async function getCampaignRunsDetailed(id: string): Promise<CampaignRunDe
  * - "failed": Last run failed
  * 
  * UI MUST NOT derive status from any other source.
+ * 
+ * DEFENSIVE NORMALIZATION:
+ * Ensures response has all required fields with safe defaults.
  */
 export async function getCampaignObservabilityStatus(id: string): Promise<ObservabilityStatus> {
   if (isApiDisabled) {
     return { ...MOCK_OBSERVABILITY_STATUS, campaign_id: id };
   }
-  return apiRequest<ObservabilityStatus>(`/${id}/observability/status`);
+  const defaults: ObservabilityStatus = {
+    campaign_id: id,
+    status: 'idle',
+    last_observed_at: new Date().toISOString(),
+  };
+  const result = await apiRequest<ObservabilityStatus>(`/${id}/observability/status`);
+  return normalizeObjectResponse(result, defaults, `getCampaignObservabilityStatus(${id})`);
 }
 
 /**
@@ -418,12 +535,32 @@ export async function getCampaignObservabilityStatus(id: string): Promise<Observ
  * No local math or inference is allowed.
  * 
  * Empty state: When stages is [], show "No activity observed yet".
+ * 
+ * DEFENSIVE NORMALIZATION:
+ * Ensures response has all required fields with safe defaults.
+ * If stages is wrapped, normalize to array.
  */
 export async function getCampaignObservabilityFunnel(id: string): Promise<ObservabilityFunnel> {
   if (isApiDisabled) {
     return { ...MOCK_OBSERVABILITY_FUNNEL, campaign_id: id };
   }
-  return apiRequest<ObservabilityFunnel>(`/${id}/observability/funnel`);
+  const defaults: ObservabilityFunnel = {
+    campaign_id: id,
+    stages: [],
+    last_updated_at: new Date().toISOString(),
+  };
+  const result = await apiRequest<ObservabilityFunnel>(`/${id}/observability/funnel`);
+  const normalized = normalizeObjectResponse(result, defaults, `getCampaignObservabilityFunnel(${id})`);
+  
+  // Extra safety: ensure stages is an array
+  if (!Array.isArray(normalized.stages)) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[API NORMALIZATION] getCampaignObservabilityFunnel(${id}): stages was not an array`);
+    }
+    normalized.stages = [];
+  }
+  
+  return normalized;
 }
 
 // =============================================================================
