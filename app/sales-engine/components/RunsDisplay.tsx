@@ -3,18 +3,13 @@
 import type { CampaignRun } from '../types/campaign';
 import { ProvenancePill } from './governance';
 import { deriveProvenance } from '../lib/campaign-state';
-import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../lib/design-tokens';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, getSemanticStatusStyle } from '../lib/design-tokens';
+import { Icon } from '../../../design/components/Icon';
 
 interface RunsDisplayProps {
   runs: CampaignRun[];
   latestRun?: CampaignRun | null;
 }
-
-const statusColors: Record<CampaignRun['status'], { bg: string; text: string; border: string }> = {
-  COMPLETED: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
-  FAILED: { bg: '#FEE2E2', text: '#991B1B', border: '#FECACA' },
-  PARTIAL: { bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },
-};
 
 /**
  * RunsDisplay - Execution run history.
@@ -162,10 +157,10 @@ export function RunsDisplay({ runs, latestRun }: RunsDisplayProps) {
                     <td style={{ padding: '12px 14px', color: NSD_COLORS.text.primary, textAlign: 'right', fontWeight: 500 }}>
                       {run.leads_processed}
                     </td>
-                    <td style={{ padding: '12px 14px', color: NSD_COLORS.success, textAlign: 'right', fontWeight: 500 }}>
+                    <td style={{ padding: '12px 14px', color: NSD_COLORS.semantic.positive.text, textAlign: 'right', fontWeight: 500 }}>
                       {run.emails_sent}
                     </td>
-                    <td style={{ padding: '12px 14px', color: run.errors > 0 ? NSD_COLORS.error : NSD_COLORS.text.primary, textAlign: 'right', fontWeight: 500 }}>
+                    <td style={{ padding: '12px 14px', color: run.errors > 0 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.text.primary, textAlign: 'right', fontWeight: 500 }}>
                       {run.errors}
                     </td>
                     <td style={{ padding: '12px 14px', textAlign: 'center' }}>
@@ -202,10 +197,9 @@ function EmptyRunsState() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: '20px',
         }}
       >
-        📋
+        <Icon name="runs" size={24} color={NSD_COLORS.text.muted} />
       </div>
       <h5
         style={{
@@ -300,7 +294,7 @@ function RunRow({ run }: { run: CampaignRun }) {
             fontSize: '18px',
             fontWeight: 600,
             fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-            color: NSD_COLORS.success,
+            color: NSD_COLORS.semantic.positive.text,
           }}
         >
           {run.emails_sent}
@@ -325,7 +319,7 @@ function RunRow({ run }: { run: CampaignRun }) {
             fontSize: '18px',
             fontWeight: 600,
             fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-            color: run.errors > 0 ? NSD_COLORS.error : NSD_COLORS.primary,
+            color: run.errors > 0 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.primary,
           }}
         >
           {run.errors}
@@ -336,7 +330,7 @@ function RunRow({ run }: { run: CampaignRun }) {
 }
 
 function RunStatusBadge({ status }: { status: CampaignRun['status'] }) {
-  const colors = statusColors[status];
+  const colors = getSemanticStatusStyle(status);
   return (
     <span
       style={{

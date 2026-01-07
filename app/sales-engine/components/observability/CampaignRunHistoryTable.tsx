@@ -28,7 +28,7 @@
 'use client';
 
 import React from 'react';
-import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, getSemanticStatusStyle } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import type { CampaignRunDetailed } from '../../types/campaign';
 
@@ -44,27 +44,27 @@ export interface CampaignRunHistoryTableProps {
 }
 
 /**
- * Get status badge styling.
+ * Get status badge styling - uses brand-aligned semantic colors.
  */
 function getStatusBadgeStyle(status: 'COMPLETED' | 'FAILED' | 'PARTIAL'): {
   bg: string;
   text: string;
+  border: string;
   label: string;
 } {
-  switch (status) {
-    case 'COMPLETED':
-      return { bg: '#D1FAE5', text: '#065F46', label: 'Completed' };
-    case 'FAILED':
-      return { bg: '#FEE2E2', text: '#991B1B', label: 'Failed' };
-    case 'PARTIAL':
-      return { bg: '#FEF3C7', text: '#92400E', label: 'Partial' };
-    default:
-      return { bg: NSD_COLORS.surface, text: NSD_COLORS.text.muted, label: status };
-  }
+  const semanticStyle = getSemanticStatusStyle(status);
+  
+  const labels: Record<string, string> = {
+    COMPLETED: 'Completed',
+    FAILED: 'Failed',
+    PARTIAL: 'Partial',
+  };
+  
+  return { ...semanticStyle, label: labels[status] || status };
 }
 
 /**
- * RunStatusBadge - Displays run status with appropriate styling.
+ * RunStatusBadge - Displays run status with brand-aligned styling.
  */
 function RunStatusBadge({ status }: { status: 'COMPLETED' | 'FAILED' | 'PARTIAL' }) {
   const style = getStatusBadgeStyle(status);
@@ -78,6 +78,7 @@ function RunStatusBadge({ status }: { status: 'COMPLETED' | 'FAILED' | 'PARTIAL'
         fontWeight: 500,
         backgroundColor: style.bg,
         color: style.text,
+        border: `1px solid ${style.border}`,
         borderRadius: NSD_RADIUS.sm,
       }}
     >
@@ -295,13 +296,13 @@ export function CampaignRunHistoryTable({
                   <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
                     {run.leads_promoted?.toLocaleString() ?? run.leads_processed?.toLocaleString() ?? '—'}
                   </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.success }}>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.semantic.positive.text }}>
                     {run.leads_approved?.toLocaleString() ?? '—'}
                   </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.success }}>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.semantic.positive.text }}>
                     {run.emails_sent.toLocaleString()}
                   </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: run.errors > 0 ? NSD_COLORS.error : NSD_COLORS.text.muted }}>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: run.errors > 0 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.text.muted }}>
                     {run.errors}
                   </td>
                 </tr>

@@ -173,6 +173,96 @@ function normalizeObjectResponse<T>(
 }
 
 /**
+ * STAGE LABEL MAPPING
+ * 
+ * Maps stage identifiers to human-readable labels.
+ * Unknown stages are rendered gracefully with formatted identifier.
+ */
+const STAGE_LABELS: Record<string, string> = {
+  orgs_sourced: 'Organizations Sourced',
+  contacts_discovered: 'Contacts Discovered',
+  contacts_evaluated: 'Contacts Evaluated',
+  leads_promoted: 'Leads Promoted',
+  leads_awaiting_approval: 'Leads Awaiting Approval',
+  leads_approved: 'Leads Approved',
+  emails_sent: 'Emails Sent',
+  emails_opened: 'Emails Opened',
+  emails_replied: 'Replies Received',
+  replies: 'Replies',
+};
+
+/**
+ * Format unknown stage identifier to readable label.
+ * 
+ * @param stage - Stage identifier (e.g., "new_stage_type")
+ * @returns Human-readable label (e.g., "New Stage Type")
+ */
+function formatUnknownStage(stage: string): string {
+  return stage
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Get stage label from identifier.
+ * 
+ * IMPORTANT: Renders unknown stages gracefully.
+ * Never crashes on missing stage definitions.
+ */
+export function getStageLabel(stage: string): string {
+  return STAGE_LABELS[stage] || formatUnknownStage(stage);
+}
+
+/**
+ * Parse adapter execution details from event payload.
+ * 
+ * IMPORTANT: Status must come ONLY from event payload fields:
+ * - details.adapterRequestMade
+ * - reason
+ * 
+ * @param payload - Event payload from backend
+ * @returns Adapter execution details or undefined if not applicable
+ */
+export function parseAdapterDetails(
+  payload: Record<string, unknown> | undefined
+): import('../types/campaign').AdapterExecutionDetails | undefined {
+  if (!payload) return undefined;
+  
+  const details = payload.details as Record<string, unknown> | undefined;
+  if (!details) return undefined;
+  
+  // Check if this stage involves adapter execution
+  const adapterRequestMade = details.adapterRequestMade;
+  if (typeof adapterRequestMade !== 'boolean') return undefined;
+  
+  const adapterName = typeof details.adapter === 'string' ? details.adapter : undefined;
+  const resultCount = typeof details.resultCount === 'number' ? details.resultCount : undefined;
+  const reason = typeof payload.reason === 'string' ? payload.reason : undefined;
+  const errorMessage = typeof details.error === 'string' ? details.error : undefined;
+  
+  // Derive status from payload fields
+  let status: import('../types/campaign').AdapterExecutionStatus;
+  
+  if (!adapterRequestMade) {
+    status = 'not_called';
+  } else if (errorMessage) {
+    status = 'adapter_error';
+  } else if (resultCount === 0) {
+    status = 'called_no_results';
+  } else {
+    status = 'called_success';
+  }
+  
+  return {
+    adapterRequestMade,
+    adapterName,
+    resultCount,
+    reason: errorMessage || reason,
+    status,
+  };
+}
+
+/**
  * Read-only API request function.
  * Enforces GET-only constraint for the Sales Engine UI.
  * 

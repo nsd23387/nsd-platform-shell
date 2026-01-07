@@ -226,7 +226,7 @@ export function LeadApprovalActions({
           <div
             style={{
               padding: '14px 16px',
-              backgroundColor: '#D1FAE5',
+              backgroundColor: NSD_COLORS.semantic.positive.bg,
               borderRadius: NSD_RADIUS.md,
               display: 'flex',
               alignItems: 'flex-start',
@@ -234,7 +234,7 @@ export function LeadApprovalActions({
             }}
           >
             <span style={{ flexShrink: 0, marginTop: '2px', display: 'flex' }}>
-              <Icon name="check" size={18} color="#065F46" />
+              <Icon name="check" size={18} color={NSD_COLORS.semantic.positive.text} />
             </span>
             <div>
               <p
@@ -242,7 +242,7 @@ export function LeadApprovalActions({
                   margin: 0,
                   fontSize: '14px',
                   fontWeight: 500,
-                  color: '#065F46',
+                  color: NSD_COLORS.semantic.positive.text,
                 }}
               >
                 Approved for Outreach
@@ -251,7 +251,7 @@ export function LeadApprovalActions({
                 style={{
                   margin: '4px 0 0 0',
                   fontSize: '13px',
-                  color: '#065F46',
+                  color: NSD_COLORS.semantic.positive.text,
                   opacity: 0.9,
                 }}
               >

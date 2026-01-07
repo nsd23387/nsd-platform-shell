@@ -28,7 +28,8 @@
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
-import type { PipelineStage } from '../../types/campaign';
+import { getStageLabel } from '../../lib/api';
+import type { PipelineStage, AdapterExecutionStatus, AdapterExecutionDetails } from '../../types/campaign';
 
 export interface PipelineFunnelTableProps {
   /** Pipeline stages with counts */
@@ -40,26 +41,138 @@ export interface PipelineFunnelTableProps {
 }
 
 /**
- * Get confidence badge styling.
+ * Get confidence badge styling - uses brand-aligned semantic colors.
  */
 function getConfidenceBadgeStyle(confidence: 'observed' | 'conditional'): {
   bg: string;
   text: string;
+  border: string;
   label: string;
 } {
   if (confidence === 'observed') {
     return {
-      bg: '#D1FAE5',
-      text: '#065F46',
+      ...NSD_COLORS.semantic.positive,
       label: 'Observed',
     };
   } else {
     return {
-      bg: '#FEF3C7',
-      text: '#92400E',
+      ...NSD_COLORS.semantic.attention,
       label: 'Conditional',
     };
   }
+}
+
+/**
+ * Get adapter status display - explains WHY adapter was or wasn't called.
+ * 
+ * IMPORTANT: Status must come ONLY from event payload fields:
+ * - details.adapterRequestMade
+ * - reason
+ */
+function getAdapterStatusDisplay(status: AdapterExecutionStatus, reason?: string): {
+  icon: 'check' | 'info' | 'warning' | 'close';
+  bg: string;
+  text: string;
+  border: string;
+  label: string;
+  description: string;
+} {
+  switch (status) {
+    case 'called_success':
+      return {
+        icon: 'check',
+        ...NSD_COLORS.semantic.positive,
+        label: 'Adapter Called',
+        description: reason || 'Adapter returned results successfully',
+      };
+    case 'called_no_results':
+      return {
+        icon: 'info',
+        ...NSD_COLORS.semantic.muted,
+        label: 'No Matches',
+        description: reason || 'Adapter called but returned zero results',
+      };
+    case 'adapter_error':
+      return {
+        icon: 'warning',
+        ...NSD_COLORS.semantic.critical,
+        label: 'Adapter Error',
+        description: reason || 'Adapter call failed - see error details',
+      };
+    case 'not_called':
+    default:
+      return {
+        icon: 'info',
+        ...NSD_COLORS.semantic.muted,
+        label: 'Not Called',
+        description: reason || 'Adapter was not invoked for this stage',
+      };
+  }
+}
+
+/**
+ * AdapterStatusBadge - Displays adapter execution status with explanation.
+ * 
+ * Shows:
+ * - Whether adapter was called
+ * - If not called, WHY (invalid config, gated, etc.)
+ * - If called with zero results, "No matches found"
+ * - If adapter_error, error state (brand critical color)
+ */
+function AdapterStatusBadge({ details }: { details: AdapterExecutionDetails }) {
+  const display = getAdapterStatusDisplay(details.status, details.reason);
+  
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '8px',
+        padding: '10px 14px',
+        backgroundColor: display.bg,
+        borderRadius: NSD_RADIUS.md,
+        border: `1px solid ${display.border}`,
+        marginTop: '8px',
+      }}
+    >
+      <Icon name={display.icon} size={16} color={display.text} />
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+          <span
+            style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              color: display.text,
+            }}
+          >
+            {details.adapterName ? `${details.adapterName}: ` : ''}{display.label}
+          </span>
+          {details.resultCount !== undefined && details.status === 'called_success' && (
+            <span
+              style={{
+                fontSize: '11px',
+                color: display.text,
+                opacity: 0.8,
+              }}
+            >
+              ({details.resultCount} result{details.resultCount !== 1 ? 's' : ''})
+            </span>
+          )}
+        </div>
+        <p
+          style={{
+            margin: 0,
+            fontSize: '11px',
+            color: display.text,
+            opacity: 0.9,
+            lineHeight: 1.4,
+          }}
+        >
+          {display.description}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -77,6 +190,7 @@ function ConfidenceBadge({ confidence }: { confidence: 'observed' | 'conditional
         fontWeight: 500,
         backgroundColor: style.bg,
         color: style.text,
+        border: `1px solid ${style.border}`,
         borderRadius: NSD_RADIUS.full,
       }}
     >
@@ -293,45 +407,61 @@ export function PipelineFunnelTable({
             </thead>
             <tbody>
               {stages.map((stage, index) => (
-                <tr
-                  key={stage.stage}
-                  style={{
-                    borderTop: index > 0 ? `1px solid ${NSD_COLORS.border.light}` : undefined,
-                  }}
-                >
-                  <td
+                <React.Fragment key={stage.stage}>
+                  <tr
                     style={{
-                      padding: '14px 20px',
-                      fontSize: '14px',
-                      color: NSD_COLORS.text.primary,
+                      borderTop: index > 0 ? `1px solid ${NSD_COLORS.border.light}` : undefined,
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span>{stage.label}</span>
-                      {stage.tooltip && <StageTooltip tooltip={stage.tooltip} />}
-                    </div>
-                  </td>
-                  <td
-                    style={{
-                      padding: '14px 20px',
-                      textAlign: 'right',
-                      fontSize: '16px',
-                      fontWeight: 600,
-                      fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-                      color: NSD_COLORS.primary,
-                    }}
-                  >
-                    {stage.count.toLocaleString()}
-                  </td>
-                  <td
-                    style={{
-                      padding: '14px 20px',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <ConfidenceBadge confidence={stage.confidence} />
-                  </td>
-                </tr>
+                    <td
+                      style={{
+                        padding: '14px 20px',
+                        fontSize: '14px',
+                        color: NSD_COLORS.text.primary,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        {/* Use stage.label if provided, otherwise fallback to getStageLabel for unknown stages */}
+                        <span>{stage.label || getStageLabel(stage.stage)}</span>
+                        {stage.tooltip && <StageTooltip tooltip={stage.tooltip} />}
+                      </div>
+                    </td>
+                    <td
+                      style={{
+                        padding: '14px 20px',
+                        textAlign: 'right',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+                        color: NSD_COLORS.primary,
+                      }}
+                    >
+                      {(stage.count ?? 0).toLocaleString()}
+                    </td>
+                    <td
+                      style={{
+                        padding: '14px 20px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <ConfidenceBadge confidence={stage.confidence ?? 'conditional'} />
+                    </td>
+                  </tr>
+                  {/* Adapter execution details row - only shown if adapter was involved */}
+                  {stage.adapterDetails && (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        style={{
+                          padding: '0 20px 14px 20px',
+                          backgroundColor: NSD_COLORS.surface,
+                        }}
+                      >
+                        <AdapterStatusBadge details={stage.adapterDetails} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>

@@ -55,7 +55,7 @@ function getActionContent(action: LeadApprovalAction, leadCount: number, leadIde
       description: `You are about to approve ${target} for outreach. Approved leads become eligible for campaign execution.`,
       confirmLabel: isBulk ? `Approve ${leadCount} Leads` : 'Approve Lead',
       icon: 'check',
-      iconColor: NSD_COLORS.success,
+      iconColor: NSD_COLORS.semantic.positive.text,
       variant: 'primary',
     };
   } else {
@@ -64,7 +64,7 @@ function getActionContent(action: LeadApprovalAction, leadCount: number, leadIde
       description: `You are about to reject ${target}. Rejected leads will not be included in campaign outreach.`,
       confirmLabel: isBulk ? `Reject ${leadCount} Leads` : 'Reject Lead',
       icon: 'close',
-      iconColor: NSD_COLORS.error,
+      iconColor: NSD_COLORS.semantic.critical.text,
       variant: 'danger',
     };
   }
@@ -128,7 +128,7 @@ export function ApprovalConfirmationModal({
               width: '56px',
               height: '56px',
               borderRadius: '50%',
-              backgroundColor: action === 'approve' ? '#D1FAE5' : '#FEE2E2',
+              backgroundColor: action === 'approve' ? NSD_COLORS.semantic.positive.bg : NSD_COLORS.semantic.critical.bg,
               margin: '0 auto 20px',
             }}
           >

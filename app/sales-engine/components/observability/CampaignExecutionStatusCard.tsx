@@ -10,19 +10,25 @@
  * - Status comes from /observability endpoint
  * - UI reflects backend truth, never infers
  * 
- * Status copy examples:
- * - 🟡 "Run in progress — Contact discovery"
- * - 🟢 "Run completed — Awaiting lead approvals"
- * - 🔴 "Run failed — See run history"
+ * Brand-compliant status indicators use icons, not emojis.
  */
 
 'use client';
 
 import React from 'react';
-import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, getSemanticStatusStyle } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import { Button } from '../ui/Button';
-import type { CampaignExecutionStatus, ExecutionStatusDisplay } from '../../types/campaign';
+import type { CampaignExecutionStatus } from '../../types/campaign';
+
+/** Status display configuration - brand-aligned (no emojis) */
+interface StatusDisplayConfig {
+  icon: 'clock' | 'refresh' | 'runs' | 'check' | 'warning' | 'info';
+  copy: string;
+  bg: string;
+  text: string;
+  border: string;
+}
 
 export interface CampaignExecutionStatusCardProps {
   /** Current execution status */
@@ -45,6 +51,7 @@ export interface CampaignExecutionStatusCardProps {
 
 /**
  * Get display configuration for execution status.
+ * Uses brand-aligned colors and proper icons (no emojis).
  * 
  * STATUS COPY (governance-aligned):
  * - idle: "Ready for execution"
@@ -59,76 +66,61 @@ function getStatusDisplay(
   status: CampaignExecutionStatus,
   currentStage?: string,
   leadsAwaitingApproval?: number
-): ExecutionStatusDisplay {
+): StatusDisplayConfig {
+  const semanticStyle = getSemanticStatusStyle(status);
+  
   switch (status) {
     case 'idle':
       return {
-        emoji: '⚪',
+        icon: 'clock',
         copy: 'Ready for execution',
-        bg: NSD_COLORS.surface,
-        text: NSD_COLORS.text.secondary,
-        border: NSD_COLORS.border.light,
+        ...NSD_COLORS.semantic.muted,
       };
     case 'run_requested':
-      // Execution requested but not yet started - awaiting backend events
       return {
-        emoji: '🔵',
+        icon: 'info',
         copy: 'Execution requested — Awaiting events',
-        bg: '#DBEAFE',
-        text: '#1E40AF',
-        border: '#93C5FD',
+        ...NSD_COLORS.semantic.info,
       };
     case 'running':
       return {
-        emoji: '🟡',
+        icon: 'refresh',
         copy: `Run in progress${currentStage ? ` — ${formatStageName(currentStage)}` : ''}`,
-        bg: '#FEF3C7',
-        text: '#92400E',
-        border: '#FCD34D',
+        ...NSD_COLORS.semantic.active,
       };
-    case 'awaiting_approvals':
-      // Run completed, leads pending approval
+    case 'awaiting_approvals': {
       const awaitingCount = leadsAwaitingApproval && leadsAwaitingApproval > 0
         ? ` (${leadsAwaitingApproval} leads)`
         : '';
       return {
-        emoji: '🟢',
+        icon: 'check',
         copy: `Run completed — Awaiting lead approvals${awaitingCount}`,
-        bg: '#D1FAE5',
-        text: '#065F46',
-        border: '#6EE7B7',
+        ...NSD_COLORS.semantic.attention,
       };
+    }
     case 'completed':
       return {
-        emoji: '🟢',
+        icon: 'check',
         copy: 'Run completed',
-        bg: '#D1FAE5',
-        text: '#065F46',
-        border: '#6EE7B7',
+        ...NSD_COLORS.semantic.positive,
       };
     case 'failed':
       return {
-        emoji: '🔴',
+        icon: 'warning',
         copy: 'Run failed — See run history',
-        bg: '#FEE2E2',
-        text: '#991B1B',
-        border: '#FECACA',
+        ...NSD_COLORS.semantic.critical,
       };
     case 'partial':
       return {
-        emoji: '🟠',
+        icon: 'warning',
         copy: 'Run partially completed — See run history',
-        bg: '#FEF3C7',
-        text: '#92400E',
-        border: '#FCD34D',
+        ...NSD_COLORS.semantic.attention,
       };
     default:
       return {
-        emoji: '⚪',
+        icon: 'clock',
         copy: 'Awaiting events',
-        bg: NSD_COLORS.surface,
-        text: NSD_COLORS.text.muted,
-        border: NSD_COLORS.border.light,
+        ...NSD_COLORS.semantic.muted,
       };
   }
 }
@@ -182,7 +174,7 @@ export function CampaignExecutionStatusCard({
         {/* Status info */}
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '20px' }}>{display.emoji}</span>
+            <Icon name={display.icon} size={20} color={display.text} />
             <h3
               style={{
                 margin: 0,

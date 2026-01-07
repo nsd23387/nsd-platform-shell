@@ -4,6 +4,7 @@ import type { CampaignMetrics, MetricsHistoryEntry } from '../types/campaign';
 import { ConfidenceBadge, ProvenancePill } from './governance';
 import { deriveConfidence, deriveProvenance } from '../lib/campaign-state';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../lib/design-tokens';
+import { Icon } from '../../../design/components/Icon';
 
 interface MetricsDisplayProps {
   metrics: CampaignMetrics;
@@ -136,21 +137,22 @@ export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
             style={{
               marginTop: '16px',
               padding: '14px 16px',
-              backgroundColor: '#FEF3C7',
+              backgroundColor: NSD_COLORS.semantic.attention.bg,
               borderRadius: NSD_RADIUS.md,
+              border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
               display: 'flex',
               alignItems: 'flex-start',
               gap: '12px',
             }}
           >
-            <span style={{ fontSize: '14px' }}>⚠️</span>
+            <Icon name="info" size={16} color={NSD_COLORS.semantic.attention.text} />
             <div>
               <p
                 style={{
                   margin: 0,
                   fontSize: '13px',
                   fontWeight: 600,
-                  color: '#92400E',
+                  color: NSD_COLORS.semantic.attention.text,
                 }}
               >
                 Observed (Unclassified)
@@ -159,7 +161,7 @@ export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
                 style={{
                   margin: '4px 0 0 0',
                   fontSize: '12px',
-                  color: '#92400E',
+                  color: NSD_COLORS.semantic.attention.text,
                   lineHeight: 1.5,
                 }}
               >

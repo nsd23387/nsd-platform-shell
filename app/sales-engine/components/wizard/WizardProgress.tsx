@@ -78,7 +78,7 @@ export function WizardProgress() {
                   backgroundColor: isActive
                     ? NSD_COLORS.secondary
                     : isPast
-                    ? NSD_COLORS.success
+                    ? NSD_COLORS.semantic.positive.text
                     : NSD_COLORS.border.light,
                   color: isActive || isPast ? NSD_COLORS.text.inverse : NSD_COLORS.text.muted,
                   transition: 'all 0.2s ease',
