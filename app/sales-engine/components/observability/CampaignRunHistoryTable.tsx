@@ -95,6 +95,31 @@ function formatDate(dateString: string): string {
 }
 
 /**
+ * Calculate and format duration between two timestamps.
+ */
+function formatDuration(startedAt: string, completedAt?: string): string {
+  if (!completedAt) return 'In progress';
+  
+  const start = new Date(startedAt).getTime();
+  const end = new Date(completedAt).getTime();
+  const durationMs = end - start;
+  
+  if (durationMs < 0) return '—';
+  
+  const seconds = Math.floor(durationMs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`;
+  }
+  return `${seconds}s`;
+}
+
+/**
  * CampaignRunHistoryTable - Full run history with pipeline visibility.
  * 
  * Fixes "View Run History" broken UX by providing inline table.
@@ -232,7 +257,7 @@ export function CampaignRunHistoryTable({
       ) : (
         /* Table */
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1050px' }}>
             <thead>
               <tr style={{ backgroundColor: NSD_COLORS.surface }}>
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 500, color: NSD_COLORS.text.muted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
@@ -247,6 +272,9 @@ export function CampaignRunHistoryTable({
                 <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 500, color: NSD_COLORS.text.muted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                   Completed
                 </th>
+                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 500, color: NSD_COLORS.text.muted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                  Duration
+                </th>
                 <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '11px', fontWeight: 500, color: NSD_COLORS.text.muted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                   Orgs
                 </th>
@@ -254,10 +282,10 @@ export function CampaignRunHistoryTable({
                   Contacts
                 </th>
                 <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '11px', fontWeight: 500, color: NSD_COLORS.text.muted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                  Promoted
+                  Leads
                 </th>
                 <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '11px', fontWeight: 500, color: NSD_COLORS.text.muted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                  Approved
+                  Personalized
                 </th>
                 <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '11px', fontWeight: 500, color: NSD_COLORS.text.muted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                   Sent
@@ -286,6 +314,9 @@ export function CampaignRunHistoryTable({
                   </td>
                   <td style={{ padding: '12px 16px', fontSize: '13px', color: NSD_COLORS.text.primary }}>
                     {run.completed_at ? formatDate(run.completed_at) : '—'}
+                  </td>
+                  <td style={{ padding: '12px 16px', fontSize: '13px', color: NSD_COLORS.text.secondary }}>
+                    {formatDuration(run.started_at, run.completed_at)}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
                     {run.orgs_sourced?.toLocaleString() ?? '—'}

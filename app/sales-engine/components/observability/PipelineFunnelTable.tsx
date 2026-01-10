@@ -31,13 +31,25 @@ import { Icon } from '../../../../design/components/Icon';
 import { getStageLabel } from '../../lib/api';
 import type { PipelineStage, AdapterExecutionStatus, AdapterExecutionDetails } from '../../types/campaign';
 
+/**
+ * Extended pipeline stage with blocking reason support.
+ */
+export interface PipelineStageWithReason extends PipelineStage {
+  /** If count is zero, the reason why (for UX clarity) */
+  zeroReason?: string;
+  /** Whether this stage was blocked/skipped */
+  blocked?: boolean;
+}
+
 export interface PipelineFunnelTableProps {
-  /** Pipeline stages with counts */
-  stages: PipelineStage[];
+  /** Pipeline stages with counts (supports PipelineStageWithReason for zero explanations) */
+  stages: (PipelineStage | PipelineStageWithReason)[];
   /** Whether data is loading */
   loading?: boolean;
   /** Error message if any */
   error?: string | null;
+  /** Global blocking reason (if entire pipeline is blocked) */
+  globalBlockingReason?: string;
 }
 
 /**
@@ -226,18 +238,58 @@ function StageTooltip({ tooltip }: { tooltip: string }) {
 }
 
 /**
+ * ZeroValueExplanation - Displays why a stage count is zero.
+ * 
+ * CRITICAL UX RULE: Never show unexplained zeros.
+ * If count is zero, explain why (blocked, skipped, not reached, etc.)
+ */
+function ZeroValueExplanation({ reason, blocked }: { reason?: string; blocked?: boolean }) {
+  if (!reason) return null;
+  
+  const style = blocked ? NSD_COLORS.semantic.critical : NSD_COLORS.semantic.attention;
+  
+  return (
+    <div
+      style={{
+        marginTop: '8px',
+        padding: '8px 12px',
+        backgroundColor: style.bg,
+        borderRadius: NSD_RADIUS.sm,
+        border: `1px solid ${style.border}`,
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: '11px',
+          color: style.text,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}
+      >
+        <Icon name={blocked ? 'close' : 'info'} size={12} color={style.text} />
+        {reason}
+      </p>
+    </div>
+  );
+}
+
+/**
  * PipelineFunnelTable - Core pipeline visibility component.
  * 
  * Rules:
  * - No local math - counts are backend-authoritative
  * - Confidence badge required for each row
  * - Tooltips explain what each stage represents
+ * - CRITICAL: Zero values must be explained (never show unexplained zeros)
  * - Observability reflects pipeline state; execution is delegated
  */
 export function PipelineFunnelTable({
   stages,
   loading = false,
   error = null,
+  globalBlockingReason,
 }: PipelineFunnelTableProps) {
   if (loading) {
     return (
@@ -320,6 +372,44 @@ export function PipelineFunnelTable({
           Read-only
         </span>
       </div>
+
+      {/* Global blocking reason banner */}
+      {globalBlockingReason && (
+        <div
+          style={{
+            padding: '14px 20px',
+            backgroundColor: NSD_COLORS.semantic.critical.bg,
+            borderBottom: `1px solid ${NSD_COLORS.border.light}`,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+          }}
+        >
+          <Icon name="warning" size={18} color={NSD_COLORS.semantic.critical.text} />
+          <div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '13px',
+                fontWeight: 600,
+                color: NSD_COLORS.semantic.critical.text,
+              }}
+            >
+              Pipeline Blocked
+            </p>
+            <p
+              style={{
+                margin: '4px 0 0 0',
+                fontSize: '13px',
+                color: NSD_COLORS.semantic.critical.text,
+                lineHeight: 1.5,
+              }}
+            >
+              {globalBlockingReason}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Empty state - No activity observed yet */}
       {stages.length === 0 ? (
@@ -406,63 +496,101 @@ export function PipelineFunnelTable({
               </tr>
             </thead>
             <tbody>
-              {stages.map((stage, index) => (
-                <React.Fragment key={stage.stage}>
-                  <tr
-                    style={{
-                      borderTop: index > 0 ? `1px solid ${NSD_COLORS.border.light}` : undefined,
-                    }}
-                  >
-                    <td
+              {stages.map((stage, index) => {
+                // Cast to extended type to access zeroReason and blocked
+                const extStage = stage as PipelineStageWithReason;
+                const isZeroWithReason = (stage.count ?? 0) === 0 && extStage.zeroReason;
+                const isBlocked = extStage.blocked;
+                
+                return (
+                  <React.Fragment key={stage.stage}>
+                    <tr
                       style={{
-                        padding: '14px 20px',
-                        fontSize: '14px',
-                        color: NSD_COLORS.text.primary,
+                        borderTop: index > 0 ? `1px solid ${NSD_COLORS.border.light}` : undefined,
+                        backgroundColor: isBlocked ? NSD_COLORS.semantic.critical.bg : undefined,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        {/* Use stage.label if provided, otherwise fallback to getStageLabel for unknown stages */}
-                        <span>{stage.label || getStageLabel(stage.stage)}</span>
-                        {stage.tooltip && <StageTooltip tooltip={stage.tooltip} />}
-                      </div>
-                    </td>
-                    <td
-                      style={{
-                        padding: '14px 20px',
-                        textAlign: 'right',
-                        fontSize: '16px',
-                        fontWeight: 600,
-                        fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-                        color: NSD_COLORS.primary,
-                      }}
-                    >
-                      {(stage.count ?? 0).toLocaleString()}
-                    </td>
-                    <td
-                      style={{
-                        padding: '14px 20px',
-                        textAlign: 'center',
-                      }}
-                    >
-                      <ConfidenceBadge confidence={stage.confidence ?? 'conditional'} />
-                    </td>
-                  </tr>
-                  {/* Adapter execution details row - only shown if adapter was involved */}
-                  {stage.adapterDetails && (
-                    <tr>
                       <td
-                        colSpan={3}
                         style={{
-                          padding: '0 20px 14px 20px',
-                          backgroundColor: NSD_COLORS.surface,
+                          padding: '14px 20px',
+                          fontSize: '14px',
+                          color: isBlocked ? NSD_COLORS.semantic.critical.text : NSD_COLORS.text.primary,
                         }}
                       >
-                        <AdapterStatusBadge details={stage.adapterDetails} />
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          {/* Use stage.label if provided, otherwise fallback to getStageLabel for unknown stages */}
+                          <span>{stage.label || getStageLabel(stage.stage)}</span>
+                          {stage.tooltip && <StageTooltip tooltip={stage.tooltip} />}
+                          {isBlocked && (
+                            <span
+                              style={{
+                                marginLeft: '8px',
+                                display: 'inline-flex',
+                                padding: '2px 6px',
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                backgroundColor: NSD_COLORS.semantic.critical.text,
+                                color: NSD_COLORS.semantic.critical.bg,
+                                borderRadius: NSD_RADIUS.sm,
+                              }}
+                            >
+                              BLOCKED
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td
+                        style={{
+                          padding: '14px 20px',
+                          textAlign: 'right',
+                          fontSize: '16px',
+                          fontWeight: 600,
+                          fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+                          color: isBlocked ? NSD_COLORS.semantic.critical.text : NSD_COLORS.primary,
+                        }}
+                      >
+                        {(stage.count ?? 0).toLocaleString()}
+                      </td>
+                      <td
+                        style={{
+                          padding: '14px 20px',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <ConfidenceBadge confidence={stage.confidence ?? 'conditional'} />
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
+                    {/* Zero value explanation - CRITICAL: Never show unexplained zeros */}
+                    {isZeroWithReason && (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          style={{
+                            padding: '0 20px 14px 20px',
+                            backgroundColor: NSD_COLORS.surface,
+                          }}
+                        >
+                          <ZeroValueExplanation reason={extStage.zeroReason} blocked={isBlocked} />
+                        </td>
+                      </tr>
+                    )}
+                    {/* Adapter execution details row - only shown if adapter was involved */}
+                    {stage.adapterDetails && (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          style={{
+                            padding: '0 20px 14px 20px',
+                            backgroundColor: NSD_COLORS.surface,
+                          }}
+                        >
+                          <AdapterStatusBadge details={stage.adapterDetails} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -26,3 +26,9 @@ export type { CampaignRunHistoryTableProps } from './CampaignRunHistoryTable';
 
 export { SendMetricsPanel } from './SendMetricsPanel';
 export type { SendMetricsPanelProps } from './SendMetricsPanel';
+
+export { ExecutionTimelineFeed } from './ExecutionTimelineFeed';
+export type { ExecutionTimelineFeedProps, ExecutionEvent } from './ExecutionTimelineFeed';
+
+export { ApprovalAwarenessPanel } from './ApprovalAwarenessPanel';
+export type { ApprovalAwarenessPanelProps, ApprovalAwarenessState } from './ApprovalAwarenessPanel';

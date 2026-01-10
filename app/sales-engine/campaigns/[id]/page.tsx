@@ -53,6 +53,10 @@ import {
   PipelineFunnelTable,
   CampaignRunHistoryTable,
   SendMetricsPanel,
+  ExecutionTimelineFeed,
+  ApprovalAwarenessPanel,
+  type ExecutionEvent,
+  type ApprovalAwarenessState,
 } from '../../components/observability';
 import { 
   isTestCampaign, 
@@ -455,11 +459,13 @@ function OverviewTab({
 /**
  * MonitoringTab - Redesigned Observability Tab
  * 
- * Provides full pipeline visibility with four stacked sections:
- * A) Execution Status (Top) - Source of truth: /observability/status
- * B) Pipeline Funnel (CORE) - Source of truth: /observability/funnel
- * C) Run History (Fixed UX) - Source of truth: /runs
- * D) Send Metrics (Scoped)
+ * Provides full pipeline visibility with stacked sections:
+ * A) Approval Awareness - Shows campaign approval state
+ * B) Execution Status - Source of truth: /observability/status
+ * C) Pipeline Funnel (CORE) - Source of truth: /observability/funnel
+ * D) Run History - Source of truth: /runs
+ * E) Execution Timeline - Activity feed of events
+ * F) Send Metrics (Scoped)
  * 
  * OBSERVABILITY GOVERNANCE:
  * - Read-only display
@@ -469,6 +475,7 @@ function OverviewTab({
  * - No mock data - all from backend observability endpoints
  * - Counts match backend exactly
  * - Approval gating is visually obvious
+ * - Blocked/skipped states are explicitly explained
  * 
  * Observability reflects pipeline state; execution is delegated.
  */
@@ -534,6 +541,49 @@ function MonitoringTab({
 
   // Dev-only debug banner (not shown in production)
   const showDebugBanner = process.env.NODE_ENV !== 'production';
+  
+  // Derive approval awareness state from campaign and observability data
+  const approvalState: ApprovalAwarenessState = {
+    isApproved: !!(campaign.approved_at || campaign.status === 'RUNNABLE' || campaign.status === 'RUNNING' || campaign.status === 'COMPLETED'),
+    approvedAt: campaign.approved_at,
+    approvedBy: campaign.approved_by,
+    status: campaign.status,
+    hasRuns: runsDetailed.length > 0 || runs.length > 0,
+    blockingReason: observabilityStatus?.error_message,
+  };
+  
+  // Build mock execution events from run data for timeline display
+  // In production, these would come from a dedicated events endpoint
+  const executionEvents: ExecutionEvent[] = runsDetailed.flatMap((run) => {
+    const events: ExecutionEvent[] = [];
+    
+    // Run started event
+    events.push({
+      id: `${run.id}-started`,
+      event_type: 'campaign.run.started',
+      run_id: run.id,
+      campaign_id: campaign.id,
+      occurred_at: run.started_at,
+      outcome: 'success',
+    });
+    
+    // Run completed/failed event
+    if (run.completed_at) {
+      events.push({
+        id: `${run.id}-completed`,
+        event_type: run.status === 'FAILED' ? 'campaign.run.failed' : 
+                    run.status === 'PARTIAL' ? 'campaign.run.partial' : 'campaign.run.completed',
+        run_id: run.id,
+        campaign_id: campaign.id,
+        occurred_at: run.completed_at,
+        outcome: run.status === 'FAILED' ? 'failed' : 
+                 run.status === 'PARTIAL' ? 'partial' : 'success',
+        reason: run.error_details?.[0],
+      });
+    }
+    
+    return events;
+  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -591,7 +641,11 @@ function MonitoringTab({
         </div>
       )}
 
-      {/* Section A: Execution Status (Top) - Always visible */}
+      {/* Section A: Approval Awareness Panel */}
+      {/* Shows campaign approval state with explanatory copy (read-only) */}
+      <ApprovalAwarenessPanel approvalState={approvalState} />
+
+      {/* Section B: Execution Status - Always visible */}
       {/* Source of truth: /observability/status endpoint */}
       <CampaignExecutionStatusCard
         status={executionStatus}
@@ -604,14 +658,14 @@ function MonitoringTab({
         isRunning={isRunRequesting}
       />
 
-      {/* Section B: Pipeline Funnel (CORE) */}
+      {/* Section C: Pipeline Funnel (CORE) */}
       {/* Source of truth: /observability/funnel endpoint */}
       <PipelineFunnelTable
         stages={pipelineStages}
         loading={!observabilityFunnel && !observability}
       />
 
-      {/* View Run History Button - scrolls to Section C */}
+      {/* View Run History Button - scrolls to Section D */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <button
           onClick={scrollToRunHistory}
@@ -634,13 +688,20 @@ function MonitoringTab({
         </button>
       </div>
 
-      {/* Section C: Run History (Fixed UX) */}
+      {/* Section D: Run History */}
       <CampaignRunHistoryTable
         runs={runsDetailed.length > 0 ? runsDetailed : runs as CampaignRunDetailed[]}
         id="run-history"
       />
 
-      {/* Section D: Send Metrics (Scoped) - Post-Approval only 
+      {/* Section E: Execution Timeline / Activity Feed */}
+      {/* Groups events by runId, ordered by occurred_at */}
+      <ExecutionTimelineFeed
+        events={executionEvents}
+        loading={false}
+      />
+
+      {/* Section F: Send Metrics (Scoped) - Post-Approval only 
           IMPORTANT: Only show actual metrics from API, never fabricated.
           If no send metrics exist, show "Not Observed Yet" state.
       */}
