@@ -552,10 +552,24 @@ function MonitoringTab({
     blockingReason: observabilityStatus?.error_message,
   };
   
-  // Build mock execution events from run data for timeline display
-  // In production, these would come from a dedicated events endpoint
+  // Build execution events from run data for timeline display
+  // In production, these would come from ODS /api/v1/activity/events endpoint
+  // Event types follow the queued → cron execution model:
+  // - run.queued → campaign.run.started → [pipeline events] → campaign.run.completed/failed
   const executionEvents: ExecutionEvent[] = runsDetailed.flatMap((run) => {
     const events: ExecutionEvent[] = [];
+    
+    // For RUNNING status runs, add a queued event (derived from run_requested state)
+    if (run.status === 'RUNNING' as any) {
+      events.push({
+        id: `${run.id}-queued`,
+        event_type: 'run.queued',
+        run_id: run.id,
+        campaign_id: campaign.id,
+        occurred_at: run.started_at,
+        outcome: 'success',
+      });
+    }
     
     // Run started event
     events.push({
@@ -566,6 +580,35 @@ function MonitoringTab({
       occurred_at: run.started_at,
       outcome: 'success',
     });
+    
+    // Add pipeline stage events for completed runs
+    if (run.completed_at && run.status !== 'FAILED') {
+      // Organizations sourced
+      if (run.orgs_sourced && run.orgs_sourced > 0) {
+        events.push({
+          id: `${run.id}-orgs`,
+          event_type: 'apollo.org.search.completed',
+          run_id: run.id,
+          campaign_id: campaign.id,
+          occurred_at: run.started_at, // Approximate timing
+          outcome: 'success',
+          details: { count: run.orgs_sourced },
+        });
+      }
+      
+      // Leads promoted
+      if (run.leads_promoted && run.leads_promoted > 0) {
+        events.push({
+          id: `${run.id}-leads`,
+          event_type: 'lead.promoted',
+          run_id: run.id,
+          campaign_id: campaign.id,
+          occurred_at: run.started_at,
+          outcome: 'success',
+          details: { count: run.leads_promoted },
+        });
+      }
+    }
     
     // Run completed/failed event
     if (run.completed_at) {
@@ -584,6 +627,18 @@ function MonitoringTab({
     
     return events;
   });
+  
+  // If execution is currently queued, add a pending queued event
+  if (isRunRequesting || executionStatus === 'run_requested') {
+    executionEvents.unshift({
+      id: 'pending-queued',
+      event_type: 'run.queued',
+      run_id: activeRunId,
+      campaign_id: campaign.id,
+      occurred_at: lastObservedAt,
+      outcome: 'success',
+    });
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -647,6 +702,12 @@ function MonitoringTab({
 
       {/* Section B: Execution Status - Always visible */}
       {/* Source of truth: /observability/status endpoint */}
+      {/* Status mapping (queued → cron model):
+          - queued: "Queued – execution will start shortly"
+          - running: "Running – sourcing organizations"
+          - completed: "Completed – results available"
+          - failed: "Failed – see timeline for details"
+          - blocked: "Blocked – see reason" */}
       <CampaignExecutionStatusCard
         status={executionStatus}
         activeRunId={activeRunId}
@@ -656,6 +717,7 @@ function MonitoringTab({
         onRunCampaign={onRunCampaign}
         canRun={canRun}
         isRunning={isRunRequesting}
+        blockingReason={observabilityStatus?.error_message}
       />
 
       {/* Section C: Pipeline Funnel (CORE) */}

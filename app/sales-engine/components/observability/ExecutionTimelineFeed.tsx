@@ -10,12 +10,24 @@
  * - Blocked/skipped events are clearly labeled
  * - No execution controls or mutations
  * 
- * Data source: Derived from ODS observability events
+ * EVENT TYPES (queued → cron execution model):
+ * - run.queued: Run has been queued for execution
+ * - campaign.run.started / run.started: Execution has begun
+ * - apollo.org.search.started: Organization sourcing started
+ * - apollo.org.search.completed: Organization sourcing completed
+ * - lead.promoted: Lead has been promoted from contact
+ * - lead.blocked: Lead was blocked (with reason)
+ * - personalization.generated: Email personalization generated
+ * - personalization.blocked: Personalization was blocked
+ * - campaign.run.completed / run.completed: Execution completed
+ * - campaign.run.failed / run.failed: Execution failed
+ * 
+ * Data source: ODS /api/v1/activity/events and /api/v1/activity/runs
  */
 
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, getSemanticStatusStyle } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 
@@ -54,6 +66,14 @@ export interface ExecutionTimelineFeedProps {
 
 /**
  * Map event type to display configuration.
+ * 
+ * EVENT TYPES (queued → cron execution model):
+ * - run.queued: Run has been queued for execution
+ * - campaign.run.started / run.started: Execution has begun
+ * - apollo.org.search.started/completed: Organization sourcing
+ * - lead.promoted / lead.blocked: Lead promotion outcomes
+ * - personalization.generated / blocked: Personalization outcomes
+ * - campaign.run.completed / failed: Execution outcomes
  */
 function getEventTypeDisplay(eventType: string): {
   label: string;
@@ -61,12 +81,25 @@ function getEventTypeDisplay(eventType: string): {
   category: 'lifecycle' | 'pipeline' | 'outcome';
 } {
   const eventDisplayMap: Record<string, { label: string; icon: 'runs' | 'check' | 'warning' | 'close' | 'clock' | 'info'; category: 'lifecycle' | 'pipeline' | 'outcome' }> = {
-    // Lifecycle events
+    // Lifecycle events (queued → cron model)
+    'run.queued': { label: 'Run Queued', icon: 'clock', category: 'lifecycle' },
+    'run.started': { label: 'Run Started', icon: 'runs', category: 'lifecycle' },
+    'run.running': { label: 'Run In Progress', icon: 'runs', category: 'lifecycle' },
+    'run.completed': { label: 'Run Completed', icon: 'check', category: 'lifecycle' },
+    'run.failed': { label: 'Run Failed', icon: 'warning', category: 'lifecycle' },
+    
+    // Legacy lifecycle events (for backwards compatibility)
     'campaign.approved': { label: 'Campaign Approved', icon: 'check', category: 'lifecycle' },
     'campaign.run.started': { label: 'Run Started', icon: 'runs', category: 'lifecycle' },
     'campaign.run.completed': { label: 'Run Completed', icon: 'check', category: 'lifecycle' },
     'campaign.run.failed': { label: 'Run Failed', icon: 'warning', category: 'lifecycle' },
     'campaign.run.partial': { label: 'Run Partially Completed', icon: 'info', category: 'lifecycle' },
+    
+    // Apollo adapter events
+    'apollo.org.search.started': { label: 'Organization Search Started', icon: 'runs', category: 'pipeline' },
+    'apollo.org.search.completed': { label: 'Organization Search Completed', icon: 'check', category: 'pipeline' },
+    'apollo.contact.search.started': { label: 'Contact Search Started', icon: 'runs', category: 'pipeline' },
+    'apollo.contact.search.completed': { label: 'Contact Search Completed', icon: 'check', category: 'pipeline' },
     
     // Pipeline events
     'pipeline.orgs_sourced': { label: 'Organizations Sourced', icon: 'runs', category: 'pipeline' },
@@ -75,6 +108,14 @@ function getEventTypeDisplay(eventType: string): {
     'pipeline.leads_promoted': { label: 'Leads Promoted', icon: 'runs', category: 'pipeline' },
     'pipeline.leads_approved': { label: 'Leads Approved', icon: 'check', category: 'pipeline' },
     'pipeline.emails_sent': { label: 'Emails Sent', icon: 'check', category: 'pipeline' },
+    
+    // Lead promotion events
+    'lead.promoted': { label: 'Lead Promoted', icon: 'check', category: 'pipeline' },
+    'lead.blocked': { label: 'Lead Blocked', icon: 'close', category: 'outcome' },
+    
+    // Personalization events
+    'personalization.generated': { label: 'Personalization Generated', icon: 'check', category: 'pipeline' },
+    'personalization.blocked': { label: 'Personalization Blocked', icon: 'close', category: 'outcome' },
     
     // Blocked/skipped events
     'pipeline.blocked': { label: 'Pipeline Blocked', icon: 'close', category: 'outcome' },
@@ -125,17 +166,49 @@ function getOutcomeBadgeStyle(outcome?: string): {
 }
 
 /**
- * Format timestamp for display.
+ * Format timestamp for display with relative time.
+ * Returns both relative and absolute time for clarity.
  */
-function formatTimestamp(timestamp: string): string {
+function formatTimestamp(timestamp: string): { relative: string; absolute: string } {
   const date = new Date(timestamp);
-  return date.toLocaleString(undefined, {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  let relative: string;
+  if (diffSeconds < 5) {
+    relative = 'just now';
+  } else if (diffSeconds < 60) {
+    relative = `${diffSeconds}s ago`;
+  } else if (diffMinutes < 60) {
+    relative = `${diffMinutes}m ago`;
+  } else if (diffHours < 24) {
+    relative = `${diffHours}h ago`;
+  } else if (diffDays < 7) {
+    relative = `${diffDays}d ago`;
+  } else {
+    relative = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  
+  const absolute = date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
+  
+  return { relative, absolute };
+}
+
+/**
+ * Legacy timestamp format (returns string for backwards compatibility).
+ */
+function formatTimestampString(timestamp: string): string {
+  return formatTimestamp(timestamp).absolute;
 }
 
 /**
@@ -164,18 +237,29 @@ function groupEventsByRun(events: ExecutionEvent[]): Record<string, ExecutionEve
 
 /**
  * TimelineEvent - Individual event display.
+ * 
+ * Features:
+ * - Shows relative timestamp ("12s ago") with absolute time on hover
+ * - Highlights queued events with pulse indicator
+ * - Clearly displays blocked/skipped reasons
  */
 function TimelineEvent({ event, isLast }: { event: ExecutionEvent; isLast: boolean }) {
   const display = getEventTypeDisplay(event.event_type);
   const outcomeBadge = event.outcome ? getOutcomeBadgeStyle(event.outcome) : null;
   const isBlocked = event.outcome === 'blocked' || event.outcome === 'skipped';
+  const isQueued = event.event_type === 'run.queued';
   
   // Get icon color based on outcome
   const iconColor = isBlocked
     ? NSD_COLORS.semantic.critical.text
     : event.outcome === 'success'
     ? NSD_COLORS.semantic.positive.text
+    : isQueued
+    ? NSD_COLORS.semantic.info.text
     : NSD_COLORS.text.secondary;
+  
+  // Get formatted timestamp
+  const timestamp = formatTimestamp(event.occurred_at);
   
   return (
     <div
@@ -201,8 +285,18 @@ function TimelineEvent({ event, isLast }: { event: ExecutionEvent; isLast: boole
             width: '24px',
             height: '24px',
             borderRadius: '50%',
-            backgroundColor: isBlocked ? NSD_COLORS.semantic.critical.bg : NSD_COLORS.surface,
-            border: `2px solid ${isBlocked ? NSD_COLORS.semantic.critical.border : NSD_COLORS.border.default}`,
+            backgroundColor: isBlocked 
+              ? NSD_COLORS.semantic.critical.bg 
+              : isQueued 
+              ? NSD_COLORS.semantic.info.bg 
+              : NSD_COLORS.surface,
+            border: `2px solid ${
+              isBlocked 
+                ? NSD_COLORS.semantic.critical.border 
+                : isQueued 
+                ? NSD_COLORS.semantic.info.border 
+                : NSD_COLORS.border.default
+            }`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -267,14 +361,17 @@ function TimelineEvent({ event, isLast }: { event: ExecutionEvent; isLast: boole
               </span>
             )}
           </div>
+          {/* Relative timestamp with absolute time on hover */}
           <span
             style={{
               fontSize: '11px',
               color: NSD_COLORS.text.muted,
               whiteSpace: 'nowrap',
+              cursor: 'help',
             }}
+            title={timestamp.absolute}
           >
-            {formatTimestamp(event.occurred_at)}
+            {timestamp.relative}
           </span>
         </div>
         
@@ -417,7 +514,7 @@ function RunGroup({
             color: NSD_COLORS.text.muted,
           }}
         >
-          {formatTimestamp(firstEvent.occurred_at)}
+          {formatTimestampString(firstEvent.occurred_at)}
         </span>
       </button>
       

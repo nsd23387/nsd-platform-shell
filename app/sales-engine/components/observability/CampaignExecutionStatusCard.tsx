@@ -10,16 +10,26 @@
  * - Status comes from /observability endpoint
  * - UI reflects backend truth, never infers
  * 
+ * STATUS MAPPING (queued → cron execution model):
+ * - queued: "Queued – execution will start shortly"
+ * - running: "Running – sourcing organizations"
+ * - completed: "Completed – results available"
+ * - failed: "Failed – see timeline for details"
+ * - blocked: "Blocked – see reason"
+ * 
  * Brand-compliant status indicators use icons, not emojis.
  */
 
 'use client';
 
-import React from 'react';
-import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, getSemanticStatusStyle } from '../../lib/design-tokens';
+import React, { useState, useEffect } from 'react';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, getSemanticStatusStyle, getExecutionStatusLabel } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import { Button } from '../ui/Button';
 import type { CampaignExecutionStatus } from '../../types/campaign';
+
+/** Extended execution status to include queued state */
+type ExtendedExecutionStatus = CampaignExecutionStatus | 'queued' | 'blocked';
 
 /** Status display configuration - brand-aligned (no emojis) */
 interface StatusDisplayConfig {
@@ -28,6 +38,7 @@ interface StatusDisplayConfig {
   bg: string;
   text: string;
   border: string;
+  showPulse?: boolean;
 }
 
 export interface CampaignExecutionStatusCardProps {
@@ -47,28 +58,48 @@ export interface CampaignExecutionStatusCardProps {
   canRun?: boolean;
   /** Whether the Run action is loading */
   isRunning?: boolean;
+  /** Blocking reason (if status is blocked) */
+  blockingReason?: string;
+}
+
+/**
+ * Calculate relative time string from timestamp.
+ * Returns human-readable string like "started 12s ago" or "2 minutes ago".
+ */
+function getRelativeTime(timestamp: string): string {
+  const now = new Date();
+  const then = new Date(timestamp);
+  const diffMs = now.getTime() - then.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  
+  if (diffSeconds < 5) return 'just now';
+  if (diffSeconds < 60) return `${diffSeconds}s ago`;
+  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+  return then.toLocaleString();
 }
 
 /**
  * Get display configuration for execution status.
  * Uses brand-aligned colors and proper icons (no emojis).
  * 
- * STATUS COPY (governance-aligned):
+ * STATUS COPY (queued → cron execution model):
  * - idle: "Ready for execution"
- * - run_requested: "Execution requested — Awaiting events"
- * - running: "Run in progress — [stage name]"
- * - awaiting_approvals: "Run completed — Awaiting lead approvals"
- * - completed: "Run completed"
- * - failed: "Run failed — See run history"
- * - partial: "Run partially completed — See run history"
+ * - queued/run_requested: "Queued – execution will start shortly"
+ * - running: "Running – sourcing organizations" (or current stage)
+ * - awaiting_approvals: "Completed – awaiting lead approvals"
+ * - completed: "Completed – results available"
+ * - failed: "Failed – see timeline for details"
+ * - partial: "Partially completed – see timeline for details"
+ * - blocked: "Blocked – see reason"
  */
 function getStatusDisplay(
-  status: CampaignExecutionStatus,
+  status: ExtendedExecutionStatus,
   currentStage?: string,
   leadsAwaitingApproval?: number
 ): StatusDisplayConfig {
-  const semanticStyle = getSemanticStatusStyle(status);
-  
   switch (status) {
     case 'idle':
       return {
@@ -76,17 +107,20 @@ function getStatusDisplay(
         copy: 'Ready for execution',
         ...NSD_COLORS.semantic.muted,
       };
+    case 'queued':
     case 'run_requested':
       return {
-        icon: 'info',
-        copy: 'Execution requested — Awaiting events',
+        icon: 'clock',
+        copy: 'Queued – execution will start shortly',
         ...NSD_COLORS.semantic.info,
+        showPulse: true,
       };
     case 'running':
       return {
         icon: 'refresh',
-        copy: `Run in progress${currentStage ? ` — ${formatStageName(currentStage)}` : ''}`,
+        copy: `Running – ${formatStageName(currentStage || 'sourcing organizations')}`,
         ...NSD_COLORS.semantic.active,
+        showPulse: true,
       };
     case 'awaiting_approvals': {
       const awaitingCount = leadsAwaitingApproval && leadsAwaitingApproval > 0
@@ -94,27 +128,33 @@ function getStatusDisplay(
         : '';
       return {
         icon: 'check',
-        copy: `Run completed — Awaiting lead approvals${awaitingCount}`,
+        copy: `Completed – awaiting lead approvals${awaitingCount}`,
         ...NSD_COLORS.semantic.attention,
       };
     }
     case 'completed':
       return {
         icon: 'check',
-        copy: 'Run completed',
+        copy: 'Completed – results available',
         ...NSD_COLORS.semantic.positive,
       };
     case 'failed':
       return {
         icon: 'warning',
-        copy: 'Run failed — See run history',
+        copy: 'Failed – see timeline for details',
         ...NSD_COLORS.semantic.critical,
       };
     case 'partial':
       return {
         icon: 'warning',
-        copy: 'Run partially completed — See run history',
+        copy: 'Partially completed – see timeline for details',
         ...NSD_COLORS.semantic.attention,
+      };
+    case 'blocked':
+      return {
+        icon: 'warning',
+        copy: 'Blocked – see reason',
+        ...NSD_COLORS.semantic.critical,
       };
     default:
       return {
@@ -130,20 +170,26 @@ function getStatusDisplay(
  */
 function formatStageName(stage: string): string {
   const stageLabels: Record<string, string> = {
-    orgs_sourced: 'Sourcing organizations',
-    contacts_discovered: 'Discovering contacts',
-    contacts_evaluated: 'Evaluating contacts',
-    leads_promoted: 'Promoting leads',
-    leads_awaiting_approval: 'Awaiting approvals',
-    leads_approved: 'Processing approvals',
-    emails_sent: 'Sending emails',
-    replies: 'Processing replies',
+    orgs_sourced: 'sourcing organizations',
+    contacts_discovered: 'discovering contacts',
+    contacts_evaluated: 'evaluating contacts',
+    leads_promoted: 'promoting leads',
+    leads_awaiting_approval: 'awaiting approvals',
+    leads_approved: 'processing approvals',
+    emails_sent: 'sending emails',
+    replies: 'processing replies',
   };
   return stageLabels[stage] || stage.replace(/_/g, ' ');
 }
 
 /**
  * CampaignExecutionStatusCard - Dynamic execution state display.
+ * 
+ * Features:
+ * - Explicit status labels for queued → cron execution model
+ * - Relative timestamps ("started 12s ago")
+ * - Pulse animation for queued/running states
+ * - Helper text after 60s when still queued
  * 
  * Observability reflects pipeline state; execution is delegated.
  */
@@ -156,10 +202,35 @@ export function CampaignExecutionStatusCard({
   onRunCampaign,
   canRun = false,
   isRunning = false,
+  blockingReason,
 }: CampaignExecutionStatusCardProps) {
-  const display = getStatusDisplay(status, currentStage, leadsAwaitingApproval);
+  const display = getStatusDisplay(status as ExtendedExecutionStatus, currentStage, leadsAwaitingApproval);
   const isIdle = status === 'idle';
   const isActiveRun = status === 'running';
+  const isQueued = status === 'run_requested' || (status as string) === 'queued';
+  
+  // Track time since queued for helper text
+  const [secondsSinceQueued, setSecondsSinceQueued] = useState(0);
+  const [relativeTime, setRelativeTime] = useState(getRelativeTime(lastObservedAt));
+  
+  // Update relative time every second for active states
+  useEffect(() => {
+    const shouldUpdate = isQueued || isActiveRun;
+    if (!shouldUpdate) return;
+    
+    const interval = setInterval(() => {
+      setRelativeTime(getRelativeTime(lastObservedAt));
+      if (isQueued) {
+        const diff = Math.floor((Date.now() - new Date(lastObservedAt).getTime()) / 1000);
+        setSecondsSinceQueued(diff);
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [isQueued, isActiveRun, lastObservedAt]);
+
+  // Show helper text if queued for more than 60 seconds
+  const showQueuedHelperText = isQueued && secondsSinceQueued >= 60;
 
   return (
     <div
@@ -168,12 +239,35 @@ export function CampaignExecutionStatusCard({
         borderRadius: NSD_RADIUS.lg,
         border: `1px solid ${display.border}`,
         padding: '20px 24px',
+        // Subtle pulse animation for queued/running states
+        ...(display.showPulse && {
+          animation: 'cardPulse 2s ease-in-out infinite',
+        }),
       }}
     >
+      <style jsx>{`
+        @keyframes cardPulse {
+          0%, 100% { box-shadow: 0 0 0 0 transparent; }
+          50% { box-shadow: 0 0 0 3px ${display.border}40; }
+        }
+      `}</style>
+      
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
         {/* Status info */}
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+            {/* Pulse indicator for active states */}
+            {display.showPulse && (
+              <span
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: display.text,
+                  animation: 'pulseGlow 1.5s ease-in-out infinite',
+                }}
+              />
+            )}
             <Icon name={display.icon} size={20} color={display.text} />
             <h3
               style={{
@@ -200,7 +294,7 @@ export function CampaignExecutionStatusCard({
           </p>
 
           {/* Active run ID */}
-          {activeRunId && isActiveRun && (
+          {activeRunId && (isActiveRun || isQueued) && (
             <p
               style={{
                 margin: '8px 0 0 0',
@@ -213,17 +307,64 @@ export function CampaignExecutionStatusCard({
             </p>
           )}
 
-          {/* Last observed */}
-          <p
-            style={{
-              margin: '8px 0 0 0',
-              fontSize: '12px',
-              color: display.text,
-              opacity: 0.7,
-            }}
-          >
-            Last observed: {new Date(lastObservedAt).toLocaleString()}
-          </p>
+          {/* Relative timestamp for active states */}
+          {(isQueued || isActiveRun) && (
+            <p
+              style={{
+                margin: '8px 0 0 0',
+                fontSize: '12px',
+                color: display.text,
+                opacity: 0.8,
+              }}
+            >
+              {isQueued ? 'Queued' : 'Started'} {relativeTime}
+            </p>
+          )}
+
+          {/* Helper text for long queue times */}
+          {showQueuedHelperText && (
+            <p
+              style={{
+                margin: '8px 0 0 0',
+                fontSize: '12px',
+                color: display.text,
+                opacity: 0.9,
+                fontStyle: 'italic',
+              }}
+            >
+              Execution starts within ~1 minute. The system processes runs in batches.
+            </p>
+          )}
+
+          {/* Blocking reason - show for failed status or when blockingReason is provided */}
+          {(status === 'failed' || blockingReason) && blockingReason && (
+            <p
+              style={{
+                margin: '12px 0 0 0',
+                padding: '8px 12px',
+                backgroundColor: `${display.text}10`,
+                borderRadius: NSD_RADIUS.sm,
+                fontSize: '12px',
+                color: display.text,
+              }}
+            >
+              <strong>Reason:</strong> {blockingReason}
+            </p>
+          )}
+
+          {/* Last observed for completed/failed states */}
+          {!isQueued && !isActiveRun && (
+            <p
+              style={{
+                margin: '8px 0 0 0',
+                fontSize: '12px',
+                color: display.text,
+                opacity: 0.7,
+              }}
+            >
+              Last observed: {new Date(lastObservedAt).toLocaleString()}
+            </p>
+          )}
         </div>
 
         {/* Run Campaign button - only shown when idle */}
@@ -236,7 +377,9 @@ export function CampaignExecutionStatusCard({
               disabled={!isIdle || !canRun || isRunning}
               loading={isRunning}
               title={
-                !isIdle
+                isQueued
+                  ? 'Execution is queued'
+                  : !isIdle
                   ? 'Execution already in progress'
                   : !canRun
                   ? 'Campaign not ready for execution'
@@ -247,7 +390,7 @@ export function CampaignExecutionStatusCard({
             </Button>
             
             {/* Tooltip for disabled state */}
-            {!isIdle && (
+            {(isQueued || (!isIdle && !isQueued)) && (
               <p
                 style={{
                   margin: '8px 0 0 0',
@@ -257,7 +400,7 @@ export function CampaignExecutionStatusCard({
                   textAlign: 'right',
                 }}
               >
-                Execution already in progress
+                {isQueued ? 'Execution queued' : 'Execution in progress'}
               </p>
             )}
           </div>
@@ -281,9 +424,16 @@ export function CampaignExecutionStatusCard({
             fontStyle: 'italic',
           }}
         >
-          Read-only projection from activity events.
+          Read-only projection from activity events. All data from ODS observability APIs.
         </p>
       </div>
+      
+      <style jsx>{`
+        @keyframes pulseGlow {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.2); }
+        }
+      `}</style>
     </div>
   );
 }

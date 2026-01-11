@@ -395,18 +395,27 @@ export interface LeadApprovalCounts {
  * - UI never infers or controls execution
  * - Execution is delegated to backend systems
  * 
- * STATUS MEANINGS:
+ * STATUS MEANINGS (queued → cron execution model):
  * - idle: No active run, campaign is ready for execution
- * - run_requested: Execution request sent, awaiting backend acknowledgment
- * - running: Run in progress (backend has started execution)
+ * - queued: Run has been queued, awaiting cron execution (UI label: "Queued – execution will start shortly")
+ * - run_requested: Legacy alias for queued (UI label: "Queued – execution will start shortly")
+ * - running: Run in progress (UI label: "Running – sourcing organizations")
  * - awaiting_approvals: Run completed, leads pending approval
- * - completed: Last run completed successfully
- * - failed: Last run failed
- * - partial: Last run partially completed
+ * - completed: Last run completed successfully (UI label: "Completed – results available")
+ * - failed: Last run failed (UI label: "Failed – see timeline for details")
+ * - partial: Last run partially completed (UI label: "Partially completed – see timeline for details")
+ * 
+ * UI STATUS MAPPING:
+ * - queued/run_requested → "Queued – execution will start shortly" (with pulse animation)
+ * - running → "Running – sourcing organizations" (with stage context)
+ * - completed → "Completed – results available"
+ * - failed → "Failed – see timeline for details"
+ * - blocked → "Blocked – see reason"
  */
 export type CampaignExecutionStatus = 
   | 'idle'               // No active run
-  | 'run_requested'      // Execution request sent, awaiting events
+  | 'queued'             // Run queued, awaiting cron execution (NEW)
+  | 'run_requested'      // Legacy: execution request sent (maps to queued)
   | 'running'            // Run in progress
   | 'awaiting_approvals' // Run completed, awaiting lead approvals
   | 'completed'          // Last run completed
