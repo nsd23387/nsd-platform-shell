@@ -555,23 +555,23 @@ export interface ExecutionStatusDisplay {
 // ============================================
 
 /**
- * Response from POST /api/v1/campaigns/{id}/run
+ * Response from POST /api/campaigns/{id}/start (canonical endpoint)
  * 
- * IMPORTANT: This is an async handoff, not synchronous execution.
- * - 202 Accepted = execution request delegated to Sales Engine
- * - UI should immediately begin polling for observability status
- * - UI should NOT assume execution is complete or even started
+ * IMPORTANT: This queues execution, not synchronous execution.
+ * - 200 OK = execution queued to Sales Engine
+ * - UI must refetch /runs to get server-truth state
+ * - UI must NOT fabricate local run state
  */
 export interface RunRequestResponse {
   /** Status of the request */
-  status: 'run_requested' | 'error';
+  status: 'queued' | 'run_requested' | 'error';
   /** Campaign ID */
   campaign_id: string;
   /** Message describing the outcome */
   message: string;
   /** Where execution was delegated */
   delegated_to: 'sales-engine' | null;
-  /** Run ID if immediately available */
+  /** Run ID if available */
   run_id?: string;
   /** Error details if failed */
   error?: string;

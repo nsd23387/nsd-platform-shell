@@ -67,8 +67,8 @@ export function GovernanceActionsPanel({
           successMsg = 'Campaign approved';
           break;
         case 'run':
-          // Run action would go to a different endpoint
-          endpoint = `/api/v1/campaigns/${campaignId}/run`;
+          // Canonical execution endpoint
+          endpoint = `/api/campaigns/${campaignId}/start`;
           successMsg = 'Campaign run initiated';
           break;
       }
@@ -78,16 +78,21 @@ export function GovernanceActionsPanel({
         headers: { 'Content-Type': 'application/json' },
       });
       
-      // 200 = success (status changed)
-      // 202 = accepted (execution delegated, e.g., /run)
+      // 200/201 = success (run queued or status changed)
       if (response.ok) {
         setSuccessMessage(successMsg);
         
-        // For /run (202), don't reload immediately - execution is async
-        // For submit/approve (200), reload to show new status
-        if (response.status === 202) {
-          // Run initiated - show message but don't assume completion
+        // For /start (200/201), run is queued - refresh to show updated state from backend
+        // UI must derive state from server-truth (campaign_runs)
+        if (action === 'run') {
+          // Run queued - show message and refresh to get server state
           setSuccessMessage(`${successMsg}. Check the Observability tab for progress.`);
+          // Force server-truth refresh after short delay to allow backend processing
+          setTimeout(() => {
+            if (typeof window !== 'undefined') {
+              window.location.reload();
+            }
+          }, 1000);
         } else {
           // Status changed - refresh to show updated state
           if (typeof window !== 'undefined') {
