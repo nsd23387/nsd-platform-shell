@@ -660,38 +660,37 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
 // =============================================================================
 
 /**
- * Request campaign execution (async handoff).
+ * Request campaign execution via canonical endpoint.
  * 
- * Endpoint: POST /api/v1/campaigns/{id}/run
+ * Endpoint: POST /api/campaigns/{id}/start
  * 
- * IMPORTANT: This does NOT execute the campaign. It delegates execution
- * intent to the Sales Engine, which is the only system with execution authority.
+ * IMPORTANT: This does NOT execute the campaign inline. It queues execution
+ * intent to the backend, which is the only system with execution authority.
  * 
- * On 202 Accepted:
- * - UI shows "Execution requested"
- * - UI immediately begins polling /observability/status
- * - UI refetches /runs to check for new run
+ * On 200 OK or 201 Created:
+ * - UI shows "Run queued"
+ * - UI must refetch /runs to get server-truth state
+ * - UI must NOT fabricate local run state
  * 
- * This is NOT a no-op or mock. The request is forwarded to Sales Engine.
+ * This is NOT a no-op or mock. The request is forwarded to the canonical endpoint.
  * 
- * @returns RunRequestResponse with status and delegation info
- * @throws Error if request fails or campaign cannot be run
+ * @returns RunRequestResponse with status and run_id
+ * @throws Error if request fails or campaign cannot be started
  */
 export async function requestCampaignRun(id: string): Promise<RunRequestResponse> {
   // When API is disabled, return a mock response indicating the action would occur
   if (isApiDisabled) {
     console.log(`[API] API mode disabled - mock run request for campaign ${id}`);
     return {
-      status: 'run_requested',
+      status: 'queued',
       campaign_id: id,
       message: 'Execution request accepted (API disabled - mock response)',
       delegated_to: null,
     };
   }
 
-  // This is the one allowed POST request - it delegates to backend
-  const baseUrl = getApiBaseUrl();
-  const url = `${baseUrl}/${id}/run`;
+  // Canonical execution endpoint - NOT the legacy /api/v1/campaigns/:id/run
+  const url = `/api/campaigns/${id}/start`;
 
   try {
     const response = await fetch(url, {
@@ -703,31 +702,21 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
       }),
     });
 
-    if (response.status === 202) {
-      // Async execution accepted
+    if (response.ok) {
+      // 200 OK or 201 Created - run queued
       const data = await response.json();
       return {
-        status: 'run_requested',
+        status: data.status || 'queued',
         campaign_id: id,
-        message: data.message || 'Execution request delegated to Sales Engine',
-        delegated_to: data.delegated_to || 'sales-engine',
+        message: data.message || 'Campaign execution queued',
+        delegated_to: 'sales-engine',
         run_id: data.run_id,
       };
     }
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      throw new Error(errorData.error || `Request failed: ${response.status}`);
-    }
-
-    // Other success status (should be 202 for async)
-    const data = await response.json();
-    return {
-      status: 'run_requested',
-      campaign_id: id,
-      message: data.message || 'Execution request accepted',
-      delegated_to: data.delegated_to || 'sales-engine',
-    };
+    // Error response
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(errorData.error || `Request failed: ${response.status}`);
   } catch (error) {
     console.error('[API] requestCampaignRun error:', error);
     throw error;
