@@ -79,6 +79,8 @@ type FormData = {
   targetLeads: number | null;
   targetEmails: number | null;
   targetReplyRate: number | null;
+  // Planning-only campaign flag
+  planningOnly: boolean;
 };
 
 const initialFormData: FormData = {
@@ -103,6 +105,8 @@ const initialFormData: FormData = {
   targetLeads: null,
   targetEmails: null,
   targetReplyRate: null,
+  // Planning-only campaign (default: No)
+  planningOnly: false,
 };
 
 export default function NewCampaignPage() {
@@ -264,6 +268,10 @@ export default function NewCampaignPage() {
       target_leads: formData.targetLeads,
       target_emails: formData.targetEmails,
       target_reply_rate: formData.targetReplyRate,
+    },
+    // Planning-only campaign flag
+    sourcing_config: {
+      benchmarks_only: formData.planningOnly,
     },
   });
 
@@ -667,6 +675,89 @@ export default function NewCampaignPage() {
             onChange={(v) => updateField('description', String(v))}
             placeholder="Describe the campaign objectives and target audience"
           />
+
+          {/* Planning-Only Campaign Toggle */}
+          <div style={{ marginTop: '20px' }}>
+            <div style={{ marginBottom: '8px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: NSD_COLORS.text.primary,
+                  marginBottom: '4px',
+                }}
+              >
+                Planning-Only Campaign?
+              </label>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '12px',
+                  color: NSD_COLORS.text.muted,
+                  lineHeight: 1.5,
+                }}
+              >
+                Planning-only campaigns are used for forecasting and analysis. They cannot be executed or launched.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  padding: '10px 16px',
+                  borderRadius: NSD_RADIUS.md,
+                  border: `2px solid ${!formData.planningOnly ? NSD_COLORS.secondary : NSD_COLORS.border.light}`,
+                  backgroundColor: !formData.planningOnly ? '#EEF2FF' : NSD_COLORS.background,
+                  transition: 'all 0.2s',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="planningOnly"
+                  checked={!formData.planningOnly}
+                  onChange={() => updateField('planningOnly', false)}
+                  style={{ accentColor: NSD_COLORS.secondary }}
+                />
+                <span style={{ fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
+                  No
+                </span>
+                <span style={{ fontSize: '12px', color: NSD_COLORS.text.muted }}>
+                  — Can be executed
+                </span>
+              </label>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  padding: '10px 16px',
+                  borderRadius: NSD_RADIUS.md,
+                  border: `2px solid ${formData.planningOnly ? NSD_COLORS.semantic.attention.border : NSD_COLORS.border.light}`,
+                  backgroundColor: formData.planningOnly ? NSD_COLORS.semantic.attention.bg : NSD_COLORS.background,
+                  transition: 'all 0.2s',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="planningOnly"
+                  checked={formData.planningOnly}
+                  onChange={() => updateField('planningOnly', true)}
+                  style={{ accentColor: NSD_COLORS.semantic.attention.text }}
+                />
+                <span style={{ fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
+                  Yes
+                </span>
+                <span style={{ fontSize: '12px', color: NSD_COLORS.text.muted }}>
+                  — Forecasting only
+                </span>
+              </label>
+            </div>
+          </div>
         </WizardStep>
 
         <WizardStep

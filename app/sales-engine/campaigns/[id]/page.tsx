@@ -450,6 +450,7 @@ function OverviewTab({
           canSubmit={campaign.canSubmit}
           canApprove={campaign.canApprove}
           runsCount={runsCount}
+          isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
         />
       </div>
     </div>
@@ -718,6 +719,7 @@ function MonitoringTab({
         canRun={canRun}
         isRunning={isRunRequesting}
         blockingReason={observabilityStatus?.error_message}
+        isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
       />
 
       {/* Section C: Pipeline Funnel (CORE) */}

@@ -14,6 +14,8 @@ interface GovernanceActionsPanelProps {
   onSubmitForApproval?: () => void;
   submitting?: boolean;
   runsCount?: number;
+  /** If true, this is a planning-only campaign that cannot be executed */
+  isPlanningOnly?: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ export function GovernanceActionsPanel({
   onSubmitForApproval,
   submitting = false,
   runsCount = 0,
+  isPlanningOnly = false,
 }: GovernanceActionsPanelProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -229,25 +232,47 @@ export function GovernanceActionsPanel({
           )}
 
           {(governanceState === 'RUNNABLE' || governanceState === 'APPROVED_READY') && (
-            <button
-              onClick={() => handleAction('run')}
-              disabled={actionLoading || isArchived}
-              style={{
-                width: '100%',
-                padding: '12px 20px',
-                fontSize: '14px',
-                fontWeight: 600,
-                fontFamily: NSD_TYPOGRAPHY.fontBody,
-                backgroundColor: NSD_COLORS.primary,
-                color: NSD_COLORS.text.inverse,
-                border: 'none',
-                borderRadius: NSD_RADIUS.md,
-                cursor: (actionLoading || isArchived) ? 'not-allowed' : 'pointer',
-                opacity: (actionLoading || isArchived) ? 0.7 : 1,
-              }}
-            >
-              {actionLoading ? 'Processing...' : 'Run Campaign'}
-            </button>
+            <>
+              {/* Planning-only notice */}
+              {isPlanningOnly && (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: NSD_COLORS.semantic.attention.bg,
+                    borderRadius: NSD_RADIUS.md,
+                    marginBottom: '12px',
+                    fontSize: '13px',
+                    color: NSD_COLORS.semantic.attention.text,
+                    border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <Icon name="info" size={16} color={NSD_COLORS.semantic.attention.text} />
+                  Execution disabled — Planning-only campaign
+                </div>
+              )}
+              <button
+                onClick={() => handleAction('run')}
+                disabled={actionLoading || isArchived || isPlanningOnly}
+                style={{
+                  width: '100%',
+                  padding: '12px 20px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  fontFamily: NSD_TYPOGRAPHY.fontBody,
+                  backgroundColor: (actionLoading || isArchived || isPlanningOnly) ? NSD_COLORS.text.muted : NSD_COLORS.primary,
+                  color: NSD_COLORS.text.inverse,
+                  border: 'none',
+                  borderRadius: NSD_RADIUS.md,
+                  cursor: (actionLoading || isArchived || isPlanningOnly) ? 'not-allowed' : 'pointer',
+                  opacity: (actionLoading || isArchived || isPlanningOnly) ? 0.7 : 1,
+                }}
+              >
+                {actionLoading ? 'Processing...' : 'Run Campaign'}
+              </button>
+            </>
           )}
         </div>
 

@@ -60,7 +60,7 @@ export async function POST(
     
     const { data: campaign, error: fetchError } = await supabase
       .from('campaigns')
-      .select('id, name, status')
+      .select('id, name, status, sourcing_config')
       .eq('id', campaignId)
       .single();
 
@@ -97,6 +97,22 @@ export async function POST(
           reason: `Campaign must be in 'active' status to start. Current status: ${campaign.status}`,
           required_status: 'active',
           current_status: campaign.status,
+        },
+        { status: 409 }
+      );
+    }
+
+    // =========================================================================
+    // STEP 3b: Validate campaign is not planning-only
+    // =========================================================================
+    
+    const sourcingConfig = campaign.sourcing_config as { benchmarks_only?: boolean } | null;
+    if (sourcingConfig?.benchmarks_only === true) {
+      console.log('[campaign-start] Planning-only campaign cannot be executed');
+      return NextResponse.json(
+        { 
+          error: 'PLANNING_ONLY_CAMPAIGN',
+          reason: 'This is a planning-only campaign and cannot be executed.',
         },
         { status: 409 }
       );

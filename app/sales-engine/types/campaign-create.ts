@@ -92,6 +92,15 @@ export interface CampaignTargets {
 }
 
 /**
+ * Sourcing Configuration
+ * 
+ * benchmarks_only: If true, this is a planning-only campaign that cannot be executed.
+ */
+export interface SourcingConfig {
+  benchmarks_only: boolean;
+}
+
+/**
  * M67-14 CampaignCreate Payload
  * 
  * REMOVED from payload:
@@ -104,6 +113,7 @@ export interface CampaignCreatePayload {
   contact_targeting: ContactTargeting;
   outreach_context: OutreachContext;
   campaign_targets?: CampaignTargets;
+  sourcing_config?: SourcingConfig;
 }
 
 export interface CampaignCreateSuccessResponse {
