@@ -670,6 +670,9 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
  * which forwards the request server-to-server to nsd-sales-engine.
  * This eliminates CORS issues since the browser never calls sales-engine directly.
  * 
+ * The proxy uses SALES_ENGINE_URL + SALES_ENGINE_API_BASE_URL to construct
+ * the target URL. If the primary path returns 404, it tries a fallback.
+ * 
  * On 202 Accepted:
  * - A campaign_run is created in nsd-ods
  * - Sales Engine cron automatically executes the run
@@ -677,8 +680,10 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
  * - UI must NOT fabricate local run state
  * 
  * Error Handling:
+ * - 404: "Execution service misconfigured (endpoint not found)."
  * - 409 PLANNING_ONLY_CAMPAIGN: "Execution disabled — this campaign is planning-only."
  * - 409 CAMPAIGN_NOT_RUNNABLE: "Campaign is not in a runnable state."
+ * - 504: "Execution service timed out."
  * - 5xx: "Execution service unavailable. Please try again."
  * 
  * @returns RunRequestResponse with status and run_id
@@ -721,6 +726,11 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
     // Error response - provide user-friendly messages
     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
     
+    if (response.status === 404) {
+      // Endpoint not found - likely misconfiguration
+      throw new Error('Execution service misconfigured (endpoint not found). Check SALES_ENGINE_URL / SALES_ENGINE_API_BASE_URL.');
+    }
+    
     if (response.status === 409) {
       if (errorData.error === 'PLANNING_ONLY_CAMPAIGN') {
         throw new Error('Execution disabled — this campaign is planning-only.');
@@ -730,11 +740,16 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
       throw new Error(errorData.reason || errorData.error || 'Campaign not in correct state');
     }
     
+    if (response.status === 504) {
+      // Timeout
+      throw new Error('Execution service timed out. Please try again.');
+    }
+    
     if (response.status >= 500) {
       throw new Error('Execution service unavailable. Please try again.');
     }
     
-    throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`);
+    throw new Error(errorData.message || errorData.error || `Request failed: ${response.status}`);
   } catch (error) {
     console.error('[API] requestCampaignRun error:', error);
     throw error;

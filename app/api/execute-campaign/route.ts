@@ -1,31 +1,74 @@
 /**
  * Execution Proxy
  *
- * NOTE:
  * platform-shell is NOT an execution engine.
  * This route exists solely to proxy execution requests
  * from the UI to nsd-sales-engine server-to-server.
  *
- * Browsers must NEVER call nsd-sales-engine directly.
- * This proxy eliminates all CORS errors by keeping
- * cross-origin requests server-side only.
+ * ARCHITECTURE:
+ * - Browser calls /api/execute-campaign (same-origin, no CORS)
+ * - This proxy forwards to nsd-sales-engine server-to-server
+ * - The canonical execution endpoint lives in nsd-sales-engine
+ * - platform-shell emits NO execution events, generates NO run IDs
  *
- * WHAT THIS ENDPOINT DOES:
- * - Accepts execution requests from the UI (same-origin)
- * - Forwards them server-to-server to nsd-sales-engine
- * - Preserves HTTP status codes and payloads
+ * CONFIGURATION:
+ * - SALES_ENGINE_URL (required): Base URL of nsd-sales-engine
+ *   Example: https://nsd-sales-engine.vercel.app
+ * - SALES_ENGINE_API_BASE_URL (optional): API path prefix
+ *   Default: /api/v1/campaigns
+ *   Example: /api/v1/campaigns or /api/campaigns
  *
- * WHAT THIS ENDPOINT DOES NOT DO:
- * - Generate run IDs
- * - Emit activity events
- * - Contain execution logic
- * - Execute campaigns locally
+ * TARGET URL CONSTRUCTION:
+ *   ${SALES_ENGINE_URL}${SALES_ENGINE_API_BASE_URL}/${campaignId}/start
+ *
+ * FALLBACK:
+ * If primary path returns 404, tries legacy path:
+ *   ${SALES_ENGINE_URL}/api/campaigns/${campaignId}/start
  */
 
 // Force Node.js runtime for server-side fetch
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
+
+/**
+ * Build a clean URL path without double slashes.
+ */
+function buildUrl(baseUrl: string, apiPath: string, campaignId: string): string {
+  // Remove trailing slash from base URL
+  const cleanBase = baseUrl.replace(/\/+$/, '');
+  
+  // Ensure API path starts with / and doesn't end with /
+  let cleanPath = apiPath.trim();
+  if (!cleanPath.startsWith('/')) {
+    cleanPath = '/' + cleanPath;
+  }
+  cleanPath = cleanPath.replace(/\/+$/, '');
+  
+  return `${cleanBase}${cleanPath}/${campaignId}/start`;
+}
+
+/**
+ * Make a fetch request with timeout.
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number = 15000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 export async function POST(req: Request) {
   console.log('[execute-campaign proxy] Received execution request');
@@ -54,40 +97,135 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get Sales Engine URL (server-side only)
+    // Get Sales Engine URL (server-side only, required)
     const SALES_ENGINE_URL = process.env.SALES_ENGINE_URL;
     if (!SALES_ENGINE_URL) {
       console.error('[execute-campaign proxy] SALES_ENGINE_URL not configured');
       return NextResponse.json(
-        { error: 'SALES_ENGINE_URL_NOT_CONFIGURED', message: 'Execution service not configured' },
+        { 
+          error: 'SALES_ENGINE_URL_NOT_CONFIGURED', 
+          message: 'Execution service not configured. Set SALES_ENGINE_URL environment variable.' 
+        },
         { status: 500 }
       );
     }
 
-    // Build target URL
-    const targetUrl = `${SALES_ENGINE_URL}/api/campaigns/${campaignId}/start`;
-    console.log('[execute-campaign proxy] Forwarding to:', targetUrl);
+    // Get API base path (optional, defaults to /api/v1/campaigns)
+    const SALES_ENGINE_API_BASE_URL = process.env.SALES_ENGINE_API_BASE_URL || '/api/v1/campaigns';
 
-    // Forward request to sales-engine (server-to-server, no CORS)
-    const res = await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    // Build request headers
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
 
-    console.log('[execute-campaign proxy] Sales Engine response status:', res.status);
+    // Forward Authorization header if present (optional)
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
 
-    // Read response as text to preserve exact payload
-    const responseText = await res.text();
+    // Build primary target URL
+    const primaryUrl = buildUrl(SALES_ENGINE_URL, SALES_ENGINE_API_BASE_URL, campaignId);
+    console.log('[execute-campaign proxy] Primary target:', primaryUrl);
 
-    // Return exact response from sales-engine
-    return new NextResponse(responseText, {
-      status: res.status,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    // Attempt primary request with timeout
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(primaryUrl, {
+        method: 'POST',
+        headers,
+      }, 15000);
+      
+      console.log('[execute-campaign proxy] Primary response status:', response.status);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.error('[execute-campaign proxy] Request timeout after 15s');
+        return NextResponse.json(
+          { error: 'EXECUTION_TIMEOUT', message: 'Execution service timed out. Please try again.' },
+          { status: 504 }
+        );
+      }
+      throw err;
+    }
+
+    // If primary returns 404, try fallback path (legacy /api/campaigns/:id/start)
+    if (response.status === 404) {
+      const fallbackUrl = buildUrl(SALES_ENGINE_URL, '/api/campaigns', campaignId);
+      
+      // Only try fallback if it's different from primary
+      if (fallbackUrl !== primaryUrl) {
+        console.log('[execute-campaign proxy] Primary returned 404, trying fallback:', fallbackUrl);
+        
+        try {
+          response = await fetchWithTimeout(fallbackUrl, {
+            method: 'POST',
+            headers,
+          }, 15000);
+          
+          console.log('[execute-campaign proxy] Fallback response status:', response.status);
+        } catch (err) {
+          if (err instanceof Error && err.name === 'AbortError') {
+            console.error('[execute-campaign proxy] Fallback request timeout after 15s');
+            return NextResponse.json(
+              { error: 'EXECUTION_TIMEOUT', message: 'Execution service timed out. Please try again.' },
+              { status: 504 }
+            );
+          }
+          throw err;
+        }
+      }
+    }
+
+    // Read response
+    const responseText = await response.text();
+    
+    // Try to parse as JSON to validate
+    let responseJson: unknown;
+    try {
+      responseJson = JSON.parse(responseText);
+    } catch {
+      // Response is not valid JSON - wrap it
+      console.warn('[execute-campaign proxy] Response is not valid JSON');
+      
+      if (response.status === 404) {
+        return NextResponse.json(
+          { 
+            error: 'ENDPOINT_NOT_FOUND', 
+            message: 'Execution service endpoint not found. Check SALES_ENGINE_URL and SALES_ENGINE_API_BASE_URL configuration.',
+            status: response.status,
+          },
+          { status: 404 }
+        );
+      }
+      
+      return NextResponse.json(
+        { 
+          error: 'INVALID_RESPONSE', 
+          message: 'Execution service returned an invalid response.',
+          status: response.status,
+          body: responseText.substring(0, 500), // Truncate for safety
+        },
+        { status: 502 }
+      );
+    }
+
+    // Return exact JSON response from sales-engine
+    return NextResponse.json(responseJson, { status: response.status });
+
   } catch (err) {
     console.error('[execute-campaign proxy] Error:', err);
+    
+    // Network errors
+    if (err instanceof TypeError && err.message.includes('fetch')) {
+      return NextResponse.json(
+        { 
+          error: 'NETWORK_ERROR', 
+          message: 'Could not connect to execution service. Please try again.' 
+        },
+        { status: 503 }
+      );
+    }
+    
     return NextResponse.json(
       { 
         error: 'EXECUTION_PROXY_FAILED', 

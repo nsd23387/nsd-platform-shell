@@ -121,7 +121,10 @@ export function GovernanceActionsPanel({
         const data = await response.json().catch(() => ({ error: 'Unknown error' }));
         
         // Provide user-friendly error messages for specific codes
-        if (response.status === 409) {
+        if (response.status === 404) {
+          // Endpoint not found - likely misconfiguration
+          setSuccessMessage('Execution service misconfigured (endpoint not found). Check SALES_ENGINE_URL / SALES_ENGINE_API_BASE_URL.');
+        } else if (response.status === 409) {
           if (data.error === 'PLANNING_ONLY_CAMPAIGN') {
             setSuccessMessage('Execution disabled — this campaign is planning-only.');
           } else if (data.error === 'CAMPAIGN_NOT_RUNNABLE') {
@@ -129,10 +132,13 @@ export function GovernanceActionsPanel({
           } else {
             setSuccessMessage(`Error: ${data.reason || data.error || 'Campaign not in correct state'}`);
           }
+        } else if (response.status === 504) {
+          // Timeout
+          setSuccessMessage('Execution service timed out. Please try again.');
         } else if (response.status >= 500) {
           setSuccessMessage('Execution service unavailable. Please try again.');
         } else {
-          setSuccessMessage(`Error: ${data.error || data.message || 'Action failed'}`);
+          setSuccessMessage(`Error: ${data.message || data.error || 'Action failed'}`);
         }
       }
     } catch (error) {
