@@ -655,26 +655,20 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
 
 // =============================================================================
 // RUN REQUEST FUNCTION
-// This submits execution intent to nsd-sales-engine.
+// This submits execution intent via the server-side proxy.
+// The proxy forwards requests to nsd-sales-engine to avoid CORS.
 // platform-shell NEVER executes campaigns locally.
 // =============================================================================
 
-// Execution is handled exclusively by nsd-sales-engine.
-// platform-shell must never execute campaigns.
-const SALES_ENGINE_URL = process.env.NEXT_PUBLIC_SALES_ENGINE_URL || '';
-
 /**
- * Request campaign execution via nsd-sales-engine.
+ * Request campaign execution via server-side proxy.
  * 
- * NOTE:
- * Campaign execution is owned by nsd-sales-engine.
- * platform-shell must never execute or simulate runs.
- * This call submits execution intent only.
+ * Execution is handled exclusively by nsd-sales-engine.
+ * platform-shell must never execute campaigns.
  * 
- * Endpoint: POST {SALES_ENGINE_URL}/api/campaigns/{id}/start
- * 
- * IMPORTANT: This does NOT execute the campaign inline. It sends execution
- * intent to nsd-sales-engine, which is the SOLE execution authority.
+ * This function calls the /api/execute-campaign proxy endpoint,
+ * which forwards the request server-to-server to nsd-sales-engine.
+ * This eliminates CORS issues since the browser never calls sales-engine directly.
  * 
  * On 202 Accepted:
  * - A campaign_run is created in nsd-ods
@@ -702,20 +696,14 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
     };
   }
 
-  // Validate Sales Engine URL is configured
-  if (!SALES_ENGINE_URL) {
-    console.error('[API] NEXT_PUBLIC_SALES_ENGINE_URL is not configured');
-    throw new Error('Sales Engine URL not configured. Cannot execute campaigns.');
-  }
-
   // Execution is handled exclusively by nsd-sales-engine.
   // platform-shell must never execute campaigns.
-  const url = `${SALES_ENGINE_URL}/api/campaigns/${id}/start`;
-
+  // Use server-side proxy to avoid CORS issues.
   try {
-    const response = await fetch(url, {
+    const response = await fetch('/api/execute-campaign', {
       method: 'POST',
-      headers: buildHeaders(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaignId: id }),
     });
 
     // 202 Accepted = success (execution intent accepted by Sales Engine)
@@ -724,7 +712,7 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
       return {
         status: data.status || 'run_requested',
         campaign_id: id,
-        message: data.message || 'Execution request sent to Sales Engine',
+        message: data.message || 'Campaign queued',
         delegated_to: 'nsd-sales-engine',
         run_id: data.run_id,
       };
@@ -746,7 +734,7 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
       throw new Error('Execution service unavailable. Please try again.');
     }
     
-    throw new Error(errorData.error || `Request failed: ${response.status}`);
+    throw new Error(errorData.error || errorData.message || `Request failed: ${response.status}`);
   } catch (error) {
     console.error('[API] requestCampaignRun error:', error);
     throw error;

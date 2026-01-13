@@ -572,12 +572,13 @@ export interface ExecutionStatusDisplay {
 // ============================================
 
 /**
- * Response from POST {SALES_ENGINE_URL}/api/campaigns/{id}/start
+ * Response from POST /api/execute-campaign (server-side proxy)
  * 
- * NOTE:
- * Campaign execution is owned by nsd-sales-engine.
- * platform-shell must never execute or simulate runs.
- * This call submits execution intent only.
+ * Execution is handled exclusively by nsd-sales-engine.
+ * platform-shell must never execute campaigns.
+ * 
+ * The proxy forwards requests server-to-server to avoid CORS.
+ * Browsers must NEVER call nsd-sales-engine directly.
  * 
  * IMPORTANT: This submits execution intent, not synchronous execution.
  * - 202 Accepted = execution intent accepted by Sales Engine

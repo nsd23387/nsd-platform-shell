@@ -6,10 +6,6 @@ import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens'
 import { Icon } from '../../../../design/components/Icon';
 import { isTestCampaign, handleTestCampaignAction } from '../../lib/test-campaign';
 
-// Execution is handled exclusively by nsd-sales-engine.
-// platform-shell must never execute campaigns.
-const SALES_ENGINE_URL = process.env.NEXT_PUBLIC_SALES_ENGINE_URL || '';
-
 interface GovernanceActionsPanelProps {
   campaignId: string;
   governanceState: string;
@@ -27,6 +23,9 @@ interface GovernanceActionsPanelProps {
  * 
  * Displays action buttons for campaign management.
  * Actions execute immediately when clicked.
+ * 
+ * NOTE: Execution is proxied through /api/execute-campaign
+ * to avoid CORS issues. platform-shell never executes campaigns directly.
  */
 export function GovernanceActionsPanel({
   campaignId,
@@ -61,43 +60,44 @@ export function GovernanceActionsPanel({
     // Handle real campaign actions via API
     setActionLoading(true);
     try {
-      let endpoint = '';
+      let response: Response;
       let successMsg = '';
-      let isSalesEngineRequest = false;
       
       switch (action) {
         case 'submit':
-          endpoint = `/api/v1/campaigns/${campaignId}/submit`;
+          response = await fetch(`/api/v1/campaigns/${campaignId}/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
           successMsg = 'Campaign submitted for approval';
           break;
+          
         case 'approve':
-          endpoint = `/api/v1/campaigns/${campaignId}/approve`;
+          response = await fetch(`/api/v1/campaigns/${campaignId}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
           successMsg = 'Campaign approved';
           break;
+          
         case 'run':
           // Execution is handled exclusively by nsd-sales-engine.
           // platform-shell must never execute campaigns.
-          if (!SALES_ENGINE_URL) {
-            setSuccessMessage('Error: Sales Engine URL not configured. Cannot execute campaigns.');
-            setActionLoading(false);
-            return;
-          }
-          endpoint = `${SALES_ENGINE_URL}/api/campaigns/${campaignId}/start`;
-          successMsg = 'Execution request sent to Sales Engine';
-          isSalesEngineRequest = true;
+          // Use server-side proxy to avoid CORS issues.
+          response = await fetch('/api/execute-campaign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ campaignId }),
+          });
+          successMsg = 'Campaign queued';
           break;
+          
+        default:
+          throw new Error(`Unknown action: ${action}`);
       }
       
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      
-      // For Sales Engine: 202 Accepted = success
-      // For local endpoints: 200/201 = success
-      const isSuccess = isSalesEngineRequest 
-        ? response.status === 202 || response.ok
-        : response.ok;
+      // 202 Accepted or 200/201 = success
+      const isSuccess = response.status === 202 || response.ok;
       
       if (isSuccess) {
         setSuccessMessage(successMsg);
@@ -131,10 +131,8 @@ export function GovernanceActionsPanel({
           }
         } else if (response.status >= 500) {
           setSuccessMessage('Execution service unavailable. Please try again.');
-        } else if (response.status === 503) {
-          setSuccessMessage(`Error: ${data.message || 'Service unavailable'}`);
         } else {
-          setSuccessMessage(`Error: ${data.error || 'Action failed'}`);
+          setSuccessMessage(`Error: ${data.error || data.message || 'Action failed'}`);
         }
       }
     } catch (error) {
