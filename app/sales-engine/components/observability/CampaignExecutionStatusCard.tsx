@@ -26,6 +26,7 @@ import React, { useState, useEffect } from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, getSemanticStatusStyle, getExecutionStatusLabel } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import { Button } from '../ui/Button';
+import { useExecutionStatus } from '../../../../hooks/useExecutionStatus';
 import type { CampaignExecutionStatus } from '../../types/campaign';
 
 /** Extended execution status to include queued state */
@@ -212,8 +213,11 @@ export function CampaignExecutionStatusCard({
   const isActiveRun = status === 'running';
   const isQueued = status === 'run_requested' || (status as string) === 'queued';
   
-  // Effective canRun - disable if planning-only
-  const effectiveCanRun = canRun && !isPlanningOnly;
+  // EXECUTION CONTRACT: Check if Sales Engine supports queue-first execution
+  const { executionSupported, loading: executionStatusLoading } = useExecutionStatus();
+  
+  // Effective canRun - disable if planning-only or execution not supported
+  const effectiveCanRun = canRun && !isPlanningOnly && executionSupported;
   
   // Track time since queued for helper text
   const [secondsSinceQueued, setSecondsSinceQueued] = useState(0);
@@ -380,10 +384,12 @@ export function CampaignExecutionStatusCard({
               variant="primary"
               icon="play"
               onClick={onRunCampaign}
-              disabled={!isIdle || !effectiveCanRun || isRunning}
-              loading={isRunning}
+              disabled={!isIdle || !effectiveCanRun || isRunning || executionStatusLoading}
+              loading={isRunning || executionStatusLoading}
               title={
-                isPlanningOnly
+                !executionSupported
+                  ? 'Execution unavailable — Sales Engine execution contract not detected.'
+                  : isPlanningOnly
                   ? 'Execution disabled — Planning-only campaign'
                   : isQueued
                   ? 'Execution is queued'
@@ -394,11 +400,25 @@ export function CampaignExecutionStatusCard({
                   : 'Start campaign execution'
               }
             >
-              Run Campaign
+              {executionStatusLoading ? 'Checking...' : 'Run Campaign'}
             </Button>
             
+            {/* Execution unavailable notice */}
+            {!executionSupported && !executionStatusLoading && (
+              <p
+                style={{
+                  margin: '8px 0 0 0',
+                  fontSize: '11px',
+                  color: NSD_COLORS.semantic.attention.text,
+                  textAlign: 'right',
+                }}
+              >
+                Execution unavailable
+              </p>
+            )}
+            
             {/* Planning-only notice */}
-            {isPlanningOnly && (
+            {isPlanningOnly && executionSupported && (
               <p
                 style={{
                   margin: '8px 0 0 0',
@@ -412,7 +432,7 @@ export function CampaignExecutionStatusCard({
             )}
             
             {/* Tooltip for disabled state */}
-            {!isPlanningOnly && (isQueued || (!isIdle && !isQueued)) && (
+            {executionSupported && !isPlanningOnly && (isQueued || (!isIdle && !isQueued)) && (
               <p
                 style={{
                   margin: '8px 0 0 0',

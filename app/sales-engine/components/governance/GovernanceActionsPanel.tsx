@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import { isTestCampaign, handleTestCampaignAction } from '../../lib/test-campaign';
+import { useExecutionStatus } from '../../../../hooks/useExecutionStatus';
 
 interface GovernanceActionsPanelProps {
   campaignId: string;
@@ -41,6 +42,14 @@ export function GovernanceActionsPanel({
   const [actionLoading, setActionLoading] = useState(false);
   const isTest = isTestCampaign(campaignId);
   const isArchived = governanceState === 'ARCHIVED';
+  
+  // EXECUTION CONTRACT: Check if Sales Engine supports queue-first execution
+  const { executionSupported, loading: executionStatusLoading, reason: executionUnavailableReason } = useExecutionStatus();
+  
+  // Execution is disabled if:
+  // - Planning-only campaign
+  // - Sales Engine contract not validated
+  const isExecutionDisabled = isPlanningOnly || !executionSupported;
 
   async function handleAction(action: 'submit' | 'approve' | 'run') {
     if (isArchived) return;
@@ -261,8 +270,29 @@ export function GovernanceActionsPanel({
 
           {(governanceState === 'RUNNABLE' || governanceState === 'APPROVED_READY') && (
             <>
+              {/* Execution unavailable notice - Sales Engine contract not detected */}
+              {!executionSupported && !executionStatusLoading && (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: NSD_COLORS.semantic.attention.bg,
+                    borderRadius: NSD_RADIUS.md,
+                    marginBottom: '12px',
+                    fontSize: '13px',
+                    color: NSD_COLORS.semantic.attention.text,
+                    border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                  title={executionUnavailableReason || 'Execution contract not validated'}
+                >
+                  <Icon name="warning" size={16} color={NSD_COLORS.semantic.attention.text} />
+                  Execution unavailable — Sales Engine execution contract not detected.
+                </div>
+              )}
               {/* Planning-only notice */}
-              {isPlanningOnly && (
+              {isPlanningOnly && executionSupported && (
                 <div
                   style={{
                     padding: '12px 16px',
@@ -283,22 +313,29 @@ export function GovernanceActionsPanel({
               )}
               <button
                 onClick={() => handleAction('run')}
-                disabled={actionLoading || isArchived || isPlanningOnly}
+                disabled={actionLoading || isArchived || isExecutionDisabled || executionStatusLoading}
+                title={
+                  !executionSupported
+                    ? 'Execution unavailable — Sales Engine execution contract not detected.'
+                    : isPlanningOnly
+                    ? 'Execution disabled — Planning-only campaign'
+                    : undefined
+                }
                 style={{
                   width: '100%',
                   padding: '12px 20px',
                   fontSize: '14px',
                   fontWeight: 600,
                   fontFamily: NSD_TYPOGRAPHY.fontBody,
-                  backgroundColor: (actionLoading || isArchived || isPlanningOnly) ? NSD_COLORS.text.muted : NSD_COLORS.primary,
+                  backgroundColor: (actionLoading || isArchived || isExecutionDisabled || executionStatusLoading) ? NSD_COLORS.text.muted : NSD_COLORS.primary,
                   color: NSD_COLORS.text.inverse,
                   border: 'none',
                   borderRadius: NSD_RADIUS.md,
-                  cursor: (actionLoading || isArchived || isPlanningOnly) ? 'not-allowed' : 'pointer',
-                  opacity: (actionLoading || isArchived || isPlanningOnly) ? 0.7 : 1,
+                  cursor: (actionLoading || isArchived || isExecutionDisabled || executionStatusLoading) ? 'not-allowed' : 'pointer',
+                  opacity: (actionLoading || isArchived || isExecutionDisabled || executionStatusLoading) ? 0.7 : 1,
                 }}
               >
-                {actionLoading ? 'Processing...' : 'Run Campaign'}
+                {executionStatusLoading ? 'Checking...' : actionLoading ? 'Processing...' : 'Run Campaign'}
               </button>
             </>
           )}

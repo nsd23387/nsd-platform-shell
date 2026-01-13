@@ -32,3 +32,6 @@ export type { ExecutionTimelineFeedProps, ExecutionEvent } from './ExecutionTime
 
 export { ApprovalAwarenessPanel } from './ApprovalAwarenessPanel';
 export type { ApprovalAwarenessPanelProps, ApprovalAwarenessState } from './ApprovalAwarenessPanel';
+
+export { LatestRunStatusCard } from './LatestRunStatusCard';
+export type { default as LatestRunStatusCardDefault } from './LatestRunStatusCard';

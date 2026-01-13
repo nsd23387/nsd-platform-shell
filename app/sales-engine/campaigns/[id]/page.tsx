@@ -55,6 +55,7 @@ import {
   SendMetricsPanel,
   ExecutionTimelineFeed,
   ApprovalAwarenessPanel,
+  LatestRunStatusCard,
   type ExecutionEvent,
   type ApprovalAwarenessState,
 } from '../../components/observability';
@@ -707,6 +708,15 @@ function MonitoringTab({
       {/* Section A: Approval Awareness Panel */}
       {/* Shows campaign approval state with explanatory copy (read-only) */}
       <ApprovalAwarenessPanel approvalState={approvalState} />
+
+      {/* Section A.1: Latest Run Status (Canonical Read Model) */}
+      {/* 
+       * EXECUTION CONTRACT NOTE:
+       * platform-shell does NOT execute campaigns.
+       * This component fetches latest run from Sales Engine's canonical read model.
+       * NO polling. NO inference. Single fetch on page load.
+       */}
+      <LatestRunStatusCard campaignId={campaign.id} />
 
       {/* Section B: Execution Status - Always visible */}
       {/* Source of truth: /observability/status endpoint */}
