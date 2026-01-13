@@ -655,24 +655,43 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
 
 // =============================================================================
 // RUN REQUEST FUNCTION
-// This is the ONLY mutation allowed from the UI - requesting execution.
-// Execution itself is delegated to the Sales Engine backend.
+// This submits execution intent to nsd-sales-engine.
+// platform-shell NEVER executes campaigns locally.
 // =============================================================================
 
 /**
- * Request campaign execution via canonical endpoint.
+ * Sales Engine Execution URL
  * 
- * Endpoint: POST /api/campaigns/{id}/start
+ * NOTE:
+ * Campaign execution is owned by nsd-sales-engine.
+ * platform-shell must never execute or simulate runs.
+ * This call submits execution intent only.
+ */
+const SALES_ENGINE_URL = process.env.NEXT_PUBLIC_SALES_ENGINE_URL || '';
+
+/**
+ * Request campaign execution via nsd-sales-engine.
  * 
- * IMPORTANT: This does NOT execute the campaign inline. It queues execution
- * intent to the backend, which is the only system with execution authority.
+ * NOTE:
+ * Campaign execution is owned by nsd-sales-engine.
+ * platform-shell must never execute or simulate runs.
+ * This call submits execution intent only.
  * 
- * On 200 OK or 201 Created:
- * - UI shows "Run queued"
+ * Endpoint: POST {SALES_ENGINE_URL}/api/campaigns/{id}/start
+ * 
+ * IMPORTANT: This does NOT execute the campaign inline. It sends execution
+ * intent to nsd-sales-engine, which is the SOLE execution authority.
+ * 
+ * On 202 Accepted:
+ * - A campaign_run is created in nsd-ods
+ * - Sales Engine cron automatically executes the run
  * - UI must refetch /runs to get server-truth state
  * - UI must NOT fabricate local run state
  * 
- * This is NOT a no-op or mock. The request is forwarded to the canonical endpoint.
+ * Error Handling:
+ * - 409 PLANNING_ONLY_CAMPAIGN: "Execution disabled — this campaign is planning-only."
+ * - 409 CAMPAIGN_NOT_RUNNABLE: "Campaign is not in a runnable state."
+ * - 5xx: "Execution service unavailable. Please try again."
  * 
  * @returns RunRequestResponse with status and run_id
  * @throws Error if request fails or campaign cannot be started
@@ -689,33 +708,54 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
     };
   }
 
-  // Canonical execution endpoint - NOT the legacy /api/v1/campaigns/:id/run
-  const url = `/api/campaigns/${id}/start`;
+  // Validate Sales Engine URL is configured
+  if (!SALES_ENGINE_URL) {
+    console.error('[API] NEXT_PUBLIC_SALES_ENGINE_URL is not configured');
+    throw new Error('Sales Engine URL not configured. Cannot execute campaigns.');
+  }
+
+  /**
+   * NOTE:
+   * Campaign execution is owned by nsd-sales-engine.
+   * platform-shell must never execute or simulate runs.
+   * This call submits execution intent only.
+   */
+  const url = `${SALES_ENGINE_URL}/api/campaigns/${id}/start`;
 
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: buildHeaders(),
-      body: JSON.stringify({
-        requested_at: new Date().toISOString(),
-        source: 'platform-shell-ui',
-      }),
     });
 
-    if (response.ok) {
-      // 200 OK or 201 Created - run queued
-      const data = await response.json();
+    // 202 Accepted = success (execution intent accepted by Sales Engine)
+    if (response.status === 202 || response.ok) {
+      const data = await response.json().catch(() => ({}));
       return {
-        status: data.status || 'queued',
+        status: data.status || 'run_requested',
         campaign_id: id,
-        message: data.message || 'Campaign execution queued',
-        delegated_to: 'sales-engine',
+        message: data.message || 'Execution request sent to Sales Engine',
+        delegated_to: 'nsd-sales-engine',
         run_id: data.run_id,
       };
     }
 
-    // Error response
+    // Error response - provide user-friendly messages
     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    
+    if (response.status === 409) {
+      if (errorData.error === 'PLANNING_ONLY_CAMPAIGN') {
+        throw new Error('Execution disabled — this campaign is planning-only.');
+      } else if (errorData.error === 'CAMPAIGN_NOT_RUNNABLE') {
+        throw new Error('Campaign is not in a runnable state.');
+      }
+      throw new Error(errorData.reason || errorData.error || 'Campaign not in correct state');
+    }
+    
+    if (response.status >= 500) {
+      throw new Error('Execution service unavailable. Please try again.');
+    }
+    
     throw new Error(errorData.error || `Request failed: ${response.status}`);
   } catch (error) {
     console.error('[API] requestCampaignRun error:', error);

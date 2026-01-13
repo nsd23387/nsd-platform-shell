@@ -1,28 +1,44 @@
 /**
- * Campaign Start API Route — Canonical Execution Endpoint
+ * Campaign Start API Route — Execution Blocked
  * 
  * POST /api/campaigns/[id]/start
  * 
- * This is the CANONICAL endpoint for campaign execution.
- * All UI execution requests MUST use this endpoint.
+ * ⚠️ EXECUTION DISABLED
  * 
- * Legacy endpoints (/api/v1/campaigns/:id/run) should NOT be used.
+ * NOTE:
+ * Execution is intentionally disabled in platform-shell.
+ * This service is NOT an execution authority.
+ * See nsd-sales-engine for execution logic.
+ * 
+ * This endpoint performs VALIDATION ONLY and returns a 409 error
+ * indicating that execution must occur via nsd-sales-engine.
+ * 
+ * WHAT THIS ENDPOINT DOES:
+ * - Validates campaign exists
+ * - Validates campaign status is 'active'
+ * - Validates campaign is not planning-only
+ * - Returns 409 with PLATFORM_SHELL_EXECUTION_DISABLED
+ * 
+ * WHAT THIS ENDPOINT DOES NOT DO:
+ * - Generate run IDs
+ * - Emit run.started / run.running events
+ * - Execute pipeline logic
+ * - Write to activity.events
+ * - Create campaign_runs
  * 
  * ARCHITECTURE:
- * - Platform Shell hosts execution (for deployment simplicity)
- * - UI remains observational + approval-only
- * - All state changes are event-driven
- * - Execution writes to activity.events
- * - Run records are written to core.campaign_runs
+ * Platform-shell acts ONLY as:
+ * - UI rendering layer
+ * - Validation layer
+ * - Adapter to canonical execution (nsd-sales-engine)
  * 
- * GOVERNANCE:
- * - No UI state mutation from execution
- * - No bypassing of approval semantics
- * - All execution is event-driven and observable
+ * All execution must occur via nsd-sales-engine, which:
+ * - Creates durable campaign_runs records
+ * - Uses queue-first, cron-adopted execution
+ * - Maintains execution authority
  * 
  * RESPONSE:
- * - 200 OK or 201 Created on success (run queued)
- * - Response contains run_id for tracking
+ * - 409 Conflict with structured error explaining execution is disabled
  */
 
 // Force Node.js runtime for database access
@@ -30,23 +46,29 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, isSupabaseConfigured } from '../../../../../lib/supabase-server';
-import { processCampaign, isRuntimeReady } from '../../../../../lib/sales-engine-runtime';
 
+/**
+ * NOTE:
+ * Execution is intentionally disabled in platform-shell.
+ * This service is NOT an execution authority.
+ * See nsd-sales-engine for execution logic.
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const campaignId = params.id;
   console.log('[campaign-start] POST request for:', campaignId);
+  console.warn('[campaign-start] ⚠️ EXECUTION DISABLED: Platform-shell is not an execution engine.');
 
   // =========================================================================
-  // STEP 1: Validate runtime is ready
+  // STEP 1: Validate database is configured
   // =========================================================================
   
-  if (!isSupabaseConfigured() || !isRuntimeReady()) {
-    console.error('[campaign-start] Runtime not configured');
+  if (!isSupabaseConfigured()) {
+    console.error('[campaign-start] Supabase not configured');
     return NextResponse.json(
-      { error: 'Execution runtime not configured' },
+      { error: 'Database not configured' },
       { status: 503 }
     );
   }
@@ -55,7 +77,7 @@ export async function POST(
     const supabase = createServerClient();
 
     // =========================================================================
-    // STEP 2: Validate campaign exists and is in ACTIVE status
+    // STEP 2: Validate campaign exists
     // =========================================================================
     
     const { data: campaign, error: fetchError } = await supabase
@@ -93,7 +115,7 @@ export async function POST(
       console.log('[campaign-start] Campaign not active:', campaign.status);
       return NextResponse.json(
         { 
-          error: 'Campaign cannot be started',
+          error: 'CAMPAIGN_NOT_RUNNABLE',
           reason: `Campaign must be in 'active' status to start. Current status: ${campaign.status}`,
           required_status: 'active',
           current_status: campaign.status,
@@ -103,7 +125,7 @@ export async function POST(
     }
 
     // =========================================================================
-    // STEP 3b: Validate campaign is not planning-only
+    // STEP 4: Validate campaign is not planning-only
     // =========================================================================
     
     const sourcingConfig = campaign.sourcing_config as { benchmarks_only?: boolean } | null;
@@ -119,38 +141,45 @@ export async function POST(
     }
 
     // =========================================================================
-    // STEP 4: Execute campaign via processCampaign()
-    // This creates a run, emits run.started, and triggers pipeline execution.
+    // STEP 5: BLOCK EXECUTION — Platform-shell is NOT an execution engine
     // =========================================================================
     
-    console.log('[campaign-start] Starting execution for:', campaignId);
+    /**
+     * NOTE:
+     * Execution is intentionally disabled in platform-shell.
+     * This service is NOT an execution authority.
+     * See nsd-sales-engine for execution logic.
+     * 
+     * ⚠️ EXECUTION DISABLED
+     * 
+     * Campaign passed validation but execution is blocked.
+     * All execution must occur via nsd-sales-engine.
+     */
     
-    const result = await processCampaign(campaignId, {
-      triggeredBy: 'platform-shell',
-    });
+    console.warn(
+      `[campaign-start] ⚠️ EXECUTION BLOCKED for campaign ${campaignId}. ` +
+      `Platform-shell is not an execution engine. ` +
+      `Forward to nsd-sales-engine for execution.`
+    );
 
-    console.log('[campaign-start] Execution started:', result);
-
-    // =========================================================================
-    // STEP 5: Return 200 OK with run details
-    // The run is queued; UI must poll /runs for status updates.
-    // =========================================================================
-    
     return NextResponse.json(
       { 
-        status: 'queued',
+        error: 'PLATFORM_SHELL_EXECUTION_DISABLED',
+        reason: 'Execution is disabled in platform-shell. All campaign execution must occur via nsd-sales-engine.',
         campaign_id: campaignId,
-        run_id: result.run_id,
-        message: 'Campaign execution queued',
+        campaign_name: campaign.name,
+        campaign_status: campaign.status,
+        validation_passed: true,
+        message: 'Campaign passed validation but execution is blocked. Use nsd-sales-engine POST /api/v1/campaigns/:id/execute for execution.',
       },
-      { status: 200 }
+      { status: 409 }
     );
 
   } catch (error) {
-    console.error('[campaign-start] Execution error:', error);
+    console.error('[campaign-start] Error:', error);
     return NextResponse.json(
       { 
-        error: 'Execution failed',
+        error: 'Internal server error',
         message: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }

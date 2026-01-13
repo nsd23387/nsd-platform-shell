@@ -215,11 +215,18 @@ export default function CampaignDetailPage() {
   /**
    * Handle Run Campaign button click.
    * 
+   * NOTE:
+   * Campaign execution is owned by nsd-sales-engine.
+   * platform-shell must never execute or simulate runs.
+   * This call submits execution intent only.
+   * 
    * On 202 Accepted:
+   * - A campaign_run is created in nsd-ods
+   * - Sales Engine cron automatically executes the run
    * - UI shows "Execution requested"
    * - UI immediately begins polling /observability/status and /runs
    * 
-   * This is NOT a mock or no-op - execution is delegated to Sales Engine.
+   * platform-shell emits NO execution events and creates NO run IDs.
    */
   const handleRunCampaign = useCallback(async () => {
     if (isRunRequesting) return;

@@ -1,25 +1,50 @@
 /**
- * Campaign Start v1 Adapter
+ * Campaign Start v1 Adapter — Execution Blocked
  * 
  * POST /api/v1/campaigns/[id]/start
  * 
- * This endpoint is an ADAPTER, not an executor.
- * It validates the campaign and forwards to the canonical execution endpoint.
+ * ⚠️ EXECUTION DISABLED
  * 
- * VALIDATION RULES:
- * 1. Campaign must exist → 404 if not found
- * 2. Campaign status must be 'active' → 409 CAMPAIGN_NOT_RUNNABLE if not
- * 3. Campaign must not be planning-only → 409 PLANNING_ONLY_CAMPAIGN if benchmarks_only=true
+ * NOTE:
+ * Execution is intentionally disabled in platform-shell.
+ * This service is NOT an execution authority.
+ * See nsd-sales-engine for execution logic.
  * 
- * If valid:
- * - Forward request to canonical endpoint POST /api/campaigns/:id/start
- * - Return 202 Accepted
+ * This endpoint is a VALIDATION-ONLY adapter.
+ * It validates the campaign and returns a 409 error
+ * indicating that execution must occur via nsd-sales-engine.
  * 
- * DO NOT:
+ * WHAT THIS ENDPOINT DOES:
+ * - Validates campaign exists (→ 404 if not found)
+ * - Validates campaign status is 'active' (→ 409 CAMPAIGN_NOT_RUNNABLE if not)
+ * - Validates campaign is not planning-only (→ 409 PLANNING_ONLY_CAMPAIGN if benchmarks_only=true)
+ * - Returns 409 with PLATFORM_SHELL_EXECUTION_DISABLED
+ * 
+ * WHAT THIS ENDPOINT DOES NOT DO:
  * - Call processCampaign() directly
+ * - Generate run IDs
  * - Create campaign_runs directly
- * - Implement queue logic
+ * - Emit run.started / run.running events
+ * - Execute pipeline logic
+ * - Write to activity.events
  * - Add background execution
+ * 
+ * ARCHITECTURE:
+ * Platform-shell acts ONLY as:
+ * - UI rendering layer
+ * - Validation layer
+ * - Adapter to canonical execution (nsd-sales-engine)
+ * 
+ * All execution must occur via nsd-sales-engine, which:
+ * - Creates durable campaign_runs records
+ * - Uses queue-first, cron-adopted execution
+ * - Maintains execution authority
+ * 
+ * RESPONSE:
+ * - 404 if campaign not found
+ * - 409 CAMPAIGN_NOT_RUNNABLE if status !== 'active'
+ * - 409 PLANNING_ONLY_CAMPAIGN if benchmarks_only === true
+ * - 409 PLATFORM_SHELL_EXECUTION_DISABLED if validation passes
  */
 
 // Force Node.js runtime for database access
@@ -37,15 +62,22 @@ interface SourcingConfig {
   };
 }
 
+/**
+ * NOTE:
+ * Execution is intentionally disabled in platform-shell.
+ * This service is NOT an execution authority.
+ * See nsd-sales-engine for execution logic.
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const campaignId = params.id;
   console.log('[v1-campaign-start] POST request for:', campaignId);
+  console.warn('[v1-campaign-start] ⚠️ EXECUTION DISABLED: Platform-shell is not an execution engine.');
 
   // =========================================================================
-  // STEP 1: Validate runtime is ready
+  // STEP 1: Validate database is configured
   // =========================================================================
   
   if (!isSupabaseConfigured()) {
@@ -121,45 +153,45 @@ export async function POST(
     }
 
     // =========================================================================
-    // STEP 5: Forward to canonical execution endpoint
-    // This adapter does NOT execute - it delegates to the canonical endpoint
+    // STEP 5: BLOCK EXECUTION — Platform-shell is NOT an execution engine
     // =========================================================================
     
-    console.log('[v1-campaign-start] Forwarding to canonical endpoint');
+    /**
+     * NOTE:
+     * Execution is intentionally disabled in platform-shell.
+     * This service is NOT an execution authority.
+     * See nsd-sales-engine for execution logic.
+     * 
+     * ⚠️ EXECUTION DISABLED
+     * 
+     * Campaign passed validation but execution is blocked.
+     * All execution must occur via nsd-sales-engine.
+     * 
+     * DO NOT:
+     * - Forward to local canonical endpoint
+     * - Call processCampaign()
+     * - Generate run IDs
+     * - Emit events
+     */
     
-    const canonicalUrl = new URL(`/api/campaigns/${campaignId}/start`, request.url);
-    
-    const forwardResponse = await fetch(canonicalUrl.toString(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    console.warn(
+      `[v1-campaign-start] ⚠️ EXECUTION BLOCKED for campaign ${campaignId}. ` +
+      `Platform-shell is not an execution engine. ` +
+      `Use nsd-sales-engine POST /api/v1/campaigns/:id/execute for execution.`
+    );
+
+    return NextResponse.json(
+      { 
+        error: 'PLATFORM_SHELL_EXECUTION_DISABLED',
+        reason: 'Execution is disabled in platform-shell. All campaign execution must occur via nsd-sales-engine.',
+        campaign_id: campaignId,
+        campaign_name: campaign.name,
+        campaign_status: campaign.status,
+        validation_passed: true,
+        message: 'Campaign passed validation but execution is blocked. Use nsd-sales-engine POST /api/v1/campaigns/:id/execute for execution.',
       },
-      body: JSON.stringify({
-        forwarded_from: 'v1-adapter',
-        requested_at: new Date().toISOString(),
-      }),
-    });
-
-    // =========================================================================
-    // STEP 6: Return 202 Accepted
-    // =========================================================================
-    
-    if (forwardResponse.ok) {
-      const responseData = await forwardResponse.json();
-      return NextResponse.json(
-        {
-          status: 'accepted',
-          campaign_id: campaignId,
-          message: 'Execution request accepted',
-          ...responseData,
-        },
-        { status: 202 }
-      );
-    }
-
-    // Forward error from canonical endpoint
-    const errorData = await forwardResponse.json().catch(() => ({ error: 'Unknown error' }));
-    return NextResponse.json(errorData, { status: forwardResponse.status });
+      { status: 409 }
+    );
 
   } catch (error) {
     console.error('[v1-campaign-start] Error:', error);
