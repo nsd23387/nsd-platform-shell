@@ -20,6 +20,20 @@ export type ProvenanceType = 'CANONICAL' | 'LEGACY_OBSERVED';
  */
 export type MetricConfidence = 'SAFE' | 'CONDITIONAL' | 'BLOCKED';
 
+/**
+ * Sourcing configuration for campaigns.
+ * Contains settings that control execution behavior.
+ */
+export interface CampaignSourcingConfig {
+  /** If true, this is a planning-only campaign that cannot be executed */
+  benchmarks_only?: boolean;
+  targets?: {
+    target_leads?: number | null;
+    target_emails?: number | null;
+    target_reply_rate?: number | null;
+  };
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -31,6 +45,8 @@ export interface Campaign {
   canSubmit: boolean;
   canApprove: boolean;
   isRunnable: boolean;
+  // Sourcing configuration (includes planning-only flag)
+  sourcing_config?: CampaignSourcingConfig;
   // Provenance fields
   provenance?: ProvenanceType;
   source_system?: string;
@@ -146,6 +162,7 @@ export interface CampaignDetail extends Campaign {
   submitted_at?: string;
   approved_at?: string;
   approved_by?: string;
+  // sourcing_config is inherited from Campaign
 }
 
 export interface DashboardThroughput {
@@ -555,12 +572,20 @@ export interface ExecutionStatusDisplay {
 // ============================================
 
 /**
- * Response from POST /api/campaigns/{id}/start (canonical endpoint)
+ * Response from POST {SALES_ENGINE_URL}/api/campaigns/{id}/start
  * 
- * IMPORTANT: This queues execution, not synchronous execution.
- * - 200 OK = execution queued to Sales Engine
+ * NOTE:
+ * Campaign execution is owned by nsd-sales-engine.
+ * platform-shell must never execute or simulate runs.
+ * This call submits execution intent only.
+ * 
+ * IMPORTANT: This submits execution intent, not synchronous execution.
+ * - 202 Accepted = execution intent accepted by Sales Engine
+ * - A campaign_run is created in nsd-ods
+ * - Sales Engine cron automatically executes the run
  * - UI must refetch /runs to get server-truth state
  * - UI must NOT fabricate local run state
+ * - platform-shell emits NO execution events
  */
 export interface RunRequestResponse {
   /** Status of the request */
@@ -570,7 +595,7 @@ export interface RunRequestResponse {
   /** Message describing the outcome */
   message: string;
   /** Where execution was delegated */
-  delegated_to: 'sales-engine' | null;
+  delegated_to: 'nsd-sales-engine' | 'sales-engine' | null;
   /** Run ID if available */
   run_id?: string;
   /** Error details if failed */

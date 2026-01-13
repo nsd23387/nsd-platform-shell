@@ -140,6 +140,7 @@ export async function GET(request: NextRequest) {
         status: mapStatusToGovernanceState(row.status),
         keywords: icp?.keywords || [],
         geographies: icp?.geographies || [],
+        sourcing_config: row.sourcing_config, // Preserve verbatim
         created_at: row.created_at,
         updated_at: row.updated_at,
         // UI state flags based on status

@@ -40,6 +40,16 @@ export const apiConfig = {
   /** Sales Engine M60 API base URL (server-side) */
   salesEngineApiServer: process.env.SALES_ENGINE_API_BASE_URL || '/api/v1/campaigns',
   
+  /**
+   * Sales Engine Execution URL (nsd-sales-engine)
+   * 
+   * NOTE:
+   * Campaign execution is owned by nsd-sales-engine.
+   * platform-shell must never execute or simulate runs.
+   * This URL is the canonical endpoint for execution intent.
+   */
+  salesEngineExecutionUrl: process.env.NEXT_PUBLIC_SALES_ENGINE_URL || '',
+  
   /** ODS API URL for bootstrap/identity */
   odsApi: process.env.NEXT_PUBLIC_ODS_API_URL || '/functions/v1/ods-api',
   

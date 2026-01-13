@@ -1,7 +1,7 @@
 /**
- * Campaign Start API Route — Execution Blocked
+ * Campaign Start v1 Adapter — Execution Blocked
  * 
- * POST /api/campaigns/[id]/start
+ * POST /api/v1/campaigns/[id]/start
  * 
  * ⚠️ EXECUTION DISABLED
  * 
@@ -10,21 +10,24 @@
  * This service is NOT an execution authority.
  * See nsd-sales-engine for execution logic.
  * 
- * This endpoint performs VALIDATION ONLY and returns a 409 error
+ * This endpoint is a VALIDATION-ONLY adapter.
+ * It validates the campaign and returns a 409 error
  * indicating that execution must occur via nsd-sales-engine.
  * 
  * WHAT THIS ENDPOINT DOES:
- * - Validates campaign exists
- * - Validates campaign status is 'active'
- * - Validates campaign is not planning-only
+ * - Validates campaign exists (→ 404 if not found)
+ * - Validates campaign status is 'active' (→ 409 CAMPAIGN_NOT_RUNNABLE if not)
+ * - Validates campaign is not planning-only (→ 409 PLANNING_ONLY_CAMPAIGN if benchmarks_only=true)
  * - Returns 409 with PLATFORM_SHELL_EXECUTION_DISABLED
  * 
  * WHAT THIS ENDPOINT DOES NOT DO:
+ * - Call processCampaign() directly
  * - Generate run IDs
+ * - Create campaign_runs directly
  * - Emit run.started / run.running events
  * - Execute pipeline logic
  * - Write to activity.events
- * - Create campaign_runs
+ * - Add background execution
  * 
  * ARCHITECTURE:
  * Platform-shell acts ONLY as:
@@ -38,14 +41,26 @@
  * - Maintains execution authority
  * 
  * RESPONSE:
- * - 409 Conflict with structured error explaining execution is disabled
+ * - 404 if campaign not found
+ * - 409 CAMPAIGN_NOT_RUNNABLE if status !== 'active'
+ * - 409 PLANNING_ONLY_CAMPAIGN if benchmarks_only === true
+ * - 409 PLATFORM_SHELL_EXECUTION_DISABLED if validation passes
  */
 
 // Force Node.js runtime for database access
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, isSupabaseConfigured } from '../../../../../lib/supabase-server';
+import { createServerClient, isSupabaseConfigured } from '../../../../../../lib/supabase-server';
+
+interface SourcingConfig {
+  benchmarks_only?: boolean;
+  targets?: {
+    target_leads?: number | null;
+    target_emails?: number | null;
+    target_reply_rate?: number | null;
+  };
+}
 
 /**
  * NOTE:
@@ -58,15 +73,15 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const campaignId = params.id;
-  console.log('[campaign-start] POST request for:', campaignId);
-  console.warn('[campaign-start] ⚠️ EXECUTION DISABLED: Platform-shell is not an execution engine.');
+  console.log('[v1-campaign-start] POST request for:', campaignId);
+  console.warn('[v1-campaign-start] ⚠️ EXECUTION DISABLED: Platform-shell is not an execution engine.');
 
   // =========================================================================
   // STEP 1: Validate database is configured
   // =========================================================================
   
   if (!isSupabaseConfigured()) {
-    console.error('[campaign-start] Supabase not configured');
+    console.error('[v1-campaign-start] Supabase not configured');
     return NextResponse.json(
       { error: 'Database not configured' },
       { status: 503 }
@@ -77,7 +92,7 @@ export async function POST(
     const supabase = createServerClient();
 
     // =========================================================================
-    // STEP 2: Validate campaign exists
+    // STEP 2: Fetch campaign by ID
     // =========================================================================
     
     const { data: campaign, error: fetchError } = await supabase
@@ -87,7 +102,7 @@ export async function POST(
       .single();
 
     if (fetchError) {
-      console.error('[campaign-start] Fetch error:', fetchError);
+      console.error('[v1-campaign-start] Fetch error:', fetchError);
       if (fetchError.code === 'PGRST116') {
         return NextResponse.json(
           { error: 'Campaign not found' },
@@ -108,17 +123,15 @@ export async function POST(
     }
 
     // =========================================================================
-    // STEP 3: Validate campaign is ACTIVE (approved and ready for execution)
+    // STEP 3: Validate campaign status is 'active'
     // =========================================================================
     
     if (campaign.status !== 'active') {
-      console.log('[campaign-start] Campaign not active:', campaign.status);
+      console.log('[v1-campaign-start] Campaign not active:', campaign.status);
       return NextResponse.json(
         { 
           error: 'CAMPAIGN_NOT_RUNNABLE',
-          reason: `Campaign must be in 'active' status to start. Current status: ${campaign.status}`,
-          required_status: 'active',
-          current_status: campaign.status,
+          status: campaign.status,
         },
         { status: 409 }
       );
@@ -128,13 +141,12 @@ export async function POST(
     // STEP 4: Validate campaign is not planning-only
     // =========================================================================
     
-    const sourcingConfig = campaign.sourcing_config as { benchmarks_only?: boolean } | null;
+    const sourcingConfig = campaign.sourcing_config as SourcingConfig | null;
     if (sourcingConfig?.benchmarks_only === true) {
-      console.log('[campaign-start] Planning-only campaign cannot be executed');
+      console.log('[v1-campaign-start] Planning-only campaign cannot be executed');
       return NextResponse.json(
         { 
           error: 'PLANNING_ONLY_CAMPAIGN',
-          reason: 'This is a planning-only campaign and cannot be executed.',
         },
         { status: 409 }
       );
@@ -154,12 +166,18 @@ export async function POST(
      * 
      * Campaign passed validation but execution is blocked.
      * All execution must occur via nsd-sales-engine.
+     * 
+     * DO NOT:
+     * - Forward to local canonical endpoint
+     * - Call processCampaign()
+     * - Generate run IDs
+     * - Emit events
      */
     
     console.warn(
-      `[campaign-start] ⚠️ EXECUTION BLOCKED for campaign ${campaignId}. ` +
+      `[v1-campaign-start] ⚠️ EXECUTION BLOCKED for campaign ${campaignId}. ` +
       `Platform-shell is not an execution engine. ` +
-      `Forward to nsd-sales-engine for execution.`
+      `Use nsd-sales-engine POST /api/v1/campaigns/:id/execute for execution.`
     );
 
     return NextResponse.json(
@@ -176,7 +194,7 @@ export async function POST(
     );
 
   } catch (error) {
-    console.error('[campaign-start] Error:', error);
+    console.error('[v1-campaign-start] Error:', error);
     return NextResponse.json(
       { 
         error: 'Internal server error',

@@ -6,6 +6,16 @@ import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens'
 import { Icon } from '../../../../design/components/Icon';
 import { isTestCampaign, handleTestCampaignAction } from '../../lib/test-campaign';
 
+/**
+ * Sales Engine Execution URL
+ * 
+ * NOTE:
+ * Campaign execution is owned by nsd-sales-engine.
+ * platform-shell must never execute or simulate runs.
+ * This call submits execution intent only.
+ */
+const SALES_ENGINE_URL = process.env.NEXT_PUBLIC_SALES_ENGINE_URL || '';
+
 interface GovernanceActionsPanelProps {
   campaignId: string;
   governanceState: string;
@@ -14,6 +24,8 @@ interface GovernanceActionsPanelProps {
   onSubmitForApproval?: () => void;
   submitting?: boolean;
   runsCount?: number;
+  /** If true, this is a planning-only campaign that cannot be executed */
+  isPlanningOnly?: boolean;
 }
 
 /**
@@ -30,6 +42,7 @@ export function GovernanceActionsPanel({
   onSubmitForApproval,
   submitting = false,
   runsCount = 0,
+  isPlanningOnly = false,
 }: GovernanceActionsPanelProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -56,6 +69,7 @@ export function GovernanceActionsPanel({
     try {
       let endpoint = '';
       let successMsg = '';
+      let isSalesEngineRequest = false;
       
       switch (action) {
         case 'submit':
@@ -67,9 +81,20 @@ export function GovernanceActionsPanel({
           successMsg = 'Campaign approved';
           break;
         case 'run':
-          // Canonical execution endpoint
-          endpoint = `/api/campaigns/${campaignId}/start`;
-          successMsg = 'Campaign run initiated';
+          /**
+           * NOTE:
+           * Campaign execution is owned by nsd-sales-engine.
+           * platform-shell must never execute or simulate runs.
+           * This call submits execution intent only.
+           */
+          if (!SALES_ENGINE_URL) {
+            setSuccessMessage('Error: Sales Engine URL not configured. Cannot execute campaigns.');
+            setActionLoading(false);
+            return;
+          }
+          endpoint = `${SALES_ENGINE_URL}/api/campaigns/${campaignId}/start`;
+          successMsg = 'Execution request sent to Sales Engine';
+          isSalesEngineRequest = true;
           break;
       }
       
@@ -78,14 +103,17 @@ export function GovernanceActionsPanel({
         headers: { 'Content-Type': 'application/json' },
       });
       
-      // 200/201 = success (run queued or status changed)
-      if (response.ok) {
+      // For Sales Engine: 202 Accepted = success
+      // For local endpoints: 200/201 = success
+      const isSuccess = isSalesEngineRequest 
+        ? response.status === 202 || response.ok
+        : response.ok;
+      
+      if (isSuccess) {
         setSuccessMessage(successMsg);
         
-        // For /start (200/201), run is queued - refresh to show updated state from backend
-        // UI must derive state from server-truth (campaign_runs)
+        // For run action, show message and refresh to get server state
         if (action === 'run') {
-          // Run queued - show message and refresh to get server state
           setSuccessMessage(`${successMsg}. Check the Observability tab for progress.`);
           // Force server-truth refresh after short delay to allow backend processing
           setTimeout(() => {
@@ -100,10 +128,19 @@ export function GovernanceActionsPanel({
           }
         }
       } else {
-        const data = await response.json();
-        // Provide more context for specific error codes
+        const data = await response.json().catch(() => ({ error: 'Unknown error' }));
+        
+        // Provide user-friendly error messages for specific codes
         if (response.status === 409) {
-          setSuccessMessage(`Error: ${data.reason || data.error || 'Campaign not in correct state'}`);
+          if (data.error === 'PLANNING_ONLY_CAMPAIGN') {
+            setSuccessMessage('Execution disabled — this campaign is planning-only.');
+          } else if (data.error === 'CAMPAIGN_NOT_RUNNABLE') {
+            setSuccessMessage('Campaign is not in a runnable state.');
+          } else {
+            setSuccessMessage(`Error: ${data.reason || data.error || 'Campaign not in correct state'}`);
+          }
+        } else if (response.status >= 500) {
+          setSuccessMessage('Execution service unavailable. Please try again.');
         } else if (response.status === 503) {
           setSuccessMessage(`Error: ${data.message || 'Service unavailable'}`);
         } else {
@@ -112,7 +149,7 @@ export function GovernanceActionsPanel({
       }
     } catch (error) {
       console.error('Action error:', error);
-      setSuccessMessage('Error: Failed to complete action');
+      setSuccessMessage('Execution service unavailable. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -229,25 +266,47 @@ export function GovernanceActionsPanel({
           )}
 
           {(governanceState === 'RUNNABLE' || governanceState === 'APPROVED_READY') && (
-            <button
-              onClick={() => handleAction('run')}
-              disabled={actionLoading || isArchived}
-              style={{
-                width: '100%',
-                padding: '12px 20px',
-                fontSize: '14px',
-                fontWeight: 600,
-                fontFamily: NSD_TYPOGRAPHY.fontBody,
-                backgroundColor: NSD_COLORS.primary,
-                color: NSD_COLORS.text.inverse,
-                border: 'none',
-                borderRadius: NSD_RADIUS.md,
-                cursor: (actionLoading || isArchived) ? 'not-allowed' : 'pointer',
-                opacity: (actionLoading || isArchived) ? 0.7 : 1,
-              }}
-            >
-              {actionLoading ? 'Processing...' : 'Run Campaign'}
-            </button>
+            <>
+              {/* Planning-only notice */}
+              {isPlanningOnly && (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: NSD_COLORS.semantic.attention.bg,
+                    borderRadius: NSD_RADIUS.md,
+                    marginBottom: '12px',
+                    fontSize: '13px',
+                    color: NSD_COLORS.semantic.attention.text,
+                    border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <Icon name="info" size={16} color={NSD_COLORS.semantic.attention.text} />
+                  Execution disabled — Planning-only campaign
+                </div>
+              )}
+              <button
+                onClick={() => handleAction('run')}
+                disabled={actionLoading || isArchived || isPlanningOnly}
+                style={{
+                  width: '100%',
+                  padding: '12px 20px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  fontFamily: NSD_TYPOGRAPHY.fontBody,
+                  backgroundColor: (actionLoading || isArchived || isPlanningOnly) ? NSD_COLORS.text.muted : NSD_COLORS.primary,
+                  color: NSD_COLORS.text.inverse,
+                  border: 'none',
+                  borderRadius: NSD_RADIUS.md,
+                  cursor: (actionLoading || isArchived || isPlanningOnly) ? 'not-allowed' : 'pointer',
+                  opacity: (actionLoading || isArchived || isPlanningOnly) ? 0.7 : 1,
+                }}
+              >
+                {actionLoading ? 'Processing...' : 'Run Campaign'}
+              </button>
+            </>
           )}
         </div>
 

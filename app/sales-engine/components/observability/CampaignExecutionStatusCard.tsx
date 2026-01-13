@@ -60,6 +60,8 @@ export interface CampaignExecutionStatusCardProps {
   isRunning?: boolean;
   /** Blocking reason (if status is blocked) */
   blockingReason?: string;
+  /** If true, this is a planning-only campaign that cannot be executed */
+  isPlanningOnly?: boolean;
 }
 
 /**
@@ -203,11 +205,15 @@ export function CampaignExecutionStatusCard({
   canRun = false,
   isRunning = false,
   blockingReason,
+  isPlanningOnly = false,
 }: CampaignExecutionStatusCardProps) {
   const display = getStatusDisplay(status as ExtendedExecutionStatus, currentStage, leadsAwaitingApproval);
   const isIdle = status === 'idle';
   const isActiveRun = status === 'running';
   const isQueued = status === 'run_requested' || (status as string) === 'queued';
+  
+  // Effective canRun - disable if planning-only
+  const effectiveCanRun = canRun && !isPlanningOnly;
   
   // Track time since queued for helper text
   const [secondsSinceQueued, setSecondsSinceQueued] = useState(0);
@@ -374,14 +380,16 @@ export function CampaignExecutionStatusCard({
               variant="primary"
               icon="play"
               onClick={onRunCampaign}
-              disabled={!isIdle || !canRun || isRunning}
+              disabled={!isIdle || !effectiveCanRun || isRunning}
               loading={isRunning}
               title={
-                isQueued
+                isPlanningOnly
+                  ? 'Execution disabled — Planning-only campaign'
+                  : isQueued
                   ? 'Execution is queued'
                   : !isIdle
                   ? 'Execution already in progress'
-                  : !canRun
+                  : !effectiveCanRun
                   ? 'Campaign not ready for execution'
                   : 'Start campaign execution'
               }
@@ -389,8 +397,22 @@ export function CampaignExecutionStatusCard({
               Run Campaign
             </Button>
             
+            {/* Planning-only notice */}
+            {isPlanningOnly && (
+              <p
+                style={{
+                  margin: '8px 0 0 0',
+                  fontSize: '11px',
+                  color: NSD_COLORS.semantic.attention.text,
+                  textAlign: 'right',
+                }}
+              >
+                Planning-only campaign
+              </p>
+            )}
+            
             {/* Tooltip for disabled state */}
-            {(isQueued || (!isIdle && !isQueued)) && (
+            {!isPlanningOnly && (isQueued || (!isIdle && !isQueued)) && (
               <p
                 style={{
                   margin: '8px 0 0 0',

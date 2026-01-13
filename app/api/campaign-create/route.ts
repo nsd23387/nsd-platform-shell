@@ -120,9 +120,9 @@ function mapPayloadToRow(payload: CampaignCreatePayload): Omit<CampaignRow, 'id'
   };
 
   // Build sourcing config JSONB
-  // NOTE: benchmarks_only is ALWAYS true - targets never gate execution
+  // benchmarks_only: If true, this is a planning-only campaign that cannot be executed
   const sourcing_config: SourcingConfig = {
-    benchmarks_only: true,
+    benchmarks_only: payload.sourcing_config?.benchmarks_only ?? false,
     targets: {
       target_leads: payload.campaign_targets?.target_leads ?? null,
       target_emails: payload.campaign_targets?.target_emails ?? null,

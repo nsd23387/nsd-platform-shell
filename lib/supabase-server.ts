@@ -97,10 +97,12 @@ export interface ICPConfig {
  * Sourcing configuration JSONB structure
  * Stored in core.campaigns.sourcing_config column
  * 
- * NOTE: Targets are benchmarks only - they do NOT gate execution
+ * benchmarks_only:
+ * - true = Planning-only campaign (cannot be executed)
+ * - false = Executable campaign (can be run)
  */
 export interface SourcingConfig {
-  benchmarks_only: true; // Always true - targets never gate execution
+  benchmarks_only?: boolean;
   targets?: {
     target_leads?: number | null;
     target_emails?: number | null;
