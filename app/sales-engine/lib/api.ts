@@ -659,14 +659,8 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
 // platform-shell NEVER executes campaigns locally.
 // =============================================================================
 
-/**
- * Sales Engine Execution URL
- * 
- * NOTE:
- * Campaign execution is owned by nsd-sales-engine.
- * platform-shell must never execute or simulate runs.
- * This call submits execution intent only.
- */
+// Execution is handled exclusively by nsd-sales-engine.
+// platform-shell must never execute campaigns.
 const SALES_ENGINE_URL = process.env.NEXT_PUBLIC_SALES_ENGINE_URL || '';
 
 /**
@@ -714,12 +708,8 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
     throw new Error('Sales Engine URL not configured. Cannot execute campaigns.');
   }
 
-  /**
-   * NOTE:
-   * Campaign execution is owned by nsd-sales-engine.
-   * platform-shell must never execute or simulate runs.
-   * This call submits execution intent only.
-   */
+  // Execution is handled exclusively by nsd-sales-engine.
+  // platform-shell must never execute campaigns.
   const url = `${SALES_ENGINE_URL}/api/campaigns/${id}/start`;
 
   try {

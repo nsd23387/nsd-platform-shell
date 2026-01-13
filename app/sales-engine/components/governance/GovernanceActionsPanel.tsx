@@ -6,14 +6,8 @@ import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens'
 import { Icon } from '../../../../design/components/Icon';
 import { isTestCampaign, handleTestCampaignAction } from '../../lib/test-campaign';
 
-/**
- * Sales Engine Execution URL
- * 
- * NOTE:
- * Campaign execution is owned by nsd-sales-engine.
- * platform-shell must never execute or simulate runs.
- * This call submits execution intent only.
- */
+// Execution is handled exclusively by nsd-sales-engine.
+// platform-shell must never execute campaigns.
 const SALES_ENGINE_URL = process.env.NEXT_PUBLIC_SALES_ENGINE_URL || '';
 
 interface GovernanceActionsPanelProps {
@@ -81,12 +75,8 @@ export function GovernanceActionsPanel({
           successMsg = 'Campaign approved';
           break;
         case 'run':
-          /**
-           * NOTE:
-           * Campaign execution is owned by nsd-sales-engine.
-           * platform-shell must never execute or simulate runs.
-           * This call submits execution intent only.
-           */
+          // Execution is handled exclusively by nsd-sales-engine.
+          // platform-shell must never execute campaigns.
           if (!SALES_ENGINE_URL) {
             setSuccessMessage('Error: Sales Engine URL not configured. Cannot execute campaigns.');
             setActionLoading(false);
