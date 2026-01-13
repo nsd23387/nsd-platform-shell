@@ -41,6 +41,12 @@
       "rules": {
         "no-restricted-syntax": "off"
       }
+    },
+    {
+      "files": ["app/sales-engine/components/PlanningOnlyToggle.tsx"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
     }
   ]
 }

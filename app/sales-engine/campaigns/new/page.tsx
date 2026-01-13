@@ -676,7 +676,29 @@ export default function NewCampaignPage() {
             placeholder="Describe the campaign objectives and target audience"
           />
 
-          {/* Planning-Only Campaign Toggle */}
+          {/* Planning-Only Campaign Toggle
+           *
+           * EXECUTION CONTRACT NOTE:
+           * platform-shell does NOT execute campaigns.
+           * This toggle sets sourcing_config.benchmarks_only at creation time.
+           * The value is included in the /api/campaign-create payload and
+           * persisted to the database via that endpoint.
+           *
+           * For EXISTING campaigns, use the PlanningOnlyToggle component
+           * on the campaign detail page, which calls:
+           *   PATCH /api/campaign-config
+           *   → PATCH ${SALES_ENGINE_URL}/api/v1/campaigns/:id/sourcing-config
+           *
+           * WHY MISLEADING BEFORE:
+           * - This toggle only affected local React state during creation
+           * - For existing campaigns, there was NO way to change this value
+           * - Users could not convert between planning-only and executable modes
+           *
+           * WHY PLATFORM-SHELL MUST NOT WRITE DIRECTLY:
+           * - All campaign mutations must go through nsd-sales-engine
+           * - platform-shell is a UI/adapter layer, not a data authority
+           * - This ensures consistency and proper audit logging
+           */}
           <div style={{ marginTop: '20px' }}>
             <div style={{ marginBottom: '8px' }}>
               <label

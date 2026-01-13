@@ -64,6 +64,7 @@ import {
   getTestCampaignDetail, 
   getTestCampaignThroughput,
 } from '../../lib/test-campaign';
+import { PlanningOnlyToggle } from '../../components/PlanningOnlyToggle';
 
 type TabType = 'overview' | 'monitoring' | 'learning';
 
@@ -346,6 +347,21 @@ export default function CampaignDetailPage() {
             campaign={campaign}
             governanceState={governanceState}
             runsCount={runs.length}
+            onPlanningOnlyChange={(newState) => {
+              // Update local campaign state when planning-only changes
+              // This ensures the UI reflects the new state immediately
+              setCampaign((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      sourcing_config: {
+                        ...prev.sourcing_config,
+                        benchmarks_only: newState,
+                      },
+                    }
+                  : prev
+              );
+            }}
           />
         )}
 
@@ -374,15 +390,37 @@ export default function CampaignDetailPage() {
   );
 }
 
+/**
+ * EXECUTION CONTRACT NOTE:
+ * platform-shell does NOT execute campaigns.
+ * This UI only mutates configuration via nsd-sales-engine.
+ *
+ * The OverviewTab includes a PlanningOnlyToggle that allows
+ * modifying the benchmarks_only flag. All changes are persisted
+ * via nsd-sales-engine, NOT directly to the database.
+ */
 function OverviewTab({
   campaign,
   governanceState,
   runsCount,
+  onPlanningOnlyChange,
 }: {
   campaign: CampaignDetail;
   governanceState: CampaignGovernanceState;
   runsCount: number;
+  /** Callback when planning-only state changes (to update parent state) */
+  onPlanningOnlyChange?: (newState: boolean) => void;
 }) {
+  // Determine if campaign can be modified
+  // Campaign cannot be modified if it's completed, archived, executed, or has runs
+  // Note: Use campaign.status (legacy) to check for COMPLETED/ARCHIVED
+  const canModifyConfig =
+    campaign.canEdit !== false &&
+    campaign.status !== 'COMPLETED' &&
+    campaign.status !== 'ARCHIVED' &&
+    governanceState !== 'EXECUTED' &&
+    runsCount === 0;
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -450,8 +488,9 @@ function OverviewTab({
         </SectionCard>
       </div>
 
-      {/* Governance Actions Panel */}
-      <div>
+      {/* Right Column: Actions and Configuration */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* Governance Actions Panel */}
         <GovernanceActionsPanel
           campaignId={campaign.id}
           governanceState={governanceState}
@@ -459,6 +498,18 @@ function OverviewTab({
           canApprove={campaign.canApprove}
           runsCount={runsCount}
           isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
+        />
+
+        {/* Planning-Only Toggle
+         * EXECUTION CONTRACT NOTE:
+         * This toggle persists via nsd-sales-engine, NOT directly to the database.
+         * platform-shell must NEVER write to ODS directly.
+         */}
+        <PlanningOnlyToggle
+          campaignId={campaign.id}
+          isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
+          onStateChange={onPlanningOnlyChange}
+          canModify={canModifyConfig}
         />
       </div>
     </div>

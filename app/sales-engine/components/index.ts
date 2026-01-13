@@ -24,6 +24,10 @@ export {
 
 export { GovernanceActions } from './GovernanceActions';
 
+// Configuration components
+// EXECUTION CONTRACT NOTE: All config changes go through nsd-sales-engine
+export { PlanningOnlyToggle } from './PlanningOnlyToggle';
+
 // Lead approval components
 // BACKEND ENFORCEMENT: Leads start as pending_approval, approval is explicit
 export {
