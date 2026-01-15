@@ -1,0 +1,135 @@
+Your plan is approved and directionally correct.
+To ensure this fully resolves the execution ambiguity and unblocks downstream work, please incorporate the following clarifications and acceptance criteria.
+
+🔒 Clarification 1 — Timeline Must Be Outcome-Oriented, Not Status-Oriented
+
+The Execution Timeline must explicitly answer:
+
+Did execution do work?
+
+Did execution intentionally do nothing?
+
+Is the system waiting or finished?
+
+This means:
+
+Do not rely on raw labels like running, queued, or idle alone
+
+Always include a plain-language outcome statement at the end of the timeline
+
+Example (acceptable):
+
+✓ Run created
+✓ Queue evaluated
+ℹ️ No eligible execution steps were found
+Execution completed without external calls
+
+
+Example (not acceptable):
+
+Status: Running
+Execution mode: Queue
+
+🔒 Clarification 2 — Explicit “Apollo Not Reached” Messaging When Applicable
+
+When execution completes without queue pickup or phases:
+
+The UI must explicitly state that no external services were contacted
+
+Example copy (or equivalent):
+
+“This execution completed without entering any sourcing phases. No external data providers were contacted.”
+
+This is critical to prevent users from debugging Apollo unnecessarily.
+
+🎯 Required UX Additions (Must-Haves)
+
+Please add these lightweight, read-only UX components alongside the timeline:
+
+1. Execution Confidence Badge (1-second signal)
+
+A compact badge near the campaign title:
+
+🟢 Execution Completed (No Work Required)
+
+🟡 Execution Idle (Expected)
+
+🔵 Execution In Progress
+
+⚪ Not Yet Executed
+
+This replaces ambiguous “Running” semantics.
+
+2. “What Should I Do Next?” Card (Single Recommendation Only)
+
+When execution completes with no work:
+
+Next Step
+This campaign completed without executing any sourcing steps.
+Recommended action:
+• Review ICP or sourcing criteria before re-running
+
+
+Rules:
+
+Exactly one recommendation
+
+Advisory only
+
+Never framed as an error
+
+3. Inline “Why?” Tooltips
+
+Add tooltips for terms like:
+
+Queue mode
+
+Idle
+
+No work detected
+
+These should explain behavior calmly and non-technically.
+
+🧪 Acceptance Criteria (This Is the Definition of Done)
+
+This work is complete when:
+
+✅ A user can determine in under 10 seconds:
+
+Whether execution happened
+
+Whether it was expected
+
+Whether action is required
+
+✅ A user never needs logs to answer:
+
+“Did Apollo run?”
+
+✅ “Nothing happened” is clearly shown as a valid, completed state
+
+✅ No backend code, schemas, or APIs were changed
+
+✅ No speculative inference is introduced
+
+🚫 Explicit Non-Goals (Reminder)
+
+No execution logic changes
+
+No retries or forcing queue states
+
+No backend status normalization
+
+No cron / worker visibility
+
+No new endpoints
+
+This is explainability only, not execution control.
+
+🧠 Final Guiding Principle
+
+When in doubt, optimize for:
+
+User confidence, not system detail
+
+The UI should make the system feel intentional, even when it does nothing.
