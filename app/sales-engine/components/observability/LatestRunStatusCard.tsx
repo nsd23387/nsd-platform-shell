@@ -45,8 +45,12 @@ interface StatusDisplay {
  * Get display configuration for run status.
  * Uses exact UX copy from specification.
  */
-function getStatusDisplay(status: string): StatusDisplay {
-  switch (status.toLowerCase()) {
+function getStatusDisplay(status?: string): StatusDisplay {
+  // Runtime safety: API contract may return status without a run payload (e.g. { status: "no_runs" }).
+  // Guard to avoid calling string methods on undefined while keeping UI read-only.
+  const normalized = typeof status === 'string' ? status.toLowerCase() : 'unknown';
+
+  switch (normalized) {
     case 'queued':
     case 'run_requested':
     case 'pending':
@@ -66,6 +70,7 @@ function getStatusDisplay(status: string): StatusDisplay {
       };
     case 'completed':
     case 'success':
+    case 'succeeded':
       return {
         icon: 'check',
         label: 'Completed',
@@ -88,11 +93,18 @@ function getStatusDisplay(status: string): StatusDisplay {
         copy: 'Last run partially completed',
         ...NSD_COLORS.semantic.attention,
       };
+    case 'no_runs':
+      return {
+        icon: 'info',
+        label: 'No runs',
+        copy: 'This campaign has not been executed yet',
+        ...NSD_COLORS.semantic.muted,
+      };
     default:
       return {
         icon: 'info',
-        label: status,
-        copy: `Status: ${status}`,
+        label: typeof status === 'string' ? status : 'Unknown',
+        copy: `Status: ${typeof status === 'string' ? status : 'Unknown'}`,
         ...NSD_COLORS.semantic.muted,
       };
   }
@@ -101,7 +113,8 @@ function getStatusDisplay(status: string): StatusDisplay {
 /**
  * Format date for display.
  */
-function formatDate(dateStr: string): string {
+function formatDate(dateStr?: string): string {
+  if (!dateStr || typeof dateStr !== 'string') return '—';
   try {
     return new Date(dateStr).toLocaleString();
   } catch {
@@ -114,7 +127,11 @@ function formatDate(dateStr: string): string {
  * Only renders exact fields from the API response.
  */
 function RunDetailsCard({ run }: { run: LatestRun }) {
-  const display = getStatusDisplay(run.status);
+  const display = getStatusDisplay(run?.status);
+  // Runtime safety: `run` payload may be missing fields (or be absent) depending on API response.
+  // Guard all string slicing to prevent client-side exceptions.
+  const rawRunId = (run as unknown as { run_id?: unknown; id?: unknown })?.run_id ?? (run as unknown as { id?: unknown })?.id;
+  const runId = typeof rawRunId === 'string' ? rawRunId : undefined;
 
   return (
     <div
@@ -204,7 +221,7 @@ function RunDetailsCard({ run }: { run: LatestRun }) {
               color: display.text,
             }}
           >
-            {run.run_id.slice(0, 8)}...
+            {runId ? `${runId.slice(0, 8)}...` : '—'}
           </p>
         </div>
 
@@ -228,7 +245,9 @@ function RunDetailsCard({ run }: { run: LatestRun }) {
               color: display.text,
             }}
           >
-            {run.execution_mode || 'N/A'}
+            {typeof run.execution_mode === 'string' && run.execution_mode.length > 0
+              ? run.execution_mode
+              : '—'}
           </p>
         </div>
 
@@ -484,7 +503,9 @@ export function LatestRunStatusCard({ campaignId }: LatestRunStatusCardProps) {
   }
 
   // No runs yet
-  if (noRuns) {
+  // Runtime safety: backend now returns 200 { status: "no_runs" } (no run payload),
+  // and older hook versions may map that into a `run` object with missing fields.
+  if (noRuns || run?.status?.toLowerCase?.() === 'no_runs') {
     return <NoRunsCard />;
   }
 
