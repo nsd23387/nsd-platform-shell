@@ -18,6 +18,12 @@ The application architecture follows a read-only principle, enforcing observatio
 - **Campaign Creation Wizard (M67-14)**: Employs a mandatory vertical left-hand navigation stepper for campaign creation to ensure visibility of all steps without scrolling and independent navigation from form content. Horizontal steppers are explicitly forbidden.
 - **Form Fields Governance (M67-14)**: Defines required fields (`name`, `keywords[]`, `geographies[]`) and explicitly forbids others (`max_organizations`, `source_type`, `technologies`, etc.) to maintain strict data integrity and prevent UI-initiated execution parameters.
 - **Governance Components**: Includes `ReadOnlyBanner`, `CampaignStateBadge`, `ExecutionReadinessPanel`, `ConfidenceBadge`, `ProvenancePill`, and `LearningSignalsPanel` to visually communicate governance, readiness, and data quality.
+- **Execution Explainability Components**: New components for outcome-oriented execution transparency:
+  - `ExecutionConfidenceBadge`: Quick 1-second status signal with brand-aligned indicators (no emojis)
+  - `ExecutionTimeline`: Outcome-oriented timeline explaining what happened during execution
+  - `NextStepCard`: Single advisory recommendation when no work occurred
+  - `ExecutionTooltip`: Inline "Why?" tooltips for execution terminology
+  - `ExecutionExplainabilityPanel`: Combined panel integrating all explainability components
 
 **Technical Implementations:**
 - **Environment Variables**: Uses `NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL` (client-side), `SALES_ENGINE_API_BASE_URL` (server-side proxy), and `NEXT_PUBLIC_ODS_API_URL` for API bootstrapping.
@@ -30,3 +36,40 @@ The application architecture follows a read-only principle, enforcing observatio
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.
 - **ODS API**: Used for bootstrap and identity services.
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
+
+## Execution Explainability (New)
+
+The Execution Timeline & Explainability feature replaces ambiguous execution indicators with clear, outcome-oriented states.
+
+**Core Principle**: A user can determine in under 10 seconds whether execution happened, whether it was expected, and whether action is required—without reading logs.
+
+**State Mapping** (`app/sales-engine/lib/execution-state-mapping.ts`):
+| Backend Condition (EXPLICIT SIGNALS ONLY) | UI Meaning |
+|-------------------------------------------|------------|
+| No run exists (noRuns=true) | "Campaign not executed yet" |
+| Run + status=queued | "Awaiting worker pickup" |
+| Run + status=running | "Execution in progress" |
+| Run + status=completed | "Execution finished" |
+| Run + status=failed | "Execution failed" |
+| Run + unknown status | "Status unknown" |
+
+**NOTE**: We do NOT infer "no work done", "no external calls", or "cron idle" because the LatestRun model does not include explicit fields for these states.
+
+**Key Features**:
+- Outcome-oriented timeline showing what explicitly happened during execution
+- Inline tooltips explaining Queue mode, Idle, No work detected
+- STRICT: Only displays states based on explicit backend signals (no inference)
+
+**Hard Constraints**:
+- READ-ONLY: No backend changes, no schema changes, no new API endpoints
+- NO INFERENCE: Only use explicit signals from existing data
+- Consume existing `/api/v1/campaigns/:id/runs/latest` endpoint only
+
+## Recent Changes
+- January 15, 2026: Execution Timeline & Explainability UI
+  - Added execution state mapping adapter with explicit backend→UI translations
+  - Created ExecutionConfidenceBadge with brand-aligned status indicators
+  - Built ExecutionTimeline component with outcome-oriented timeline
+  - Added NextStepCard for single advisory recommendations
+  - Implemented ExecutionTooltip for inline "Why?" explanations
+  - Integrated ExecutionExplainabilityPanel into Campaign detail page

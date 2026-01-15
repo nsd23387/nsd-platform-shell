@@ -56,6 +56,7 @@ import {
   ExecutionTimelineFeed,
   ApprovalAwarenessPanel,
   LatestRunStatusCard,
+  ExecutionExplainabilityPanel,
   type ExecutionEvent,
   type ApprovalAwarenessState,
 } from '../../components/observability';
@@ -770,6 +771,16 @@ function MonitoringTab({
        * NO polling. NO inference. Single fetch on page load.
        */}
       <LatestRunStatusCard campaignId={campaign.id} />
+
+      {/* Section A.2: Execution Explainability Panel */}
+      {/* 
+       * EXECUTION EXPLAINABILITY:
+       * Answers: Did execution do work? Was nothing happening intentional?
+       * Replaces ambiguous "Running" semantics with clear outcome-oriented states.
+       * Explicitly explains when no external services were contacted.
+       * READ-ONLY: Derived entirely from existing run data.
+       */}
+      <ExecutionExplainabilityPanel campaignId={campaign.id} />
 
       {/* Section B: Execution Status - Always visible */}
       {/* Source of truth: /observability/status endpoint */}
