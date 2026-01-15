@@ -155,8 +155,17 @@ export function useLatestRunStatus(campaignId: string | null): LatestRunStatus {
     setServiceUnavailable(false);
 
     try {
-      // Architecture contract: UI should call versioned `/api/v1/*` endpoints (not legacy `/api/campaigns/*`).
-      const response = await fetch(`/api/v1/campaigns/${campaignId}/runs/latest`);
+      // Prefer versioned `/api/v1/*` for governed architecture; fallback to legacy `/api/campaigns/*`
+      // to support safe staged migration if v1 is temporarily unavailable or not deployed everywhere yet.
+      let response: Response;
+      try {
+        response = await fetch(`/api/v1/campaigns/${campaignId}/runs/latest`);
+        if (response.status === 404) {
+          response = await fetch(`/api/campaigns/${campaignId}/runs/latest`);
+        }
+      } catch {
+        response = await fetch(`/api/campaigns/${campaignId}/runs/latest`);
+      }
 
       // Backwards compatibility: older implementation returned 204 for no runs.
       if (response.status === 204) {
