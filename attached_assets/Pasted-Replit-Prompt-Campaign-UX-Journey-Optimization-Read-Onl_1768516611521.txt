@@ -1,0 +1,164 @@
+Replit Prompt — Campaign UX & Journey Optimization (Read-Only)
+
+Context
+You are working inside the NSD Platform Shell UI on the Sales Engine campaign experience.
+
+The execution explainability feature has been completed and approved.
+Now perform a UX / IA inspection of the entire campaign journey, with the goal of making each campaign self-explanatory, reviewable, and actionable without navigation elsewhere.
+
+🔒 Hard Constraints (Non-Negotiable)
+
+❌ NO backend changes
+
+❌ NO schema changes
+
+❌ NO new API endpoints
+
+❌ NO mutations or edits
+
+❌ NO campaign configuration logic
+
+❌ NO inference beyond existing data
+
+✅ READ-ONLY UI only
+
+This is visibility and clarity only.
+
+🎯 Goal
+
+A user viewing a campaign detail page should be able to answer, in under 15 seconds:
+
+What is this campaign targeting?
+
+What criteria define its scope?
+
+Where in the funnel is it?
+
+What happened during execution?
+
+What should I do next?
+
+All without leaving the page.
+
+🧠 Required UX Enhancements
+1. Campaign Scope Panel (HIGH PRIORITY)
+
+Surface read-only ICP configuration directly in the campaign detail view.
+
+This includes (only if already available via existing data):
+
+Target industries / keywords
+
+Company size range
+
+Geography
+
+Any explicit ICP filters used
+
+Format as a compact, scannable summary, e.g.:
+
+Campaign Scope
+────────────────────────
+Industries: Fitness, Gyms, Boxing
+Company Size: 11–50 employees
+Location: California
+
+
+Rules:
+
+Read-only
+
+No editing
+
+No deep nesting
+
+No abbreviations without labels
+
+2. Funnel Visibility Panel
+
+Show the current funnel state, even if empty.
+
+Example:
+
+Pipeline Funnel
+────────────────────────
+Organizations sourced: 0
+Contacts discovered: 0
+Leads enriched: 0
+Messages sent: 0
+
+
+Empty funnel must be presented as valid, not broken.
+
+3. Journey Anchoring (Context Awareness)
+
+Ensure the user always sees:
+
+Campaign name
+
+Campaign status
+
+Execution confidence badge
+
+Scope summary
+
+These should be above the fold.
+
+4. Reduce Cognitive Load
+
+Collapse secondary details behind toggles
+
+Promote summary blocks
+
+Remove redundant status language
+
+Ensure each section answers a single question
+
+5. Forward Momentum Callouts
+
+When appropriate, show advisory-only guidance:
+
+“Review ICP criteria if results are empty”
+
+“Execution completed successfully — you can create another campaign or refine this one”
+
+No CTAs should mutate data.
+
+🧪 Acceptance Criteria
+
+This task is complete when:
+
+A user does not need to navigate to another page to understand campaign scope
+
+ICP criteria are visible without editing
+
+Funnel emptiness is clearly explained
+
+The page feels reviewable, not operational
+
+No backend changes were made
+
+No logic was duplicated
+
+🧭 Guiding Principle
+
+A campaign detail page should read like a summary report, not a control panel.
+
+If something feels actionable, hide it.
+If something feels ambiguous, clarify it.
+
+6️⃣ Recommendation
+
+Run this prompt now.
+
+You’re in the exact right sequence:
+
+Execution explainability ✅
+
+Campaign clarity & scope visibility ⬅️ now
+
+Funnel effectiveness & optimization (later)
+
+Runtime enhancements (optional)
+
+This keeps momentum high and avoids premature backend work.
