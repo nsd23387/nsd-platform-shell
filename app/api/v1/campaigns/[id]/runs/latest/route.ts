@@ -1,71 +1,76 @@
-import { NextRequest, NextResponse } from 'next/server';
-
 /**
- * Resolve Sales Engine API base URL safely.
+ * GET /api/v1/campaigns/:id/runs/latest
  *
- * IMPORTANT:
- * In this repo, `*_SALES_ENGINE_API_BASE_URL` is often configured as a relative path
- * like `/api/v1/campaigns` for client routing. If we proxy using that value here,
- * this route will recurse into itself.
+ * REQUIRED CONTRACT (must match non-versioned):
+ * 1) 404 { error: "CAMPAIGN_NOT_FOUND" } only when campaign does not exist
+ * 2) 200 { status: "no_runs" } when campaign exists but has no runs
+ * 3) 200 { status: "<run.status>", run } when a latest run exists (any status, verbatim)
  */
-function resolveBackendBaseUrl(): string | null {
-  const configured =
-    process.env.SALES_ENGINE_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL ||
-    '/api/v1/campaigns';
 
-  // If already an absolute URL, use it directly.
-  if (configured.startsWith('http://') || configured.startsWith('https://')) {
-    return configured.replace(/\/+$/, '');
+export const runtime = 'nodejs';
+
+import { NextResponse } from 'next/server';
+import { createServerClient, isSupabaseConfigured } from '../../../../../../../lib/supabase-server';
+
+export async function GET(_: Request, { params }: { params: { id: string } }) {
+  const campaignId = params.id;
+
+  if (!campaignId) {
+    return NextResponse.json(
+      { error: 'MISSING_CAMPAIGN_ID', message: 'Campaign ID is required' },
+      { status: 400 }
+    );
   }
 
-  // If relative, only usable when SALES_ENGINE_URL is configured.
-  const origin = process.env.SALES_ENGINE_URL;
-  if (!origin) return null;
-
-  const normalizedOrigin = origin.replace(/\/+$/, '');
-  const normalizedPath = configured.startsWith('/') ? configured : `/${configured}`;
-  return `${normalizedOrigin}${normalizedPath}`.replace(/\/+$/, '');
-}
-
-function getMockLatestRun(campaignId: string) {
-  return {
-    id: 'run-001',
-    campaign_id: campaignId,
-    status: 'COMPLETED',
-    started_at: '2025-01-20T08:00:00Z',
-    completed_at: '2025-01-20T08:45:00Z',
-    leads_processed: 250,
-    emails_sent: 248,
-    errors: 2,
-  };
-}
-
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const backendBaseUrl = resolveBackendBaseUrl();
-  if (!backendBaseUrl) {
-    return NextResponse.json(getMockLatestRun(params.id));
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'SERVICE_UNAVAILABLE', message: 'Database not configured' },
+      { status: 503 }
+    );
   }
 
-  try {
-    const headers: HeadersInit = { 'Content-Type': 'application/json' };
-    const authHeader = request.headers.get('authorization');
-    if (authHeader) headers['Authorization'] = authHeader;
+  const supabase = createServerClient();
 
-    const response = await fetch(`${backendBaseUrl}/${params.id}/runs/latest`, { headers });
+  // Run state must never cause a 404 — campaign existence and execution state are orthogonal.
+  const { data: campaign, error: campaignError } = await supabase
+    .from('campaigns')
+    .select('id')
+    .eq('id', campaignId)
+    .single();
 
-    // If upstream returns 204 (no runs), do NOT attempt to parse JSON.
-    if (response.status === 204) {
-      return new NextResponse(null, { status: 204 });
+  if (campaignError) {
+    if ((campaignError as { code?: string }).code === 'PGRST116') {
+      return NextResponse.json({ error: 'CAMPAIGN_NOT_FOUND' }, { status: 404 });
     }
-
-    const data = await response.json().catch(() => null);
-    return NextResponse.json(data, { status: response.status });
-  } catch (error) {
-    console.error('Backend proxy error:', error);
-    return NextResponse.json(getMockLatestRun(params.id));
+    return NextResponse.json(
+      { error: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch campaign' },
+      { status: 500 }
+    );
   }
+
+  if (!campaign) {
+    return NextResponse.json({ error: 'CAMPAIGN_NOT_FOUND' }, { status: 404 });
+  }
+
+  const { data: runs, error: runsError } = await supabase
+    .schema('public')
+    .from('campaign_runs')
+    .select('*')
+    .eq('campaign_id', campaignId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (runsError) {
+    return NextResponse.json(
+      { error: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch latest run' },
+      { status: 500 }
+    );
+  }
+
+  if (!runs || runs.length === 0) {
+    return NextResponse.json({ status: 'no_runs' }, { status: 200 });
+  }
+
+  const run = runs[0] as Record<string, unknown>;
+  return NextResponse.json({ status: run.status, run }, { status: 200 });
 }
