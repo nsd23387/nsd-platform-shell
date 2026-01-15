@@ -409,7 +409,13 @@ function TimelineEvent({ event, isLast }: { event: ExecutionEvent; isLast: boole
             }}
           >
             {event.details.count !== undefined && (
-              <span>Count: {(event.details.count as number).toLocaleString()}</span>
+              // Runtime safety: event.details is untyped and may carry non-numeric values.
+              <span>
+                Count:{' '}
+                {typeof event.details.count === 'number'
+                  ? event.details.count.toLocaleString()
+                  : '—'}
+              </span>
             )}
           </div>
         )}
