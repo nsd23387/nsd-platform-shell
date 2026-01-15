@@ -239,7 +239,9 @@ export default function CampaignDetailPage() {
     try {
       const response = await requestCampaignRun(campaignId);
       
-      if (response.status === 'run_requested') {
+      // Runtime safety: execution intent may be acknowledged as "run_requested" or "queued"
+      // depending on the upstream contract/version. Treat both as success signals.
+      if (response.status === 'run_requested' || response.status === 'queued') {
         // Show "Execution requested" message
         setRunRequestMessage('Execution requested — Awaiting events from backend');
         
