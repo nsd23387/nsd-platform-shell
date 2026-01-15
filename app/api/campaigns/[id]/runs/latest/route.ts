@@ -13,7 +13,7 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import { createServerClient, isSupabaseConfigured } from '../../../../../lib/supabase-server';
+import { createServerClient, isSupabaseConfigured } from '../../../../../../lib/supabase-server';
 
 type CampaignRunStatus = 'queued' | 'running' | 'failed' | 'succeeded' | 'skipped';
 
