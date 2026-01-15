@@ -8,6 +8,8 @@
  * 
  * Campaign is created in governance_state = DRAFT.
  * No execution or sourcing occurs.
+ * 
+ * M67.9-01: Campaign creation is disabled when API mode is disabled.
  */
 
 import { useState } from 'react';
@@ -22,17 +24,39 @@ import type {
   ValidationError,
   isCampaignCreateSuccess,
 } from '../../types/campaign-create';
+import { isApiDisabled, featureFlags } from '../../../../config/appConfig';
 
+/**
+ * M67-14 CampaignCreate Wizard Steps
+ * 
+ * GOVERNANCE: Lead Qualification step removed (minimumSignals is forbidden)
+ * Organization Sourcing is read-only (derived from ICP)
+ */
 const WIZARD_STEPS = [
   { id: 'identity', label: 'Campaign Identity' },
   { id: 'icp', label: 'ICP Definition' },
   { id: 'sourcing', label: 'Organization Sourcing' },
   { id: 'targeting', label: 'Contact Targeting' },
   { id: 'outreach', label: 'Outreach Context' },
-  { id: 'readiness', label: 'Readiness' },
   { id: 'targets', label: 'Targets (Optional)' },
 ];
 
+/**
+ * M67-14 CampaignCreate FormData
+ * 
+ * REMOVED FIELDS (per governance):
+ * - technologies (forbidden)
+ * - sourceType (forbidden - derived from ICP)
+ * - maxOrganizations (forbidden)
+ * - minimumSignals (forbidden)
+ * - targetOrganizations (forbidden)
+ * - targetContacts (forbidden)
+ * 
+ * REQUIRED FIELDS:
+ * - name
+ * - keywords[] (non-empty)
+ * - geographies[] (non-empty)
+ */
 type FormData = {
   name: string;
   description: string;
@@ -50,31 +74,14 @@ type FormData = {
   tone: string;
   valuePropositions: string[];
   painPoints: string[];
-  callToAction: string[];
-  mailboxHealthRequired: boolean;
-  deliverabilityThreshold: number;
+  callToAction: string;
+  // Targets (benchmarks only - do not affect execution)
   targetLeads: number | null;
   targetEmails: number | null;
   targetReplyRate: number | null;
+  // Planning-only campaign flag
+  planningOnly: boolean;
 };
-
-const DEFAULT_VALUE_PROPOSITIONS = [
-  'Increase revenue by 30% within 6 months',
-  'Reduce operational costs significantly',
-  'Streamline your workflow with automation',
-];
-
-const DEFAULT_PAIN_POINTS = [
-  'Manual processes consuming too much time',
-  'Difficulty scaling operations efficiently',
-  'Lack of visibility into key metrics',
-];
-
-const DEFAULT_CALLS_TO_ACTION = [
-  'Book a 15-minute discovery call',
-  'Schedule a personalized demo',
-  'Get a free consultation',
-];
 
 const initialFormData: FormData = {
   name: '',
@@ -91,14 +98,15 @@ const initialFormData: FormData = {
   maxContactsPerOrg: 3,
   requireVerifiedEmail: true,
   tone: 'professional',
-  valuePropositions: [...DEFAULT_VALUE_PROPOSITIONS],
-  painPoints: [...DEFAULT_PAIN_POINTS],
-  callToAction: [...DEFAULT_CALLS_TO_ACTION],
-  mailboxHealthRequired: true,
-  deliverabilityThreshold: 80,
+  valuePropositions: [],
+  painPoints: [],
+  callToAction: '',
+  // Targets (benchmarks only)
   targetLeads: null,
   targetEmails: null,
   targetReplyRate: null,
+  // Planning-only campaign (default: No)
+  planningOnly: false,
 };
 
 export default function NewCampaignPage() {
@@ -116,6 +124,86 @@ export default function NewCampaignPage() {
     error?: string;
   } | null>(null);
 
+  // M67.9-01: Show disabled state when API mode is disabled
+  if (!featureFlags.canCreateCampaign) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          backgroundColor: NSD_COLORS.surface,
+          padding: '32px',
+        }}
+      >
+        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <Link
+              href="/sales-engine"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px',
+                color: NSD_COLORS.secondary,
+                textDecoration: 'none',
+              }}
+            >
+              <Icon name="arrow-left" size={16} color={NSD_COLORS.secondary} />
+              Back to Campaigns
+            </Link>
+          </div>
+
+          <div
+            style={{
+              backgroundColor: NSD_COLORS.background,
+              borderRadius: NSD_RADIUS.lg,
+              border: `1px solid ${NSD_COLORS.border.light}`,
+              padding: '48px',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '64px',
+                height: '64px',
+                backgroundColor: '#FEF3C7',
+                borderRadius: '50%',
+                margin: '0 auto 24px',
+              }}
+            >
+              <Icon name="warning" size={32} color="#92400E" />
+            </div>
+
+            <h1
+              style={{
+                margin: '0 0 16px 0',
+                fontSize: '24px',
+                fontWeight: 600,
+                color: NSD_COLORS.primary,
+                fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+              }}
+            >
+              Campaign Creation Disabled
+            </h1>
+
+            <p
+              style={{
+                margin: '0 0 24px 0',
+                fontSize: '15px',
+                color: NSD_COLORS.text.secondary,
+                lineHeight: 1.6,
+              }}
+            >
+              Campaign creation is currently unavailable.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const updateField = <K extends keyof FormData>(field: K, value: FormData[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
@@ -127,6 +215,23 @@ export default function NewCampaignPage() {
     }
   };
 
+  /**
+   * M67-14 Payload Builder
+   * 
+   * REMOVED from payload (per governance):
+   * - technologies
+   * - organization_sourcing.source_type (derived from ICP)
+   * - organization_sourcing.max_organizations
+   * - lead_qualification.minimum_signals
+   * - campaign_targets.target_organizations
+   * - campaign_targets.target_contacts
+   * - campaign_targets.target_replies
+   * 
+   * REQUIRED:
+   * - name, keywords[], geographies[]
+   * 
+   * Targets are benchmarks only and do not affect campaign execution.
+   */
   const buildPayload = (): CampaignCreatePayload => ({
     campaign_identity: {
       name: formData.name,
@@ -143,9 +248,6 @@ export default function NewCampaignPage() {
       seniority_levels: formData.seniorityLevels,
       keywords: formData.keywords,
     },
-    organization_sourcing: {
-      source_type: 'criteria',
-    },
     contact_targeting: {
       roles: formData.roles,
       seniority: formData.seniority,
@@ -155,24 +257,32 @@ export default function NewCampaignPage() {
         exclude_generic: true,
       },
     },
-    lead_qualification: {},
     outreach_context: {
       tone: formData.tone,
       value_propositions: formData.valuePropositions,
       pain_points: formData.painPoints,
-      call_to_action: formData.callToAction.join('; '),
+      call_to_action: formData.callToAction,
     },
-    readiness_requirements: {
-      mailbox_health_required: formData.mailboxHealthRequired,
-      deliverability_threshold: formData.deliverabilityThreshold,
-    },
+    // Targets are benchmarks only - do not affect execution
     campaign_targets: {
       target_leads: formData.targetLeads,
       target_emails: formData.targetEmails,
-      target_replies: formData.targetReplyRate,
+      target_reply_rate: formData.targetReplyRate,
+    },
+    // Planning-only campaign flag
+    sourcing_config: {
+      benchmarks_only: formData.planningOnly,
     },
   });
 
+  /**
+   * M67-14 Validation
+   * 
+   * REQUIRED fields:
+   * - name (non-empty)
+   * - keywords[] (non-empty array)
+   * - geographies[] (non-empty array)
+   */
   const validateAllSteps = (): boolean => {
     const allErrors: Record<string, string> = {};
 
@@ -242,6 +352,13 @@ export default function NewCampaignPage() {
     }
   };
 
+  /**
+   * M67-14 Step Validation
+   * 
+   * Step 0 (Identity): name required
+   * Step 1 (ICP): keywords[] and geographies[] required
+   * Step 2 (Sourcing): read-only, no validation
+   */
   const validateCurrentStep = (): boolean => {
     const stepErrors: Record<string, string> = {};
 
@@ -259,6 +376,7 @@ export default function NewCampaignPage() {
           stepErrors['icp.geographies'] = 'At least one geography is required';
         }
         break;
+      // Step 2 (Organization Sourcing) is read-only - no validation needed
       default:
         break;
     }
@@ -318,12 +436,12 @@ export default function NewCampaignPage() {
                 justifyContent: 'center',
                 width: '64px',
                 height: '64px',
-                backgroundColor: '#D1FAE5',
+                backgroundColor: NSD_COLORS.semantic.positive.bg,
                 borderRadius: '50%',
                 margin: '0 auto 24px',
               }}
             >
-              <Icon name="check" size={32} color="#065F46" />
+              <Icon name="check" size={32} color={NSD_COLORS.semantic.positive.text} />
             </div>
 
             <h1
@@ -396,31 +514,6 @@ export default function NewCampaignPage() {
               </div>
             </div>
 
-            <div
-              style={{
-                backgroundColor: '#FFFBEB',
-                borderRadius: NSD_RADIUS.md,
-                padding: '16px',
-                marginBottom: '32px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-              }}
-            >
-              <Icon name="info" size={20} color="#92400E" />
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '13px',
-                  color: '#92400E',
-                  lineHeight: 1.5,
-                  textAlign: 'left',
-                }}
-              >
-                This UI is read-only for campaign lifecycle. Governance transitions, approvals, and execution are managed by backend systems.
-              </p>
-            </div>
-
             <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
               <Link
                 href="/sales-engine"
@@ -446,6 +539,16 @@ export default function NewCampaignPage() {
     );
   }
 
+  /**
+   * GOVERNANCE LOCK (M67-14)
+   * Campaign creation MUST use vertical left-hand navigation.
+   * Horizontal steppers are explicitly forbidden due to UX and governance requirements.
+   * Do not reintroduce a horizontal stepper under any condition.
+   * 
+   * Layout: Two-column with persistent left-hand vertical navigation
+   * - Left column: WizardNav (vertical step list, always visible)
+   * - Right column: Form content area
+   */
   return (
     <div
       style={{
@@ -454,7 +557,8 @@ export default function NewCampaignPage() {
         padding: '32px',
       }}
     >
-      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        {/* Header Section */}
         <div style={{ marginBottom: '24px' }}>
           <Link
             href="/sales-engine"
@@ -493,6 +597,7 @@ export default function NewCampaignPage() {
           Configure a new campaign. It will be created in Draft state.
         </p>
 
+        {/* Two-column layout: Vertical Nav (left) + Content (right) */}
         <div
           style={{
             display: 'flex',
@@ -500,406 +605,521 @@ export default function NewCampaignPage() {
             alignItems: 'flex-start',
           }}
         >
-          {/* Left-hand vertical navigation */}
+          {/* Left Column: Vertical Navigation (GOVERNANCE LOCK - must remain vertical) */}
+          <WizardNav
+            steps={stepsWithCompletion}
+            currentStep={currentStep}
+            onStepClick={(step) => {
+              if (step > currentStep) {
+                if (!validateCurrentStep()) {
+                  return;
+                }
+              }
+              setErrors({});
+              setCurrentStep(step);
+            }}
+          />
+
+          {/* Right Column: Form Content */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+
+        {(submitResult?.error || Object.keys(errors).length > 0) && (
           <div
             style={{
-              position: 'sticky',
-              top: '32px',
-              backgroundColor: NSD_COLORS.background,
-              borderRadius: NSD_RADIUS.lg,
-              border: `1px solid ${NSD_COLORS.border.light}`,
+              backgroundColor: '#FEE2E2',
+              borderRadius: NSD_RADIUS.md,
               padding: '16px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
             }}
           >
-            <WizardNav
-              steps={stepsWithCompletion}
-              currentStep={currentStep}
-              layout="vertical"
-              onStepClick={(step) => {
-                if (step > currentStep) {
-                  if (!validateCurrentStep()) {
-                    return;
-                  }
-                }
-                setErrors({});
-                setCurrentStep(step);
-              }}
-            />
-          </div>
-
-          {/* Main content area */}
-          <div style={{ flex: 1 }}>
-            {(submitResult?.error || Object.keys(errors).length > 0) && (
-              <div
-                style={{
-                  backgroundColor: '#FEE2E2',
-                  borderRadius: NSD_RADIUS.md,
-                  padding: '16px',
-                  marginBottom: '24px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '12px',
-                }}
-              >
-                <Icon name="warning" size={20} color="#991B1B" />
-                <div>
-                  <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: '#991B1B' }}>
-                    {submitResult?.error || 'Please fix the errors below before continuing'}
-                  </p>
-                  {Object.keys(errors).length > 0 && (
-                    <ul style={{ margin: '8px 0 0 0', padding: '0 0 0 16px', fontSize: '13px', color: '#991B1B' }}>
-                      {Object.entries(errors).map(([field, message]) => (
-                        <li key={field}>{message}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <WizardStep
-              title="Campaign Identity"
-              description="Basic information about your campaign"
-              isActive={currentStep === 0}
-              stepNumber={1}
-              totalSteps={WIZARD_STEPS.length}
-            >
-              <FormField
-                label="Campaign Name"
-                name="name"
-                value={formData.name}
-                onChange={(v) => updateField('name', String(v))}
-                placeholder="Enter campaign name"
-                required
-                error={errors['campaign_identity.name']}
-              />
-              <FormField
-                label="Description"
-                name="description"
-                type="textarea"
-                value={formData.description}
-                onChange={(v) => updateField('description', String(v))}
-                placeholder="Describe the campaign objectives and target audience"
-              />
-            </WizardStep>
-
-            <WizardStep
-              title="ICP Definition"
-              description="Define your Ideal Customer Profile"
-              isActive={currentStep === 1}
-              stepNumber={2}
-              totalSteps={WIZARD_STEPS.length}
-            >
-              <TagInput
-                label="Keywords"
-                name="keywords"
-                values={formData.keywords}
-                onChange={(v) => updateField('keywords', v)}
-                placeholder="Type and press Enter (required)"
-                helpText="Primary drivers of organization sourcing. At least one required."
-                error={errors['icp.keywords']}
-                required
-              />
-              <TagInput
-                label="Geography"
-                name="geographies"
-                values={formData.geographies}
-                onChange={(v) => updateField('geographies', v)}
-                placeholder="e.g., United States, Europe (required)"
-                helpText="Defines where organizations are sourced from. Required."
-                error={errors['icp.geographies']}
-                required
-              />
-              <TagInput
-                label="Industries"
-                name="industries"
-                values={formData.industries}
-                onChange={(v) => updateField('industries', v)}
-                placeholder="Type and press Enter"
-                helpText="Target industries for this campaign"
-              />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <FormField
-                  label="Company Size (Min)"
-                  name="companySizeMin"
-                  type="number"
-                  value={formData.companySizeMin}
-                  onChange={(v) => updateField('companySizeMin', Number(v))}
-                />
-                <FormField
-                  label="Company Size (Max)"
-                  name="companySizeMax"
-                  type="number"
-                  value={formData.companySizeMax}
-                  onChange={(v) => updateField('companySizeMax', Number(v))}
-                />
-              </div>
-              <TagInput
-                label="Job Titles"
-                name="jobTitles"
-                values={formData.jobTitles}
-                onChange={(v) => updateField('jobTitles', v)}
-                placeholder="e.g., VP of Sales, CRO"
-              />
-            </WizardStep>
-
-            <WizardStep
-              title="Organization Sourcing"
-              description="How organizations will be sourced for this campaign"
-              isActive={currentStep === 2}
-              stepNumber={3}
-              totalSteps={WIZARD_STEPS.length}
-            >
-              <div
-                style={{
-                  backgroundColor: '#EFF6FF',
-                  borderRadius: NSD_RADIUS.md,
-                  padding: '20px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '12px',
-                }}
-              >
-                <Icon name="info" size={20} color="#1E40AF" />
-                <div>
-                  <p
-                    style={{
-                      margin: '0 0 8px 0',
-                      fontSize: '14px',
-                      fontWeight: 500,
-                      color: '#1E40AF',
-                    }}
-                  >
-                    Automatic ICP-Based Sourcing
-                  </p>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: '13px',
-                      color: '#1E40AF',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    Organizations are sourced automatically based on ICP criteria. Full population sourcing is assumed. No quantity or cap settings are required in v1.
-                  </p>
-                </div>
-              </div>
-            </WizardStep>
-
-            <WizardStep
-              title="Contact Targeting"
-              description="Define how contacts are selected within organizations"
-              isActive={currentStep === 3}
-              stepNumber={4}
-              totalSteps={WIZARD_STEPS.length}
-            >
-              <TagInput
-                label="Target Roles"
-                name="roles"
-                values={formData.roles}
-                onChange={(v) => updateField('roles', v)}
-                placeholder="e.g., Sales, Marketing"
-              />
-              <TagInput
-                label="Seniority Levels"
-                name="seniority"
-                values={formData.seniority}
-                onChange={(v) => updateField('seniority', v)}
-                placeholder="e.g., Director, VP, C-Level"
-              />
-              <FormField
-                label="Max Contacts per Organization"
-                name="maxContactsPerOrg"
-                type="number"
-                value={formData.maxContactsPerOrg}
-                onChange={(v) => updateField('maxContactsPerOrg', Number(v))}
-              />
-            </WizardStep>
-
-            <WizardStep
-              title="Outreach Context"
-              description="Messaging and positioning for outreach"
-              isActive={currentStep === 4}
-              stepNumber={5}
-              totalSteps={WIZARD_STEPS.length}
-            >
-              <FormField
-                label="Tone"
-                name="tone"
-                type="select"
-                value={formData.tone}
-                onChange={(v) => updateField('tone', String(v))}
-                options={[
-                  { value: 'professional', label: 'Professional' },
-                  { value: 'casual', label: 'Casual' },
-                  { value: 'friendly', label: 'Friendly' },
-                  { value: 'formal', label: 'Formal' },
-                ]}
-              />
-              <TagInput
-                label="Value Propositions"
-                name="valuePropositions"
-                values={formData.valuePropositions}
-                onChange={(v) => updateField('valuePropositions', v)}
-                placeholder="Key value propositions"
-                helpText="Pre-filled with suggestions. Edit or add your own."
-              />
-              <TagInput
-                label="Pain Points"
-                name="painPoints"
-                values={formData.painPoints}
-                onChange={(v) => updateField('painPoints', v)}
-                placeholder="Pain points to address"
-                helpText="Pre-filled with suggestions. Edit or add your own."
-              />
-              <TagInput
-                label="Calls to Action"
-                name="callToAction"
-                values={formData.callToAction}
-                onChange={(v) => updateField('callToAction', v)}
-                placeholder="e.g., Book a demo"
-                helpText="Pre-filled with suggestions. Edit or add your own."
-              />
-            </WizardStep>
-
-            <WizardStep
-              title="Readiness Requirements"
-              description="Prerequisites for campaign execution"
-              isActive={currentStep === 5}
-              stepNumber={6}
-              totalSteps={WIZARD_STEPS.length}
-            >
-              <FormField
-                label="Deliverability Threshold (%)"
-                name="deliverabilityThreshold"
-                type="number"
-                value={formData.deliverabilityThreshold}
-                onChange={(v) => updateField('deliverabilityThreshold', Number(v))}
-                helpText="Minimum deliverability score required"
-              />
-            </WizardStep>
-
-            <WizardStep
-              title="Campaign Targets (Optional)"
-              description="Benchmarks only — do not affect campaign execution"
-              isActive={currentStep === 6}
-              stepNumber={7}
-              totalSteps={WIZARD_STEPS.length}
-            >
-              <div
-                style={{
-                  backgroundColor: '#EFF6FF',
-                  borderRadius: NSD_RADIUS.md,
-                  padding: '16px',
-                  marginBottom: '24px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '12px',
-                }}
-              >
-                <Icon name="info" size={20} color="#1E40AF" />
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: '13px',
-                    color: '#1E40AF',
-                    lineHeight: 1.5,
-                  }}
-                >
-                  Targets are benchmarks only. They do not enforce minimums, caps, or affect campaign execution in any way. Use these to track progress against goals.
-                </p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
-                <FormField
-                  label="Target Leads"
-                  name="targetLeads"
-                  type="number"
-                  value={formData.targetLeads ?? ''}
-                  onChange={(v) => updateField('targetLeads', v ? Number(v) : null)}
-                  helpText="Number of qualified leads"
-                />
-                <FormField
-                  label="Target Emails"
-                  name="targetEmails"
-                  type="number"
-                  value={formData.targetEmails ?? ''}
-                  onChange={(v) => updateField('targetEmails', v ? Number(v) : null)}
-                  helpText="Number of emails to send"
-                />
-                <FormField
-                  label="Target Reply Rate (%)"
-                  name="targetReplyRate"
-                  type="number"
-                  value={formData.targetReplyRate ?? ''}
-                  onChange={(v) => updateField('targetReplyRate', v ? Number(v) : null)}
-                  helpText="Expected reply rate percentage"
-                />
-              </div>
-            </WizardStep>
-
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginTop: '24px',
-              }}
-            >
-              <button
-                onClick={goPrev}
-                disabled={currentStep === 0}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: NSD_COLORS.background,
-                  color: currentStep === 0 ? NSD_COLORS.text.muted : NSD_COLORS.text.primary,
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  borderRadius: NSD_RADIUS.md,
-                  border: `1px solid ${NSD_COLORS.border.default}`,
-                  cursor: currentStep === 0 ? 'not-allowed' : 'pointer',
-                  opacity: currentStep === 0 ? 0.5 : 1,
-                }}
-              >
-                Previous
-              </button>
-
-              {currentStep < WIZARD_STEPS.length - 1 ? (
-                <button
-                  onClick={goNext}
-                  style={{
-                    padding: '12px 24px',
-                    backgroundColor: NSD_COLORS.primary,
-                    color: NSD_COLORS.text.inverse,
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    borderRadius: NSD_RADIUS.md,
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Continue
-                </button>
-              ) : (
-                <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || !formData.name.trim()}
-                  style={{
-                    padding: '12px 32px',
-                    backgroundColor: isSubmitting || !formData.name.trim() ? NSD_COLORS.text.muted : NSD_COLORS.cta,
-                    color: NSD_COLORS.text.inverse,
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    borderRadius: NSD_RADIUS.md,
-                    border: 'none',
-                    cursor: isSubmitting || !formData.name.trim() ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {isSubmitting ? 'Submitting...' : 'Create Campaign'}
-                </button>
+            <Icon name="warning" size={20} color="#991B1B" />
+            <div>
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: '#991B1B' }}>
+                {submitResult?.error || 'Please fix the errors below before continuing'}
+              </p>
+              {Object.keys(errors).length > 0 && (
+                <ul style={{ margin: '8px 0 0 0', padding: '0 0 0 16px', fontSize: '13px', color: '#991B1B' }}>
+                  {Object.entries(errors).map(([field, message]) => (
+                    <li key={field}>{message}</li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>
+        )}
+
+        <WizardStep
+          title="Campaign Identity"
+          description="Basic information about your campaign"
+          isActive={currentStep === 0}
+          stepNumber={1}
+          totalSteps={WIZARD_STEPS.length}
+        >
+          <FormField
+            label="Campaign Name"
+            name="name"
+            value={formData.name}
+            onChange={(v) => updateField('name', String(v))}
+            placeholder="Enter campaign name"
+            required
+            error={errors['campaign_identity.name']}
+          />
+          <FormField
+            label="Description"
+            name="description"
+            type="textarea"
+            value={formData.description}
+            onChange={(v) => updateField('description', String(v))}
+            placeholder="Describe the campaign objectives and target audience"
+          />
+
+          {/* Planning-Only Campaign Toggle
+           *
+           * EXECUTION CONTRACT NOTE:
+           * platform-shell does NOT execute campaigns.
+           * This toggle sets sourcing_config.benchmarks_only at creation time.
+           * The value is included in the /api/campaign-create payload and
+           * persisted to the database via that endpoint.
+           *
+           * For EXISTING campaigns, use the PlanningOnlyToggle component
+           * on the campaign detail page, which calls:
+           *   PATCH /api/campaign-config
+           *   → PATCH ${SALES_ENGINE_URL}/api/v1/campaigns/:id/sourcing-config
+           *
+           * WHY MISLEADING BEFORE:
+           * - This toggle only affected local React state during creation
+           * - For existing campaigns, there was NO way to change this value
+           * - Users could not convert between planning-only and executable modes
+           *
+           * WHY PLATFORM-SHELL MUST NOT WRITE DIRECTLY:
+           * - All campaign mutations must go through nsd-sales-engine
+           * - platform-shell is a UI/adapter layer, not a data authority
+           * - This ensures consistency and proper audit logging
+           */}
+          <div style={{ marginTop: '20px' }}>
+            <div style={{ marginBottom: '8px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: NSD_COLORS.text.primary,
+                  marginBottom: '4px',
+                }}
+              >
+                Planning-Only Campaign?
+              </label>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '12px',
+                  color: NSD_COLORS.text.muted,
+                  lineHeight: 1.5,
+                }}
+              >
+                Planning-only campaigns are used for forecasting and analysis. They cannot be executed or launched.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  padding: '10px 16px',
+                  borderRadius: NSD_RADIUS.md,
+                  border: `2px solid ${!formData.planningOnly ? NSD_COLORS.secondary : NSD_COLORS.border.light}`,
+                  backgroundColor: !formData.planningOnly ? '#EEF2FF' : NSD_COLORS.background,
+                  transition: 'all 0.2s',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="planningOnly"
+                  checked={!formData.planningOnly}
+                  onChange={() => updateField('planningOnly', false)}
+                  style={{ accentColor: NSD_COLORS.secondary }}
+                />
+                <span style={{ fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
+                  No
+                </span>
+                <span style={{ fontSize: '12px', color: NSD_COLORS.text.muted }}>
+                  — Can be executed
+                </span>
+              </label>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  padding: '10px 16px',
+                  borderRadius: NSD_RADIUS.md,
+                  border: `2px solid ${formData.planningOnly ? NSD_COLORS.semantic.attention.border : NSD_COLORS.border.light}`,
+                  backgroundColor: formData.planningOnly ? NSD_COLORS.semantic.attention.bg : NSD_COLORS.background,
+                  transition: 'all 0.2s',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="planningOnly"
+                  checked={formData.planningOnly}
+                  onChange={() => updateField('planningOnly', true)}
+                  style={{ accentColor: NSD_COLORS.semantic.attention.text }}
+                />
+                <span style={{ fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
+                  Yes
+                </span>
+                <span style={{ fontSize: '12px', color: NSD_COLORS.text.muted }}>
+                  — Forecasting only
+                </span>
+              </label>
+            </div>
+          </div>
+        </WizardStep>
+
+        <WizardStep
+          title="ICP Definition"
+          description="Define your Ideal Customer Profile"
+          isActive={currentStep === 1}
+          stepNumber={2}
+          totalSteps={WIZARD_STEPS.length}
+        >
+          {/* REQUIRED: Keywords */}
+          <TagInput
+            label="Keywords"
+            name="keywords"
+            values={formData.keywords}
+            onChange={(v) => updateField('keywords', v)}
+            placeholder="Type and press Enter (required)"
+            helpText="Keywords are required for campaign targeting"
+            error={errors['icp.keywords']}
+          />
+          {/* REQUIRED: Geographies */}
+          <TagInput
+            label="Geographies"
+            name="geographies"
+            values={formData.geographies}
+            onChange={(v) => updateField('geographies', v)}
+            placeholder="e.g., United States, Europe (required)"
+            helpText="At least one geography is required"
+            error={errors['icp.geographies']}
+          />
+          <TagInput
+            label="Industries"
+            name="industries"
+            values={formData.industries}
+            onChange={(v) => updateField('industries', v)}
+            placeholder="e.g., Technology, Healthcare"
+            helpText="Target industries for this campaign"
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <FormField
+              label="Company Size (Min)"
+              name="companySizeMin"
+              type="number"
+              value={formData.companySizeMin}
+              onChange={(v) => updateField('companySizeMin', Number(v))}
+            />
+            <FormField
+              label="Company Size (Max)"
+              name="companySizeMax"
+              type="number"
+              value={formData.companySizeMax}
+              onChange={(v) => updateField('companySizeMax', Number(v))}
+            />
+          </div>
+          <TagInput
+            label="Job Titles"
+            name="jobTitles"
+            values={formData.jobTitles}
+            onChange={(v) => updateField('jobTitles', v)}
+            placeholder="e.g., VP of Sales, CRO"
+          />
+        </WizardStep>
+
+        {/* 
+          M67-14 GOVERNANCE: Organization Sourcing is READ-ONLY
+          - No inputs, toggles, selectors, counts, or limits
+          - Derived automatically from ICP
+        */}
+        <WizardStep
+          title="Organization Sourcing"
+          description="How organizations will be sourced for this campaign"
+          isActive={currentStep === 2}
+          stepNumber={3}
+          totalSteps={WIZARD_STEPS.length}
+        >
+          <div
+            style={{
+              backgroundColor: '#F3F4F6',
+              borderRadius: NSD_RADIUS.md,
+              padding: '24px',
+              border: `1px solid ${NSD_COLORS.border.light}`,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '16px',
+              }}
+            >
+              <Icon name="info" size={20} color={NSD_COLORS.text.secondary} />
+              <span
+                style={{
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: NSD_COLORS.text.primary,
+                }}
+              >
+                Derived automatically from ICP
+              </span>
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '13px',
+                color: NSD_COLORS.text.secondary,
+                lineHeight: 1.6,
+              }}
+            >
+              Organization sourcing is determined by your ICP definition. 
+              Organizations matching your keywords, geographies, and other criteria 
+              will be automatically identified during campaign execution.
+            </p>
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '12px',
+                backgroundColor: NSD_COLORS.background,
+                borderRadius: NSD_RADIUS.sm,
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '12px',
+                  color: NSD_COLORS.text.muted,
+                  fontStyle: 'italic',
+                }}
+              >
+                No configuration required. This step is for your awareness only.
+              </p>
+            </div>
+          </div>
+        </WizardStep>
+
+        <WizardStep
+          title="Contact Targeting"
+          description="Define how contacts are selected within organizations"
+          isActive={currentStep === 3}
+          stepNumber={4}
+          totalSteps={WIZARD_STEPS.length}
+        >
+          <TagInput
+            label="Target Roles"
+            name="roles"
+            values={formData.roles}
+            onChange={(v) => updateField('roles', v)}
+            placeholder="e.g., Sales, Marketing"
+          />
+          <TagInput
+            label="Seniority Levels"
+            name="seniority"
+            values={formData.seniority}
+            onChange={(v) => updateField('seniority', v)}
+            placeholder="e.g., Director, VP, C-Level"
+          />
+          <FormField
+            label="Max Contacts per Organization"
+            name="maxContactsPerOrg"
+            type="number"
+            value={formData.maxContactsPerOrg}
+            onChange={(v) => updateField('maxContactsPerOrg', Number(v))}
+          />
+        </WizardStep>
+
+        {/* M67-14: Lead Qualification step REMOVED - minimumSignals is forbidden */}
+
+        <WizardStep
+          title="Outreach Context"
+          description="Messaging and positioning for outreach"
+          isActive={currentStep === 4}
+          stepNumber={5}
+          totalSteps={WIZARD_STEPS.length}
+        >
+          <FormField
+            label="Tone"
+            name="tone"
+            type="select"
+            value={formData.tone}
+            onChange={(v) => updateField('tone', String(v))}
+            options={[
+              { value: 'professional', label: 'Professional' },
+              { value: 'casual', label: 'Casual' },
+              { value: 'friendly', label: 'Friendly' },
+              { value: 'formal', label: 'Formal' },
+            ]}
+          />
+          <TagInput
+            label="Value Propositions"
+            name="valuePropositions"
+            values={formData.valuePropositions}
+            onChange={(v) => updateField('valuePropositions', v)}
+            placeholder="Key value propositions"
+          />
+          <TagInput
+            label="Pain Points"
+            name="painPoints"
+            values={formData.painPoints}
+            onChange={(v) => updateField('painPoints', v)}
+            placeholder="Pain points to address"
+          />
+          <FormField
+            label="Call to Action"
+            name="callToAction"
+            value={formData.callToAction}
+            onChange={(v) => updateField('callToAction', String(v))}
+            placeholder="e.g., Book a demo"
+          />
+        </WizardStep>
+
+        {/* 
+          M67-14 GOVERNANCE: Targets are BENCHMARKS ONLY
+          - Do not gate execution, sourcing, or approval
+          - Do not affect lifecycle
+          - Only target_leads, target_emails, target_reply_rate allowed
+          - target_organizations, target_contacts REMOVED
+        */}
+        <WizardStep
+          title="Campaign Targets (Optional)"
+          description="Benchmarks only — do not affect campaign execution"
+          isActive={currentStep === 5}
+          stepNumber={6}
+          totalSteps={WIZARD_STEPS.length}
+        >
+          <div
+            style={{
+              backgroundColor: '#EFF6FF',
+              borderRadius: NSD_RADIUS.md,
+              padding: '16px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+            }}
+          >
+            <Icon name="info" size={20} color="#1E40AF" />
+            <p
+              style={{
+                margin: 0,
+                fontSize: '13px',
+                color: '#1E40AF',
+                lineHeight: 1.5,
+              }}
+            >
+              Targets are benchmarks only and do not affect campaign execution.
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <FormField
+              label="Target Leads"
+              name="targetLeads"
+              type="number"
+              value={formData.targetLeads ?? ''}
+              onChange={(v) => updateField('targetLeads', v ? Number(v) : null)}
+              helpText="Benchmark only"
+            />
+            <FormField
+              label="Target Emails"
+              name="targetEmails"
+              type="number"
+              value={formData.targetEmails ?? ''}
+              onChange={(v) => updateField('targetEmails', v ? Number(v) : null)}
+              helpText="Benchmark only"
+            />
+            <FormField
+              label="Target Reply Rate (%)"
+              name="targetReplyRate"
+              type="number"
+              value={formData.targetReplyRate ?? ''}
+              onChange={(v) => updateField('targetReplyRate', v ? Number(v) : null)}
+              helpText="Benchmark only (e.g., 5 for 5%)"
+            />
+          </div>
+        </WizardStep>
+
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginTop: '24px',
+          }}
+        >
+          <button
+            onClick={goPrev}
+            disabled={currentStep === 0}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: NSD_COLORS.background,
+              color: currentStep === 0 ? NSD_COLORS.text.muted : NSD_COLORS.text.primary,
+              fontSize: '14px',
+              fontWeight: 500,
+              borderRadius: NSD_RADIUS.md,
+              border: `1px solid ${NSD_COLORS.border.default}`,
+              cursor: currentStep === 0 ? 'not-allowed' : 'pointer',
+              opacity: currentStep === 0 ? 0.5 : 1,
+            }}
+          >
+            Previous
+          </button>
+
+          {currentStep < WIZARD_STEPS.length - 1 ? (
+            <button
+              onClick={goNext}
+              style={{
+                padding: '12px 24px',
+                backgroundColor: NSD_COLORS.primary,
+                color: NSD_COLORS.text.inverse,
+                fontSize: '14px',
+                fontWeight: 500,
+                borderRadius: NSD_RADIUS.md,
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Continue
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting || !formData.name.trim()}
+              style={{
+                padding: '12px 32px',
+                backgroundColor: isSubmitting || !formData.name.trim() ? NSD_COLORS.text.muted : NSD_COLORS.cta,
+                color: NSD_COLORS.text.inverse,
+                fontSize: '14px',
+                fontWeight: 500,
+                borderRadius: NSD_RADIUS.md,
+                border: 'none',
+                cursor: isSubmitting || !formData.name.trim() ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {isSubmitting ? 'Submitting...' : 'Create Campaign'}
+            </button>
+          )}
         </div>
+          </div>
+          {/* End Right Column */}
+        </div>
+        {/* End Two-column layout */}
       </div>
     </div>
   );

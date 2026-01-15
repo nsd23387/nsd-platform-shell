@@ -190,18 +190,3 @@ export function logViolationAttempt(method: string, endpoint: string): void {
   // TODO: Integrate with ODS observability tables for monitoring
 }
 
-/**
- * Message to display when a mutation feature is not available.
- */
-export const READ_ONLY_MESSAGE = 
-  'This action is not available. The Sales Engine UI is read-only. ' +
-  'Execution and data mutations are managed by backend governance systems.';
-
-/**
- * Component-friendly readonly status.
- */
-export const READ_ONLY_STATUS = {
-  isReadOnly: true,
-  message: READ_ONLY_MESSAGE,
-  constraint: 'Governance-first, read-only UI façade',
-} as const;

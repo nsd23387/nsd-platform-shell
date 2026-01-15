@@ -4,26 +4,23 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Icon } from '../../../design/components/Icon';
 import { NavBar, PageHeader } from '../components/ui';
-import { getRecentRuns, getDashboardThroughput, getDashboardReadiness } from '../lib/api';
-import type { RecentRunOutcome, DashboardThroughput, DashboardReadiness } from '../types/campaign';
+import { getRecentRuns, getDashboardThroughput } from '../lib/api';
+import type { RecentRunOutcome, DashboardThroughput } from '../types/campaign';
 
 export default function MonitoringPage() {
   const [runs, setRuns] = useState<RecentRunOutcome[]>([]);
   const [throughput, setThroughput] = useState<DashboardThroughput | null>(null);
-  const [readiness, setReadiness] = useState<DashboardReadiness | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [runsData, throughputData, readinessData] = await Promise.all([
+        const [runsData, throughputData] = await Promise.all([
           getRecentRuns(),
           getDashboardThroughput(),
-          getDashboardReadiness(),
         ]);
         setRuns(runsData);
         setThroughput(throughputData);
-        setReadiness(readinessData);
       } catch (err) {
         console.error('Failed to load monitoring data:', err);
       } finally {
@@ -33,6 +30,14 @@ export default function MonitoringPage() {
     loadData();
   }, []);
 
+  /**
+   * Yield metrics computed from run outcomes.
+   * 
+   * IMPORTANT: Contacts and leads are distinct; leads are conditionally promoted.
+   * - "Leads Attempted" = promoted leads (Tier A/B) that were processed
+   * - Tier C/D contacts are never leads and are not included in these counts
+   * - Lead counts reflect promoted leads only, not total contacts
+   */
   const yieldMetrics = runs.length > 0 ? {
     totalLeads: runs.reduce((sum, r) => sum + r.leadsAttempted, 0),
     totalSent: runs.reduce((sum, r) => sum + r.leadsSent, 0),
@@ -47,7 +52,6 @@ export default function MonitoringPage() {
   const safetyMetrics = {
     blockedByThroughput: throughput?.blockedByThroughput || 0,
     totalBlocked: runs.reduce((sum, r) => sum + r.leadsBlocked, 0),
-    blockerCount: readiness?.blockers?.length || 0,
   };
 
   if (loading) {
@@ -69,47 +73,57 @@ export default function MonitoringPage() {
         <NavBar active="monitoring" />
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px', marginBottom: '32px' }}>
-          <MetricGroup
-            title="Yield"
-            icon="chart"
-            color="#10b981"
-            metrics={[
-              { label: 'Total Leads Attempted', value: yieldMetrics?.totalLeads || 0 },
-              { label: 'Successfully Sent', value: yieldMetrics?.totalSent || 0 },
-              { label: 'Success Rate', value: `${yieldMetrics?.successRate || 0}%` },
-            ]}
-          />
+          {/* 
+            Yield metrics display promoted leads only.
+            Contacts and leads are distinct; leads are conditionally promoted.
+            Lead counts do NOT include Tier C/D contacts.
+            
+            DEFENSIVE RENDERING: Only show metrics when data exists from API.
+          */}
+          {yieldMetrics && (
+            <MetricGroup
+              title="Observed Yield"
+              icon="chart"
+              color="#3730A3"
+              metrics={[
+                { label: 'Promoted Leads Attempted', value: yieldMetrics.totalLeads },
+                { label: 'Successfully Sent', value: yieldMetrics.totalSent },
+                { label: 'Completed Runs', value: `${runs.filter(r => r.status === 'COMPLETED').length}` },
+              ]}
+            />
+          )}
 
           <MetricGroup
             title="Efficiency"
             icon="clock"
-            color="#8b5cf6"
+            color="#692BAA"
             metrics={[
-              { label: 'Daily Utilization', value: `${efficiencyMetrics?.utilizationRate || 0}%` },
-              { label: 'Active Campaigns', value: efficiencyMetrics?.activeCampaigns || 0 },
-              { label: 'Throughput Used', value: throughput?.usedToday || 0 },
+              { label: 'Daily Utilization', value: efficiencyMetrics ? `${efficiencyMetrics.utilizationRate}%` : 'Not observed' },
+              { label: 'Active Campaigns', value: efficiencyMetrics?.activeCampaigns ?? 'Not observed' },
+              { label: 'Throughput Used', value: throughput?.usedToday ?? 'Not observed' },
             ]}
           />
 
-          <MetricGroup
-            title="Quality"
-            icon="star"
-            color="#f59e0b"
-            metrics={[
-              { label: 'Completed Runs', value: runs.filter(r => r.status === 'COMPLETED').length },
-              { label: 'Partial Runs', value: runs.filter(r => r.status === 'PARTIAL').length },
-              { label: 'Failed Runs', value: runs.filter(r => r.status === 'FAILED').length },
-            ]}
-          />
+          {runs.length > 0 && (
+            <MetricGroup
+              title="Run Quality"
+              icon="star"
+              color="#3730A3"
+              metrics={[
+                { label: 'Completed Runs', value: runs.filter(r => r.status === 'COMPLETED').length },
+                { label: 'Partial Runs', value: runs.filter(r => r.status === 'PARTIAL').length },
+                { label: 'Failed Runs', value: runs.filter(r => r.status === 'FAILED').length },
+              ]}
+            />
+          )}
 
           <MetricGroup
             title="Safety"
             icon="shield"
-            color="#ef4444"
+            color="#991B1B"
             metrics={[
               { label: 'Blocked by Throughput', value: safetyMetrics.blockedByThroughput },
-              { label: 'Leads Blocked (Recent)', value: safetyMetrics.totalBlocked },
-              { label: 'Active Blockers', value: safetyMetrics.blockerCount },
+              { label: 'Leads Blocked (Recent)', value: runs.length > 0 ? safetyMetrics.totalBlocked : 'Not observed' },
             ]}
           />
         </div>
@@ -150,8 +164,9 @@ export default function MonitoringPage() {
                       <span
                         style={{
                           padding: '4px 10px',
-                          backgroundColor: run.status === 'COMPLETED' ? '#d1fae5' : run.status === 'FAILED' ? '#fef2f2' : '#fef3c7',
-                          color: run.status === 'COMPLETED' ? '#065f46' : run.status === 'FAILED' ? '#991b1b' : '#92400e',
+                          backgroundColor: run.status === 'COMPLETED' ? '#E0E7FF' : run.status === 'FAILED' ? '#FEE2E2' : '#FEF3C7',
+                          color: run.status === 'COMPLETED' ? '#3730A3' : run.status === 'FAILED' ? '#991B1B' : '#92400E',
+                          border: `1px solid ${run.status === 'COMPLETED' ? '#A5B4FC' : run.status === 'FAILED' ? '#FECACA' : '#FCD34D'}`,
                           borderRadius: '6px',
                           fontSize: '12px',
                           fontWeight: 500,
@@ -163,10 +178,10 @@ export default function MonitoringPage() {
                     <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: '#6b7280' }}>
                       {run.leadsAttempted}
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: '#10b981', fontWeight: 500 }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: '#3730A3', fontWeight: 500 }}>
                       {run.leadsSent}
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: run.leadsBlocked > 0 ? '#ef4444' : '#6b7280' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: run.leadsBlocked > 0 ? '#991B1B' : '#6b7280' }}>
                       {run.leadsBlocked}
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '13px', color: '#6b7280' }}>

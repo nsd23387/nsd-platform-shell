@@ -1,0 +1,205 @@
+Replit Prompt — Execution Timeline & Explainability UI (Authoritative)
+
+Project Context
+You are working inside the NSD Sales Engine UI.
+This is a UI-only, read-only enhancement to improve execution observability and user explainability.
+
+🔒 Hard Constraints (Non-Negotiable)
+
+❌ NO backend changes
+
+❌ NO schema changes
+
+❌ NO cron / worker / execution logic changes
+
+❌ NO Apollo logic
+
+❌ NO Supabase mutations
+
+❌ NO new API endpoints
+
+❌ NO inference beyond explicit signals
+
+✅ READ-ONLY UI only
+
+✅ Consume existing APIs and data exactly as-is
+
+This task is about explaining execution, not changing it.
+
+📦 Target Repository (IMPORTANT)
+
+Repo: nsd-platform-shell
+This work must live entirely in the Platform Shell UI, not in:
+
+nsd-sales-engine (backend execution)
+
+nsd-ods-api (data / semantics)
+
+The Platform Shell already consumes Sales Engine APIs — extend that consumption only.
+
+🎯 Goal
+
+Replace ambiguous execution indicators like:
+
+“Running”
+
+“Queue mode”
+
+“Awaiting execution”
+
+with a clear, user-explainable Execution Timeline that answers:
+
+Did my campaign actually run?
+
+Was anything queued?
+
+Did the worker do work or intentionally do nothing?
+
+Is this idle, completed, or waiting — and why?
+
+A non-technical user must understand execution state without reading logs.
+
+🔌 Data Sources (Consume Only)
+
+You may consume only existing sources, including:
+
+Sales Engine API
+
+GET /api/v1/campaigns/:id/runs/latest
+
+Legacy fallback already exists in useLatestRunStatus
+
+Existing run fields
+
+campaign_runs.status
+
+campaign_runs.execution_mode
+
+campaign_runs.created_at
+
+campaign_runs.updated_at
+
+Existing observability signals
+
+Presence or absence of runs
+
+queued vs non-queued states
+
+Known “no work” outcomes (e.g. cron idle semantics)
+
+⚠️ If a signal is not explicitly available, do not invent it.
+
+🧠 What You Must Build
+1. Execution Timeline Component (New UI)
+
+Create a read-only component that renders a deterministic timeline, for example:
+
+Execution Timeline
+────────────────────────────
+✓ Run created (Jan 15, 21:32)
+⚠️ No queued work detected
+ℹ️ Worker checked queue and found no executable steps
+
+
+OR (when applicable):
+
+✓ Run created
+✓ Run queued
+✓ Worker started execution
+⏳ Executing: Organization Sourcing
+
+
+This component must:
+
+Be derived entirely from existing data
+
+Never imply backend failure
+
+Explicitly explain “nothing happened” as a valid state
+
+2. Explicit Status Explanations (Critical)
+
+Replace ambiguous labels with explanatory copy.
+
+Examples (choose exact copy or improve it):
+
+No queued runs
+
+“This campaign was approved, but no executable steps were eligible at this time.”
+
+Queue mode + idle
+
+“The execution worker checked the queue and found no work. This may occur if execution completed immediately or no sourcing criteria produced results.”
+
+Run exists, no phases
+
+“Execution completed without entering the queue. No external services were contacted.”
+
+3. Strict State Mapping (No Inference)
+
+Create a small adapter that maps raw backend signals → user-meaningful states.
+
+Example mapping table (must be explicit in code comments):
+
+Backend Condition	UI Meaning
+No run exists	“Campaign not executed yet”
+Run exists + status=queued	“Awaiting worker pickup”
+Run exists + cron idle	“No eligible work found”
+Run exists + completed	“Execution finished”
+
+Do not infer Apollo usage or execution phases unless explicitly observable.
+
+🧩 Where to Integrate
+
+Integrate the timeline directly into the Campaign detail page
+
+Place it near:
+
+“Latest Run Status”
+
+“Execution Status”
+
+This component replaces ambiguity, not adds noise
+
+🧪 Validation Checklist (Must Pass)
+
+✅ UI correctly explains the current “stuck in queue” scenario
+
+✅ UI makes it clear Apollo was not reached
+
+✅ No backend code was touched
+
+✅ No new API calls were added
+
+✅ A non-technical user can understand execution outcome
+
+✅ Execution “doing nothing” is clearly presented as intentional
+
+🚫 Explicit Non-Goals
+
+Do not fix execution semantics
+
+Do not add retries
+
+Do not change queue behavior
+
+Do not force runs into queued
+
+Do not simulate backend states
+
+Do not add debug-only UI
+
+📌 Success Criteria
+
+This work is complete when:
+
+A user can look at the campaign page and immediately understand
+what happened, why it happened, and whether action is required — without logs.
+
+If Replit asks clarifying questions, default to:
+
+Read-only
+
+Explain, don’t infer
+
+UI clarity over technical detail

@@ -11,7 +11,7 @@ import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'NSD Command Center',
-  description: 'Read-only analytics dashboards powered by Activity Spine',
+  description: 'Sales Engine Campaign Management',
 };
 
 export default function RootLayout({

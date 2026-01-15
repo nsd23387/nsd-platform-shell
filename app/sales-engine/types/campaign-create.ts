@@ -9,6 +9,17 @@
  * - source_eligible = false (no sourcing occurs)
  * - targets_gating = false (targets are benchmarks only)
  * - No execution, sourcing, learning, or analytics behavior
+ * 
+ * M67-14 REMOVED FIELDS (forbidden):
+ * - technologies
+ * - source_type, max_organizations (organization_sourcing derived from ICP)
+ * - minimum_signals (lead_qualification removed)
+ * - target_organizations, target_contacts, target_replies
+ * 
+ * M67-14 REQUIRED FIELDS:
+ * - name
+ * - keywords[] (non-empty)
+ * - geographies[] (non-empty)
  */
 
 export interface CampaignIdentity {
@@ -18,16 +29,22 @@ export interface CampaignIdentity {
   team_id?: string;
 }
 
+/**
+ * ICP Definition
+ * 
+ * REQUIRED: keywords, geographies (non-empty arrays)
+ * REMOVED: technologies (forbidden per M67-14)
+ */
 export interface ICPDefinition {
   company_size?: {
     min?: number;
     max?: number;
   };
   industries?: string[];
-  geographies?: string[];
+  geographies: string[];  // REQUIRED
   job_titles?: string[];
   seniority_levels?: string[];
-  keywords?: string[];
+  keywords: string[];     // REQUIRED
   exclusions?: {
     industries?: string[];
     domains?: string[];
@@ -35,12 +52,12 @@ export interface ICPDefinition {
   };
 }
 
-export interface OrganizationSourcing {
-  source_type: 'manual' | 'list' | 'criteria';
-  list_id?: string;
-  criteria?: ICPDefinition;
-}
-
+/**
+ * Contact Targeting
+ * 
+ * Organization sourcing is DERIVED from ICP (read-only)
+ * No OrganizationSourcing interface needed
+ */
 export interface ContactTargeting {
   roles?: string[];
   seniority?: string[];
@@ -51,11 +68,6 @@ export interface ContactTargeting {
   };
 }
 
-export interface LeadQualification {
-  required_fields?: string[];
-  scoring_model?: string;
-}
-
 export interface OutreachContext {
   tone?: string;
   value_propositions?: string[];
@@ -64,27 +76,44 @@ export interface OutreachContext {
   personalization_fields?: string[];
 }
 
-export interface ReadinessRequirements {
-  mailbox_health_required?: boolean;
-  deliverability_threshold?: number;
-  warmup_complete?: boolean;
-}
-
+/**
+ * Campaign Targets - BENCHMARKS ONLY
+ * 
+ * These do NOT gate execution, sourcing, or approval.
+ * They do NOT affect campaign lifecycle.
+ * 
+ * REMOVED: target_organizations, target_contacts, target_replies (forbidden)
+ * ALLOWED: target_leads, target_emails, target_reply_rate
+ */
 export interface CampaignTargets {
   target_leads?: number | null;
   target_emails?: number | null;
-  target_replies?: number | null;
+  target_reply_rate?: number | null;
 }
 
+/**
+ * Sourcing Configuration
+ * 
+ * benchmarks_only: If true, this is a planning-only campaign that cannot be executed.
+ */
+export interface SourcingConfig {
+  benchmarks_only: boolean;
+}
+
+/**
+ * M67-14 CampaignCreate Payload
+ * 
+ * REMOVED from payload:
+ * - organization_sourcing (derived from ICP)
+ * - lead_qualification (minimum_signals forbidden)
+ */
 export interface CampaignCreatePayload {
   campaign_identity: CampaignIdentity;
   icp: ICPDefinition;
-  organization_sourcing: OrganizationSourcing;
   contact_targeting: ContactTargeting;
-  lead_qualification: LeadQualification;
   outreach_context: OutreachContext;
-  readiness_requirements: ReadinessRequirements;
   campaign_targets?: CampaignTargets;
+  sourcing_config?: SourcingConfig;
 }
 
 export interface CampaignCreateSuccessResponse {

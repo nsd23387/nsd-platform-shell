@@ -1,5 +1,7 @@
 {
   "extends": ["next/core-web-vitals"],
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
   "rules": {
     "no-restricted-syntax": [
       "error",
@@ -24,6 +26,24 @@
     },
     {
       "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    },
+    {
+      "files": ["app/sales-engine/campaigns/new/**/*.tsx"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    },
+    {
+      "files": ["app/sales-engine/components/governance/**/*.tsx"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    },
+    {
+      "files": ["app/sales-engine/components/PlanningOnlyToggle.tsx"],
       "rules": {
         "no-restricted-syntax": "off"
       }

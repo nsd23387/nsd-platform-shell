@@ -6,22 +6,20 @@ import { Icon } from '../../../design/components/Icon';
 import { PageHeader, SectionCard, StatCard, StatusChip, Button, NavBar } from '../components/ui';
 import { NSD_COLORS, NSD_TYPOGRAPHY, NSD_RADIUS } from '../lib/design-tokens';
 import {
-  getDashboardReadiness,
   getDashboardThroughput,
   getSystemNotices,
   getRecentRuns,
   getNeedsAttention,
 } from '../lib/api';
 import type {
-  DashboardReadiness,
   DashboardThroughput,
   SystemNotice,
   RecentRunOutcome,
   NeedsAttentionItem,
 } from '../types/campaign';
+import { isApiDisabled, featureFlags } from '../../../config/appConfig';
 
 export default function SalesEngineHomePage() {
-  const [readiness, setReadiness] = useState<DashboardReadiness | null>(null);
   const [throughput, setThroughput] = useState<DashboardThroughput | null>(null);
   const [notices, setNotices] = useState<SystemNotice[]>([]);
   const [recentRuns, setRecentRuns] = useState<RecentRunOutcome[]>([]);
@@ -31,14 +29,12 @@ export default function SalesEngineHomePage() {
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [readinessData, throughputData, noticesData, runsData, attentionData] = await Promise.all([
-          getDashboardReadiness(),
+        const [throughputData, noticesData, runsData, attentionData] = await Promise.all([
           getDashboardThroughput(),
           getSystemNotices(),
           getRecentRuns(),
           getNeedsAttention(),
         ]);
-        setReadiness(readinessData);
         setThroughput(throughputData);
         setNotices(noticesData);
         setRecentRuns(runsData);
@@ -73,11 +69,22 @@ export default function SalesEngineHomePage() {
           title="Sales Engine"
           description="Command center for campaign lifecycle management"
           actions={
-            <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
-              <Button variant="cta" icon="plus">
+            featureFlags.canCreateCampaign ? (
+              <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
+                <Button variant="cta" icon="plus">
+                  New Campaign
+                </Button>
+              </Link>
+            ) : (
+              <Button 
+                variant="cta" 
+                icon="plus" 
+                disabled 
+                title="Campaign creation is disabled when API mode is disabled"
+              >
                 New Campaign
               </Button>
-            </Link>
+            )
           }
         />
 
@@ -103,24 +110,8 @@ export default function SalesEngineHomePage() {
           </div>
         )}
 
-        {readiness && (
-          <div style={{ marginBottom: '32px' }}>
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 600, color: NSD_COLORS.text.secondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Campaign Overview
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px' }}>
-              <StatCard label="Drafts" value={readiness.draft} icon="draft" color="#F59E0B" size="sm" />
-              <StatCard label="In Review" value={readiness.pendingReview} icon="review" color="#3B82F6" size="sm" />
-              <StatCard label="Approved & Ready" value={readiness.runnable} icon="check" color="#10B981" size="sm" />
-              <StatCard label="Running" value={readiness.running || 0} icon="runs" color={NSD_COLORS.secondary} size="sm" />
-              <StatCard label="Completed (7d)" value={readiness.completed || 0} icon="check" color="#10B981" size="sm" />
-              <StatCard label="Failed" value={readiness.failed || 0} icon="warning" color="#EF4444" size="sm" />
-            </div>
-          </div>
-        )}
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
-          <SectionCard title="Needs Attention" icon="warning" iconColor="#F59E0B">
+          <SectionCard title="Needs Attention" icon="warning" iconColor={NSD_COLORS.semantic.attention.text}>
             {attention.length === 0 ? (
               <p style={{ color: NSD_COLORS.text.muted, fontSize: '14px', textAlign: 'center', padding: '24px' }}>
                 No items require attention
@@ -148,7 +139,7 @@ export default function SalesEngineHomePage() {
                     style={{
                       width: `${Math.min((throughput.usedToday / throughput.dailyLimit) * 100, 100)}%`,
                       height: '100%',
-                      backgroundColor: throughput.usedToday > throughput.dailyLimit * 0.9 ? NSD_COLORS.error : NSD_COLORS.success,
+                      backgroundColor: throughput.usedToday > throughput.dailyLimit * 0.9 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.secondary,
                       transition: 'width 0.3s ease',
                     }}
                   />
@@ -157,14 +148,14 @@ export default function SalesEngineHomePage() {
                   {throughput.dailyLimit - throughput.usedToday} remaining today
                 </p>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
                   <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Active Campaigns</div>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.success }}>{throughput.activeCampaigns}</div>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.semantic.positive.text }}>{throughput.activeCampaigns}</div>
                 </div>
                 <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
                   <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Blocked</div>
-                  <div style={{ fontSize: '24px', fontWeight: 700, color: throughput.blockedByThroughput > 0 ? NSD_COLORS.error : NSD_COLORS.text.muted }}>{throughput.blockedByThroughput}</div>
+                  <div style={{ fontSize: '24px', fontWeight: 700, color: throughput.blockedByThroughput > 0 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.text.muted }}>{throughput.blockedByThroughput}</div>
                 </div>
               </div>
             </SectionCard>
@@ -203,8 +194,8 @@ export default function SalesEngineHomePage() {
                     <td style={{ padding: '14px 16px' }}>
                       <StatusChip status={run.status} size="sm" />
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.success, fontWeight: 500 }}>{run.leadsSent}</td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: run.leadsBlocked > 0 ? NSD_COLORS.error : NSD_COLORS.text.muted }}>{run.leadsBlocked}</td>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.semantic.positive.text, fontWeight: 500 }}>{run.leadsSent}</td>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: run.leadsBlocked > 0 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.text.muted }}>{run.leadsBlocked}</td>
                   </tr>
                 ))}
               </tbody>
@@ -216,11 +207,24 @@ export default function SalesEngineHomePage() {
   );
 }
 
+/**
+ * AttentionRow - Displays a campaign needing attention.
+ * 
+ * IMPORTANT: Copy must be governance-safe.
+ * - No "Ready to start" (implies execution initiation)
+ * - No "Auto-qualified" (leads require explicit promotion)
+ * - Use "Pending" or "Awaiting" terminology
+ */
 function AttentionRow({ item }: { item: NeedsAttentionItem }) {
+  // Governance-safe reason labels (no execution-first terminology)
   const reasonLabels: Record<string, string> = {
     in_review_stale: 'Awaiting review',
-    approved_not_started: 'Ready to start',
-    run_failed: 'Run failed',
+    pending_approval_stale: 'Awaiting review',
+    approved_not_started: 'Approved – awaiting execution',
+    approved_not_observed: 'Approved – not yet observed',
+    run_failed: 'Execution failed',
+    execution_failed: 'Execution failed',
+    blocked: 'Blocked',
   };
 
   return (

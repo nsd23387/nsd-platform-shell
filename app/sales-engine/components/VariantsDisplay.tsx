@@ -51,7 +51,7 @@ export function VariantsDisplay({ variants }: VariantsDisplayProps) {
           color: '#374151',
         }}
       >
-        Personalization Variants (Read-Only)
+        Personalization Variants
       </h4>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

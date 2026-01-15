@@ -206,7 +206,7 @@ export function StepAI() {
                 width: '72px',
                 height: '72px',
                 margin: '0 auto 24px',
-                backgroundColor: NSD_COLORS.success,
+                backgroundColor: NSD_COLORS.semantic.positive.text,
                 borderRadius: NSD_RADIUS.lg,
                 display: 'flex',
                 alignItems: 'center',

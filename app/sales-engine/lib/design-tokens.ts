@@ -30,11 +30,140 @@ export const NSD_COLORS = {
     archived: { bg: '#F3F4F6', text: '#4B5563', border: '#D1D5DB' },
   },
   
+  /**
+   * Semantic status colors - Brand-aligned replacements for literal colors.
+   * Use these instead of success/warning/error for consistent branding.
+   * 
+   * Brand palette mapping:
+   * - active: Indigo (running processes, active states)
+   * - positive: Indigo-tinted (completed, success states - NOT green)
+   * - attention: Brand amber (needs review, conditional states)
+   * - critical: Brand coral (failures, blocked states)
+   * - muted: Neutral gray (idle, pending states)
+   */
+  semantic: {
+    active: { bg: '#E0E7FF', text: '#3730A3', border: '#A5B4FC' },     // Indigo - running/active
+    positive: { bg: '#E0E7FF', text: '#3730A3', border: '#A5B4FC' },   // Indigo - completed/success
+    attention: { bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },  // Amber - warning/review
+    critical: { bg: '#FEE2E2', text: '#991B1B', border: '#FECACA' },   // Coral - error/failed
+    muted: { bg: '#F3F4F6', text: '#6B7280', border: '#D1D5DB' },      // Gray - idle/pending
+    info: { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },       // Blue - informational
+  },
+  
+  // Legacy colors - kept for backwards compatibility but prefer semantic.* above
   success: '#10B981',
   warning: '#F59E0B',
   error: '#EF4444',
   info: '#3B82F6',
 } as const;
+
+/**
+ * Semantic status style mapping for execution states.
+ * Returns brand-aligned colors (NO green/yellow/red).
+ */
+export function getSemanticStatusStyle(status: string): { bg: string; text: string; border: string } {
+  const styles: Record<string, { bg: string; text: string; border: string }> = {
+    // Execution states (aligned with queued → cron execution model)
+    idle: NSD_COLORS.semantic.muted,
+    queued: NSD_COLORS.semantic.info,           // NEW: Queued - execution starting shortly
+    run_requested: NSD_COLORS.semantic.info,    // Legacy: maps to queued
+    running: NSD_COLORS.semantic.active,
+    awaiting_approvals: NSD_COLORS.semantic.attention,
+    completed: NSD_COLORS.semantic.positive,
+    failed: NSD_COLORS.semantic.critical,
+    partial: NSD_COLORS.semantic.attention,
+    blocked: NSD_COLORS.semantic.critical,      // NEW: Blocked state
+    
+    // Run status
+    COMPLETED: NSD_COLORS.semantic.positive,
+    FAILED: NSD_COLORS.semantic.critical,
+    PARTIAL: NSD_COLORS.semantic.attention,
+    RUNNING: NSD_COLORS.semantic.active,
+    QUEUED: NSD_COLORS.semantic.info,           // NEW: Queued run status
+    BLOCKED: NSD_COLORS.semantic.critical,      // NEW: Blocked run status
+    
+    // Generic
+    success: NSD_COLORS.semantic.positive,
+    error: NSD_COLORS.semantic.critical,
+    warning: NSD_COLORS.semantic.attention,
+    active: NSD_COLORS.semantic.active,
+  };
+  
+  return styles[status] || NSD_COLORS.semantic.muted;
+}
+
+/**
+ * Execution status labels for UI display.
+ * Maps backend state → human-readable UI labels.
+ * 
+ * IMPORTANT: These labels are the source of truth for execution status copy.
+ * All execution status text should use these labels.
+ */
+export const EXECUTION_STATUS_LABELS: Record<string, string> = {
+  // Queued state - user clicked Run, awaiting cron execution
+  queued: 'Queued – execution will start shortly',
+  run_requested: 'Queued – execution will start shortly',
+  
+  // Running states with stage context
+  running: 'Running – sourcing organizations',
+  running_sourcing: 'Running – sourcing organizations',
+  running_discovering: 'Running – discovering contacts',
+  running_evaluating: 'Running – evaluating contacts',
+  running_promoting: 'Running – promoting leads',
+  running_sending: 'Running – sending emails',
+  
+  // Completion states
+  completed: 'Completed – results available',
+  awaiting_approvals: 'Completed – awaiting lead approvals',
+  
+  // Failure states
+  failed: 'Failed – see timeline for details',
+  partial: 'Partially completed – see timeline for details',
+  
+  // Blocked state
+  blocked: 'Blocked – see reason',
+  
+  // Idle state
+  idle: 'Ready for execution',
+};
+
+/**
+ * Get execution status label for display.
+ * 
+ * @param status - Execution status from backend
+ * @param currentStage - Optional current pipeline stage
+ * @returns Human-readable status label
+ */
+export function getExecutionStatusLabel(status: string, currentStage?: string): string {
+  // For running status, include stage context if available
+  if (status === 'running' && currentStage) {
+    const stageKey = `running_${currentStage.replace(/_/g, '').toLowerCase()}`;
+    if (EXECUTION_STATUS_LABELS[stageKey]) {
+      return EXECUTION_STATUS_LABELS[stageKey];
+    }
+    // Fallback with formatted stage name
+    return `Running – ${formatStageName(currentStage)}`;
+  }
+  
+  return EXECUTION_STATUS_LABELS[status] || EXECUTION_STATUS_LABELS.idle;
+}
+
+/**
+ * Format stage name for display.
+ */
+function formatStageName(stage: string): string {
+  const stageLabels: Record<string, string> = {
+    orgs_sourced: 'sourcing organizations',
+    contacts_discovered: 'discovering contacts',
+    contacts_evaluated: 'evaluating contacts',
+    leads_promoted: 'promoting leads',
+    leads_awaiting_approval: 'awaiting approvals',
+    leads_approved: 'processing approvals',
+    emails_sent: 'sending emails',
+    replies: 'processing replies',
+  };
+  return stageLabels[stage] || stage.replace(/_/g, ' ');
+}
 
 export const NSD_SPACING = {
   xs: '4px',

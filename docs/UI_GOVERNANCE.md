@@ -167,24 +167,159 @@ deriveProvenance({}) // Returns 'LEGACY_OBSERVED' (default)
 
 ## Lead Model Integrity
 
-### Qualified Leads vs Contacts Observed
+### Promoted Leads vs Contacts Observed
 
-| View | Description | Email Filtering |
-|------|-------------|-----------------|
-| Qualified Leads | Only lead-ready/qualified records | Required: valid, non-filler email |
-| Contacts Observed | All observed contact records | No filtering - shows all records |
+**CRITICAL SEMANTIC DISTINCTION:**
+Contacts and leads are distinct entities. Leads are conditionally promoted from contacts.
+
+| View | Description | Criteria | Tiers |
+|------|-------------|----------|-------|
+| Promoted Leads | Only promoted lead records | ICP fit + valid email | Tier A/B only |
+| Contacts Observed | All observed contact records | No filtering | All tiers (A/B/C/D) |
+
+### Backend Truths (Authoritative)
+
+- **Organizations are global**; campaign linkage via `organization.sourced`
+- **Contacts are global**; campaign linkage via `contact.discovered`
+- **Contacts are evaluated deterministically**
+- **Leads exist only when contacts are promoted**
+- **Promotion requires**: ICP fit + real (non-placeholder) email
+- **Promotion produces**: `promotionTier` (A/B), `promotionScore`, `promotionReasons[]`
+- **Tier C/D contacts are never leads**
+- **Events are authoritative**; DB rows are snapshots
+
+### Promotion Tiers
+
+| Tier | Status | Meaning |
+|------|--------|---------|
+| A | Promoted | High-priority lead - Strong ICP fit |
+| B | Promoted | Standard lead - Good ICP fit |
+| C | Not Promoted | Partial ICP match - remains contact |
+| D | Not Promoted | Does not meet criteria - remains contact |
 
 ### Rules
 
-- `isValidLeadEmail()` - Use ONLY for Qualified Leads view
-- `isQualifiedLead()` - Verifies email validity AND qualification state
-- Contacts Observed shows records even without valid emails
+- `isValidLeadEmail()` - Use ONLY for Promoted Leads view
+- `isQualifiedLead()` - Verifies email validity AND promotion eligibility
+- Contacts Observed shows records even without valid emails or promotion
+- **Lead count is NOT derived from contact count** (independent metrics)
+- **UI must not imply all contacts become leads**
 
 ### Why This Matters
 
-- "Contact with email" ≠ Lead
-- Lead counts must be accurate (only truly qualified leads)
-- Contact observability must be complete (all data visible)
+- "Contact with email" ≠ Lead (a contact may have email but not qualify)
+- Lead counts must reflect promoted leads only (Tier A/B)
+- Contact observability must be complete (all data visible, all tiers)
+- Promotion rationale must be visible (read-only) on lead details
+
+---
+
+## Lead Approval Workflow
+
+### Backend Enforcement (Authoritative)
+
+- **Leads start as `pending_approval`**
+- **Only approved leads can be sent/exported**
+- **Approval/rejection are explicit actions**
+- UI reflects this state, does not auto-approve
+
+### Approval Status
+
+| Status | UI Label | Meaning |
+|--------|----------|---------|
+| `pending_approval` | "Awaiting approval" | Lead requires explicit approval |
+| `approved` | "Approved for outreach" | Lead eligible for campaign execution |
+| `rejected` | "Rejected" | Lead excluded from outreach |
+
+### UI Components
+
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| `LeadStatusBadge` | Display approval status | Lead list, lead detail |
+| `LeadApprovalActions` | Approve/Reject buttons | Lead detail view |
+| `BulkApprovalPanel` | Bulk approve pending leads | Campaign view |
+| `ApprovalConfirmationModal` | Confirm before action | All approval actions |
+
+### Rules
+
+1. **Approve/Reject buttons visible only for `pending_approval` status**
+2. **Buttons disabled once approved or rejected** (status transitions are one-way)
+3. **Confirmation modal required** for all approval actions
+4. **Promotion rationale remains read-only** (no scoring controls)
+5. **No send/export buttons** in approval UI
+
+### Copy Alignment (Exact Language)
+
+Use these exact labels:
+
+| Status | ✅ Correct | ❌ Incorrect |
+|--------|-----------|-------------|
+| Pending | "Awaiting approval" | "Pending", "Qualified", "Ready" |
+| Approved | "Approved for outreach" | "Ready to send", "Qualified" |
+| Rejected | "Rejected" | "Failed", "Disqualified" |
+
+### Bulk Approval
+
+- "Approve all pending leads" button in campaign view
+- **Visible only if pending leads exist**
+- Shows before/after counts
+- Confirmation modal shows lead count
+- No auto-approval behavior
+
+---
+
+## Pipeline Observability
+
+### Observability Tab Layout
+
+The Observability tab provides full pipeline visibility with four stacked sections:
+
+| Section | Component | Purpose |
+|---------|-----------|---------|
+| A | `CampaignExecutionStatusCard` | Dynamic execution state (top) |
+| B | `PipelineFunnelTable` | Pipeline funnel with stage counts (CORE) |
+| C | `CampaignRunHistoryTable` | Run history with full details |
+| D | `SendMetricsPanel` | Send metrics (post-approval only) |
+
+### Data Sources (Backend Authoritative)
+
+| Endpoint | Data |
+|----------|------|
+| `GET /campaigns/{id}/observability` | Pipeline state, status, stages |
+| `GET /campaigns/{id}/runs` | Run history with full details |
+
+### Pipeline Stages
+
+| Stage | Label | Confidence |
+|-------|-------|------------|
+| `orgs_sourced` | Organizations sourced | Observed |
+| `contacts_discovered` | Contacts discovered | Observed |
+| `contacts_evaluated` | Contacts evaluated | Observed |
+| `leads_promoted` | Leads promoted | Observed |
+| `leads_awaiting_approval` | Leads awaiting approval | Observed |
+| `leads_approved` | Leads approved | Observed |
+| `emails_sent` | Emails sent | Conditional |
+| `replies` | Replies | Conditional |
+
+### Observability Governance Rules
+
+1. **Read-only display** - No mutation controls
+2. **No execution control** - Run Campaign disabled when running
+3. **No retries** - Cannot re-run failed executions from UI
+4. **No Smartlead editing** - Email content is backend-managed
+5. **No stage skipping** - Pipeline is sequential
+6. **No local math** - Counts come directly from backend
+7. **Confidence required** - Every count has a confidence badge
+
+### Execution Status Display
+
+| Status | Emoji | Copy Example |
+|--------|-------|--------------|
+| `idle` | ⚪ | "Ready for execution" |
+| `running` | 🟡 | "Run in progress — Contact discovery" |
+| `completed` | 🟢 | "Run completed — Awaiting lead approvals" |
+| `failed` | 🔴 | "Run failed — See run history" |
+| `partial` | 🟠 | "Run partially completed — See run history" |
 
 ---
 
@@ -235,4 +370,12 @@ All governance logic has unit tests:
 | UNKNOWN is valid | Show "Unknown" when data missing |
 | No inferred confidence | `deriveConfidence()` defaults to CONDITIONAL |
 | Provenance precedence | Explicit field > heuristics |
-| Lead model integrity | Qualified Leads ≠ Contacts Observed |
+| Lead model integrity | Promoted Leads (Tier A/B) ≠ Contacts Observed (All Tiers) |
+| Contact vs Lead distinction | Leads are conditionally promoted; not all contacts become leads |
+| Promotion visibility | Promotion details (tier, score, reasons) displayed read-only |
+| Lead approval gating | Leads start pending; approval is explicit action |
+| No auto-approval | UI never implies leads are auto-approved |
+| Confirmation required | All approval actions require modal confirmation |
+| Pipeline observability | Full pipeline visibility with 8 stages |
+| No local math | Counts come from backend, never computed |
+| Execution status | Dynamic status display from backend |

@@ -4,6 +4,7 @@ import type { CampaignMetrics, MetricsHistoryEntry } from '../types/campaign';
 import { ConfidenceBadge, ProvenancePill } from './governance';
 import { deriveConfidence, deriveProvenance } from '../lib/campaign-state';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../lib/design-tokens';
+import { Icon } from '../../../design/components/Icon';
 
 interface MetricsDisplayProps {
   metrics: CampaignMetrics;
@@ -15,8 +16,14 @@ interface MetricsDisplayProps {
  * 
  * Updated for target-state architecture:
  * - Shows confidence classification for each metric
- * - Uses "Qualified Leads" terminology
+ * - Uses "Promoted Leads" terminology (not "Contacts")
  * - Displays provenance indicator
+ * 
+ * CRITICAL SEMANTIC DISTINCTION:
+ * - Contacts and leads are distinct; leads are conditionally promoted.
+ * - Lead count reflects PROMOTED leads only (Tier A/B), NOT total contacts.
+ * - Tier C/D contacts are never leads and are not included.
+ * - Promotion requires ICP fit AND real (non-placeholder) email.
  * 
  * IMPORTANT: Confidence is derived from ACTUAL backend metadata only.
  * - If metrics.confidence or metrics.validation_status is present, use it
@@ -82,11 +89,16 @@ export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
             marginBottom: '20px',
           }}
         >
+          {/* 
+            Promoted Leads count - distinct from total contacts.
+            Contacts and leads are distinct; leads are conditionally promoted.
+            This count reflects Tier A/B promoted leads only.
+          */}
           <MetricCard 
-            label="Qualified Leads" 
+            label="Promoted Leads" 
             value={metrics.total_leads}
             confidence={metricConfidence}
-            tooltip="Leads that passed qualification checks (valid email, qualification state)."
+            tooltip="Leads promoted from contacts (Tier A/B). Requires ICP fit and valid email. Does not include Tier C/D contacts."
           />
           <MetricCard 
             label="Emails Sent" 
@@ -125,21 +137,22 @@ export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
             style={{
               marginTop: '16px',
               padding: '14px 16px',
-              backgroundColor: '#FEF3C7',
+              backgroundColor: NSD_COLORS.semantic.attention.bg,
               borderRadius: NSD_RADIUS.md,
+              border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
               display: 'flex',
               alignItems: 'flex-start',
               gap: '12px',
             }}
           >
-            <span style={{ fontSize: '14px' }}>⚠️</span>
+            <Icon name="info" size={16} color={NSD_COLORS.semantic.attention.text} />
             <div>
               <p
                 style={{
                   margin: 0,
                   fontSize: '13px',
                   fontWeight: 600,
-                  color: '#92400E',
+                  color: NSD_COLORS.semantic.attention.text,
                 }}
               >
                 Observed (Unclassified)
@@ -148,7 +161,7 @@ export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
                 style={{
                   margin: '4px 0 0 0',
                   fontSize: '12px',
-                  color: '#92400E',
+                  color: NSD_COLORS.semantic.attention.text,
                   lineHeight: 1.5,
                 }}
               >
@@ -206,29 +219,6 @@ export function MetricsDisplay({ metrics, history }: MetricsDisplayProps) {
           </div>
         )}
 
-        <div
-          style={{
-            marginTop: '20px',
-            padding: '12px 16px',
-            backgroundColor: '#EFF6FF',
-            borderRadius: NSD_RADIUS.md,
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '10px',
-          }}
-        >
-          <span style={{ fontSize: '14px' }}>ℹ️</span>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '12px',
-              color: '#1E40AF',
-              lineHeight: 1.5,
-            }}
-          >
-            Metrics are observed from backend systems. This UI is read-only and does not modify any data.
-          </p>
-        </div>
       </div>
     </div>
   );

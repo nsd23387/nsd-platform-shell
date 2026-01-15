@@ -1,19 +1,8 @@
 /**
- * Campaign State Machine - Target-State Architecture
+ * Campaign State Machine
  * 
  * This module provides the canonical campaign state types and deterministic
  * mapping functions for deriving campaign governance states from backend data.
- * 
- * Non-negotiable constraints:
- * - UI is read-only; execution is observed, not initiated
- * - States reflect governance/approval stages, not execution triggers
- * - Provenance must be explicitly tracked (Canonical vs Legacy)
- * 
- * IMPORTANT DISTINCTION:
- * - Governance State: Reflects approval/workflow stage (DRAFT, PENDING_APPROVAL, etc.)
- * - Readiness Level: Reflects system capability to execute (READY, NOT_READY, UNKNOWN)
- * These are ORTHOGONAL. A campaign can be APPROVED_READY but still NOT_READY or UNKNOWN
- * for execution if readiness checks have not passed or have not been performed.
  */
 
 /**
@@ -24,8 +13,8 @@ export type CampaignGovernanceState =
   | 'DRAFT'                  // Campaign is being authored, editable
   | 'PENDING_APPROVAL'       // Submitted for review, awaiting approval
   | 'APPROVED_READY'         // Approved by governance, execution observed externally
-  | 'BLOCKED'                // Cannot proceed due to readiness/governance issues
-  | 'EXECUTED_READ_ONLY';    // Has been executed, now in observability-only mode
+  | 'BLOCKED'                // Cannot proceed due to governance issues
+  | 'EXECUTED';             // Has been executed
 
 /**
  * Legacy backend status values that may still appear in API responses.
@@ -56,15 +45,6 @@ export type ProvenanceType = 'CANONICAL' | 'LEGACY_OBSERVED';
 export type MetricConfidence = 'SAFE' | 'CONDITIONAL' | 'BLOCKED';
 
 /**
- * Readiness status for execution readiness panel.
- * 
- * IMPORTANT: This is INDEPENDENT of CampaignGovernanceState.
- * A campaign can be APPROVED_READY but have readiness level UNKNOWN or NOT_READY
- * if the backend has not provided explicit readiness validation.
- */
-export type ReadinessLevel = 'READY' | 'NOT_READY' | 'UNKNOWN';
-
-/**
  * Autonomy levels for learning signals (L0-L2 only per constraints).
  * UI must not imply autonomous optimization beyond L2.
  */
@@ -76,24 +56,8 @@ export type AutonomyLevel = 'L0' | 'L1' | 'L2';
 export interface CampaignGovernanceMetadata {
   governanceState: CampaignGovernanceState;
   provenance: ProvenanceType;
-  readinessLevel: ReadinessLevel;
-  blockingReasons: string[];
-  lastReadinessCheck?: string;
   approvedAt?: string;
   approvedBy?: string;
-}
-
-/**
- * Readiness payload from backend.
- * All fields are optional - if not provided, readiness is UNKNOWN.
- */
-export interface BackendReadinessPayload {
-  is_ready?: boolean;
-  blocking_reasons?: string[];
-  last_checked?: string;
-  mailbox_healthy?: boolean;
-  deliverability_score?: number;
-  kill_switch_enabled?: boolean;
 }
 
 /**
@@ -103,28 +67,17 @@ export interface BackendReadinessPayload {
  * - DRAFT -> DRAFT (editable)
  * - PENDING_REVIEW -> PENDING_APPROVAL (awaiting governance)
  * - RUNNABLE -> APPROVED_READY (approved, execution observed externally)
- * - RUNNING/COMPLETED/FAILED -> EXECUTED_READ_ONLY (observability only)
- * - ARCHIVED -> EXECUTED_READ_ONLY (historical, read-only)
- * - If blocking reasons present -> BLOCKED (regardless of backend status)
- * 
- * NOTE: This function maps GOVERNANCE state only. It does NOT imply READINESS.
- * A campaign with APPROVED_READY governance state may still have UNKNOWN readiness.
+ * - RUNNING/COMPLETED/FAILED -> EXECUTED
+ * - ARCHIVED -> EXECUTED
  * 
  * @param legacyStatus - Backend status value
- * @param blockingReasons - List of blocking reasons from readiness check
  * @param isRunnable - Backend-provided runnable flag
  * @returns Target-state governance state
  */
 export function mapToGovernanceState(
   legacyStatus: LegacyCampaignStatus | string,
-  blockingReasons: string[] = [],
   isRunnable: boolean = false
 ): CampaignGovernanceState {
-  // If there are blocking reasons, the campaign is blocked regardless of status
-  if (blockingReasons.length > 0 && legacyStatus !== 'COMPLETED' && legacyStatus !== 'FAILED') {
-    return 'BLOCKED';
-  }
-
   switch (legacyStatus) {
     case 'DRAFT':
       return 'DRAFT';
@@ -133,73 +86,18 @@ export function mapToGovernanceState(
       return 'PENDING_APPROVAL';
 
     case 'RUNNABLE':
-      // RUNNABLE without blocking reasons = approved and ready
       return isRunnable ? 'APPROVED_READY' : 'BLOCKED';
 
     case 'RUNNING':
     case 'COMPLETED':
     case 'FAILED':
     case 'ARCHIVED':
-      // All execution states are read-only observability
-      return 'EXECUTED_READ_ONLY';
+      return 'EXECUTED';
 
     default:
       // Unknown status treated as blocked for safety
       return 'BLOCKED';
   }
-}
-
-/**
- * Compute readiness level from backend readiness payload.
- * 
- * CRITICAL: This function does NOT use governance state to infer readiness.
- * Readiness is determined ONLY by explicit backend readiness data.
- * 
- * Rules:
- * 1. If payload is null/undefined -> UNKNOWN
- * 2. If blocking_reasons has items -> NOT_READY
- * 3. If kill_switch_enabled is true -> NOT_READY
- * 4. If is_ready is explicitly true AND all required fields are present -> READY
- * 5. Otherwise -> UNKNOWN
- * 
- * @param readiness - Backend readiness payload (may be partial or absent)
- * @returns Readiness level
- */
-export function computeReadinessLevel(
-  readiness: BackendReadinessPayload | null | undefined
-): ReadinessLevel {
-  // No readiness data provided -> UNKNOWN
-  if (!readiness) {
-    return 'UNKNOWN';
-  }
-
-  // Blocking reasons present -> NOT_READY
-  if (readiness.blocking_reasons && readiness.blocking_reasons.length > 0) {
-    return 'NOT_READY';
-  }
-
-  // Kill switch enabled -> NOT_READY
-  if (readiness.kill_switch_enabled === true) {
-    return 'NOT_READY';
-  }
-
-  // Check if backend explicitly says ready
-  if (readiness.is_ready === true) {
-    // Verify required fields are present for a valid READY determination
-    // If any required field is missing, we cannot confirm readiness
-    if (readiness.mailbox_healthy === undefined) {
-      return 'UNKNOWN'; // Cannot confirm ready without mailbox health
-    }
-    return 'READY';
-  }
-
-  // is_ready explicitly false -> NOT_READY
-  if (readiness.is_ready === false) {
-    return 'NOT_READY';
-  }
-
-  // is_ready not provided, no blocking reasons, but we can't confirm readiness
-  return 'UNKNOWN';
 }
 
 /**
@@ -211,7 +109,7 @@ export function getGovernanceStateLabel(state: CampaignGovernanceState): string 
     PENDING_APPROVAL: 'Pending Approval',
     APPROVED_READY: 'Approved (Execution Observed)',
     BLOCKED: 'Blocked',
-    EXECUTED_READ_ONLY: 'Executed (Read-Only)',
+    EXECUTED: 'Executed',
   };
   return labels[state] || state;
 }
@@ -229,7 +127,7 @@ export function getGovernanceStateStyle(state: CampaignGovernanceState): {
     PENDING_APPROVAL: { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
     APPROVED_READY: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
     BLOCKED: { bg: '#FEE2E2', text: '#991B1B', border: '#FECACA' },
-    EXECUTED_READ_ONLY: { bg: '#F3F4F6', text: '#4B5563', border: '#D1D5DB' },
+    EXECUTED: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
   };
   return styles[state] || styles.BLOCKED;
 }
@@ -394,13 +292,21 @@ export function deriveConfidence(metric: {
 /**
  * Check if an email is a valid lead email (not a filler/placeholder).
  * 
- * IMPORTANT: This function is intended for use with QUALIFIED LEAD views ONLY.
+ * CRITICAL SEMANTIC DISTINCTION (contacts vs leads):
+ * - Contacts and leads are distinct; leads are conditionally promoted.
+ * - Organizations are global; campaign linkage via organization.sourced
+ * - Contacts are global; campaign linkage via contact.discovered
+ * - Leads exist ONLY when contacts are promoted
+ * - Promotion requires ICP fit AND real (non-placeholder) email
+ * - Tier C/D contacts are NEVER leads
+ * 
+ * IMPORTANT: This function is intended for use with PROMOTED LEAD views ONLY.
  * "Contacts Observed" views should NOT filter by email validity - they display
- * all observed contact records regardless of email status.
+ * all observed contact records regardless of email or promotion status.
  * 
  * Use this function when:
- * - Filtering leads for the "Qualified Leads" view
- * - Validating lead eligibility
+ * - Filtering leads for the "Promoted Leads" view
+ * - Validating lead promotion eligibility
  * 
  * Do NOT use this function when:
  * - Displaying "Contacts Observed" (all contacts should be shown)
@@ -424,19 +330,29 @@ export function isValidLeadEmail(email: string | null | undefined): boolean {
 }
 
 /**
- * Determine if a record qualifies as a lead (not just a contact).
+ * Determine if a record qualifies as a promoted lead (not just a contact).
  * 
- * Per constraints: Lead views must only show records in "lead-ready/qualified" state.
+ * CRITICAL SEMANTIC DISTINCTION (contacts vs leads):
+ * - Contacts and leads are distinct; leads are conditionally promoted.
+ * - NOT all contacts become leads (Tier C/D are never leads)
+ * - Lead count is NOT derived from contact count
+ * - Promotion requires: ICP fit AND real (non-placeholder) email
+ * - Promotion produces: promotionTier (A/B), promotionScore, promotionReasons[]
+ * 
+ * Per constraints: Lead views must only show records that are:
+ * - Promoted (Tier A/B)
+ * - Have valid non-placeholder email
+ * - In "lead-ready/qualified" state
  * 
  * IMPORTANT DISTINCTION:
- * - "Qualified Leads" view: Use this function. Only shows records that pass all checks.
+ * - "Promoted Leads" view: Use this function. Only shows promoted Tier A/B records.
  * - "Contacts Observed" view: Do NOT use this function. Shows all observed contacts,
- *   even those without valid emails or qualification status.
+ *   even those without valid emails or without promotion status.
  * 
  * This distinction ensures:
- * - Lead counts are accurate (only truly qualified leads)
+ * - Lead counts are accurate (only promoted leads, not total contacts)
  * - Contact observability is complete (all data visible)
- * - UI does not conflate contacts with qualified leads
+ * - UI does not conflate contacts with promoted leads
  */
 export function isQualifiedLead(record: {
   email?: string | null;
@@ -531,12 +447,12 @@ export function getPrimaryAction(
         label: 'Blocked',
         action: 'blocked',
         disabled: true,
-        explanation: 'This campaign is blocked due to unresolved governance or readiness issues.',
+        explanation: 'This campaign is blocked due to unresolved governance issues.',
       };
 
-    case 'EXECUTED_READ_ONLY':
+    case 'EXECUTED':
       return {
-        label: 'Executed (Read-Only)',
+        label: 'Executed',
         action: 'read_only',
         disabled: true,
         explanation: 'This campaign has been executed. View run history for observability data.',

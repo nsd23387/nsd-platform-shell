@@ -1,18 +1,12 @@
 'use client';
 
 /**
- * Campaign Detail Page - Target-State Architecture
+ * Campaign Detail Page
  * 
- * IMPORTANT ARCHITECTURAL NOTES:
- * 1. This page is READ-ONLY. No mutations are performed.
- * 2. Governance State and Readiness Level are ORTHOGONAL:
- *    - Governance: approval workflow stage
- *    - Readiness: system capability (from backend readiness check)
- * 3. Missing data is shown as UNKNOWN, never inferred as READY/SAFE.
- * 4. Confidence is derived from actual backend metadata, not hardcoded.
+ * Displays campaign details, metrics, and action buttons.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader, SectionCard } from '../../components/ui';
@@ -23,39 +17,59 @@ import type {
   CampaignMetrics,
   MetricsHistoryEntry,
   CampaignRun,
+  CampaignRunDetailed,
   CampaignVariant,
   ThroughputConfig,
+  CampaignObservability,
+  ObservabilityStatus,
+  ObservabilityFunnel,
+  CampaignExecutionStatus,
 } from '../../types/campaign';
 import {
   getCampaign,
   getCampaignMetrics,
   getCampaignMetricsHistory,
   getCampaignRuns,
+  getCampaignRunsDetailed,
   getLatestRun,
   getCampaignVariants,
   getCampaignThroughput,
+  getCampaignObservability,
+  getCampaignObservabilityStatus,
+  getCampaignObservabilityFunnel,
+  requestCampaignRun,
 } from '../../lib/api';
 import {
   mapToGovernanceState,
-  computeReadinessLevel,
-  deriveConfidence,
   type CampaignGovernanceState,
-  type ReadinessLevel,
 } from '../../lib/campaign-state';
 import {
-  CampaignStateBadge,
-  ReadOnlyBanner,
-  ExecutionReadinessPanel,
   LearningSignalsPanel,
   GovernanceActionsPanel,
 } from '../../components/governance';
 import { MetricsDisplay } from '../../components/MetricsDisplay';
+import {
+  CampaignExecutionStatusCard,
+  PipelineFunnelTable,
+  CampaignRunHistoryTable,
+  SendMetricsPanel,
+  ExecutionTimelineFeed,
+  ApprovalAwarenessPanel,
+  LatestRunStatusCard,
+  type ExecutionEvent,
+  type ApprovalAwarenessState,
+} from '../../components/observability';
+import { 
+  isTestCampaign, 
+  getTestCampaignDetail, 
+  getTestCampaignThroughput,
+} from '../../lib/test-campaign';
+import { PlanningOnlyToggle } from '../../components/PlanningOnlyToggle';
 
-type TabType = 'overview' | 'readiness' | 'monitoring' | 'learning';
+type TabType = 'overview' | 'monitoring' | 'learning';
 
 const TAB_CONFIG: { id: TabType; label: string; icon: string }[] = [
   { id: 'overview', label: 'Overview', icon: 'campaigns' },
-  { id: 'readiness', label: 'Readiness', icon: 'shield' },
   { id: 'monitoring', label: 'Observability', icon: 'metrics' },
   { id: 'learning', label: 'Learning Signals', icon: 'chart' },
 ];
@@ -70,47 +84,98 @@ export default function CampaignDetailPage() {
   const [metrics, setMetrics] = useState<CampaignMetrics | null>(null);
   const [metricsHistory, setMetricsHistory] = useState<MetricsHistoryEntry[]>([]);
   const [runs, setRuns] = useState<CampaignRun[]>([]);
+  const [runsDetailed, setRunsDetailed] = useState<CampaignRunDetailed[]>([]);
   const [latestRun, setLatestRun] = useState<CampaignRun | null>(null);
   const [variants, setVariants] = useState<CampaignVariant[]>([]);
   const [throughput, setThroughput] = useState<ThroughputConfig | null>(null);
+  const [observability, setObservability] = useState<CampaignObservability | null>(null);
+  // Observability status - source of truth for execution state
+  const [observabilityStatus, setObservabilityStatus] = useState<ObservabilityStatus | null>(null);
+  // Observability funnel - source of truth for pipeline counts
+  const [observabilityFunnel, setObservabilityFunnel] = useState<ObservabilityFunnel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
+  // Run request state
+  const [isRunRequesting, setIsRunRequesting] = useState(false);
+  const [runRequestMessage, setRunRequestMessage] = useState<string | null>(null);
+  // Polling interval ref
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derive governance state from backend data
-  // NOTE: This is INDEPENDENT of readiness level
   const governanceState: CampaignGovernanceState = campaign
-    ? mapToGovernanceState(
-        campaign.status,
-        campaign.readiness?.blocking_reasons || [],
-        campaign.isRunnable
-      )
+    ? mapToGovernanceState(campaign.status, campaign.isRunnable)
     : 'BLOCKED';
+
+  // Check if this is a test campaign
+  const isTest = isTestCampaign(campaignId);
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError(null);
       try {
+        // M68-03: Handle test campaigns separately - no API calls
+        if (isTestCampaign(campaignId)) {
+          const testCampaign = getTestCampaignDetail(campaignId);
+          if (testCampaign) {
+            setCampaign(testCampaign);
+            // M68-04.1: Get mock throughput for test campaigns
+            setThroughput(getTestCampaignThroughput(campaignId));
+            // Test campaigns don't have real metrics/runs/variants
+            setMetrics(null);
+            setMetricsHistory([]);
+            setRuns([]);
+            setLatestRun(null);
+            setVariants([]);
+          } else {
+            setError('Test campaign not found or not available in this environment');
+          }
+          setLoading(false);
+          return;
+        }
+
         const campaignData = await getCampaign(campaignId);
         setCampaign(campaignData);
 
-        const [metricsData, historyData, runsData, latestRunData, variantsData, throughputData] =
-          await Promise.allSettled([
-            getCampaignMetrics(campaignId),
-            getCampaignMetricsHistory(campaignId),
-            getCampaignRuns(campaignId),
-            getLatestRun(campaignId),
-            getCampaignVariants(campaignId),
-            getCampaignThroughput(campaignId),
-          ]);
+        const [
+          metricsData,
+          historyData,
+          runsData,
+          runsDetailedData,
+          latestRunData,
+          variantsData,
+          throughputData,
+          observabilityData,
+          observabilityStatusData,
+          observabilityFunnelData,
+        ] = await Promise.allSettled([
+          getCampaignMetrics(campaignId),
+          getCampaignMetricsHistory(campaignId),
+          getCampaignRuns(campaignId),
+          getCampaignRunsDetailed(campaignId),
+          getLatestRun(campaignId),
+          getCampaignVariants(campaignId),
+          getCampaignThroughput(campaignId),
+          getCampaignObservability(campaignId),
+          // Source of truth for execution state
+          getCampaignObservabilityStatus(campaignId),
+          // Source of truth for pipeline counts
+          getCampaignObservabilityFunnel(campaignId),
+        ]);
 
         if (metricsData.status === 'fulfilled') setMetrics(metricsData.value);
         if (historyData.status === 'fulfilled') setMetricsHistory(historyData.value);
         if (runsData.status === 'fulfilled') setRuns(runsData.value);
+        if (runsDetailedData.status === 'fulfilled') setRunsDetailed(runsDetailedData.value);
         if (latestRunData.status === 'fulfilled') setLatestRun(latestRunData.value);
         if (variantsData.status === 'fulfilled') setVariants(variantsData.value);
         if (throughputData.status === 'fulfilled') setThroughput(throughputData.value);
+        if (observabilityData.status === 'fulfilled') setObservability(observabilityData.value);
+        // Set observability status (source of truth for execution state)
+        if (observabilityStatusData.status === 'fulfilled') setObservabilityStatus(observabilityStatusData.value);
+        // Set observability funnel (source of truth for pipeline counts)
+        if (observabilityFunnelData.status === 'fulfilled') setObservabilityFunnel(observabilityFunnelData.value);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load campaign');
       } finally {
@@ -119,6 +184,98 @@ export default function CampaignDetailPage() {
     }
     loadData();
   }, [campaignId]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  /**
+   * Refresh observability data (status, funnel, runs).
+   * Called after run request and during polling.
+   */
+  const refreshObservabilityData = useCallback(async () => {
+    try {
+      const [statusData, funnelData, runsData] = await Promise.allSettled([
+        getCampaignObservabilityStatus(campaignId),
+        getCampaignObservabilityFunnel(campaignId),
+        getCampaignRunsDetailed(campaignId),
+      ]);
+
+      if (statusData.status === 'fulfilled') setObservabilityStatus(statusData.value);
+      if (funnelData.status === 'fulfilled') setObservabilityFunnel(funnelData.value);
+      if (runsData.status === 'fulfilled') setRunsDetailed(runsData.value);
+    } catch (err) {
+      console.error('[CampaignDetail] Failed to refresh observability:', err);
+    }
+  }, [campaignId]);
+
+  /**
+   * Handle Run Campaign button click.
+   * 
+   * NOTE:
+   * Campaign execution is owned by nsd-sales-engine.
+   * platform-shell must never execute or simulate runs.
+   * This call submits execution intent only.
+   * 
+   * On 202 Accepted:
+   * - A campaign_run is created in nsd-ods
+   * - Sales Engine cron automatically executes the run
+   * - UI shows "Execution requested"
+   * - UI immediately begins polling /observability/status and /runs
+   * 
+   * platform-shell emits NO execution events and creates NO run IDs.
+   */
+  const handleRunCampaign = useCallback(async () => {
+    if (isRunRequesting) return;
+
+    setIsRunRequesting(true);
+    setRunRequestMessage(null);
+
+    try {
+      const response = await requestCampaignRun(campaignId);
+      
+      // Runtime safety: execution intent may be acknowledged as "run_requested" or "queued"
+      // depending on the upstream contract/version. Treat both as success signals.
+      if (response.status === 'run_requested' || response.status === 'queued') {
+        // Show "Execution requested" message
+        setRunRequestMessage('Execution requested — Awaiting events from backend');
+        
+        // Immediately refresh observability data
+        await refreshObservabilityData();
+
+        // Start polling for status updates (every 5 seconds for 2 minutes)
+        let pollCount = 0;
+        const maxPolls = 24; // 2 minutes at 5 second intervals
+        
+        pollingIntervalRef.current = setInterval(async () => {
+          pollCount++;
+          await refreshObservabilityData();
+          
+          // Stop polling after max time or when status changes from run_requested
+          if (pollCount >= maxPolls) {
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+          }
+        }, 5000);
+      } else {
+        setRunRequestMessage('Execution request failed — See console for details');
+      }
+    } catch (err) {
+      console.error('[CampaignDetail] Run request failed:', err);
+      setRunRequestMessage(
+        `Execution request failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+      );
+    } finally {
+      setIsRunRequesting(false);
+    }
+  }, [campaignId, isRunRequesting, refreshObservabilityData]);
 
   if (loading) {
     return (
@@ -146,18 +303,12 @@ export default function CampaignDetailPage() {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
-        {/* Read-only banner */}
-        <div style={{ marginBottom: '24px' }}>
-          <ReadOnlyBanner variant="info" compact />
-        </div>
-
-        {/* Header with governance state badge */}
+        {/* Header */}
         <PageHeader
           title={campaign.name}
           description={campaign.description}
           backHref="/sales-engine"
           backLabel="Back to Campaigns"
-          actions={<CampaignStateBadge state={governanceState} size="lg" />}
         />
 
         {/* Navigation tabs */}
@@ -198,13 +349,21 @@ export default function CampaignDetailPage() {
             campaign={campaign}
             governanceState={governanceState}
             runsCount={runs.length}
-          />
-        )}
-
-        {activeTab === 'readiness' && (
-          <ReadinessTab
-            campaign={campaign}
-            throughput={throughput}
+            onPlanningOnlyChange={(newState) => {
+              // Update local campaign state when planning-only changes
+              // This ensures the UI reflects the new state immediately
+              setCampaign((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      sourcing_config: {
+                        ...prev.sourcing_config,
+                        benchmarks_only: newState,
+                      },
+                    }
+                  : prev
+              );
+            }}
           />
         )}
 
@@ -214,7 +373,14 @@ export default function CampaignDetailPage() {
             metrics={metrics}
             metricsHistory={metricsHistory}
             runs={runs}
+            runsDetailed={runsDetailed}
             latestRun={latestRun}
+            observability={observability}
+            observabilityStatus={observabilityStatus}
+            observabilityFunnel={observabilityFunnel}
+            onRunCampaign={handleRunCampaign}
+            isRunRequesting={isRunRequesting}
+            runRequestMessage={runRequestMessage}
           />
         )}
 
@@ -226,15 +392,37 @@ export default function CampaignDetailPage() {
   );
 }
 
+/**
+ * EXECUTION CONTRACT NOTE:
+ * platform-shell does NOT execute campaigns.
+ * This UI only mutates configuration via nsd-sales-engine.
+ *
+ * The OverviewTab includes a PlanningOnlyToggle that allows
+ * modifying the benchmarks_only flag. All changes are persisted
+ * via nsd-sales-engine, NOT directly to the database.
+ */
 function OverviewTab({
   campaign,
   governanceState,
   runsCount,
+  onPlanningOnlyChange,
 }: {
   campaign: CampaignDetail;
   governanceState: CampaignGovernanceState;
   runsCount: number;
+  /** Callback when planning-only state changes (to update parent state) */
+  onPlanningOnlyChange?: (newState: boolean) => void;
 }) {
+  // Determine if campaign can be modified
+  // Campaign cannot be modified if it's completed, archived, executed, or has runs
+  // Note: Use campaign.status (legacy) to check for COMPLETED/ARCHIVED
+  const canModifyConfig =
+    campaign.canEdit !== false &&
+    campaign.status !== 'COMPLETED' &&
+    campaign.status !== 'ARCHIVED' &&
+    governanceState !== 'EXECUTED' &&
+    runsCount === 0;
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -302,14 +490,28 @@ function OverviewTab({
         </SectionCard>
       </div>
 
-      {/* Governance Actions Panel */}
-      <div>
+      {/* Right Column: Actions and Configuration */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* Governance Actions Panel */}
         <GovernanceActionsPanel
           campaignId={campaign.id}
           governanceState={governanceState}
           canSubmit={campaign.canSubmit}
           canApprove={campaign.canApprove}
           runsCount={runsCount}
+          isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
+        />
+
+        {/* Planning-Only Toggle
+         * EXECUTION CONTRACT NOTE:
+         * This toggle persists via nsd-sales-engine, NOT directly to the database.
+         * platform-shell must NEVER write to ODS directly.
+         */}
+        <PlanningOnlyToggle
+          campaignId={campaign.id}
+          isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
+          onStateChange={onPlanningOnlyChange}
+          canModify={canModifyConfig}
         />
       </div>
     </div>
@@ -317,232 +519,356 @@ function OverviewTab({
 }
 
 /**
- * ReadinessTab - Displays execution readiness status
+ * MonitoringTab - Redesigned Observability Tab
  * 
- * CRITICAL: Readiness is computed from backend readiness payload ONLY.
- * It is NOT derived from governance state. A campaign can be APPROVED_READY
- * but still have readiness UNKNOWN if backend has not validated readiness.
- */
-function ReadinessTab({
-  campaign,
-  throughput,
-}: {
-  campaign: CampaignDetail;
-  throughput: ThroughputConfig | null;
-}) {
-  // Compute readiness level from backend readiness payload ONLY
-  // DO NOT use governance state to infer readiness
-  const readinessLevel: ReadinessLevel = computeReadinessLevel(campaign.readiness);
-
-  // Build readiness data from ACTUAL backend fields only
-  // No hardcoding or inference - if data is missing, show UNKNOWN
-  const readinessData = {
-    // Use actual backend mailbox_healthy field, default to undefined (unknown)
-    mailboxHealthy: campaign.readiness?.mailbox_healthy,
-    mailboxHealthStatus: campaign.readiness?.mailbox_healthy === undefined
-      ? 'Unknown (Not Validated)'
-      : campaign.readiness.mailbox_healthy
-        ? 'Healthy'
-        : 'Unhealthy',
-    
-    // Use actual backend deliverability_score - NO HARDCODING
-    deliverabilityScore: campaign.readiness?.deliverability_score,
-    deliverabilityThreshold: 95,
-    
-    // Throughput from actual backend data
-    currentThroughput: throughput?.current_daily_usage,
-    maxThroughput: throughput?.daily_limit,
-    
-    // Use actual backend kill_switch_enabled field
-    killSwitchEnabled: campaign.readiness?.kill_switch_enabled ?? false,
-    
-    // Use actual last_checked timestamp from backend
-    lastReadinessCheck: campaign.readiness?.last_checked,
-    
-    // Readiness level computed from backend data, not governance state
-    readinessLevel,
-    
-    // Blocking reasons from backend
-    blockingReasons: campaign.readiness?.blocking_reasons?.map(r => r.replace(/_/g, ' ')) || [],
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Readiness vs Governance State explanation */}
-      <div style={{ padding: '14px 20px', backgroundColor: '#FEF3C7', borderRadius: NSD_RADIUS.md }}>
-        <p style={{ margin: 0, fontSize: '13px', color: '#92400E' }}>
-          <strong>Note:</strong> Readiness status is determined by backend validation checks and is independent
-          of governance approval state. A campaign may be approved but still show &quot;Unknown&quot; readiness if
-          validation has not been performed.
-        </p>
-      </div>
-
-      <ExecutionReadinessPanel data={readinessData} />
-
-      {/* Throughput details */}
-      {throughput && (
-        <SectionCard title="Throughput Configuration" icon="clock" iconColor={NSD_COLORS.info}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-            <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
-              <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Daily Limit</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.text.primary }}>{throughput.daily_limit}</div>
-            </div>
-            <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
-              <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Daily Used</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.info }}>{throughput.current_daily_usage}</div>
-            </div>
-            <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
-              <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Hourly Limit</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.text.primary }}>{throughput.hourly_limit}</div>
-            </div>
-            <div style={{ padding: '16px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
-              <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>Mailbox Limit</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: NSD_COLORS.text.primary }}>{throughput.mailbox_limit}</div>
-            </div>
-          </div>
-
-          {throughput.is_blocked && (
-            <div style={{ marginTop: '16px', padding: '14px 16px', backgroundColor: '#FEE2E2', borderRadius: NSD_RADIUS.md }}>
-              <p style={{ margin: 0, fontSize: '13px', color: '#991B1B' }}>
-                <strong>Throughput Blocked:</strong> {throughput.block_reason?.replace(/_/g, ' ') || 'Unknown reason'}
-              </p>
-            </div>
-          )}
-        </SectionCard>
-      )}
-    </div>
-  );
-}
-
-/**
- * MonitoringTab - Displays metrics and run history
+ * Provides full pipeline visibility with stacked sections:
+ * A) Approval Awareness - Shows campaign approval state
+ * B) Execution Status - Source of truth: /observability/status
+ * C) Pipeline Funnel (CORE) - Source of truth: /observability/funnel
+ * D) Run History - Source of truth: /runs
+ * E) Execution Timeline - Activity feed of events
+ * F) Send Metrics (Scoped)
  * 
- * CRITICAL: Confidence is derived from ACTUAL backend metadata only.
- * No hardcoded confidence values. If metadata is missing, metrics are
- * shown as "Observed (Unclassified)" with CONDITIONAL confidence.
+ * OBSERVABILITY GOVERNANCE:
+ * - Read-only display
+ * - Run Campaign button delegates to backend (returns 202 Accepted)
+ * - On 202: UI shows "Execution requested" and begins polling
+ * - No retries or overrides
+ * - No mock data - all from backend observability endpoints
+ * - Counts match backend exactly
+ * - Approval gating is visually obvious
+ * - Blocked/skipped states are explicitly explained
+ * 
+ * Observability reflects pipeline state; execution is delegated.
  */
 function MonitoringTab({
   campaign,
   metrics,
   metricsHistory,
   runs,
+  runsDetailed,
   latestRun,
+  observability,
+  observabilityStatus,
+  observabilityFunnel,
+  onRunCampaign,
+  isRunRequesting,
+  runRequestMessage,
 }: {
   campaign: CampaignDetail;
   metrics: CampaignMetrics | null;
   metricsHistory: MetricsHistoryEntry[];
   runs: CampaignRun[];
+  runsDetailed: CampaignRunDetailed[];
   latestRun: CampaignRun | null;
+  observability: CampaignObservability | null;
+  observabilityStatus: ObservabilityStatus | null;
+  observabilityFunnel: ObservabilityFunnel | null;
+  onRunCampaign: () => void;
+  isRunRequesting: boolean;
+  runRequestMessage: string | null;
 }) {
+  // Scroll to run history section
+  const scrollToRunHistory = () => {
+    const element = document.getElementById('run-history');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Derive execution status from observabilityStatus (source of truth)
+  // Fallback to observability.status for backwards compatibility
+  const executionStatus: CampaignExecutionStatus = 
+    observabilityStatus?.status || observability?.status || 'idle';
+  
+  const activeRunId = observabilityStatus?.active_run_id || observability?.active_run_id;
+  const currentStage = observabilityStatus?.current_stage || observability?.current_stage;
+  const lastObservedAt = observabilityStatus?.last_observed_at || 
+    observability?.last_observed_at || new Date().toISOString();
+
+  // Pipeline stages from observabilityFunnel (source of truth)
+  // Fallback to observability.pipeline for backwards compatibility
+  const pipelineStages = observabilityFunnel?.stages || observability?.pipeline || [];
+
+  // Get leads awaiting approval count from pipeline
+  const leadsAwaitingApproval = pipelineStages.find(
+    (s) => s.stage === 'leads_awaiting_approval'
+  )?.count;
+
+  // Determine if campaign can be run
+  // Only allow run when status is 'idle' and campaign is runnable
+  const canRun = campaign.isRunnable && 
+    campaign.status === 'RUNNABLE' && 
+    executionStatus === 'idle';
+
+  // Dev-only debug banner (not shown in production)
+  const showDebugBanner = process.env.NODE_ENV !== 'production';
+  
+  // Derive approval awareness state from campaign and observability data
+  const approvalState: ApprovalAwarenessState = {
+    isApproved: !!(campaign.approved_at || campaign.status === 'RUNNABLE' || campaign.status === 'RUNNING' || campaign.status === 'COMPLETED'),
+    approvedAt: campaign.approved_at,
+    approvedBy: campaign.approved_by,
+    status: campaign.status,
+    hasRuns: runsDetailed.length > 0 || runs.length > 0,
+    blockingReason: observabilityStatus?.error_message,
+  };
+  
+  // Build execution events from run data for timeline display
+  // In production, these would come from ODS /api/v1/activity/events endpoint
+  // Event types follow the queued → cron execution model:
+  // - run.queued → campaign.run.started → [pipeline events] → campaign.run.completed/failed
+  const executionEvents: ExecutionEvent[] = runsDetailed.flatMap((run) => {
+    const events: ExecutionEvent[] = [];
+    
+    // For RUNNING status runs, add a queued event (derived from run_requested state)
+    if (run.status === 'RUNNING' as any) {
+      events.push({
+        id: `${run.id}-queued`,
+        event_type: 'run.queued',
+        run_id: run.id,
+        campaign_id: campaign.id,
+        occurred_at: run.started_at,
+        outcome: 'success',
+      });
+    }
+    
+    // Run started event
+    events.push({
+      id: `${run.id}-started`,
+      event_type: 'campaign.run.started',
+      run_id: run.id,
+      campaign_id: campaign.id,
+      occurred_at: run.started_at,
+      outcome: 'success',
+    });
+    
+    // Add pipeline stage events for completed runs
+    if (run.completed_at && run.status !== 'FAILED') {
+      // Organizations sourced
+      if (run.orgs_sourced && run.orgs_sourced > 0) {
+        events.push({
+          id: `${run.id}-orgs`,
+          event_type: 'apollo.org.search.completed',
+          run_id: run.id,
+          campaign_id: campaign.id,
+          occurred_at: run.started_at, // Approximate timing
+          outcome: 'success',
+          details: { count: run.orgs_sourced },
+        });
+      }
+      
+      // Leads promoted
+      if (run.leads_promoted && run.leads_promoted > 0) {
+        events.push({
+          id: `${run.id}-leads`,
+          event_type: 'lead.promoted',
+          run_id: run.id,
+          campaign_id: campaign.id,
+          occurred_at: run.started_at,
+          outcome: 'success',
+          details: { count: run.leads_promoted },
+        });
+      }
+    }
+    
+    // Run completed/failed event
+    if (run.completed_at) {
+      events.push({
+        id: `${run.id}-completed`,
+        event_type: run.status === 'FAILED' ? 'campaign.run.failed' : 
+                    run.status === 'PARTIAL' ? 'campaign.run.partial' : 'campaign.run.completed',
+        run_id: run.id,
+        campaign_id: campaign.id,
+        occurred_at: run.completed_at,
+        outcome: run.status === 'FAILED' ? 'failed' : 
+                 run.status === 'PARTIAL' ? 'partial' : 'success',
+        reason: run.error_details?.[0],
+      });
+    }
+    
+    return events;
+  });
+  
+  // If execution is currently queued, add a pending queued event
+  if (isRunRequesting || executionStatus === 'run_requested') {
+    executionEvents.unshift({
+      id: 'pending-queued',
+      event_type: 'run.queued',
+      run_id: activeRunId,
+      campaign_id: campaign.id,
+      occurred_at: lastObservedAt,
+      outcome: 'success',
+    });
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Read-only observability notice */}
-      <div style={{ padding: '14px 20px', backgroundColor: '#EFF6FF', borderRadius: NSD_RADIUS.md }}>
-        <p style={{ margin: 0, fontSize: '13px', color: '#1E40AF' }}>
-          <strong>Observability Mode:</strong> This view displays execution outcomes observed from backend systems.
-          The UI does not trigger or control execution. Metrics confidence is determined by backend validation status.
-        </p>
-      </div>
-
-      {/* Metrics using MetricsDisplay component with actual backend data */}
-      {metrics ? (
-        <MetricsDisplay metrics={metrics} history={metricsHistory} />
-      ) : (
-        <SectionCard title="Performance Metrics" icon="metrics" iconColor={NSD_COLORS.secondary}>
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.muted }}>
-              No metrics data available. Metrics will appear once execution has been observed.
-            </p>
+      {/* DEV-ONLY: Debug banner showing endpoint status */}
+      {showDebugBanner && (
+        <div
+          style={{
+            padding: '12px 16px',
+            backgroundColor: NSD_COLORS.semantic.attention.bg,
+            borderRadius: NSD_RADIUS.md,
+            border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
+            fontFamily: 'monospace',
+            fontSize: '11px',
+          }}
+        >
+          <div style={{ fontWeight: 'bold', marginBottom: '8px', color: NSD_COLORS.semantic.attention.text }}>
+            DEV DEBUG: Observability Wiring Status
           </div>
-        </SectionCard>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', color: NSD_COLORS.semantic.attention.text }}>
+            <div>/observability/status:</div>
+            <div>{observabilityStatus ? `OK status="${observabilityStatus.status}"` : 'null/undefined'}</div>
+            
+            <div>/observability/funnel:</div>
+            <div>{observabilityFunnel ? `OK stages.length=${observabilityFunnel.stages?.length ?? 0}` : 'null/undefined'}</div>
+            
+            <div>/runs:</div>
+            <div>{runsDetailed ? `OK runs.length=${runsDetailed.length}` : 'null/undefined'}</div>
+            
+            <div>/observability:</div>
+            <div>{observability ? `OK pipeline.length=${observability.pipeline?.length ?? 0}` : 'null/undefined'}</div>
+          </div>
+          <div style={{ marginTop: '8px', fontSize: '10px', color: NSD_COLORS.semantic.attention.text, fontStyle: 'italic' }}>
+            This banner is dev-only and will not appear in production.
+          </div>
+        </div>
       )}
 
-      {/* Run History (observability) */}
-      <SectionCard title="Run History (Observed)" icon="runs" iconColor={NSD_COLORS.info}>
-        {runs.length === 0 ? (
-          <p style={{ color: NSD_COLORS.text.muted, fontSize: '14px', textAlign: 'center', padding: '24px' }}>
-            No execution runs recorded yet
-          </p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${NSD_COLORS.border.light}` }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Observed At</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Status</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Qualified Leads Processed</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Emails Sent</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.muted, fontWeight: 500 }}>Errors</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run) => (
-                <tr key={run.id} style={{ borderBottom: `1px solid ${NSD_COLORS.border.light}` }}>
-                  <td style={{ padding: '14px 16px', fontSize: '14px', color: NSD_COLORS.text.primary }}>
-                    {new Date(run.started_at).toLocaleString()}
-                  </td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <RunStatusBadge status={run.status} />
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.text.primary }}>
-                    {run.leads_processed}
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.success }}>
-                    {run.emails_sent}
-                  </td>
-                  <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', color: run.errors > 0 ? NSD_COLORS.error : NSD_COLORS.text.muted }}>
-                    {run.errors}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </SectionCard>
+      {/* Run request message (shown after requesting execution) */}
+      {runRequestMessage && (
+        <div
+          style={{
+            padding: '12px 16px',
+            backgroundColor: '#DBEAFE',
+            borderRadius: NSD_RADIUS.md,
+            border: '1px solid #93C5FD',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <Icon name="info" size={16} color="#1E40AF" />
+          <span style={{ fontSize: '14px', color: '#1E40AF' }}>
+            {runRequestMessage}
+          </span>
+        </div>
+      )}
+
+      {/* Section A: Approval Awareness Panel */}
+      {/* Shows campaign approval state with explanatory copy (read-only) */}
+      <ApprovalAwarenessPanel approvalState={approvalState} />
+
+      {/* Section A.1: Latest Run Status (Canonical Read Model) */}
+      {/* 
+       * EXECUTION CONTRACT NOTE:
+       * platform-shell does NOT execute campaigns.
+       * This component fetches latest run from Sales Engine's canonical read model.
+       * NO polling. NO inference. Single fetch on page load.
+       */}
+      <LatestRunStatusCard campaignId={campaign.id} />
+
+      {/* Section B: Execution Status - Always visible */}
+      {/* Source of truth: /observability/status endpoint */}
+      {/* Status mapping (queued → cron model):
+          - queued: "Queued – execution will start shortly"
+          - running: "Running – sourcing organizations"
+          - completed: "Completed – results available"
+          - failed: "Failed – see timeline for details"
+          - blocked: "Blocked – see reason" */}
+      <CampaignExecutionStatusCard
+        status={executionStatus}
+        activeRunId={activeRunId}
+        currentStage={currentStage}
+        lastObservedAt={lastObservedAt}
+        leadsAwaitingApproval={leadsAwaitingApproval}
+        onRunCampaign={onRunCampaign}
+        canRun={canRun}
+        isRunning={isRunRequesting}
+        blockingReason={observabilityStatus?.error_message}
+        isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
+      />
+
+      {/* Section C: Pipeline Funnel (CORE) */}
+      {/* Source of truth: /observability/funnel endpoint */}
+      <PipelineFunnelTable
+        stages={pipelineStages}
+        loading={!observabilityFunnel && !observability}
+      />
+
+      {/* View Run History Button - scrolls to Section D */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <button
+          onClick={scrollToRunHistory}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 20px',
+            fontSize: '14px',
+            fontWeight: 500,
+            color: NSD_COLORS.secondary,
+            backgroundColor: 'transparent',
+            border: `1px solid ${NSD_COLORS.secondary}`,
+            borderRadius: NSD_RADIUS.md,
+            cursor: 'pointer',
+          }}
+        >
+          <Icon name="runs" size={16} color={NSD_COLORS.secondary} />
+          View Run History
+        </button>
+      </div>
+
+      {/* Section D: Run History */}
+      <CampaignRunHistoryTable
+        runs={runsDetailed.length > 0 ? runsDetailed : runs as CampaignRunDetailed[]}
+        id="run-history"
+      />
+
+      {/* Section E: Execution Timeline / Activity Feed */}
+      {/* Groups events by runId, ordered by occurred_at */}
+      <ExecutionTimelineFeed
+        events={executionEvents}
+        loading={false}
+      />
+
+      {/* Section F: Send Metrics (Scoped) - Post-Approval only 
+          IMPORTANT: Only show actual metrics from API, never fabricated.
+          If no send metrics exist, show "Not Observed Yet" state.
+      */}
+      <SendMetricsPanel
+        emailsSent={observability?.send_metrics?.emails_sent ?? metrics?.emails_sent}
+        emailsOpened={observability?.send_metrics?.emails_opened ?? metrics?.emails_opened}
+        emailsReplied={observability?.send_metrics?.emails_replied ?? metrics?.emails_replied}
+        openRate={observability?.send_metrics?.open_rate ?? metrics?.open_rate}
+        replyRate={observability?.send_metrics?.reply_rate ?? metrics?.reply_rate}
+        confidence={observability?.send_metrics?.confidence ?? 'conditional'}
+        lastUpdated={observability?.last_observed_at ?? metrics?.last_updated}
+        hasReachedSendStage={
+          // Check if pipeline has email_sent stage with count > 0
+          pipelineStages.some(s => s.stage === 'emails_sent' && s.count > 0) ||
+          (observability?.send_metrics?.emails_sent ?? 0) > 0
+        }
+      />
     </div>
   );
 }
 
 function LearningTab({ campaignId }: { campaignId: string }) {
-  // Sample learning signals - in production, these would come from the backend
-  // NOTE: This is placeholder data for UI demonstration purposes
-  const sampleSignals = [
-    { id: '1', name: 'Reply Outcome', type: 'reply_outcome' as const, collected: true, eligibleForLearning: true, excludedFromAutomation: false },
-    { id: '2', name: 'Bounce Detection', type: 'bounce' as const, collected: true, eligibleForLearning: true, excludedFromAutomation: false },
-    { id: '3', name: 'Open Rate Tracking', type: 'open_rate' as const, collected: true, eligibleForLearning: false, excludedFromAutomation: true, reason: 'Privacy compliance' },
-    { id: '4', name: 'Engagement Score', type: 'engagement' as const, collected: false, eligibleForLearning: false, excludedFromAutomation: true, reason: 'Not yet implemented' },
-  ];
-
+  // Learning signals must come from the backend API.
+  // Do NOT use placeholder data - show empty state when data is not available.
+  // This ensures no mock/fake data appears in the UI.
+  
   return (
     <LearningSignalsPanel
-      signals={sampleSignals}
+      signals={undefined} // Will show "No Learning Signals Configured" state
       autonomyLevel="L1"
       campaignId={campaignId}
     />
   );
 }
 
-function RunStatusBadge({ status }: { status: 'COMPLETED' | 'FAILED' | 'PARTIAL' }) {
-  const styles = {
-    COMPLETED: { bg: '#D1FAE5', text: '#065F46', label: 'Completed' },
-    FAILED: { bg: '#FEE2E2', text: '#991B1B', label: 'Failed' },
-    PARTIAL: { bg: '#FEF3C7', text: '#92400E', label: 'Partial' },
-  };
-
-  const style = styles[status];
-
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        padding: '4px 8px',
-        fontSize: '12px',
-        fontWeight: 500,
-        backgroundColor: style.bg,
-        color: style.text,
-        borderRadius: NSD_RADIUS.sm,
-      }}
-    >
-      {style.label}
-    </span>
-  );
-}
+// RunStatusBadge moved to CampaignRunHistoryTable component
