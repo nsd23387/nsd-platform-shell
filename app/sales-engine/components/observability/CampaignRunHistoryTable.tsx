@@ -46,13 +46,19 @@ export interface CampaignRunHistoryTableProps {
 /**
  * Get status badge styling - uses brand-aligned semantic colors.
  */
-function getStatusBadgeStyle(status: 'COMPLETED' | 'FAILED' | 'PARTIAL'): {
+function getStatusBadgeStyle(status: string): {
   bg: string;
   text: string;
   border: string;
   label: string;
 } {
-  const semanticStyle = getSemanticStatusStyle(status);
+  // Runtime safety: backend may add statuses or return null-ish values; never crash the table.
+  const normalized = typeof status === 'string' ? status.toUpperCase() : 'UNKNOWN';
+  const semanticStyle = getSemanticStatusStyle(
+    (normalized === 'COMPLETED' || normalized === 'FAILED' || normalized === 'PARTIAL'
+      ? (normalized as 'COMPLETED' | 'FAILED' | 'PARTIAL')
+      : 'PARTIAL')
+  );
   
   const labels: Record<string, string> = {
     COMPLETED: 'Completed',
@@ -60,13 +66,13 @@ function getStatusBadgeStyle(status: 'COMPLETED' | 'FAILED' | 'PARTIAL'): {
     PARTIAL: 'Partial',
   };
   
-  return { ...semanticStyle, label: labels[status] || status };
+  return { ...semanticStyle, label: labels[normalized] || (typeof status === 'string' ? status : 'Unknown') };
 }
 
 /**
  * RunStatusBadge - Displays run status with brand-aligned styling.
  */
-function RunStatusBadge({ status }: { status: 'COMPLETED' | 'FAILED' | 'PARTIAL' }) {
+function RunStatusBadge({ status }: { status: string }) {
   const style = getStatusBadgeStyle(status);
 
   return (
@@ -90,18 +96,22 @@ function RunStatusBadge({ status }: { status: 'COMPLETED' | 'FAILED' | 'PARTIAL'
 /**
  * Format date for display.
  */
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleString();
+function formatDate(dateString: unknown): string {
+  if (typeof dateString !== 'string' || dateString.length === 0) return '—';
+  const d = new Date(dateString);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
 }
 
 /**
  * Calculate and format duration between two timestamps.
  */
-function formatDuration(startedAt: string, completedAt?: string): string {
-  if (!completedAt) return 'In progress';
+function formatDuration(startedAt: unknown, completedAt?: unknown): string {
+  if (typeof startedAt !== 'string' || startedAt.length === 0) return '—';
+  if (typeof completedAt !== 'string' || completedAt.length === 0) return 'In progress';
   
   const start = new Date(startedAt).getTime();
   const end = new Date(completedAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end)) return '—';
   const durationMs = end - start;
   
   if (durationMs < 0) return '—';
@@ -297,17 +307,18 @@ export function CampaignRunHistoryTable({
             </thead>
             <tbody>
               {runs.map((run, index) => (
+                // Runtime safety: do not assume run fields exist or are non-null.
                 <tr
-                  key={run.id}
+                  key={typeof run.id === 'string' && run.id.length > 0 ? run.id : `run-${index}`}
                   style={{
                     borderTop: index > 0 ? `1px solid ${NSD_COLORS.border.light}` : undefined,
                   }}
                 >
                   <td style={{ padding: '12px 16px', fontSize: '12px', fontFamily: 'monospace', color: NSD_COLORS.text.secondary }}>
-                    {run.id.slice(0, 8)}...
+                    {typeof run.id === 'string' && run.id.length > 0 ? `${run.id.slice(0, 8)}...` : '—'}
                   </td>
                   <td style={{ padding: '12px 16px' }}>
-                    <RunStatusBadge status={run.status} />
+                    <RunStatusBadge status={typeof run.status === 'string' ? run.status : 'Unknown'} />
                   </td>
                   <td style={{ padding: '12px 16px', fontSize: '13px', color: NSD_COLORS.text.primary }}>
                     {formatDate(run.started_at)}
@@ -319,22 +330,37 @@ export function CampaignRunHistoryTable({
                     {formatDuration(run.started_at, run.completed_at)}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
-                    {run.orgs_sourced?.toLocaleString() ?? '—'}
+                    {typeof run.orgs_sourced === 'number' ? run.orgs_sourced.toLocaleString() : '—'}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
-                    {run.contacts_discovered?.toLocaleString() ?? '—'}
+                    {typeof run.contacts_discovered === 'number' ? run.contacts_discovered.toLocaleString() : '—'}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
-                    {run.leads_promoted?.toLocaleString() ?? run.leads_processed?.toLocaleString() ?? '—'}
+                    {typeof run.leads_promoted === 'number'
+                      ? run.leads_promoted.toLocaleString()
+                      : typeof run.leads_processed === 'number'
+                      ? run.leads_processed.toLocaleString()
+                      : '—'}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.semantic.positive.text }}>
-                    {run.leads_approved?.toLocaleString() ?? '—'}
+                    {typeof run.leads_approved === 'number' ? run.leads_approved.toLocaleString() : '—'}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.semantic.positive.text }}>
-                    {run.emails_sent.toLocaleString()}
+                    {typeof run.emails_sent === 'number' ? run.emails_sent.toLocaleString() : '—'}
                   </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 500, color: run.errors > 0 ? NSD_COLORS.semantic.critical.text : NSD_COLORS.text.muted }}>
-                    {run.errors}
+                  <td
+                    style={{
+                      padding: '12px 16px',
+                      textAlign: 'right',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color:
+                        typeof run.errors === 'number' && run.errors > 0
+                          ? NSD_COLORS.semantic.critical.text
+                          : NSD_COLORS.text.muted,
+                    }}
+                  >
+                    {typeof run.errors === 'number' ? run.errors : '—'}
                   </td>
                 </tr>
               ))}
