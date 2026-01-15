@@ -20,11 +20,76 @@ import { useState, useEffect, useCallback } from 'react';
  * Only these exact fields - no derived state.
  */
 export interface LatestRun {
-  run_id: string;
-  status: string;
-  execution_mode: string;
-  created_at: string;
-  updated_at: string;
+  run_id?: string;
+  status?: string;
+  execution_mode?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+type LatestRunApiResponse =
+  // New contract (platform-shell): 200 { status: "no_runs" }
+  | { status: 'no_runs' }
+  // New contract (platform-shell): 200 { status: <runStatus>, run }
+  | { status: string; run?: Record<string, unknown> }
+  // Legacy shape (older proxy): 200 { run_id, status, ... }
+  | {
+      run_id?: string;
+      status?: string;
+      execution_mode?: string;
+      created_at?: string;
+      updated_at?: string;
+    };
+
+function getString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function normalizeLatestRunResponse(data: unknown): { noRuns: boolean; run: LatestRun | null } {
+  if (!data || typeof data !== 'object') {
+    return { noRuns: false, run: null };
+  }
+
+  const payload = data as LatestRunApiResponse & Record<string, unknown>;
+  const status = getString(payload.status);
+
+  // Contract: campaign exists, no runs yet
+  if (status === 'no_runs') {
+    return { noRuns: true, run: null };
+  }
+
+  // Contract: campaign exists, latest run returned under `run`
+  const embeddedRun = (payload as { run?: unknown }).run;
+  if (embeddedRun && typeof embeddedRun === 'object' && !Array.isArray(embeddedRun)) {
+    const r = embeddedRun as Record<string, unknown>;
+    // Runtime safety: upstream run payload fields are not guaranteed to exist.
+    // Prefer `run_id`, fall back to `id` without remapping execution state.
+    const runId = getString(r.run_id) ?? getString(r.id);
+    const runStatus = status ?? getString(r.status);
+
+    return {
+      noRuns: false,
+      run: {
+        run_id: runId,
+        status: runStatus,
+        execution_mode: getString(r.execution_mode),
+        created_at: getString(r.created_at),
+        updated_at: getString(r.updated_at),
+      },
+    };
+  }
+
+  // Legacy shape: run fields are top-level
+  return {
+    noRuns: false,
+    run: {
+      run_id: getString((payload as any).run_id),
+      status,
+      execution_mode: getString((payload as any).execution_mode),
+      created_at: getString((payload as any).created_at),
+      updated_at: getString((payload as any).updated_at),
+    },
+  };
 }
 
 /**
@@ -92,7 +157,7 @@ export function useLatestRunStatus(campaignId: string | null): LatestRunStatus {
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/runs/latest`);
 
-      // Handle 204 No Content (no runs yet)
+      // Backwards compatibility: older implementation returned 204 for no runs.
       if (response.status === 204) {
         setRun(null);
         setNoRuns(true);
@@ -125,15 +190,11 @@ export function useLatestRunStatus(campaignId: string | null): LatestRunStatus {
         return;
       }
 
-      // Parse successful response
-      const data = await response.json();
-      setRun({
-        run_id: data.run_id,
-        status: data.status,
-        execution_mode: data.execution_mode,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-      });
+      // Parse successful response (supports both legacy and new contract shapes).
+      const data: unknown = await response.json().catch(() => null);
+      const normalized = normalizeLatestRunResponse(data);
+      setNoRuns(normalized.noRuns);
+      setRun(normalized.run);
       setLoading(false);
     } catch (err) {
       console.warn('[useLatestRunStatus] Fetch error:', err);
