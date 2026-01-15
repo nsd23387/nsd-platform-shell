@@ -8,6 +8,7 @@
  * HARD CONSTRAINTS:
  * - READ-ONLY: No backend changes
  * - NO INFERENCE: Only use explicit signals from LatestRun model
+ * - OBSERVATION-BASED: State what we observe, not what we infer
  * - OUTCOME-ORIENTED: Focus on what happened, not technical status
  * - UNKNOWN IS VALID: When we don't have explicit signals, we say "unknown"
  * 
@@ -18,20 +19,21 @@
  * - created_at: string | undefined
  * - updated_at: string | undefined
  * 
- * Backend Condition → UI Meaning Mapping (EXPLICIT SIGNALS ONLY):
+ * Backend Condition → UI Meaning Mapping (OBSERVATION-BASED):
  * ┌─────────────────────────────────────┬─────────────────────────────────────────────────┐
  * │ Backend Condition                   │ UI Meaning                                      │
  * ├─────────────────────────────────────┼─────────────────────────────────────────────────┤
  * │ No run exists (noRuns=true)         │ "Campaign not executed yet"                     │
  * │ Run exists + status=queued          │ "Awaiting worker pickup"                        │
  * │ Run exists + status=running         │ "Execution in progress"                         │
- * │ Run exists + status=completed       │ "Execution finished"                            │
+ * │ Run exists + status=completed       │ "Execution finished - no steps observed"        │
  * │ Run exists + status=failed          │ "Execution failed"                              │
  * │ Run exists + unknown status         │ "Status unknown"                                │
  * └─────────────────────────────────────┴─────────────────────────────────────────────────┘
  * 
- * NOTE: We do NOT infer "no work done", "no external calls", or "cron idle"
- * because the LatestRun model does not include explicit fields for these.
+ * OBSERVATION: The LatestRun model provides only start/end timestamps without
+ * intermediate execution steps. When a run completes, we observe that no execution
+ * steps are visible in the data. This is stated as an observation, not inference.
  */
 
 import type { LatestRun } from '../../../hooks/useLatestRunStatus';
@@ -42,14 +44,18 @@ import type { LatestRun } from '../../../hooks/useLatestRunStatus';
  * 
  * STRICT: All states are derived from EXPLICIT backend signals only.
  * We do not infer states that the backend does not explicitly provide.
+ * 
+ * OBSERVATION-BASED: 'completed_no_steps_observed' is based on observing
+ * that the LatestRun model contains no intermediate execution step data.
  */
 export type ExecutionConfidence = 
-  | 'completed'           // Execution finished (status explicitly indicates completion)
-  | 'in_progress'         // Execution actively running (status=running)
-  | 'queued'              // Awaiting execution (status=queued)
-  | 'not_executed'        // Never executed (noRuns=true)
-  | 'failed'              // Execution failed (status=failed)
-  | 'unknown';            // Cannot determine state from available signals
+  | 'completed'                    // Execution finished with observable steps
+  | 'completed_no_steps_observed'  // Execution finished but no steps observed in data
+  | 'in_progress'                  // Execution actively running (status=running)
+  | 'queued'                       // Awaiting execution (status=queued)
+  | 'not_executed'                 // Never executed (noRuns=true)
+  | 'failed'                       // Execution failed (status=failed)
+  | 'unknown';                     // Cannot determine state from available signals
 
 /**
  * Timeline event for rendering the Execution Timeline.
@@ -222,20 +228,76 @@ export function deriveExecutionState(
   }
 
   // Case 5: Run completed
-  // STRICT: We only state what we explicitly know from the data.
-  // We do NOT infer whether external services were contacted or whether work was done.
+  // OBSERVATION-BASED: The LatestRun model provides only start/end data.
+  // We observe that no intermediate execution steps are present in the data.
+  // This is stated as an observation ("no execution steps were observed"),
+  // not an inference about what the system did or didn't do.
+  //
+  // DESIGN DECISION: Since the current LatestRun model does NOT include
+  // intermediate step data (e.g., `steps: []`, `phases: []`), ALL completed
+  // runs are classified as 'completed_no_steps_observed'. This is correct
+  // because we're observing what data is available, not inferring what happened.
+  //
+  // FUTURE EXTENSIBILITY: If the backend adds step data to LatestRun (e.g.,
+  // `run.steps` or `run.phases`), check for their presence here to distinguish
+  // between 'completed' (steps observed) and 'completed_no_steps_observed'.
   if (status === 'completed' || status === 'success' || status === 'succeeded') {
+    // Check if step data exists in the run (future extensibility)
+    // Currently, LatestRun never includes step data, so this is always false.
+    const hasObservableSteps = Boolean(
+      (run as Record<string, unknown>).steps || 
+      (run as Record<string, unknown>).phases ||
+      (run as Record<string, unknown>).execution_steps
+    );
+    
+    if (hasObservableSteps) {
+      // Future path: when backend provides step data
+      return {
+        confidence: 'completed',
+        confidenceLabel: 'Completed',
+        confidenceDescription: 'Execution finished.',
+        outcomeStatement: 'This execution completed. Check the pipeline funnel for detailed results.',
+        timeline: [
+          {
+            id: 'run_created',
+            type: 'success',
+            label: `Run created${createdAt ? ` (${createdAt})` : ''}`,
+            timestamp: run.created_at,
+            isCompleted: true,
+          },
+          {
+            id: 'execution_completed',
+            type: 'success',
+            label: `Execution completed${updatedAt ? ` (${updatedAt})` : ''}`,
+            timestamp: run.updated_at,
+            isCompleted: true,
+          },
+        ],
+        nextStepRecommendation: null,
+      };
+    }
+    
+    // Current path: LatestRun model contains no step data
+    // We observe the absence of steps and communicate this clearly
     return {
-      confidence: 'completed',
+      confidence: 'completed_no_steps_observed',
       confidenceLabel: 'Completed',
-      confidenceDescription: 'Execution finished.',
-      outcomeStatement: 'This execution completed. Check the pipeline funnel for detailed results.',
+      confidenceDescription: 'Execution finished. No execution steps were observed in the available data.',
+      outcomeStatement: 
+        'This execution completed, but no execution steps were observed. ' +
+        'Check the pipeline funnel to verify whether any results were produced.',
       timeline: [
         {
           id: 'run_created',
           type: 'success',
           label: `Run created${createdAt ? ` (${createdAt})` : ''}`,
           timestamp: run.created_at,
+          isCompleted: true,
+        },
+        {
+          id: 'no_steps_observed',
+          type: 'warning',
+          label: 'No execution steps observed',
           isCompleted: true,
         },
         {
@@ -246,7 +308,8 @@ export function deriveExecutionState(
           isCompleted: true,
         },
       ],
-      nextStepRecommendation: null,
+      nextStepRecommendation: 
+        'Review the pipeline funnel for results. If empty, consider reviewing ICP criteria or sourcing parameters.',
     };
   }
 
@@ -314,6 +377,11 @@ export const EXECUTION_TOOLTIPS: Record<string, string> = {
   completed: 
     'Completed means the execution finished. ' +
     'Check the pipeline funnel for detailed results about what was processed.',
+  
+  no_steps_observed:
+    'No execution steps were observed in the available data. ' +
+    'This means the run completed but intermediate step details are not visible here. ' +
+    'Check the pipeline funnel to see if any results were produced.',
   
   failed: 
     'Failed means the execution encountered an error. ' +

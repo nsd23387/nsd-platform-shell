@@ -44,21 +44,23 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
 **Core Principle**: A user can determine in under 10 seconds whether execution happened, whether it was expected, and whether action is required—without reading logs.
 
 **State Mapping** (`app/sales-engine/lib/execution-state-mapping.ts`):
-| Backend Condition (EXPLICIT SIGNALS ONLY) | UI Meaning |
-|-------------------------------------------|------------|
+| Backend Condition (OBSERVATION-BASED) | UI Meaning |
+|---------------------------------------|------------|
 | No run exists (noRuns=true) | "Campaign not executed yet" |
 | Run + status=queued | "Awaiting worker pickup" |
 | Run + status=running | "Execution in progress" |
-| Run + status=completed | "Execution finished" |
+| Run + status=completed | "Execution finished - no steps observed" |
 | Run + status=failed | "Execution failed" |
 | Run + unknown status | "Status unknown" |
 
-**NOTE**: We do NOT infer "no work done", "no external calls", or "cron idle" because the LatestRun model does not include explicit fields for these states.
+**OBSERVATION**: The LatestRun model provides only start/end timestamps without intermediate execution steps. When a run completes, we observe that no execution steps are visible in the data. This is stated as an observation ("no execution steps were observed"), not inference about what the system did or didn't do.
 
 **Key Features**:
 - Outcome-oriented timeline showing what explicitly happened during execution
-- Inline tooltips explaining Queue mode, Idle, No work detected
-- STRICT: Only displays states based on explicit backend signals (no inference)
+- "No execution steps observed" surfaced as a valid terminal outcome for completed runs
+- NextStepCard shown for completed runs with no observable execution (with guidance to check pipeline funnel)
+- Inline tooltips explaining Queue mode and No Steps Observed states
+- OBSERVATION-BASED: Only displays states based on what we can observe in the data
 
 **Hard Constraints**:
 - READ-ONLY: No backend changes, no schema changes, no new API endpoints
