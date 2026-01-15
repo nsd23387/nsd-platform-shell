@@ -41,3 +41,8 @@ export { ExecutionTimeline } from './ExecutionTimeline';
 export { NextStepCard } from './NextStepCard';
 export { ExecutionTooltip } from './ExecutionTooltip';
 export { ExecutionExplainabilityPanel } from './ExecutionExplainabilityPanel';
+
+export { CampaignScopeSummary } from './CampaignScopeSummary';
+export { CampaignStatusHeader } from './CampaignStatusHeader';
+export { FunnelSummaryWidget } from './FunnelSummaryWidget';
+export { ForwardMomentumCallout } from './ForwardMomentumCallout';
