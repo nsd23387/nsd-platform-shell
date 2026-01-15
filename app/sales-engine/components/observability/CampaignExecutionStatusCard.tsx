@@ -313,7 +313,13 @@ export function CampaignExecutionStatusCard({
                 opacity: 0.8,
               }}
             >
-              Run ID: <code style={{ fontFamily: 'monospace' }}>{activeRunId.slice(0, 8)}...</code>
+              {/* Runtime safety: activeRunId may be missing/invalid depending on backend observability projection */}
+              Run ID:{' '}
+              <code style={{ fontFamily: 'monospace' }}>
+                {typeof activeRunId === 'string' && activeRunId.length > 0
+                  ? `${activeRunId.slice(0, 8)}...`
+                  : '—'}
+              </code>
             </p>
           )}
 
