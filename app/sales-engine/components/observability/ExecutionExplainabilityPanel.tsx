@@ -123,11 +123,13 @@ function ExplainabilityContent({
   executionState: ExecutionState;
   compact: boolean;
 }) {
-  // Only show next step recommendation for failed executions
-  // (the only case where we have an explicit signal that action may be needed)
+  // Show next step recommendation for failed executions and completed runs
+  // where no execution steps were observed (both are valid terminal outcomes
+  // where user guidance is helpful)
   const showNextStep = 
     executionState.nextStepRecommendation && 
-    executionState.confidence === 'failed';
+    (executionState.confidence === 'failed' || 
+     executionState.confidence === 'completed_no_steps_observed');
 
   return (
     <div

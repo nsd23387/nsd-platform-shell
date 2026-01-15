@@ -45,6 +45,12 @@ function getBadgeStyle(confidence: ExecutionConfidence): BadgeStyle {
         icon: 'check',
         label: 'Completed',
       };
+    case 'completed_no_steps_observed':
+      return {
+        ...NSD_COLORS.semantic.muted,
+        icon: 'check',
+        label: 'Completed (No Steps Observed)',
+      };
     case 'in_progress':
       return {
         ...NSD_COLORS.semantic.active,
