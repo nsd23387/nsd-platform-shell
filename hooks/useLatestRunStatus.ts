@@ -116,7 +116,7 @@ export interface LatestRunStatus {
  * Hook to fetch the latest run status for a campaign.
  *
  * This hook:
- * - Fetches /api/campaigns/:id/runs/latest once on mount
+ * - Fetches /api/v1/campaigns/:id/runs/latest once on mount
  * - Does NOT poll (single fetch per page load)
  * - Handles 200, 204, 404, and 5xx responses
  * - Never throws
@@ -155,7 +155,8 @@ export function useLatestRunStatus(campaignId: string | null): LatestRunStatus {
     setServiceUnavailable(false);
 
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/runs/latest`);
+      // Architecture contract: UI should call versioned `/api/v1/*` endpoints (not legacy `/api/campaigns/*`).
+      const response = await fetch(`/api/v1/campaigns/${campaignId}/runs/latest`);
 
       // Backwards compatibility: older implementation returned 204 for no runs.
       if (response.status === 204) {
