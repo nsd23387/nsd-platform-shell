@@ -68,6 +68,25 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
 - Consume existing `/api/v1/campaigns/:id/runs/latest` endpoint only
 
 ## Recent Changes
+- January 16, 2026: ET Timezone + Live Execution Observability
+  - Created timezone utility (`app/sales-engine/lib/time.ts`) with DST-aware ET formatting
+  - All timestamps now display in America/New_York timezone with explicit "ET" label
+  - Added `useExecutionPolling` hook for live observability during execution
+  - Polling runs every 7 seconds while status is queued/running/in_progress
+  - Polling automatically stops on terminal states (completed, failed, etc.)
+  - Added `LastUpdatedIndicator` component showing "Last updated X seconds ago"
+  - Added pulse animation to ExecutionConfidenceBadge when execution is active
+  - Added "Refresh now" button for manual data refresh
+  - CampaignStatusHeader now shows last updated time and auto-refresh indicator
+  - FunnelSummaryWidget displays last updated timestamp in ET
+  - Consolidated polling to single useExecutionPolling mechanism
+
+- January 15, 2026: UX Enhancements for Campaign Detail Page
+  - Added CampaignScopeSummary for full ICP criteria display
+  - Added CampaignStatusHeader for above-the-fold governance and execution state
+  - Added FunnelSummaryWidget for compact pipeline funnel snapshot
+  - Added ForwardMomentumCallout for advisory guidance
+
 - January 15, 2026: Execution Timeline & Explainability UI
   - Added execution state mapping adapter with explicit backend→UI translations
   - Created ExecutionConfidenceBadge with brand-aligned status indicators

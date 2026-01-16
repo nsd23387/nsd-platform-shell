@@ -6,7 +6,7 @@
  * Displays campaign details, metrics, and action buttons.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader, SectionCard } from '../../components/ui';
@@ -65,12 +65,15 @@ import {
   type ApprovalAwarenessState,
 } from '../../components/observability';
 import { deriveExecutionState } from '../../lib/execution-state-mapping';
+import { formatEt, formatEtDate } from '../../lib/time';
 import { 
   isTestCampaign, 
   getTestCampaignDetail, 
   getTestCampaignThroughput,
 } from '../../lib/test-campaign';
 import { PlanningOnlyToggle } from '../../components/PlanningOnlyToggle';
+import { useExecutionPolling } from '../../hooks/useExecutionPolling';
+import { LastUpdatedIndicator } from '../../components/observability/LastUpdatedIndicator';
 
 type TabType = 'overview' | 'monitoring' | 'learning';
 
@@ -105,8 +108,6 @@ export default function CampaignDetailPage() {
   // Run request state
   const [isRunRequesting, setIsRunRequesting] = useState(false);
   const [runRequestMessage, setRunRequestMessage] = useState<string | null>(null);
-  // Polling interval ref
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derive governance state from backend data
   const governanceState: CampaignGovernanceState = campaign
@@ -191,14 +192,26 @@ export default function CampaignDetailPage() {
     loadData();
   }, [campaignId]);
 
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, []);
+
+  // Live execution polling for active runs
+  const {
+    latestRun: polledLatestRun,
+    funnel: polledFunnel,
+    lastUpdatedAt,
+    isPolling,
+    isRefreshing,
+    refreshNow,
+  } = useExecutionPolling({
+    campaignId,
+    initialLatestRun: latestRun,
+    initialFunnel: observabilityFunnel,
+    pollingIntervalMs: 7000,
+    enabled: !loading && !isTest,
+  });
+
+  // Use polled data when available, otherwise fall back to initial data
+  const effectiveLatestRun = polledLatestRun || latestRun;
+  const effectiveFunnel = polledFunnel || observabilityFunnel;
 
   /**
    * Refresh observability data (status, funnel, runs).
@@ -253,23 +266,13 @@ export default function CampaignDetailPage() {
         
         // Immediately refresh observability data
         await refreshObservabilityData();
-
-        // Start polling for status updates (every 5 seconds for 2 minutes)
-        let pollCount = 0;
-        const maxPolls = 24; // 2 minutes at 5 second intervals
         
-        pollingIntervalRef.current = setInterval(async () => {
-          pollCount++;
-          await refreshObservabilityData();
-          
-          // Stop polling after max time or when status changes from run_requested
-          if (pollCount >= maxPolls) {
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current);
-              pollingIntervalRef.current = null;
-            }
-          }
-        }, 5000);
+        // NOTE: Live polling is handled by useExecutionPolling hook
+        // The hook will automatically poll while status is queued/running/in_progress
+        // and stop when a terminal state is reached
+        
+        // Trigger immediate refresh via the polling hook
+        await refreshNow();
       } else {
         setRunRequestMessage('Execution request failed — See console for details');
       }
@@ -355,8 +358,12 @@ export default function CampaignDetailPage() {
             campaign={campaign}
             governanceState={governanceState}
             runsCount={runs.length}
-            latestRun={latestRun}
-            observabilityFunnel={observabilityFunnel}
+            latestRun={effectiveLatestRun}
+            observabilityFunnel={effectiveFunnel}
+            lastUpdatedAt={lastUpdatedAt}
+            isPolling={isPolling}
+            isRefreshing={isRefreshing}
+            onRefresh={refreshNow}
             onPlanningOnlyChange={(newState) => {
               // Update local campaign state when planning-only changes
               // This ensures the UI reflects the new state immediately
@@ -421,6 +428,10 @@ function OverviewTab({
   runsCount,
   latestRun,
   observabilityFunnel,
+  lastUpdatedAt,
+  isPolling,
+  isRefreshing,
+  onRefresh,
   onPlanningOnlyChange,
 }: {
   campaign: CampaignDetail;
@@ -428,6 +439,10 @@ function OverviewTab({
   runsCount: number;
   latestRun: CampaignRun | null;
   observabilityFunnel: ObservabilityFunnel | null;
+  lastUpdatedAt: string | null;
+  isPolling: boolean;
+  isRefreshing: boolean;
+  onRefresh: () => void;
   /** Callback when planning-only state changes (to update parent state) */
   onPlanningOnlyChange?: (newState: boolean) => void;
 }) {
@@ -465,6 +480,17 @@ function OverviewTab({
         governanceState={governanceState}
         executionConfidence={executionState.confidence}
         isPlanningOnly={isPlanningOnly}
+        lastUpdatedAt={lastUpdatedAt}
+        isPolling={isPolling}
+      />
+
+      {/* Last Updated Indicator with Refresh button */}
+      <LastUpdatedIndicator
+        lastUpdatedAt={lastUpdatedAt}
+        isPolling={isPolling}
+        isRefreshing={isRefreshing}
+        onRefresh={onRefresh}
+        showRefreshButton={true}
       />
 
       {/* Forward Momentum Callout - advisory guidance */}
@@ -494,18 +520,18 @@ function OverviewTab({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Created</label>
-                  <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{new Date(campaign.created_at).toLocaleDateString()}</p>
+                  <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{formatEtDate(campaign.created_at)}</p>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Updated</label>
-                  <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{new Date(campaign.updated_at).toLocaleDateString()}</p>
+                  <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{formatEtDate(campaign.updated_at)}</p>
                 </div>
               </div>
               {campaign.approved_at && (
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Approved</label>
                   <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>
-                    {new Date(campaign.approved_at).toLocaleString()}
+                    {formatEt(campaign.approved_at)}
                     {campaign.approved_by && ` by ${campaign.approved_by}`}
                   </p>
                 </div>

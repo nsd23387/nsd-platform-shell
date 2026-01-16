@@ -46,3 +46,4 @@ export { CampaignScopeSummary } from './CampaignScopeSummary';
 export { CampaignStatusHeader } from './CampaignStatusHeader';
 export { FunnelSummaryWidget } from './FunnelSummaryWidget';
 export { ForwardMomentumCallout } from './ForwardMomentumCallout';
+export { LastUpdatedIndicator } from './LastUpdatedIndicator';

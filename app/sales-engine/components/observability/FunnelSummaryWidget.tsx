@@ -22,6 +22,7 @@
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
+import { formatEt } from '../../lib/time';
 import type { ObservabilityFunnel, PipelineStage } from '../../types/campaign';
 
 interface FunnelSummaryWidgetProps {
@@ -213,6 +214,9 @@ export function FunnelSummaryWidget({ funnel, loading = false }: FunnelSummaryWi
 
       <div
         style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           padding: '10px 20px',
           borderTop: `1px solid ${NSD_COLORS.border.light}`,
           backgroundColor: NSD_COLORS.surface,
@@ -228,6 +232,17 @@ export function FunnelSummaryWidget({ funnel, loading = false }: FunnelSummaryWi
         >
           Counts are backend-authoritative. View Observability tab for details.
         </p>
+        {funnel?.last_updated_at && (
+          <p
+            style={{
+              margin: 0,
+              fontSize: '10px',
+              color: NSD_COLORS.text.muted,
+            }}
+          >
+            Updated: {formatEt(funnel.last_updated_at)}
+          </p>
+        )}
       </div>
     </div>
   );
