@@ -68,6 +68,18 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
 - Consume existing `/api/v1/campaigns/:id/runs/latest` endpoint only
 
 ## Recent Changes
+- January 16, 2026: Execution Clarity & Real-Time Observability (P0)
+  - **ExecutionStageTracker**: Vertical tracker showing org_sourcing, contact_discovery, lead_creation stages with Waiting/Running/Completed status
+  - **ActiveStageFocusPanel**: Live-updating panel answering "What is the system doing right now?" with human-readable status
+  - **ExecutionHealthIndicator**: Single sentence health line visible without scrolling (e.g., "Execution completed — contacts discovered, no promotable leads")
+  - **ResultsBreakdownCards**: Post-stage completion cards with counts and skip reasons (uses "Skipped" not "Failed")
+  - **AdvisoryCallout**: Non-blocking contextual guidance labeled as "Advisory"
+  - **PollingStatusIndicator**: Shows "Auto-refreshing every 7s" during execution, "Execution idle" when terminal
+  - Layout reorganized: Execution-first UI above the fold in Overview tab
+  - User can answer "What is happening now?" in under 3 seconds
+  - Zero leads promoted is explained without implying failure
+  - All data derived from observed backend funnel stages only (no inference)
+
 - January 16, 2026: ET Timezone + Live Execution Observability
   - Created timezone utility (`app/sales-engine/lib/time.ts`) with DST-aware ET formatting
   - All timestamps now display in America/New_York timezone with explicit "ET" label

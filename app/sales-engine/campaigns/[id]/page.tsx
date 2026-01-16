@@ -61,6 +61,12 @@ import {
   CampaignStatusHeader,
   FunnelSummaryWidget,
   ForwardMomentumCallout,
+  ExecutionStageTracker,
+  ActiveStageFocusPanel,
+  ExecutionHealthIndicator,
+  ResultsBreakdownCards,
+  AdvisoryCallout,
+  PollingStatusIndicator,
   type ExecutionEvent,
   type ApprovalAwarenessState,
 } from '../../components/observability';
@@ -472,37 +478,80 @@ function OverviewTab({
 
   const isPlanningOnly = campaign.sourcing_config?.benchmarks_only === true;
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Above the fold: Status Header with governance and execution badges */}
-      <CampaignStatusHeader
-        campaignName={campaign.name}
-        governanceState={governanceState}
-        executionConfidence={executionState.confidence}
-        isPlanningOnly={isPlanningOnly}
-        lastUpdatedAt={lastUpdatedAt}
-        isPolling={isPolling}
-      />
+  const runStatus = latestRun?.status?.toLowerCase() || null;
+  const runPhase = (latestRun as any)?.phase?.toLowerCase() || null;
+  const noRuns = runsCount === 0;
 
-      {/* Last Updated Indicator with Refresh button */}
-      <LastUpdatedIndicator
-        lastUpdatedAt={lastUpdatedAt}
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* ============================================
+          ABOVE THE FOLD: Execution-First UI
+          User can answer "What's happening now?" in <3 seconds
+          ============================================ */}
+      
+      {/* Execution Health Indicator - Single sentence visible without scrolling */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <ExecutionHealthIndicator
+          runStatus={runStatus}
+          runPhase={runPhase}
+          funnel={observabilityFunnel}
+          noRuns={noRuns}
+        />
+        <CampaignStatusHeader
+          campaignName={campaign.name}
+          governanceState={governanceState}
+          executionConfidence={executionState.confidence}
+          isPlanningOnly={isPlanningOnly}
+          lastUpdatedAt={lastUpdatedAt}
+          isPolling={isPolling}
+        />
+      </div>
+
+      {/* Polling Status - Shows "Auto-refreshing every 7s" or "Execution idle" */}
+      <PollingStatusIndicator
         isPolling={isPolling}
         isRefreshing={isRefreshing}
+        lastUpdatedAt={lastUpdatedAt}
+        pollingInterval={7000}
         onRefresh={onRefresh}
-        showRefreshButton={true}
       />
 
-      {/* Forward Momentum Callout - advisory guidance */}
-      <ForwardMomentumCallout
-        governanceState={governanceState}
-        executionConfidence={executionState.confidence}
-        hasFunnelActivity={hasFunnelActivity}
-        isPlanningOnly={isPlanningOnly}
+      {/* Active Stage Focus Panel - What is the system doing right now? */}
+      <ActiveStageFocusPanel
+        runStatus={runStatus}
+        runPhase={runPhase}
+        funnel={observabilityFunnel}
+        noRuns={noRuns}
+        isPolling={isPolling}
       />
+
+      {/* Execution Stage Tracker - Vertical stage tracker */}
+      <ExecutionStageTracker
+        runStatus={runStatus}
+        runPhase={runPhase}
+        funnel={observabilityFunnel}
+        noRuns={noRuns}
+      />
+
+      {/* Results Breakdown Cards - Post-stage completion details */}
+      <ResultsBreakdownCards
+        funnel={observabilityFunnel}
+        runStatus={runStatus}
+      />
+
+      {/* Advisory Callout - Non-blocking guidance */}
+      <AdvisoryCallout
+        runStatus={runStatus}
+        funnel={observabilityFunnel}
+        noRuns={noRuns}
+      />
+
+      {/* ============================================
+          BELOW THE FOLD: Campaign Details & Actions
+          ============================================ */}
 
       {/* Main content grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', marginTop: '8px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Campaign Scope Summary - Full ICP display */}
           <CampaignScopeSummary icp={campaign.icp} />
