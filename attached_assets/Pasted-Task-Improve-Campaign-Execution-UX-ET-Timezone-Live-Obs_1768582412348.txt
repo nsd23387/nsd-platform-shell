@@ -1,0 +1,97 @@
+Task: Improve Campaign Execution UX — ET Timezone + Live Observability (P0)
+
+Repository: nsd-platform-shell
+
+Context:
+The Sales Engine execution is correct and queue-first, but the UI does not clearly
+communicate execution progress to users.
+
+Current issues:
+- All timestamps are shown in UTC and confusing to users
+- Campaign detail pages do not refresh frequently during execution
+- Users cannot easily tell whether a campaign is waiting, running, or complete
+- There is insufficient feedback while asynchronous execution is in progress
+
+This task improves READ-ONLY UI observability only.
+NO backend logic, NO schema changes, NO execution changes.
+
+--------------------------------------------------
+PART 1: Timezone Handling (Authoritative)
+--------------------------------------------------
+
+Rules:
+1) Backend APIs return timestamps in UTC (assume ISO strings)
+2) UI must convert ALL timestamps to America/New_York (ET)
+3) Conversion must be DST-aware
+4) Display timezone label explicitly ("ET")
+
+Actions:
+- Create a shared utility:
+  src/utils/time.ts
+  - formatEt(utcTimestamp: string): string
+
+- Use Intl.DateTimeFormat with:
+  timeZone = "America/New_York"
+
+- Update ALL timestamp displays to use this utility:
+  - ExecutionTimeline
+  - ExecutionConfidenceBadge tooltips
+  - CampaignStatusHeader
+  - FunnelSummaryWidget timestamps
+  - Any “Last updated” indicators
+
+--------------------------------------------------
+PART 2: Live Execution Observability (P0)
+--------------------------------------------------
+
+Polling behavior:
+- While latestRun.status ∈ { "queued", "running" }
+- Poll every 5–10 seconds:
+  - /api/v1/campaigns/:id/runs/latest
+  - Observability funnel endpoint
+- Stop polling when run reaches a terminal state
+
+Implementation notes:
+- Polling must be scoped to the campaign detail page only
+- Polling must automatically stop to avoid unnecessary load
+
+--------------------------------------------------
+PART 3: User Feedback & Liveness Signals
+--------------------------------------------------
+
+Required UX enhancements:
+- Add “Last updated X seconds ago” indicator
+- Add subtle pulse or spinner on ExecutionConfidenceBadge when active
+- Timeline must show explicit waiting states:
+  - "Awaiting worker pickup"
+  - "Execution in progress"
+- Add a manual “Refresh now” button (secondary, non-primary action)
+
+UX principles:
+- Waiting is a valid state and must be clearly communicated
+- Never imply failure unless backend explicitly signals failure
+- No inference beyond explicit API signals
+
+--------------------------------------------------
+Constraints
+--------------------------------------------------
+- READ-ONLY UI
+- No backend changes
+- No schema assumptions
+- No new API endpoints
+- No inference beyond explicit signals
+
+--------------------------------------------------
+Acceptance Criteria
+--------------------------------------------------
+- All timestamps display in ET with timezone label
+- Campaign page visibly updates during execution
+- User can determine execution state within 5 seconds
+- No page reload required to see updates
+- UI remains stable and non-intrusive
+
+--------------------------------------------------
+Guiding Principle
+--------------------------------------------------
+Execution is asynchronous.
+The UI must make waiting understandable, not confusing.
