@@ -20,6 +20,7 @@
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
+import { formatEt } from '../../lib/time';
 import type { ExecutionConfidence } from '../../lib/execution-state-mapping';
 
 interface ExecutionConfidenceBadgeProps {
@@ -27,6 +28,8 @@ interface ExecutionConfidenceBadgeProps {
   label?: string;
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
+  showPulse?: boolean;
+  lastUpdatedAt?: string | null;
 }
 
 interface BadgeStyle {
@@ -112,56 +115,89 @@ function getSizeStyles(size: 'sm' | 'md' | 'lg') {
   }
 }
 
+function isActiveConfidence(confidence: ExecutionConfidence): boolean {
+  return confidence === 'queued' || confidence === 'in_progress';
+}
+
 export function ExecutionConfidenceBadge({
   confidence,
   label,
   size = 'md',
   showLabel = true,
+  showPulse,
+  lastUpdatedAt,
 }: ExecutionConfidenceBadgeProps) {
   const style = getBadgeStyle(confidence);
   const sizeStyles = getSizeStyles(size);
   const displayLabel = label || style.label;
+  
+  const isActive = isActiveConfidence(confidence);
+  const shouldPulse = showPulse ?? isActive;
+  
+  const tooltipText = lastUpdatedAt
+    ? `${displayLabel} — Last updated: ${formatEt(lastUpdatedAt)}`
+    : displayLabel;
 
   return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: sizeStyles.gap,
-        padding: sizeStyles.padding,
-        backgroundColor: style.bg,
-        border: `1px solid ${style.border}`,
-        borderRadius: NSD_RADIUS.sm,
-      }}
-      title={displayLabel}
-    >
+    <>
       <div
         style={{
-          display: 'flex',
+          display: 'inline-flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          width: sizeStyles.iconSize + 4,
-          height: sizeStyles.iconSize + 4,
-          borderRadius: '50%',
-          backgroundColor: `${style.text}15`,
+          gap: sizeStyles.gap,
+          padding: sizeStyles.padding,
+          backgroundColor: style.bg,
+          border: `1px solid ${style.border}`,
+          borderRadius: NSD_RADIUS.sm,
+          animation: shouldPulse ? 'executionPulse 2s ease-in-out infinite' : undefined,
         }}
+        title={tooltipText}
       >
-        <Icon name={style.icon} size={sizeStyles.iconSize} color={style.text} />
-      </div>
-      {showLabel && (
-        <span
+        <div
           style={{
-            fontSize: sizeStyles.fontSize,
-            fontWeight: 600,
-            fontFamily: NSD_TYPOGRAPHY.fontBody,
-            color: style.text,
-            whiteSpace: 'nowrap',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: sizeStyles.iconSize + 4,
+            height: sizeStyles.iconSize + 4,
+            borderRadius: '50%',
+            backgroundColor: `${style.text}15`,
+            animation: isActive ? 'iconSpin 2s linear infinite' : undefined,
           }}
         >
-          {displayLabel}
-        </span>
-      )}
-    </div>
+          <Icon name={style.icon} size={sizeStyles.iconSize} color={style.text} />
+        </div>
+        {showLabel && (
+          <span
+            style={{
+              fontSize: sizeStyles.fontSize,
+              fontWeight: 600,
+              fontFamily: NSD_TYPOGRAPHY.fontBody,
+              color: style.text,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {displayLabel}
+          </span>
+        )}
+      </div>
+      <style jsx global>{`
+        @keyframes executionPulse {
+          0%, 100% {
+            opacity: 1;
+            box-shadow: 0 0 0 0 rgba(32, 15, 90, 0.2);
+          }
+          50% {
+            opacity: 0.85;
+            box-shadow: 0 0 0 4px rgba(32, 15, 90, 0.1);
+          }
+        }
+        @keyframes iconSpin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+    </>
   );
 }
 
