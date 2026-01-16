@@ -1,0 +1,280 @@
+REPLIT PROMPT — Sales Engine UI: Real-Time Execution Clarity (P0)
+
+Repo: nsd-platform-shell
+Area: Sales Engine Campaign Detail UI
+Mode: Inspect → Propose → Implement
+Priority: P0 (Operator UX & Execution Observability)
+
+Objective
+
+Optimize the Campaign Detail experience so a user can answer, in under 10 seconds:
+
+What stage is executing right now?
+
+What has already completed vs what’s pending?
+
+Is the system working or waiting?
+
+Is action required from me, or should I wait?
+
+If results are “zero,” is that expected or a problem?
+
+This must be frictionless, glanceable, and real-time, without overwhelming the user.
+
+Architectural Constraints (Do Not Violate)
+
+UI is read-only (no mutations)
+
+UI reflects backend truth only (no inference)
+
+All timestamps are UTC from API → displayed as ET
+
+Execution stages are canonical:
+
+org_sourcing
+
+contact_discovery
+
+lead_creation
+
+Discovery success ≠ Promotion success (must be visually distinct)
+
+Zero leads promoted is not an error if discovery succeeded
+
+Phase 1 — Inspect Current UX (Required)
+
+First, inspect and summarize:
+
+Current Campaign Detail layout
+
+Where execution status is shown (header, tab, card, etc.)
+
+How stages are currently represented (if at all)
+
+How often data refreshes and what triggers re-renders
+
+Where confusion could occur today (especially:
+
+“Completed but nothing happened”
+
+“Is it still running?”
+
+“Why are there zero leads?”)
+
+⚠️ Do not change code yet.
+Return a short UX gap analysis before implementing.
+
+Phase 2 — UX Model to Implement (Authoritative)
+
+Once inspection is complete, implement the following execution-first UI model.
+
+1. Execution Stage Tracker (P0)
+
+Add a vertical or horizontal Stage Tracker at the top of the Campaign Detail page.
+
+Stages (fixed order):
+
+Organizations Identified
+
+Contacts Discovered
+
+Leads Promoted
+
+Each stage shows:
+
+Status: Waiting | Running | Completed | Completed (No Output) | Failed
+
+Sub-label with plain English meaning
+
+Timestamp (ET)
+
+Example:
+
+[✓] Organizations Identified
+    55 organizations sourced
+
+[●] Contacts Discovered
+    Running — scanning organizations for contacts
+
+[ ] Leads Promoted
+    Pending — requires email-qualified contacts
+
+
+Rules:
+
+Only one stage may be “Running” at a time
+
+Completed stages never animate
+
+“Completed (No Output)” must be visually distinct from “Failed”
+
+2. Active Stage Focus Panel (P0)
+
+Directly below the tracker, add an Active Stage Panel that answers:
+
+“What is the system doing right now?”
+
+This panel updates live and is the primary attention anchor.
+
+Panel Contents
+
+Stage name (large)
+
+Status sentence (human readable)
+
+Live signal (only if running)
+
+“Last updated X seconds ago”
+
+Examples
+
+“Discovering contacts across 55 organizations”
+
+“Promotion complete — no contacts met email requirements”
+
+“Waiting for execution worker”
+
+No technical jargon. No IDs. No raw JSON.
+
+3. Results Breakdown Cards (P0)
+
+For completed stages, show compact breakdown cards:
+
+Contact Discovery Card
+Contacts Discovered
+────────────────────
+Total: 214
+With Email: 38
+Without Email: 176
+Status: Inventory Created
+
+Lead Promotion Card
+Leads Promoted
+──────────────
+Eligible: 38
+Promoted: 12
+Skipped:
+- Missing email: 26
+
+
+Rules:
+
+Numbers must reconcile
+
+Skips must be explained, not implied
+
+Never show “0” without explanation text
+
+4. Execution Health Indicator (P0)
+
+Replace vague “Completed” messaging with a single health line:
+
+✅ “Execution completed successfully”
+
+⚠️ “Execution completed — limited promotable leads”
+
+❌ “Execution failed during contact discovery”
+
+⏳ “Execution in progress”
+
+This line should be visible without scrolling.
+
+5. Action Guidance (P1, Advisory Only)
+
+Add a non-blocking advisory callout based on final state:
+
+Examples:
+
+“Most contacts lacked email. Consider enabling email enrichment.”
+
+“Campaign completed successfully. Review promoted leads.”
+
+“No organizations matched the ICP. Review keywords or geography.”
+
+Rules:
+
+No buttons required
+
+No forced actions
+
+Pure guidance
+
+6. Live Refresh & Polling UX (P0)
+
+Ensure:
+
+Polling occurs only while execution is active
+
+Polling interval is visible (e.g., “Auto-refreshing every 7s”)
+
+Manual refresh button is always available
+
+UI never “freezes” silently
+
+If execution is idle:
+
+Stop polling
+
+Clearly state “Execution idle”
+
+Phase 3 — Visual & Cognitive Design Rules
+
+Prioritize text clarity over graphics
+
+Use color only for status, not decoration
+
+Avoid dense tables during execution
+
+No emojis
+
+No acronyms without labels
+
+One primary focus area at a time
+
+Deliverables
+
+UX gap analysis (short)
+
+Updated Campaign Detail UI implementing:
+
+Stage Tracker
+
+Active Stage Panel
+
+Results Breakdown Cards
+
+Execution Health Indicator
+
+Advisory Callouts
+
+Ensure ET timestamps are displayed consistently
+
+Ensure UI updates cleanly during live execution
+
+Non-Goals
+
+❌ No backend changes
+
+❌ No schema assumptions
+
+❌ No new API endpoints
+
+❌ No execution control buttons
+
+❌ No analytics dashboards
+
+Success Criteria
+
+A first-time user can open a campaign and immediately understand:
+
+Where execution is
+
+What has happened
+
+Why results look the way they do
+
+Whether action is needed
+
+No guessing. No digging. No second-guessing.
+
+END REPLIT PROMPT
