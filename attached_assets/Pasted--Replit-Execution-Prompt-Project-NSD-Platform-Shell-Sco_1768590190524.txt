@@ -1,0 +1,264 @@
+🎯 Replit Execution Prompt
+
+Project: NSD Platform Shell
+Scope: Campaign Execution UX Clarity & Real-Time Observability
+Repo: nsd-platform-shell
+Authority: UI is observational only. Backend state + ODS events are authoritative.
+
+Objective
+
+Optimize the Campaign Detail UI so users can clearly understand:
+
+What stage the campaign is currently executing
+
+What has already completed
+
+Why certain results (e.g. 0 leads) occurred
+
+Whether the system is actively working or idle
+
+What actions (if any) they should take next
+
+This must be fast to interpret, low friction, and confidence-building, especially during live execution.
+
+Hard Architectural Guardrails (NON-NEGOTIABLE)
+
+These must be followed strictly:
+
+NO new canonical state
+
+Do NOT add or modify:
+
+campaigns
+
+campaign_runs
+
+organizations, contacts, leads
+
+Do NOT introduce inferred execution fields.
+
+UI is READ-ONLY & OBSERVATIONAL
+
+All execution truth comes from:
+
+campaign_runs.status
+
+campaign_runs.phase
+
+activity.events
+
+The UI must never “decide” execution state.
+
+ODS alignment
+
+All breakdowns, warnings, and explanations must be derived from existing activity.events payloads.
+
+No new ODS event types are introduced here (frontend only).
+
+Language precision
+
+Use “Skipped”, not “Failed”, for qualification outcomes (e.g. missing email).
+
+Zero promoted leads ≠ execution failure.
+
+No inference by time
+
+Do NOT infer progress based on elapsed time.
+
+Only reflect what is explicitly observed.
+
+UX Problems to Solve
+
+Current UX issues that MUST be addressed:
+
+Users cannot tell which stage is running right now
+
+Timeline and stage context are hidden behind tabs
+
+Zero leads promoted looks like a failure
+
+Execution health is fragmented across widgets
+
+Polling is invisible and unclear
+
+Required UI Enhancements
+1️⃣ Execution Stage Tracker (TOP OF PAGE)
+
+Implement a vertical or horizontal stage tracker above the fold showing:
+
+Organizations Sourced
+
+Contacts Discovered
+
+Leads Promoted
+
+Each stage must show exactly ONE of:
+
+Waiting
+
+Running
+
+Completed
+
+Rules:
+
+Stage status is derived from:
+
+campaign_runs.phase
+
+latest stage.completed events
+
+No “Failed” stage unless the entire run is failed.
+
+2️⃣ Active Stage Focus Panel (ABOVE THE FOLD)
+
+Directly below the stage tracker, add a live-updating panel answering:
+
+“What is the system doing right now?”
+
+Examples:
+
+“Sourcing organizations based on ICP”
+
+“Discovering contacts across 55 organizations”
+
+“Qualifying contacts for lead promotion”
+
+“Execution completed”
+
+Rules:
+
+Copy must be derived from observed execution state only.
+
+Must update automatically via polling.
+
+No speculation or inferred intent.
+
+3️⃣ Execution Health Indicator (Single Sentence)
+
+Add a concise, human-readable health line visible without scrolling.
+
+Examples:
+
+“Execution running — discovering contacts”
+
+“Execution completed — contacts discovered, no promotable leads”
+
+“Execution failed — adapter error during contact sourcing”
+
+Rules:
+
+Exactly one sentence
+
+Must reconcile status + results
+
+No alarmist language
+
+4️⃣ Results Breakdown Cards (Post-Stage Completion)
+
+For completed stages, show clear breakdown cards explaining outcomes.
+
+Examples:
+
+Contacts Discovered:
+
+Total fetched
+
+Persisted
+
+With email
+
+Without email (skipped for promotion)
+
+Lead Promotion:
+
+Eligible
+
+Promoted
+
+Skipped (missing email)
+
+Skipped (invalid email)
+
+Rules:
+
+Data sourced from ODS events only
+
+Use “Skipped”, never “Failed”
+
+Make zero outcomes explainable, not alarming
+
+5️⃣ Advisory Callouts (Non-Blocking)
+
+Show contextual guidance ONLY when appropriate.
+
+Examples:
+
+“Most contacts lacked email — consider enabling email enrichment”
+
+“Broadening ICP keywords may increase promotable leads”
+
+Rules:
+
+Clearly labeled as Advisory
+
+Never imply system malfunction
+
+Never block or override execution state
+
+6️⃣ Polling UX Enhancements
+
+Improve visibility into live updates:
+
+Display: “Auto-refreshing every 7s” while execution is active
+
+Show “Execution idle” when terminal state reached
+
+Provide a “Refresh now” action without interrupting polling
+
+Tabs & Layout Guidance
+
+Above the fold must include:
+
+Stage Tracker
+
+Active Stage Focus Panel
+
+Execution Health Indicator
+
+Observability tab remains for:
+
+Full timeline
+
+Detailed funnel tables
+
+Deep inspection
+
+The user should NOT need to click a tab to understand what’s happening now.
+
+Acceptance Criteria (Must All Pass)
+
+A user can answer “What is happening right now?” in <3 seconds
+
+A user can understand why leads = 0 without guessing
+
+No new backend state or schema introduced
+
+UI does not misclassify successful executions as failures
+
+All labels and copy align with backend execution semantics
+
+Works correctly during:
+
+Queued
+
+Running
+
+Completed (with warnings)
+
+Failed
+
+Final Instruction
+
+Proceed with implementation only after validating alignment with these constraints.
+If any requirement conflicts with existing UI architecture, pause and ask for clarification before proceeding.
