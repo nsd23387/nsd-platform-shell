@@ -57,9 +57,14 @@ import {
   ApprovalAwarenessPanel,
   LatestRunStatusCard,
   ExecutionExplainabilityPanel,
+  CampaignScopeSummary,
+  CampaignStatusHeader,
+  FunnelSummaryWidget,
+  ForwardMomentumCallout,
   type ExecutionEvent,
   type ApprovalAwarenessState,
 } from '../../components/observability';
+import { deriveExecutionState } from '../../lib/execution-state-mapping';
 import { 
   isTestCampaign, 
   getTestCampaignDetail, 
@@ -350,6 +355,8 @@ export default function CampaignDetailPage() {
             campaign={campaign}
             governanceState={governanceState}
             runsCount={runs.length}
+            latestRun={latestRun}
+            observabilityFunnel={observabilityFunnel}
             onPlanningOnlyChange={(newState) => {
               // Update local campaign state when planning-only changes
               // This ensures the UI reflects the new state immediately
@@ -401,16 +408,26 @@ export default function CampaignDetailPage() {
  * The OverviewTab includes a PlanningOnlyToggle that allows
  * modifying the benchmarks_only flag. All changes are persisted
  * via nsd-sales-engine, NOT directly to the database.
+ * 
+ * UX ENHANCEMENTS (M67-UX):
+ * - CampaignStatusHeader: Above-the-fold status and execution confidence
+ * - CampaignScopeSummary: Full ICP criteria display (read-only)
+ * - FunnelSummaryWidget: Compact funnel snapshot for quick understanding
+ * - ForwardMomentumCallout: Advisory guidance based on state
  */
 function OverviewTab({
   campaign,
   governanceState,
   runsCount,
+  latestRun,
+  observabilityFunnel,
   onPlanningOnlyChange,
 }: {
   campaign: CampaignDetail;
   governanceState: CampaignGovernanceState;
   runsCount: number;
+  latestRun: CampaignRun | null;
+  observabilityFunnel: ObservabilityFunnel | null;
   /** Callback when planning-only state changes (to update parent state) */
   onPlanningOnlyChange?: (newState: boolean) => void;
 }) {
@@ -424,96 +441,103 @@ function OverviewTab({
     governanceState !== 'EXECUTED' &&
     runsCount === 0;
 
+  // Derive execution state from latest run
+  const executionState = deriveExecutionState(
+    latestRun ? {
+      run_id: latestRun.id,
+      status: latestRun.status?.toLowerCase(),
+      created_at: latestRun.started_at,
+      updated_at: latestRun.completed_at,
+    } : null,
+    runsCount === 0
+  );
+
+  // Check if funnel has any activity
+  const hasFunnelActivity = observabilityFunnel?.stages?.some(s => s.count > 0) ?? false;
+
+  const isPlanningOnly = campaign.sourcing_config?.benchmarks_only === true;
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* Campaign Details */}
-        <SectionCard title="Campaign Details" icon="campaigns" iconColor={NSD_COLORS.primary}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Name</label>
-              <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{campaign.name}</p>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</label>
-              <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{campaign.description || 'No description'}</p>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Created</label>
-                <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{new Date(campaign.created_at).toLocaleDateString()}</p>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Updated</label>
-                <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{new Date(campaign.updated_at).toLocaleDateString()}</p>
-              </div>
-            </div>
-            {campaign.approved_at && (
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Approved</label>
-                <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>
-                  {new Date(campaign.approved_at).toLocaleString()}
-                  {campaign.approved_by && ` by ${campaign.approved_by}`}
-                </p>
-              </div>
-            )}
-          </div>
-        </SectionCard>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Above the fold: Status Header with governance and execution badges */}
+      <CampaignStatusHeader
+        campaignName={campaign.name}
+        governanceState={governanceState}
+        executionConfidence={executionState.confidence}
+        isPlanningOnly={isPlanningOnly}
+      />
 
-        {/* ICP Configuration */}
-        <SectionCard title="ICP Configuration" icon="target" iconColor={NSD_COLORS.secondary}>
-          {campaign.icp ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {campaign.icp.industries && campaign.icp.industries.length > 0 && (
+      {/* Forward Momentum Callout - advisory guidance */}
+      <ForwardMomentumCallout
+        governanceState={governanceState}
+        executionConfidence={executionState.confidence}
+        hasFunnelActivity={hasFunnelActivity}
+        isPlanningOnly={isPlanningOnly}
+      />
+
+      {/* Main content grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Campaign Scope Summary - Full ICP display */}
+          <CampaignScopeSummary icp={campaign.icp} />
+
+          {/* Pipeline Funnel Summary - Quick visibility */}
+          <FunnelSummaryWidget funnel={observabilityFunnel} />
+
+          {/* Campaign Details */}
+          <SectionCard title="Campaign Details" icon="campaigns" iconColor={NSD_COLORS.primary}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</label>
+                <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{campaign.description || 'No description'}</p>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '6px' }}>Industries</label>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {campaign.icp.industries.map((ind, i) => (
-                      <span key={i} style={{ padding: '4px 10px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.sm, fontSize: '12px', color: NSD_COLORS.text.secondary }}>{ind}</span>
-                    ))}
-                  </div>
+                  <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Created</label>
+                  <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{new Date(campaign.created_at).toLocaleDateString()}</p>
                 </div>
-              )}
-              {campaign.icp.roles && campaign.icp.roles.length > 0 && (
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '6px' }}>Target Roles</label>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {campaign.icp.roles.map((role, i) => (
-                      <span key={i} style={{ padding: '4px 10px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.sm, fontSize: '12px', color: NSD_COLORS.text.secondary }}>{role}</span>
-                    ))}
-                  </div>
+                  <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Updated</label>
+                  <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{new Date(campaign.updated_at).toLocaleDateString()}</p>
+                </div>
+              </div>
+              {campaign.approved_at && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Approved</label>
+                  <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>
+                    {new Date(campaign.approved_at).toLocaleString()}
+                    {campaign.approved_by && ` by ${campaign.approved_by}`}
+                  </p>
                 </div>
               )}
             </div>
-          ) : (
-            <p style={{ color: NSD_COLORS.text.muted, fontSize: '14px' }}>No ICP configured</p>
-          )}
-        </SectionCard>
-      </div>
+          </SectionCard>
+        </div>
 
-      {/* Right Column: Actions and Configuration */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {/* Governance Actions Panel */}
-        <GovernanceActionsPanel
-          campaignId={campaign.id}
-          governanceState={governanceState}
-          canSubmit={campaign.canSubmit}
-          canApprove={campaign.canApprove}
-          runsCount={runsCount}
-          isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
-        />
+        {/* Right Column: Actions and Configuration */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Governance Actions Panel */}
+          <GovernanceActionsPanel
+            campaignId={campaign.id}
+            governanceState={governanceState}
+            canSubmit={campaign.canSubmit}
+            canApprove={campaign.canApprove}
+            runsCount={runsCount}
+            isPlanningOnly={isPlanningOnly}
+          />
 
-        {/* Planning-Only Toggle
-         * EXECUTION CONTRACT NOTE:
-         * This toggle persists via nsd-sales-engine, NOT directly to the database.
-         * platform-shell must NEVER write to ODS directly.
-         */}
-        <PlanningOnlyToggle
-          campaignId={campaign.id}
-          isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
-          onStateChange={onPlanningOnlyChange}
-          canModify={canModifyConfig}
-        />
+          {/* Planning-Only Toggle
+           * EXECUTION CONTRACT NOTE:
+           * This toggle persists via nsd-sales-engine, NOT directly to the database.
+           * platform-shell must NEVER write to ODS directly.
+           */}
+          <PlanningOnlyToggle
+            campaignId={campaign.id}
+            isPlanningOnly={isPlanningOnly}
+            onStateChange={onPlanningOnlyChange}
+            canModify={canModifyConfig}
+          />
+        </div>
       </div>
     </div>
   );
