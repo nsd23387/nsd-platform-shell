@@ -6,21 +6,22 @@
  * Live-updating panel that answers "What is the system doing right now?"
  * Displays human-readable status sentence derived from observed state only.
  * 
- * GOVERNANCE CONSTRAINTS:
+ * GOVERNANCE CONSTRAINTS (CRITICAL):
+ * - This component is PRESENTATIONAL ONLY. It does NOT define execution semantics.
  * - Derived from observed execution state only
  * - No speculation or inferred intent
- * - Updates automatically via polling
+ * - Unknown/future stages must produce NEUTRAL copy
  * - Read-only display
  * 
- * Examples:
- * - "Sourcing organizations based on ICP"
- * - "Discovering contacts across 55 organizations"
- * - "Qualifying contacts for lead promotion"
- * - "Execution completed"
+ * Stage-Agnostic Copy Rules:
+ * - Known stages: Use stage-specific copy with context
+ * - Unknown/future stages: "Stage in progress — awaiting further data"
+ * - No marketing language for unknown stages
  */
 
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { getStageConfig, isKnownStage, isFutureStage } from '../../lib/execution-stages';
 import type { ObservabilityFunnel } from '../../types/campaign';
 
 interface ActiveStageFocusPanelProps {
@@ -29,6 +30,85 @@ interface ActiveStageFocusPanelProps {
   funnel: ObservabilityFunnel | null;
   noRuns: boolean;
   isPolling?: boolean;
+}
+
+/**
+ * Generate copy for a known stage
+ * 
+ * GOVERNANCE CONSTRAINT:
+ * These are the only stages with specific copy.
+ * All other stages use neutral fallback.
+ */
+function getKnownStageCopy(
+  stageId: string,
+  funnel: ObservabilityFunnel | null
+): { headline: string; description: string } {
+  const orgsCount = funnel?.stages?.find(s => s.stage === 'orgs_sourced')?.count || 0;
+  const contactsCount = funnel?.stages?.find(s => s.stage === 'contacts_discovered')?.count || 0;
+  const leadsCount = funnel?.stages?.find(s => s.stage === 'leads_promoted')?.count || 0;
+
+  switch (stageId) {
+    case 'org_sourcing':
+      return {
+        headline: 'Sourcing organizations',
+        description: 'Identifying organizations that match your ICP criteria.',
+      };
+    case 'contact_discovery':
+      const orgsText = orgsCount > 0 ? `across ${orgsCount.toLocaleString()} organizations` : '';
+      return {
+        headline: 'Discovering contacts',
+        description: `Scanning ${orgsText} for contacts matching role criteria.`.trim(),
+      };
+    case 'lead_creation':
+      const contactsText = contactsCount > 0 ? `${contactsCount.toLocaleString()} contacts` : 'contacts';
+      return {
+        headline: 'Qualifying contacts',
+        description: `Evaluating ${contactsText} for lead promotion eligibility.`,
+      };
+    case 'email_readiness':
+      return {
+        headline: 'Checking email readiness',
+        description: 'Verifying email availability and enrichment status.',
+      };
+    case 'personalization':
+      return {
+        headline: 'Generating personalization',
+        description: 'Creating personalized outreach content.',
+      };
+    case 'outbound_activation':
+      return {
+        headline: 'Activating outbound',
+        description: 'Connecting to outbound delivery system.',
+      };
+    case 'send_in_progress':
+      return {
+        headline: 'Sending messages',
+        description: 'Outbound messages in delivery.',
+      };
+    case 'send_completed':
+      return {
+        headline: 'Sending completed',
+        description: 'All outbound activity completed.',
+      };
+    default:
+      return {
+        headline: 'Stage in progress',
+        description: 'Awaiting further data.',
+      };
+  }
+}
+
+/**
+ * Generate neutral copy for unknown/future stages
+ * 
+ * GOVERNANCE CONSTRAINT:
+ * No assumptions. No marketing language.
+ */
+function getUnknownStageCopy(stageId: string): { headline: string; description: string } {
+  return {
+    headline: 'Stage in progress',
+    description: 'Awaiting further data.',
+  };
 }
 
 function deriveActiveStageCopy(
@@ -61,29 +141,19 @@ function deriveActiveStageCopy(
   }
 
   if (normalizedStatus === 'running' || normalizedStatus === 'in_progress') {
-    if (normalizedPhase.includes('org') || normalizedPhase.includes('source')) {
+    if (normalizedPhase && isKnownStage(normalizedPhase)) {
+      const copy = getKnownStageCopy(normalizedPhase, funnel);
+      return { ...copy, isActive: true };
+    }
+    
+    if (normalizedPhase) {
       return {
-        headline: 'Sourcing organizations',
-        description: 'Identifying organizations that match your ICP criteria.',
+        headline: 'Stage in progress',
+        description: 'Awaiting further data.',
         isActive: true,
       };
     }
-    if (normalizedPhase.includes('contact') || normalizedPhase.includes('discover')) {
-      const orgsText = orgsCount > 0 ? `across ${orgsCount.toLocaleString()} organizations` : '';
-      return {
-        headline: 'Discovering contacts',
-        description: `Scanning ${orgsText} for contacts matching role criteria.`.trim(),
-        isActive: true,
-      };
-    }
-    if (normalizedPhase.includes('lead') || normalizedPhase.includes('promot') || normalizedPhase.includes('qualif')) {
-      const contactsText = contactsCount > 0 ? `${contactsCount.toLocaleString()} contacts` : 'contacts';
-      return {
-        headline: 'Qualifying contacts',
-        description: `Evaluating ${contactsText} for lead promotion eligibility.`,
-        isActive: true,
-      };
-    }
+    
     return {
       headline: 'Execution in progress',
       description: 'Processing campaign stages.',
@@ -92,30 +162,33 @@ function deriveActiveStageCopy(
   }
 
   if (normalizedStatus === 'completed' || normalizedStatus === 'success' || normalizedStatus === 'succeeded') {
-    if (leadsCount > 0) {
+    const totalStages = funnel?.stages?.length || 0;
+    const stageLabels: string[] = [];
+    
+    if (leadsCount > 0) stageLabels.push(`${leadsCount.toLocaleString()} leads promoted`);
+    else if (contactsCount > 0) stageLabels.push(`${contactsCount.toLocaleString()} contacts discovered`);
+    else if (orgsCount > 0) stageLabels.push(`${orgsCount.toLocaleString()} organizations sourced`);
+
+    const observedFutureStages = funnel?.stages?.filter(s => {
+      const knownIds = ['orgs_sourced', 'contacts_discovered', 'leads_promoted'];
+      return !knownIds.includes(s.stage) && s.count > 0;
+    }) || [];
+
+    if (observedFutureStages.length > 0) {
+      stageLabels.push(`${observedFutureStages.length} additional stages observed`);
+    }
+
+    if (stageLabels.length === 0) {
       return {
         headline: 'Execution completed',
-        description: `Successfully promoted ${leadsCount.toLocaleString()} leads from ${contactsCount.toLocaleString()} contacts.`,
+        description: 'No results produced. Review ICP criteria to improve targeting.',
         isActive: false,
       };
     }
-    if (contactsCount > 0) {
-      return {
-        headline: 'Execution completed',
-        description: `${contactsCount.toLocaleString()} contacts discovered. No contacts qualified for lead promotion.`,
-        isActive: false,
-      };
-    }
-    if (orgsCount > 0) {
-      return {
-        headline: 'Execution completed',
-        description: `${orgsCount.toLocaleString()} organizations sourced. No contacts discovered.`,
-        isActive: false,
-      };
-    }
+
     return {
       headline: 'Execution completed',
-      description: 'No results produced. Review ICP criteria to improve targeting.',
+      description: stageLabels.join('. ') + '.',
       isActive: false,
     };
   }
@@ -224,12 +297,14 @@ export function ActiveStageFocusPanel({
             <span
               style={{
                 fontSize: '11px',
+                padding: '2px 6px',
+                backgroundColor: `${textColor}20`,
+                borderRadius: '4px',
                 color: textColor,
-                opacity: 0.7,
-                fontStyle: 'italic',
+                fontFamily: NSD_TYPOGRAPHY.fontBody,
               }}
             >
-              Auto-refreshing
+              live
             </span>
           )}
         </div>
@@ -248,8 +323,8 @@ export function ActiveStageFocusPanel({
 
       <style jsx global>{`
         @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.6; transform: scale(0.9); }
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
       `}</style>
     </div>

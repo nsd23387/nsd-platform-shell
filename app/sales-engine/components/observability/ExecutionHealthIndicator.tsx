@@ -6,20 +6,22 @@
  * Single sentence health line visible without scrolling.
  * Reconciles status + results into one clear statement.
  * 
- * GOVERNANCE CONSTRAINTS:
+ * GOVERNANCE CONSTRAINTS (CRITICAL):
+ * - This component is PRESENTATIONAL ONLY. It does NOT define execution semantics.
  * - Exactly one sentence
- * - Must reconcile status + results
+ * - Must reconcile status + results from observed data
  * - No alarmist language
+ * - Stage-agnostic: Must NOT assume a 3-stage funnel
+ * - Future stages degrade gracefully
  * - Read-only display
  * 
- * Examples:
- * - "Execution running — discovering contacts"
- * - "Execution completed — contacts discovered, no promotable leads"
- * - "Execution failed — adapter error during contact sourcing"
+ * The health statement must work regardless of which stages exist.
+ * If future stages are present but empty, show neutral messaging.
  */
 
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { CANONICAL_STAGE_CONFIG, isFutureStage } from '../../lib/execution-stages';
 import type { ObservabilityFunnel } from '../../types/campaign';
 
 interface ExecutionHealthIndicatorProps {
@@ -31,6 +33,60 @@ interface ExecutionHealthIndicatorProps {
 
 type HealthLevel = 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
+/**
+ * Stage-to-copy mapping for known stages
+ * 
+ * GOVERNANCE CONSTRAINT:
+ * Only exact matches are allowed. No substring inference.
+ * Unknown stages use neutral fallback.
+ */
+const STAGE_RUNNING_COPY: Record<string, string> = {
+  org_sourcing: 'sourcing organizations',
+  contact_discovery: 'discovering contacts',
+  lead_creation: 'qualifying contacts for promotion',
+  email_readiness: 'checking email readiness',
+  personalization: 'generating personalization',
+  outbound_activation: 'activating outbound',
+  send_in_progress: 'sending messages',
+  send_completed: 'completing sends',
+};
+
+function getRunningPhaseCopy(phase: string): string {
+  const normalizedPhase = phase.toLowerCase();
+  return STAGE_RUNNING_COPY[normalizedPhase] || 'processing stage';
+}
+
+/**
+ * Stage-to-copy mapping for failure states
+ * 
+ * GOVERNANCE CONSTRAINT:
+ * Only exact matches are allowed. No substring inference.
+ * Unknown stages use neutral fallback.
+ */
+const STAGE_FAILURE_COPY: Record<string, string> = {
+  org_sourcing: 'error during organization sourcing',
+  contact_discovery: 'error during contact discovery',
+  lead_creation: 'error during lead promotion',
+  email_readiness: 'error during email readiness check',
+  personalization: 'error during personalization',
+  outbound_activation: 'error during outbound activation',
+  send_in_progress: 'error during sending',
+  send_completed: 'error during send completion',
+};
+
+function getFailurePhaseCopy(phase: string): string {
+  const normalizedPhase = phase.toLowerCase();
+  return STAGE_FAILURE_COPY[normalizedPhase] || 'see timeline for details';
+}
+
+/**
+ * Derive health statement from observed data
+ * 
+ * GOVERNANCE CONSTRAINT:
+ * This function must work with ANY number of stages.
+ * It must NOT assume leads or sends exist.
+ * It must degrade gracefully for future stages.
+ */
 function deriveHealthStatement(
   runStatus: string | null,
   runPhase: string | null,
@@ -47,9 +103,17 @@ function deriveHealthStatement(
   const normalizedStatus = runStatus.toLowerCase();
   const normalizedPhase = runPhase?.toLowerCase() || '';
 
-  const orgsCount = funnel?.stages?.find(s => s.stage === 'orgs_sourced')?.count || 0;
-  const contactsCount = funnel?.stages?.find(s => s.stage === 'contacts_discovered')?.count || 0;
-  const leadsCount = funnel?.stages?.find(s => s.stage === 'leads_promoted')?.count || 0;
+  const stageMap = new Map<string, number>();
+  funnel?.stages?.forEach(s => stageMap.set(s.stage, s.count));
+
+  const orgsCount = stageMap.get('orgs_sourced') || 0;
+  const contactsCount = stageMap.get('contacts_discovered') || 0;
+  const leadsCount = stageMap.get('leads_promoted') || 0;
+  
+  const futureStagesWithData = funnel?.stages?.filter(s => {
+    const knownCurrentIds = ['orgs_sourced', 'contacts_discovered', 'leads_promoted'];
+    return !knownCurrentIds.includes(s.stage) && s.count > 0;
+  }) || [];
 
   if (normalizedStatus === 'queued' || normalizedStatus === 'run_requested' || normalizedStatus === 'pending') {
     return {
@@ -59,31 +123,22 @@ function deriveHealthStatement(
   }
 
   if (normalizedStatus === 'running' || normalizedStatus === 'in_progress') {
-    if (normalizedPhase.includes('org') || normalizedPhase.includes('source')) {
-      return {
-        statement: 'Execution running — sourcing organizations',
-        level: 'info',
-      };
-    }
-    if (normalizedPhase.includes('contact') || normalizedPhase.includes('discover')) {
-      return {
-        statement: 'Execution running — discovering contacts',
-        level: 'info',
-      };
-    }
-    if (normalizedPhase.includes('lead') || normalizedPhase.includes('promot')) {
-      return {
-        statement: 'Execution running — qualifying contacts for promotion',
-        level: 'info',
-      };
-    }
+    const phaseCopy = normalizedPhase ? getRunningPhaseCopy(normalizedPhase) : 'processing';
     return {
-      statement: 'Execution running',
+      statement: `Execution running — ${phaseCopy}`,
       level: 'info',
     };
   }
 
   if (normalizedStatus === 'completed' || normalizedStatus === 'success' || normalizedStatus === 'succeeded') {
+    if (futureStagesWithData.length > 0) {
+      const lastFutureStage = futureStagesWithData[futureStagesWithData.length - 1];
+      return {
+        statement: `Execution completed — activity observed beyond lead promotion`,
+        level: 'success',
+      };
+    }
+    
     if (leadsCount > 0) {
       return {
         statement: `Execution completed — ${leadsCount.toLocaleString()} leads promoted`,
@@ -115,20 +170,9 @@ function deriveHealthStatement(
   }
 
   if (normalizedStatus === 'failed' || normalizedStatus === 'error') {
-    if (normalizedPhase.includes('org') || normalizedPhase.includes('source')) {
-      return {
-        statement: 'Execution failed — error during organization sourcing',
-        level: 'error',
-      };
-    }
-    if (normalizedPhase.includes('contact') || normalizedPhase.includes('discover')) {
-      return {
-        statement: 'Execution failed — error during contact discovery',
-        level: 'error',
-      };
-    }
+    const failureCopy = normalizedPhase ? getFailurePhaseCopy(normalizedPhase) : 'see timeline for details';
     return {
-      statement: 'Execution failed — see timeline for details',
+      statement: `Execution failed — ${failureCopy}`,
       level: 'error',
     };
   }
@@ -223,7 +267,7 @@ function HealthIcon({ level }: { level: HealthLevel }) {
 
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="7" stroke={color} strokeWidth="1.5" />
+      <circle cx="8" cy="8" r="6" stroke={color} strokeWidth="1.5" strokeDasharray="3 2" />
     </svg>
   );
 }
@@ -245,13 +289,13 @@ export function ExecutionHealthIndicator({
         gap: '8px',
         padding: '8px 14px',
         backgroundColor: styles.bg,
-        borderRadius: NSD_RADIUS.full,
+        borderRadius: NSD_RADIUS.md,
       }}
     >
       <HealthIcon level={level} />
       <span
         style={{
-          fontSize: '13px',
+          fontSize: '14px',
           fontWeight: 500,
           fontFamily: NSD_TYPOGRAPHY.fontBody,
           color: styles.text,

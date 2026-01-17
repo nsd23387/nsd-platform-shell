@@ -6,21 +6,24 @@
  * Post-stage completion cards showing counts and skip reasons.
  * Makes zero outcomes explainable, not alarming.
  * 
- * GOVERNANCE CONSTRAINTS:
+ * GOVERNANCE CONSTRAINTS (CRITICAL):
+ * - This component is PRESENTATIONAL ONLY. It does NOT define execution semantics.
+ * - Cards are keyed by stage ID, NOT hardcoded types
+ * - Cards render ONLY when backend emits breakdown data
  * - Use "Skipped", never "Failed" for qualification outcomes
  * - Data sourced from ODS events / funnel data
  * - Zero promoted leads is NOT an error
- * - Numbers must reconcile
+ * - Numbers must reconcile from observed data only
  * - Read-only display
+ * - Future stages show NO cards until data exists
  * 
- * Cards:
- * - Contact Discovery: Total, With Email, Without Email (skipped)
- * - Lead Promotion: Eligible, Promoted, Skipped reasons
+ * DO NOT add placeholder cards for future stages.
  */
 
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
+import { CANONICAL_STAGE_CONFIG, getStageConfig, isFutureStage } from '../../lib/execution-stages';
 import type { ObservabilityFunnel, PipelineStage } from '../../types/campaign';
 
 interface ResultsBreakdownCardsProps {
@@ -36,6 +39,7 @@ interface BreakdownItem {
 }
 
 interface BreakdownCard {
+  stageId: string;
   title: string;
   icon: string;
   items: BreakdownItem[];
@@ -43,48 +47,77 @@ interface BreakdownCard {
   explanation?: string;
 }
 
-function extractBreakdownData(funnel: ObservabilityFunnel | null): {
-  orgs: number;
-  contacts: number;
-  contactsWithEmail: number | null;
-  contactsWithoutEmail: number | null;
-  leads: number;
-  leadsSkippedNoEmail: number | null;
-  leadsSkippedInvalidEmail: number | null;
-} {
-  const stageMap = new Map<string, number>();
-  funnel?.stages?.forEach((s) => {
-    stageMap.set(s.stage, s.count);
-  });
-
-  const orgs = stageMap.get('orgs_sourced') || 0;
-  const contacts = stageMap.get('contacts_discovered') || 0;
-  const leads = stageMap.get('leads_promoted') || 0;
-  
-  const contactsWithEmail = stageMap.has('contacts_with_email') 
-    ? stageMap.get('contacts_with_email')! 
-    : null;
-  const contactsWithoutEmail = stageMap.has('contacts_without_email')
-    ? stageMap.get('contacts_without_email')!
-    : null;
-  
-  const leadsSkippedNoEmail = stageMap.has('leads_skipped_no_email')
-    ? stageMap.get('leads_skipped_no_email')!
-    : null;
-  const leadsSkippedInvalidEmail = stageMap.has('leads_skipped_invalid_email')
-    ? stageMap.get('leads_skipped_invalid_email')!
-    : null;
-
-  return {
-    orgs,
-    contacts,
-    contactsWithEmail,
-    contactsWithoutEmail,
-    leads,
-    leadsSkippedNoEmail,
-    leadsSkippedInvalidEmail,
-  };
+interface StageBreakdownConfig {
+  stageId: string;
+  funnelStageId: string;
+  title: string;
+  icon: string;
+  countLabel: string;
+  relatedStages?: Array<{
+    funnelStageId: string;
+    label: string;
+    isSkipped: boolean;
+    skipReason?: string;
+  }>;
+  explanationFn?: (data: Map<string, number>) => string | undefined;
 }
+
+/**
+ * Stage breakdown configuration
+ * 
+ * GOVERNANCE CONSTRAINT (CRITICAL):
+ * This configuration defines how to render breakdown cards for CURRENT stages only.
+ * Cards only render when the funnelStageId has data in the funnel.
+ * 
+ * DO NOT add future stage funnel IDs here until backend contract confirms them.
+ * Future stages will be rendered via the unknown stage fallback when their data appears.
+ */
+const STAGE_BREAKDOWN_CONFIG: StageBreakdownConfig[] = [
+  {
+    stageId: 'org_sourcing',
+    funnelStageId: 'orgs_sourced',
+    title: 'Organizations Sourced',
+    icon: 'building',
+    countLabel: 'Organizations',
+  },
+  {
+    stageId: 'contact_discovery',
+    funnelStageId: 'contacts_discovered',
+    title: 'Contacts Discovered',
+    icon: 'users',
+    countLabel: 'Total Discovered',
+    relatedStages: [
+      { funnelStageId: 'contacts_with_email', label: 'With Email', isSkipped: false },
+      { funnelStageId: 'contacts_without_email', label: 'Without Email', isSkipped: true, skipReason: 'skipped for promotion' },
+    ],
+    explanationFn: (data) => {
+      const withoutEmail = data.get('contacts_without_email');
+      if (withoutEmail !== undefined && withoutEmail > 0) {
+        return 'Contacts without email cannot be promoted to leads.';
+      }
+      return undefined;
+    },
+  },
+  {
+    stageId: 'lead_creation',
+    funnelStageId: 'leads_promoted',
+    title: 'Lead Promotion',
+    icon: 'star',
+    countLabel: 'Leads Promoted',
+    relatedStages: [
+      { funnelStageId: 'leads_skipped_no_email', label: 'Skipped', isSkipped: true, skipReason: 'missing email' },
+      { funnelStageId: 'leads_skipped_invalid_email', label: 'Skipped', isSkipped: true, skipReason: 'invalid email format' },
+    ],
+    explanationFn: (data) => {
+      const leads = data.get('leads_promoted') || 0;
+      const contacts = data.get('contacts_discovered') || 0;
+      if (leads === 0 && contacts > 0) {
+        return 'No contacts met the criteria for lead promotion.';
+      }
+      return undefined;
+    },
+  },
+];
 
 function BreakdownRow({ item }: { item: BreakdownItem }) {
   return (
@@ -207,85 +240,99 @@ function CardComponent({ card }: { card: BreakdownCard }) {
   );
 }
 
+/**
+ * Build breakdown cards from funnel data
+ * 
+ * GOVERNANCE CONSTRAINT:
+ * Cards only render when backend has emitted data for the stage.
+ * No placeholder cards for future stages.
+ */
+function buildBreakdownCards(
+  funnel: ObservabilityFunnel | null,
+  isCompleted: boolean,
+  isRunning: boolean
+): BreakdownCard[] {
+  if (!funnel?.stages) {
+    return [];
+  }
+
+  const stageMap = new Map<string, number>();
+  funnel.stages.forEach((s) => {
+    stageMap.set(s.stage, s.count);
+  });
+
+  const cards: BreakdownCard[] = [];
+
+  for (const config of STAGE_BREAKDOWN_CONFIG) {
+    const mainCount = stageMap.get(config.funnelStageId);
+    
+    if (mainCount === undefined) {
+      continue;
+    }
+
+    const items: BreakdownItem[] = [
+      { label: config.countLabel, value: mainCount },
+    ];
+
+    if (config.relatedStages) {
+      for (const related of config.relatedStages) {
+        const relatedCount = stageMap.get(related.funnelStageId);
+        if (relatedCount !== undefined && relatedCount > 0) {
+          items.push({
+            label: related.label,
+            value: relatedCount,
+            isSkipped: related.isSkipped,
+            skipReason: related.skipReason,
+          });
+        }
+      }
+    }
+
+    const explanation = config.explanationFn ? config.explanationFn(stageMap) : undefined;
+
+    cards.push({
+      stageId: config.stageId,
+      title: config.title,
+      icon: config.icon,
+      items,
+      status: isCompleted ? 'completed' : isRunning ? 'in_progress' : 'pending',
+      explanation,
+    });
+  }
+
+  const knownFunnelIds = new Set(
+    STAGE_BREAKDOWN_CONFIG.flatMap((c) => [
+      c.funnelStageId,
+      ...(c.relatedStages?.map((r) => r.funnelStageId) || []),
+    ])
+  );
+
+  funnel.stages.forEach((stage) => {
+    if (!knownFunnelIds.has(stage.stage) && stage.count > 0) {
+      cards.push({
+        stageId: `unknown_${stage.stage}`,
+        title: 'Additional Data',
+        icon: 'info',
+        items: [{ label: stage.stage, value: stage.count }],
+        status: isCompleted ? 'completed' : isRunning ? 'in_progress' : 'pending',
+      });
+    }
+  });
+
+  return cards;
+}
+
 export function ResultsBreakdownCards({
   funnel,
   runStatus,
 }: ResultsBreakdownCardsProps) {
-  const data = extractBreakdownData(funnel);
   const isCompleted = runStatus?.toLowerCase() === 'completed' || 
                       runStatus?.toLowerCase() === 'success' ||
                       runStatus?.toLowerCase() === 'succeeded';
   const isRunning = runStatus?.toLowerCase() === 'running' || 
                     runStatus?.toLowerCase() === 'in_progress';
 
-  const hasAnyData = data.orgs > 0 || data.contacts > 0 || data.leads > 0;
-
-  if (!hasAnyData && !isRunning) {
-    return null;
-  }
-
-  const cards: BreakdownCard[] = [];
-
-  if (data.contacts > 0 || isRunning) {
-    const contactItems: BreakdownItem[] = [
-      { label: 'Total Discovered', value: data.contacts },
-    ];
-
-    if (data.contactsWithEmail !== null) {
-      contactItems.push({ label: 'With Email', value: data.contactsWithEmail });
-    }
-    if (data.contactsWithoutEmail !== null) {
-      contactItems.push({ 
-        label: 'Without Email', 
-        value: data.contactsWithoutEmail, 
-        isSkipped: true, 
-        skipReason: 'skipped for promotion' 
-      });
-    }
-
-    cards.push({
-      title: 'Contacts Discovered',
-      icon: 'users',
-      items: contactItems,
-      status: data.contacts > 0 ? 'completed' : isRunning ? 'in_progress' : 'pending',
-      explanation: data.contactsWithoutEmail !== null && data.contactsWithoutEmail > 0
-        ? 'Contacts without email cannot be promoted to leads.'
-        : undefined,
-    });
-  }
-
-  if (data.leads >= 0 && (data.contacts > 0 || isCompleted)) {
-    const leadItems: BreakdownItem[] = [
-      { label: 'Leads Promoted', value: data.leads },
-    ];
-
-    if (data.leadsSkippedNoEmail !== null && data.leadsSkippedNoEmail > 0) {
-      leadItems.push({
-        label: 'Skipped',
-        value: data.leadsSkippedNoEmail,
-        isSkipped: true,
-        skipReason: 'missing email',
-      });
-    }
-    if (data.leadsSkippedInvalidEmail !== null && data.leadsSkippedInvalidEmail > 0) {
-      leadItems.push({
-        label: 'Skipped',
-        value: data.leadsSkippedInvalidEmail,
-        isSkipped: true,
-        skipReason: 'invalid email format',
-      });
-    }
-
-    cards.push({
-      title: 'Lead Promotion',
-      icon: 'star',
-      items: leadItems,
-      status: isCompleted ? 'completed' : isRunning ? 'in_progress' : 'pending',
-      explanation: data.leads === 0 && data.contacts > 0
-        ? 'No contacts met the criteria for lead promotion.'
-        : undefined,
-    });
-  }
+  const cards = buildBreakdownCards(funnel, isCompleted, isRunning);
 
   if (cards.length === 0) {
     return null;
@@ -299,8 +346,8 @@ export function ResultsBreakdownCards({
         gap: '16px',
       }}
     >
-      {cards.map((card, index) => (
-        <CardComponent key={index} card={card} />
+      {cards.map((card) => (
+        <CardComponent key={card.stageId} card={card} />
       ))}
     </div>
   );
