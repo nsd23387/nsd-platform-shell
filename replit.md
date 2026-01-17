@@ -75,6 +75,11 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
   - ResultsBreakdownCards and AdvisoryCallout remain full-width below
   - Responsive CSS in globals.css stacks columns on screens < 900px
 
+- January 17, 2026: Side-by-Side Layout for Observability & Learning Tabs
+  - MonitoringTab: Left column (status/context: ApprovalAwarenessPanel, LatestRunStatusCard, ExecutionExplainabilityPanel), Right column (metrics: ExecutionStatusCard, PipelineFunnel, SendMetrics)
+  - LearningTab: Left column (About Learning Signals context card), Right column (LearningSignalsPanel)
+  - All tabs now use shared `.overview-two-column-grid` class for consistent responsive behavior
+
 - January 17, 2026: P0 UI Hardening for Future Execution Stages (Complete)
   - Created centralized `CANONICAL_STAGE_CONFIG` in `lib/execution-stages.ts` with all 8 canonical stages
   - Refactored `ExecutionStageTracker` to render from config array with unknown stage fallback
