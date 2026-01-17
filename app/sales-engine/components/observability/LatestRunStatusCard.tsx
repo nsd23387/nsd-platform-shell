@@ -53,12 +53,13 @@ interface StatusDisplay {
 function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
   const normalized = typeof status === 'string' ? status.toLowerCase() : 'unknown';
 
-  // STALE RUN HANDLING: Running runs older than 30 min are displayed as stale
+  // STALE RUN HANDLING: Running runs older than 30 min are displayed as stalled
+  // GOVERNANCE: "stalled" messaging ONLY allowed when status='running' AND >30 min
   if (isStale && (normalized === 'running' || normalized === 'in_progress')) {
     return {
       icon: 'warning',
-      label: 'Stale',
-      copy: 'A previous execution did not complete and is being cleaned up by the system.',
+      label: 'Stalled',
+      copy: 'Execution stalled — system will mark failed',
       ...NSD_COLORS.semantic.attention,
     };
   }

@@ -192,13 +192,14 @@ export function deriveExecutionState(
     const resolvable = toResolvableRun(run);
     const stale = isRunStale(resolvable);
     
-    // Case 3a: Stale running run - display warning state
+    // Case 3a: Stale running run - display stalled state
+    // GOVERNANCE: "stalled" messaging ONLY allowed when status='running' AND >30 min
     if (stale) {
       return {
         confidence: 'stale',
-        confidenceLabel: 'Stale',
-        confidenceDescription: 'A previous execution did not complete and is being cleaned up by the system.',
-        outcomeStatement: 'This execution has been running for over 30 minutes and is considered stale. The backend watchdog will clean it up automatically.',
+        confidenceLabel: 'Stalled',
+        confidenceDescription: 'Execution stalled — system will mark failed.',
+        outcomeStatement: 'This execution has been running for over 30 minutes without completing. The system watchdog will mark it as failed.',
         timeline: [
           {
             id: 'run_created',
@@ -210,17 +211,11 @@ export function deriveExecutionState(
           {
             id: 'stale_warning',
             type: 'warning',
-            label: 'Execution exceeded 30-minute threshold',
+            label: 'Execution stalled (>30 minutes)',
             isCompleted: true,
           },
-          {
-            id: 'awaiting_cleanup',
-            type: 'info',
-            label: 'Awaiting system cleanup',
-            isCompleted: false,
-          },
         ],
-        nextStepRecommendation: 'This run will be marked as failed by the system watchdog. A new execution can be requested after cleanup.',
+        nextStepRecommendation: 'The system will mark this run as failed. Check execution logs for details.',
       };
     }
     
@@ -443,7 +438,6 @@ export const EXECUTION_TOOLTIPS: Record<string, string> = {
     'Check the run history for details about what went wrong.',
     
   stale:
-    'A stale run means the execution was marked as running but has not completed ' +
-    'within 30 minutes. The backend watchdog will automatically mark it as failed ' +
-    'and clean up the state. A new execution can be requested after cleanup.',
+    'A stalled run means the execution has been running for over 30 minutes without completing. ' +
+    'The system watchdog will mark it as failed. Check execution logs for details.',
 };

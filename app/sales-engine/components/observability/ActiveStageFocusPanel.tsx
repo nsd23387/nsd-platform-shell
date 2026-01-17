@@ -149,8 +149,8 @@ function deriveActiveStageCopy(
   // STALENESS HANDLING: Show warning for stale running runs
   if (isStale && (normalizedStatus === 'running' || normalizedStatus === 'in_progress')) {
     return {
-      headline: 'Stale execution detected',
-      description: 'A previous execution did not complete and is being cleaned up by the system.',
+      headline: 'Execution stalled',
+      description: 'Execution stalled — system will mark failed.',
       isActive: false,
     };
   }
