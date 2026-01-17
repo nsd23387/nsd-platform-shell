@@ -485,61 +485,78 @@ function OverviewTab({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* ============================================
-          ABOVE THE FOLD: Execution-First UI
-          User can answer "What's happening now?" in <3 seconds
+          ABOVE THE FOLD: Side-by-Side Layout
+          Left: Campaign Scope (context)
+          Right: Execution Status (what's happening)
           ============================================ */}
       
-      {/* Execution Health Indicator - Single sentence visible without scrolling */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <ExecutionHealthIndicator
-          runStatus={runStatus}
-          runPhase={runPhase}
-          funnel={observabilityFunnel}
-          noRuns={noRuns}
-        />
-        <CampaignStatusHeader
-          campaignName={campaign.name}
-          governanceState={governanceState}
-          executionConfidence={executionState.confidence}
-          isPlanningOnly={isPlanningOnly}
-          lastUpdatedAt={lastUpdatedAt}
-          isPolling={isPolling}
-        />
+      {/* Two-column layout: Scope + Execution Status
+          Responsive: stacks to single column on screens < 900px (see globals.css) */}
+      <div className="overview-two-column-grid">
+        {/* LEFT COLUMN: Campaign Scope & Context (40%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Campaign Scope Summary - Full ICP display */}
+          <CampaignScopeSummary icp={campaign.icp} />
+          
+          {/* Pipeline Funnel Summary - Quick visibility */}
+          <FunnelSummaryWidget funnel={observabilityFunnel} />
+        </div>
+
+        {/* RIGHT COLUMN: Execution Status (60%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Execution Health Indicator - Single sentence visible without scrolling */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            <ExecutionHealthIndicator
+              runStatus={runStatus}
+              runPhase={runPhase}
+              funnel={observabilityFunnel}
+              noRuns={noRuns}
+            />
+            <CampaignStatusHeader
+              campaignName={campaign.name}
+              governanceState={governanceState}
+              executionConfidence={executionState.confidence}
+              isPlanningOnly={isPlanningOnly}
+              lastUpdatedAt={lastUpdatedAt}
+              isPolling={isPolling}
+            />
+          </div>
+
+          {/* Polling Status - Shows "Auto-refreshing every 7s" or "Execution idle" */}
+          <PollingStatusIndicator
+            isPolling={isPolling}
+            isRefreshing={isRefreshing}
+            lastUpdatedAt={lastUpdatedAt}
+            pollingInterval={7000}
+            onRefresh={onRefresh}
+          />
+
+          {/* Active Stage Focus Panel - What is the system doing right now? */}
+          <ActiveStageFocusPanel
+            runStatus={runStatus}
+            runPhase={runPhase}
+            funnel={observabilityFunnel}
+            noRuns={noRuns}
+            isPolling={isPolling}
+          />
+
+          {/* Execution Stage Tracker - Vertical stage tracker */}
+          <ExecutionStageTracker
+            runStatus={runStatus}
+            runPhase={runPhase}
+            funnel={observabilityFunnel}
+            noRuns={noRuns}
+          />
+        </div>
       </div>
 
-      {/* Polling Status - Shows "Auto-refreshing every 7s" or "Execution idle" */}
-      <PollingStatusIndicator
-        isPolling={isPolling}
-        isRefreshing={isRefreshing}
-        lastUpdatedAt={lastUpdatedAt}
-        pollingInterval={7000}
-        onRefresh={onRefresh}
-      />
-
-      {/* Active Stage Focus Panel - What is the system doing right now? */}
-      <ActiveStageFocusPanel
-        runStatus={runStatus}
-        runPhase={runPhase}
-        funnel={observabilityFunnel}
-        noRuns={noRuns}
-        isPolling={isPolling}
-      />
-
-      {/* Execution Stage Tracker - Vertical stage tracker */}
-      <ExecutionStageTracker
-        runStatus={runStatus}
-        runPhase={runPhase}
-        funnel={observabilityFunnel}
-        noRuns={noRuns}
-      />
-
-      {/* Results Breakdown Cards - Post-stage completion details */}
+      {/* Results Breakdown Cards - Post-stage completion details (full width) */}
       <ResultsBreakdownCards
         funnel={observabilityFunnel}
         runStatus={runStatus}
       />
 
-      {/* Advisory Callout - Non-blocking guidance */}
+      {/* Advisory Callout - Non-blocking guidance (full width) */}
       <AdvisoryCallout
         runStatus={runStatus}
         funnel={observabilityFunnel}
@@ -553,11 +570,6 @@ function OverviewTab({
       {/* Main content grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', marginTop: '8px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Campaign Scope Summary - Full ICP display */}
-          <CampaignScopeSummary icp={campaign.icp} />
-
-          {/* Pipeline Funnel Summary - Quick visibility */}
-          <FunnelSummaryWidget funnel={observabilityFunnel} />
 
           {/* Campaign Details */}
           <SectionCard title="Campaign Details" icon="campaigns" iconColor={NSD_COLORS.primary}>

@@ -131,6 +131,25 @@ a:focus-visible,
 }
 
 /* ============================================
+   Campaign Overview Layout
+   ============================================ */
+
+/* Two-column layout: Scope (left) + Execution (right) */
+.overview-two-column-grid {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Responsive: stack columns on narrow screens */
+@media (max-width: 900px) {
+  .overview-two-column-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================
    Scrollbar Styling
    ============================================ */
 
