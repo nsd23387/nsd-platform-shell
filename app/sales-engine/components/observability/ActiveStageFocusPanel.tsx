@@ -22,6 +22,7 @@
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { getStageConfig, isKnownStage, isFutureStage } from '../../lib/execution-stages';
+import { isRunStale, type ResolvableRun } from '../../lib/resolveActiveRun';
 import type { ObservabilityFunnel } from '../../types/campaign';
 
 interface ActiveStageFocusPanelProps {
@@ -30,6 +31,10 @@ interface ActiveStageFocusPanelProps {
   funnel: ObservabilityFunnel | null;
   noRuns: boolean;
   isPolling?: boolean;
+  /** Staleness can be passed directly from parent (centralized resolution) or calculated from runStartedAt */
+  isStale?: boolean;
+  /** @deprecated Use isStale prop instead. Kept for backward compatibility. */
+  runStartedAt?: string | null;
 }
 
 /**
@@ -115,7 +120,8 @@ function deriveActiveStageCopy(
   runStatus: string | null,
   runPhase: string | null,
   funnel: ObservabilityFunnel | null,
-  noRuns: boolean
+  noRuns: boolean,
+  isStale: boolean
 ): { headline: string; description: string; isActive: boolean } {
   if (noRuns || !runStatus) {
     return {
@@ -137,6 +143,15 @@ function deriveActiveStageCopy(
       headline: 'Execution queued',
       description: 'Awaiting worker pickup. Execution will begin shortly.',
       isActive: true,
+    };
+  }
+
+  // STALENESS HANDLING: Show warning for stale running runs
+  if (isStale && (normalizedStatus === 'running' || normalizedStatus === 'in_progress')) {
+    return {
+      headline: 'Stale execution detected',
+      description: 'A previous execution did not complete and is being cleaned up by the system.',
+      isActive: false,
     };
   }
 
@@ -222,12 +237,26 @@ export function ActiveStageFocusPanel({
   funnel,
   noRuns,
   isPolling = false,
+  isStale: isStaleFromParent,
+  runStartedAt,
 }: ActiveStageFocusPanelProps) {
+  // STALENESS HANDLING: Use centralized staleness from parent when provided,
+  // otherwise fall back to calculating from runStartedAt for backward compatibility
+  const normalizedStatus = runStatus?.toLowerCase() || '';
+  const isRunning = normalizedStatus === 'running' || normalizedStatus === 'in_progress';
+  const stale = isStaleFromParent ?? (isRunning && runStartedAt ? isRunStale({
+    id: 'check',
+    status: runStatus || '',
+    started_at: runStartedAt,
+    created_at: runStartedAt,
+  }) : false);
+
   const { headline, description, isActive } = deriveActiveStageCopy(
     runStatus,
     runPhase,
     funnel,
-    noRuns
+    noRuns,
+    stale
   );
 
   const bgColor = isActive

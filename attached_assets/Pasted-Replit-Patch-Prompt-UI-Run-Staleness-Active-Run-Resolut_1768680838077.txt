@@ -1,0 +1,213 @@
+Replit Patch Prompt — UI Run Staleness & Active Run Resolution (P0)
+
+Context
+
+We have confirmed that the backend execution watchdog is working correctly and safely marks stale running campaign runs as failed on cron. However, the frontend UI currently misrepresents stale runs as “Running”, causing confusion when:
+
+A run from yesterday is still marked status = 'running'
+
+A newer run exists in queued
+
+Cron has not yet cleaned the stale run
+
+This is a UI precedence + staleness interpretation bug, not a backend bug.
+
+The UI must remain observational only, but it must not present stale executions as active.
+
+Objective
+
+Fix the Campaign Detail UI so that:
+
+At most ONE run is ever displayed as “active”
+
+Stale running runs are never shown as Running
+
+Queued runs always supersede older running runs
+
+Backend canonical truth is preserved (no writes, no retries, no mutations)
+
+Hard Constraints (DO NOT VIOLATE)
+
+❌ Do NOT modify backend APIs
+
+❌ Do NOT update database state
+
+❌ Do NOT infer or invent execution states
+
+❌ Do NOT resurrect or retry runs
+
+❌ Do NOT change run.status values
+
+❌ Do NOT introduce heuristics beyond time-based staleness
+
+✅ UI logic must be purely read-only
+
+✅ Must align with execution watchdog semantics
+
+Authoritative Watchdog Threshold
+
+Use the same semantic threshold as backend:
+
+const RUN_STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+
+Staleness is determined ONLY by:
+
+status === 'running'
+AND started_at IS NOT NULL
+AND now() - started_at > RUN_STALE_THRESHOLD_MS
+
+Required Changes
+1. Introduce a Run Resolution Utility (P0)
+
+Create a single resolver function that determines which run is considered “active” for display.
+
+Location suggestion:
+
+app/sales-engine/lib/resolveActiveRun.ts
+
+
+Required behavior:
+
+export function resolveActiveRun(runs: CampaignRun[]): CampaignRun | null {
+  const now = Date.now();
+
+  const sorted = [...runs].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  // 1. Queued runs always win
+  const queued = sorted.find(r => r.status === 'queued');
+  if (queued) return queued;
+
+  // 2. Running run only if NOT stale
+  const running = sorted.find(r => r.status === 'running');
+  if (running && running.started_at) {
+    const startedAt = new Date(running.started_at).getTime();
+    const isStale = now - startedAt > RUN_STALE_THRESHOLD_MS;
+    if (!isStale) return running;
+  }
+
+  // 3. Otherwise show latest terminal run
+  return (
+    sorted.find(r =>
+      ['completed', 'failed', 'skipped'].includes(r.status)
+    ) ?? null
+  );
+}
+
+
+This must be the only source of truth for determining the active run in the UI.
+
+2. Apply Resolver Everywhere Active Run Is Displayed (P0)
+
+Replace all ad-hoc logic that uses:
+
+“latest run”
+
+“most recent created”
+
+“running if exists”
+
+Specifically update:
+
+LatestRunStatus
+
+ExecutionSummary
+
+ExecutionStatus
+
+ExecutionStageTracker
+
+ActiveStageFocusPanel
+
+Any “Running / In Progress” badge logic
+
+All of these must consume the resolved active run, not raw API ordering.
+
+3. Stale Run Presentation Rules (P0)
+
+If a stale running run is detected:
+
+❌ Do NOT display “Running”
+
+❌ Do NOT show spinners or “In Progress” states
+
+❌ Do NOT show execution countdowns
+
+Instead:
+
+Show warning-tone messaging
+
+Label clearly as stale / interrupted
+
+Example copy (use neutral language):
+
+“A previous execution did not complete and is being cleaned up by the system.”
+
+Visual requirements:
+
+⚠️ Warning icon or muted badge
+
+No primary action buttons
+
+No implied activity
+
+4. UI Precedence Rules (Must Be Enforced)
+Scenario	UI Must Show
+New queued run exists	Queued run (even if older running run exists)
+Running run < 30 min	Running
+Running run > 30 min	Treated as inactive (warning only)
+No queued/running	Latest terminal run
+
+At no time should multiple sections disagree on execution state.
+
+5. Observability Consistency (P0)
+
+Ensure:
+
+ExecutionSummary
+
+LatestRunStatus
+
+ExecutionStageTracker
+
+…all derive from the same resolved run.
+
+There must be no conflicting status language on the same page.
+
+Explicit Non-Goals
+
+Do NOT:
+
+Add new run statuses
+
+Add backend coordination logic
+
+Add retry buttons
+
+Add cron awareness
+
+Add “force fail” UI controls
+
+Acceptance Criteria
+
+Before marking complete, verify:
+
+A run stuck from yesterday no longer shows as “Running”
+
+A newer queued run correctly appears as active
+
+UI remains fully read-only
+
+No backend changes required
+
+No regression in normal execution display
+
+No duplicate or conflicting execution states visible
+
+Completion Declaration
+
+Once implemented, explicitly state:
+
+“The UI now correctly resolves and displays a single authoritative active run, hides stale running executions, and remains fully aligned with queue-first, watchdog-based execution semantics.”
