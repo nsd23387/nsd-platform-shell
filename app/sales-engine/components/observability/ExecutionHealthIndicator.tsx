@@ -132,9 +132,10 @@ function deriveHealthStatement(
   }
 
   // STALENESS HANDLING: Show warning for stale running runs
+  // GOVERNANCE: "stalled" messaging ONLY allowed when status='running' AND >30 min
   if (isStale && (normalizedStatus === 'running' || normalizedStatus === 'in_progress')) {
     return {
-      statement: 'Stale execution — being cleaned up by system',
+      statement: 'Execution stalled — system will mark failed',
       level: 'warning',
     };
   }
