@@ -29,6 +29,7 @@ import {
   type CanonicalStageConfig,
   type StageRenderStatus,
 } from '../../lib/execution-stages';
+import { isRunStale, type ResolvableRun } from '../../lib/resolveActiveRun';
 import type { ObservabilityFunnel } from '../../types/campaign';
 
 export type StageStatus = 'waiting' | 'running' | 'completed' | 'not_observed';
@@ -49,6 +50,10 @@ interface ExecutionStageTrackerProps {
   funnel: ObservabilityFunnel | null;
   noRuns: boolean;
   showFutureStages?: boolean;
+  /** Staleness can be passed directly from parent (centralized resolution) or calculated from runStartedAt */
+  isStale?: boolean;
+  /** @deprecated Use isStale prop instead. Kept for backward compatibility. */
+  runStartedAt?: string | null;
 }
 
 /**
@@ -60,9 +65,12 @@ interface ExecutionStageTrackerProps {
  * 
  * Rules:
  * - completed: ONLY when funnelCount > 0 (explicit data exists)
- * - running: ONLY when campaign_runs.phase === stage.id (exact match)
+ * - running: ONLY when campaign_runs.phase === stage.id (exact match) AND run is not stale
  * - waiting: When run exists but no data for this stage yet
- * - not_observed: When stage has no data and is not current phase
+ * - not_observed: When stage has no data and is not current phase, OR run is stale
+ * 
+ * STALENESS HANDLING:
+ * If a run is stale (running > 30 min), treat all "running" stages as not_observed.
  * 
  * No ordering-based inference. Completion is determined by data presence only.
  */
@@ -71,7 +79,8 @@ function deriveStageStatus(
   runStatus: string | null,
   runPhase: string | null,
   funnel: ObservabilityFunnel | null,
-  noRuns: boolean
+  noRuns: boolean,
+  isStale: boolean
 ): { status: StageStatus; count?: number } {
   const stageId = stageConfig.id;
   const funnelStageId = stageConfig.funnelStageId;
@@ -91,6 +100,11 @@ function deriveStageStatus(
 
   if (hasData) {
     return { status: 'completed', count: funnelCount };
+  }
+
+  // STALENESS HANDLING: If run is stale, don't show any stage as "running"
+  if (isStale) {
+    return { status: 'not_observed' };
   }
 
   if (normalizedPhase === stageId) {
@@ -336,13 +350,26 @@ export function ExecutionStageTracker({
   funnel,
   noRuns,
   showFutureStages = false,
+  isStale: isStaleFromParent,
+  runStartedAt,
 }: ExecutionStageTrackerProps) {
+  // STALENESS HANDLING: Use centralized staleness from parent when provided,
+  // otherwise fall back to calculating from runStartedAt for backward compatibility
+  const normalizedStatus = runStatus?.toLowerCase() || '';
+  const isRunning = normalizedStatus === 'running' || normalizedStatus === 'in_progress';
+  const stale = isStaleFromParent ?? (isRunning && runStartedAt ? isRunStale({
+    id: 'check',
+    status: runStatus || '',
+    started_at: runStartedAt,
+    created_at: runStartedAt,
+  }) : false);
+
   const configToUse = showFutureStages
     ? CANONICAL_STAGE_CONFIG
     : CANONICAL_STAGE_CONFIG.filter((s) => !isFutureStage(s.id));
 
   const stages: ExecutionStage[] = configToUse.map((stageConfig) => {
-    const { status, count } = deriveStageStatus(stageConfig, runStatus, runPhase, funnel, noRuns);
+    const { status, count } = deriveStageStatus(stageConfig, runStatus, runPhase, funnel, noRuns, stale);
     return {
       id: stageConfig.id,
       label: stageConfig.label,

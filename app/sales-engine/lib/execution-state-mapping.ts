@@ -37,6 +37,7 @@
  */
 
 import type { LatestRun } from '../../../hooks/useLatestRunStatus';
+import { isRunStale, RUN_STALE_THRESHOLD_MS, type ResolvableRun } from './resolveActiveRun';
 
 /**
  * User-facing execution confidence levels.
@@ -47,6 +48,9 @@ import type { LatestRun } from '../../../hooks/useLatestRunStatus';
  * 
  * OBSERVATION-BASED: 'completed_no_steps_observed' is based on observing
  * that the LatestRun model contains no intermediate execution step data.
+ * 
+ * STALENESS HANDLING: 'stale' is for runs marked 'running' that exceed
+ * the 30-minute threshold, aligning with backend watchdog semantics.
  */
 export type ExecutionConfidence = 
   | 'completed'                    // Execution finished with observable steps
@@ -55,6 +59,7 @@ export type ExecutionConfidence =
   | 'queued'                       // Awaiting execution (status=queued)
   | 'not_executed'                 // Never executed (noRuns=true)
   | 'failed'                       // Execution failed (status=failed)
+  | 'stale'                        // Run was running but exceeded staleness threshold
   | 'unknown';                     // Cannot determine state from available signals
 
 /**
@@ -88,6 +93,19 @@ export interface ExecutionState {
  */
 function normalizeStatus(status?: string): string {
   return typeof status === 'string' ? status.toLowerCase().trim() : '';
+}
+
+/**
+ * Convert LatestRun to ResolvableRun for staleness check.
+ */
+function toResolvableRun(run: LatestRun): ResolvableRun {
+  return {
+    id: run.run_id,
+    status: run.status || '',
+    started_at: run.created_at, // API uses created_at as start time
+    created_at: run.created_at,
+    updated_at: run.updated_at,
+  };
 }
 
 /**
@@ -169,7 +187,44 @@ export function deriveExecutionState(
   }
 
   // Case 3: Run is in progress
+  // STALENESS HANDLING: Check if running run exceeds 30-minute threshold
   if (status === 'running' || status === 'in_progress') {
+    const resolvable = toResolvableRun(run);
+    const stale = isRunStale(resolvable);
+    
+    // Case 3a: Stale running run - display warning state
+    if (stale) {
+      return {
+        confidence: 'stale',
+        confidenceLabel: 'Stale',
+        confidenceDescription: 'A previous execution did not complete and is being cleaned up by the system.',
+        outcomeStatement: 'This execution has been running for over 30 minutes and is considered stale. The backend watchdog will clean it up automatically.',
+        timeline: [
+          {
+            id: 'run_created',
+            type: 'success',
+            label: `Run created${createdAt ? ` (${createdAt})` : ''}`,
+            timestamp: run.created_at,
+            isCompleted: true,
+          },
+          {
+            id: 'stale_warning',
+            type: 'warning',
+            label: 'Execution exceeded 30-minute threshold',
+            isCompleted: true,
+          },
+          {
+            id: 'awaiting_cleanup',
+            type: 'info',
+            label: 'Awaiting system cleanup',
+            isCompleted: false,
+          },
+        ],
+        nextStepRecommendation: 'This run will be marked as failed by the system watchdog. A new execution can be requested after cleanup.',
+      };
+    }
+    
+    // Case 3b: Active running run (not stale)
     return {
       confidence: 'in_progress',
       confidenceLabel: 'In Progress',
@@ -386,4 +441,9 @@ export const EXECUTION_TOOLTIPS: Record<string, string> = {
   failed: 
     'Failed means the execution encountered an error. ' +
     'Check the run history for details about what went wrong.',
+    
+  stale:
+    'A stale run means the execution was marked as running but has not completed ' +
+    'within 30 minutes. The backend watchdog will automatically mark it as failed ' +
+    'and clean up the state. A new execution can be requested after cleanup.',
 };

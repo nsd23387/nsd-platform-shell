@@ -78,6 +78,12 @@ function getBadgeStyle(confidence: ExecutionConfidence): BadgeStyle {
         icon: 'warning',
         label: 'Failed',
       };
+    case 'stale':
+      return {
+        ...NSD_COLORS.semantic.attention,
+        icon: 'warning',
+        label: 'Stale',
+      };
     case 'unknown':
     default:
       return {
