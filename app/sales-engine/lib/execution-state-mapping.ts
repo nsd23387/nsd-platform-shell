@@ -19,15 +19,16 @@
  * - created_at: string | undefined
  * - updated_at: string | undefined
  * 
- * Backend Condition → UI Meaning Mapping (OBSERVATION-BASED):
+ * Backend Condition → UI Meaning Mapping (CANONICAL MESSAGING MATRIX):
  * ┌─────────────────────────────────────┬─────────────────────────────────────────────────┐
- * │ Backend Condition                   │ UI Meaning                                      │
+ * │ Backend Condition                   │ UI Meaning (Canonical Copy)                     │
  * ├─────────────────────────────────────┼─────────────────────────────────────────────────┤
- * │ No run exists (noRuns=true)         │ "Campaign not executed yet"                     │
- * │ Run exists + status=queued          │ "Awaiting worker pickup"                        │
+ * │ No run exists (noRuns=true)         │ "No execution has run yet" (idle)               │
+ * │ Run exists + status=queued          │ "Execution queued"                              │
  * │ Run exists + status=running         │ "Execution in progress"                         │
- * │ Run exists + status=completed       │ "Execution finished - no steps observed"        │
- * │ Run exists + status=failed          │ "Execution failed"                              │
+ * │ Run exists + status=running + >30m  │ "Execution stalled — system will mark failed"   │
+ * │ Run exists + status=completed       │ "Last execution completed successfully"         │
+ * │ Run exists + status=failed          │ "Last execution failed"                         │
  * │ Run exists + unknown status         │ "Status unknown"                                │
  * └─────────────────────────────────────┴─────────────────────────────────────────────────┘
  * 
@@ -49,8 +50,9 @@ import { isRunStale, RUN_STALE_THRESHOLD_MS, type ResolvableRun } from './resolv
  * OBSERVATION-BASED: 'completed_no_steps_observed' is based on observing
  * that the LatestRun model contains no intermediate execution step data.
  * 
- * STALENESS HANDLING: 'stale' is for runs marked 'running' that exceed
- * the 30-minute threshold, aligning with backend watchdog semantics.
+ * STALENESS HANDLING: 'stale' (displayed as "Stalled") is for runs marked
+ * 'running' that exceed the 30-minute threshold, aligning with backend watchdog.
+ * GOVERNANCE: "stalled" messaging ONLY appears when status='running' AND >30 min.
  */
 export type ExecutionConfidence = 
   | 'completed'                    // Execution finished with observable steps
