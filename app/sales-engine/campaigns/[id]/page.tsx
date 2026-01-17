@@ -485,61 +485,78 @@ function OverviewTab({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* ============================================
-          ABOVE THE FOLD: Execution-First UI
-          User can answer "What's happening now?" in <3 seconds
+          ABOVE THE FOLD: Side-by-Side Layout
+          Left: Campaign Scope (context)
+          Right: Execution Status (what's happening)
           ============================================ */}
       
-      {/* Execution Health Indicator - Single sentence visible without scrolling */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <ExecutionHealthIndicator
-          runStatus={runStatus}
-          runPhase={runPhase}
-          funnel={observabilityFunnel}
-          noRuns={noRuns}
-        />
-        <CampaignStatusHeader
-          campaignName={campaign.name}
-          governanceState={governanceState}
-          executionConfidence={executionState.confidence}
-          isPlanningOnly={isPlanningOnly}
-          lastUpdatedAt={lastUpdatedAt}
-          isPolling={isPolling}
-        />
+      {/* Two-column layout: Scope + Execution Status
+          Responsive: stacks to single column on screens < 900px (see globals.css) */}
+      <div className="overview-two-column-grid">
+        {/* LEFT COLUMN: Campaign Scope & Context (40%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Campaign Scope Summary - Full ICP display */}
+          <CampaignScopeSummary icp={campaign.icp} />
+          
+          {/* Pipeline Funnel Summary - Quick visibility */}
+          <FunnelSummaryWidget funnel={observabilityFunnel} />
+        </div>
+
+        {/* RIGHT COLUMN: Execution Status (60%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Execution Health Indicator - Single sentence visible without scrolling */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            <ExecutionHealthIndicator
+              runStatus={runStatus}
+              runPhase={runPhase}
+              funnel={observabilityFunnel}
+              noRuns={noRuns}
+            />
+            <CampaignStatusHeader
+              campaignName={campaign.name}
+              governanceState={governanceState}
+              executionConfidence={executionState.confidence}
+              isPlanningOnly={isPlanningOnly}
+              lastUpdatedAt={lastUpdatedAt}
+              isPolling={isPolling}
+            />
+          </div>
+
+          {/* Polling Status - Shows "Auto-refreshing every 7s" or "Execution idle" */}
+          <PollingStatusIndicator
+            isPolling={isPolling}
+            isRefreshing={isRefreshing}
+            lastUpdatedAt={lastUpdatedAt}
+            pollingInterval={7000}
+            onRefresh={onRefresh}
+          />
+
+          {/* Active Stage Focus Panel - What is the system doing right now? */}
+          <ActiveStageFocusPanel
+            runStatus={runStatus}
+            runPhase={runPhase}
+            funnel={observabilityFunnel}
+            noRuns={noRuns}
+            isPolling={isPolling}
+          />
+
+          {/* Execution Stage Tracker - Vertical stage tracker */}
+          <ExecutionStageTracker
+            runStatus={runStatus}
+            runPhase={runPhase}
+            funnel={observabilityFunnel}
+            noRuns={noRuns}
+          />
+        </div>
       </div>
 
-      {/* Polling Status - Shows "Auto-refreshing every 7s" or "Execution idle" */}
-      <PollingStatusIndicator
-        isPolling={isPolling}
-        isRefreshing={isRefreshing}
-        lastUpdatedAt={lastUpdatedAt}
-        pollingInterval={7000}
-        onRefresh={onRefresh}
-      />
-
-      {/* Active Stage Focus Panel - What is the system doing right now? */}
-      <ActiveStageFocusPanel
-        runStatus={runStatus}
-        runPhase={runPhase}
-        funnel={observabilityFunnel}
-        noRuns={noRuns}
-        isPolling={isPolling}
-      />
-
-      {/* Execution Stage Tracker - Vertical stage tracker */}
-      <ExecutionStageTracker
-        runStatus={runStatus}
-        runPhase={runPhase}
-        funnel={observabilityFunnel}
-        noRuns={noRuns}
-      />
-
-      {/* Results Breakdown Cards - Post-stage completion details */}
+      {/* Results Breakdown Cards - Post-stage completion details (full width) */}
       <ResultsBreakdownCards
         funnel={observabilityFunnel}
         runStatus={runStatus}
       />
 
-      {/* Advisory Callout - Non-blocking guidance */}
+      {/* Advisory Callout - Non-blocking guidance (full width) */}
       <AdvisoryCallout
         runStatus={runStatus}
         funnel={observabilityFunnel}
@@ -553,11 +570,6 @@ function OverviewTab({
       {/* Main content grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', marginTop: '8px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Campaign Scope Summary - Full ICP display */}
-          <CampaignScopeSummary icp={campaign.icp} />
-
-          {/* Pipeline Funnel Summary - Quick visibility */}
-          <FunnelSummaryWidget funnel={observabilityFunnel} />
 
           {/* Campaign Details */}
           <SectionCard title="Campaign Details" icon="campaigns" iconColor={NSD_COLORS.primary}>
@@ -858,56 +870,65 @@ function MonitoringTab({
         </div>
       )}
 
-      {/* Section A: Approval Awareness Panel */}
-      {/* Shows campaign approval state with explanatory copy (read-only) */}
-      <ApprovalAwarenessPanel approvalState={approvalState} />
+      {/* ============================================
+          Two-column layout: Status/Context (left) + Metrics/Data (right)
+          Responsive: stacks on screens < 900px (see globals.css)
+          ============================================ */}
+      <div className="overview-two-column-grid">
+        {/* LEFT COLUMN: Status & Context (40%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Section A: Approval Awareness Panel */}
+          <ApprovalAwarenessPanel approvalState={approvalState} />
 
-      {/* Section A.1: Latest Run Status (Canonical Read Model) */}
-      {/* 
-       * EXECUTION CONTRACT NOTE:
-       * platform-shell does NOT execute campaigns.
-       * This component fetches latest run from Sales Engine's canonical read model.
-       * NO polling. NO inference. Single fetch on page load.
-       */}
-      <LatestRunStatusCard campaignId={campaign.id} />
+          {/* Section A.1: Latest Run Status (Canonical Read Model) */}
+          <LatestRunStatusCard campaignId={campaign.id} />
 
-      {/* Section A.2: Execution Explainability Panel */}
-      {/* 
-       * EXECUTION EXPLAINABILITY:
-       * Answers: Did execution do work? Was nothing happening intentional?
-       * Replaces ambiguous "Running" semantics with clear outcome-oriented states.
-       * Explicitly explains when no external services were contacted.
-       * READ-ONLY: Derived entirely from existing run data.
-       */}
-      <ExecutionExplainabilityPanel campaignId={campaign.id} />
+          {/* Section A.2: Execution Explainability Panel */}
+          <ExecutionExplainabilityPanel campaignId={campaign.id} />
+        </div>
 
-      {/* Section B: Execution Status - Always visible */}
-      {/* Source of truth: /observability/status endpoint */}
-      {/* Status mapping (queued → cron model):
-          - queued: "Queued – execution will start shortly"
-          - running: "Running – sourcing organizations"
-          - completed: "Completed – results available"
-          - failed: "Failed – see timeline for details"
-          - blocked: "Blocked – see reason" */}
-      <CampaignExecutionStatusCard
-        status={executionStatus}
-        activeRunId={activeRunId}
-        currentStage={currentStage}
-        lastObservedAt={lastObservedAt}
-        leadsAwaitingApproval={leadsAwaitingApproval}
-        onRunCampaign={onRunCampaign}
-        canRun={canRun}
-        isRunning={isRunRequesting}
-        blockingReason={observabilityStatus?.error_message}
-        isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
-      />
+        {/* RIGHT COLUMN: Metrics & Data (60%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Section B: Execution Status - Always visible */}
+          <CampaignExecutionStatusCard
+            status={executionStatus}
+            activeRunId={activeRunId}
+            currentStage={currentStage}
+            lastObservedAt={lastObservedAt}
+            leadsAwaitingApproval={leadsAwaitingApproval}
+            onRunCampaign={onRunCampaign}
+            canRun={canRun}
+            isRunning={isRunRequesting}
+            blockingReason={observabilityStatus?.error_message}
+            isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
+          />
 
-      {/* Section C: Pipeline Funnel (CORE) */}
-      {/* Source of truth: /observability/funnel endpoint */}
-      <PipelineFunnelTable
-        stages={pipelineStages}
-        loading={!observabilityFunnel && !observability}
-      />
+          {/* Section C: Pipeline Funnel (CORE) */}
+          <PipelineFunnelTable
+            stages={pipelineStages}
+            loading={!observabilityFunnel && !observability}
+          />
+
+          {/* Section F: Send Metrics (Scoped) */}
+          <SendMetricsPanel
+            emailsSent={observability?.send_metrics?.emails_sent ?? metrics?.emails_sent}
+            emailsOpened={observability?.send_metrics?.emails_opened ?? metrics?.emails_opened}
+            emailsReplied={observability?.send_metrics?.emails_replied ?? metrics?.emails_replied}
+            openRate={observability?.send_metrics?.open_rate ?? metrics?.open_rate}
+            replyRate={observability?.send_metrics?.reply_rate ?? metrics?.reply_rate}
+            confidence={observability?.send_metrics?.confidence ?? 'conditional'}
+            lastUpdated={observability?.last_observed_at ?? metrics?.last_updated}
+            hasReachedSendStage={
+              pipelineStages.some(s => s.stage === 'emails_sent' && s.count > 0) ||
+              (observability?.send_metrics?.emails_sent ?? 0) > 0
+            }
+          />
+        </div>
+      </div>
+
+      {/* ============================================
+          Full-width sections: History & Timeline
+          ============================================ */}
 
       {/* View Run History Button - scrolls to Section D */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -939,45 +960,62 @@ function MonitoringTab({
       />
 
       {/* Section E: Execution Timeline / Activity Feed */}
-      {/* Groups events by runId, ordered by occurred_at */}
       <ExecutionTimelineFeed
         events={executionEvents}
         loading={false}
-      />
-
-      {/* Section F: Send Metrics (Scoped) - Post-Approval only 
-          IMPORTANT: Only show actual metrics from API, never fabricated.
-          If no send metrics exist, show "Not Observed Yet" state.
-      */}
-      <SendMetricsPanel
-        emailsSent={observability?.send_metrics?.emails_sent ?? metrics?.emails_sent}
-        emailsOpened={observability?.send_metrics?.emails_opened ?? metrics?.emails_opened}
-        emailsReplied={observability?.send_metrics?.emails_replied ?? metrics?.emails_replied}
-        openRate={observability?.send_metrics?.open_rate ?? metrics?.open_rate}
-        replyRate={observability?.send_metrics?.reply_rate ?? metrics?.reply_rate}
-        confidence={observability?.send_metrics?.confidence ?? 'conditional'}
-        lastUpdated={observability?.last_observed_at ?? metrics?.last_updated}
-        hasReachedSendStage={
-          // Check if pipeline has email_sent stage with count > 0
-          pipelineStages.some(s => s.stage === 'emails_sent' && s.count > 0) ||
-          (observability?.send_metrics?.emails_sent ?? 0) > 0
-        }
       />
     </div>
   );
 }
 
 function LearningTab({ campaignId }: { campaignId: string }) {
-  // Learning signals must come from the backend API.
-  // Do NOT use placeholder data - show empty state when data is not available.
-  // This ensures no mock/fake data appears in the UI.
-  
   return (
-    <LearningSignalsPanel
-      signals={undefined} // Will show "No Learning Signals Configured" state
-      autonomyLevel="L1"
-      campaignId={campaignId}
-    />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* ============================================
+          Two-column layout: Context (left) + Learning Signals (right)
+          Responsive: stacks on screens < 900px (see globals.css)
+          ============================================ */}
+      <div className="overview-two-column-grid">
+        {/* LEFT COLUMN: Context & Guidance (40%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <SectionCard title="About Learning Signals" icon="chart" iconColor={NSD_COLORS.secondary}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px', color: NSD_COLORS.text.secondary }}>
+              <p style={{ margin: 0 }}>
+                Learning signals capture patterns and insights from campaign execution to improve future performance.
+              </p>
+              <p style={{ margin: 0 }}>
+                Signals are generated automatically based on execution outcomes and require no manual configuration.
+              </p>
+              <div style={{ 
+                padding: '12px', 
+                backgroundColor: NSD_COLORS.surface, 
+                borderRadius: NSD_RADIUS.sm,
+                border: `1px solid ${NSD_COLORS.border.light}`,
+              }}>
+                <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Autonomy Level
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
+                  L1 — Human-in-the-loop
+                </div>
+                <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginTop: '4px' }}>
+                  All decisions require operator approval
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+        </div>
+
+        {/* RIGHT COLUMN: Learning Signals Panel (60%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <LearningSignalsPanel
+            signals={undefined}
+            autonomyLevel="L1"
+            campaignId={campaignId}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
