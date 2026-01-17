@@ -68,6 +68,13 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
 - Consume existing `/api/v1/campaigns/:id/runs/latest` endpoint only
 
 ## Recent Changes
+- January 17, 2026: Side-by-Side Campaign Overview Layout
+  - Restructured OverviewTab to use two-column grid (40% scope / 60% execution)
+  - Left column: CampaignScopeSummary + FunnelSummaryWidget (campaign context)
+  - Right column: ExecutionHealthIndicator, PollingStatusIndicator, ActiveStageFocusPanel, ExecutionStageTracker
+  - ResultsBreakdownCards and AdvisoryCallout remain full-width below
+  - Responsive CSS in globals.css stacks columns on screens < 900px
+
 - January 17, 2026: P0 UI Hardening for Future Execution Stages (Complete)
   - Created centralized `CANONICAL_STAGE_CONFIG` in `lib/execution-stages.ts` with all 8 canonical stages
   - Refactored `ExecutionStageTracker` to render from config array with unknown stage fallback
