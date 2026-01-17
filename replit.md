@@ -69,6 +69,14 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
 - Consume existing `/api/v1/campaigns/:id/runs/latest` endpoint only
 
 ## Recent Changes
+- January 17, 2026: Last Execution Summary Card (Complete)
+  - Created `LastExecutionSummaryCard` component for historical execution context
+  - Shows when status is failed or completed (terminal states only)
+  - Displays: timestamp (when execution finished), terminal reason (if failed), counts (orgs/contacts/leads), link to observability
+  - UX Trust Accelerator: Reinforces "The system is idle. You are looking at history."
+  - Read-only with no execution controls
+  - Integrated into Overview tab's right column after ExecutionStageTracker
+
 - January 17, 2026: P0 Canonical Run State Reconciliation (Complete)
   - Created `resolveCanonicalRunState()` function as single source of truth for execution state
   - Mandatory messaging matrix enforced across all components:
