@@ -22,6 +22,7 @@
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { CANONICAL_STAGE_CONFIG, isFutureStage } from '../../lib/execution-stages';
+import { isRunStale, type ResolvableRun } from '../../lib/resolveActiveRun';
 import type { ObservabilityFunnel } from '../../types/campaign';
 
 interface ExecutionHealthIndicatorProps {
@@ -29,6 +30,10 @@ interface ExecutionHealthIndicatorProps {
   runPhase: string | null;
   funnel: ObservabilityFunnel | null;
   noRuns: boolean;
+  /** Staleness can be passed directly from parent (centralized resolution) or calculated from runStartedAt */
+  isStale?: boolean;
+  /** @deprecated Use isStale prop instead. Kept for backward compatibility. */
+  runStartedAt?: string | null;
 }
 
 type HealthLevel = 'success' | 'warning' | 'error' | 'info' | 'neutral';
@@ -86,12 +91,16 @@ function getFailurePhaseCopy(phase: string): string {
  * This function must work with ANY number of stages.
  * It must NOT assume leads or sends exist.
  * It must degrade gracefully for future stages.
+ * 
+ * STALENESS HANDLING:
+ * Stale running runs display warning messaging instead of "Execution in progress".
  */
 function deriveHealthStatement(
   runStatus: string | null,
   runPhase: string | null,
   funnel: ObservabilityFunnel | null,
-  noRuns: boolean
+  noRuns: boolean,
+  isStale: boolean
 ): { statement: string; level: HealthLevel } {
   if (noRuns || !runStatus) {
     return {
@@ -119,6 +128,14 @@ function deriveHealthStatement(
     return {
       statement: 'Execution queued — awaiting worker pickup',
       level: 'info',
+    };
+  }
+
+  // STALENESS HANDLING: Show warning for stale running runs
+  if (isStale && (normalizedStatus === 'running' || normalizedStatus === 'in_progress')) {
+    return {
+      statement: 'Stale execution — being cleaned up by system',
+      level: 'warning',
     };
   }
 
@@ -277,8 +294,21 @@ export function ExecutionHealthIndicator({
   runPhase,
   funnel,
   noRuns,
+  isStale: isStaleFromParent,
+  runStartedAt,
 }: ExecutionHealthIndicatorProps) {
-  const { statement, level } = deriveHealthStatement(runStatus, runPhase, funnel, noRuns);
+  // STALENESS HANDLING: Use centralized staleness from parent when provided,
+  // otherwise fall back to calculating from runStartedAt for backward compatibility
+  const normalizedStatus = runStatus?.toLowerCase() || '';
+  const isRunning = normalizedStatus === 'running' || normalizedStatus === 'in_progress';
+  const stale = isStaleFromParent ?? (isRunning && runStartedAt ? isRunStale({
+    id: 'check',
+    status: runStatus || '',
+    started_at: runStartedAt,
+    created_at: runStartedAt,
+  }) : false);
+
+  const { statement, level } = deriveHealthStatement(runStatus, runPhase, funnel, noRuns, stale);
   const styles = getHealthStyles(level);
 
   return (

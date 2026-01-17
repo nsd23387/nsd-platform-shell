@@ -24,6 +24,7 @@ import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import { useLatestRunStatus, type LatestRun } from '../../../../hooks/useLatestRunStatus';
+import { isRunStale, RUN_STALE_THRESHOLD_MS, type ResolvableRun } from '../../lib/resolveActiveRun';
 
 interface LatestRunStatusCardProps {
   campaignId: string;
@@ -44,11 +45,23 @@ interface StatusDisplay {
 /**
  * Get display configuration for run status.
  * Uses exact UX copy from specification.
+ * 
+ * STALENESS HANDLING:
+ * When isStale=true and status is 'running', display a warning state
+ * instead of misleading "Running" indicator.
  */
-function getStatusDisplay(status?: string): StatusDisplay {
-  // Runtime safety: API contract may return status without a run payload (e.g. { status: "no_runs" }).
-  // Guard to avoid calling string methods on undefined while keeping UI read-only.
+function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
   const normalized = typeof status === 'string' ? status.toLowerCase() : 'unknown';
+
+  // STALE RUN HANDLING: Running runs older than 30 min are displayed as stale
+  if (isStale && (normalized === 'running' || normalized === 'in_progress')) {
+    return {
+      icon: 'warning',
+      label: 'Stale',
+      copy: 'A previous execution did not complete and is being cleaned up by the system.',
+      ...NSD_COLORS.semantic.attention,
+    };
+  }
 
   switch (normalized) {
     case 'queued':
@@ -123,11 +136,30 @@ function formatDate(dateStr?: string): string {
 }
 
 /**
+ * Convert LatestRun to ResolvableRun for staleness check.
+ */
+function toResolvableRun(run: LatestRun): ResolvableRun {
+  return {
+    id: run.run_id,
+    status: run.status || '',
+    started_at: run.created_at, // API uses created_at as start time
+    created_at: run.created_at,
+    updated_at: run.updated_at,
+  };
+}
+
+/**
  * RunDetailsCard - Displays run data.
  * Only renders exact fields from the API response.
+ * 
+ * STALENESS HANDLING:
+ * Checks if the run is stale (running > 30 min) and displays
+ * appropriate warning messaging instead of "Running" indicator.
  */
 function RunDetailsCard({ run }: { run: LatestRun }) {
-  const display = getStatusDisplay(run?.status);
+  const resolvable = toResolvableRun(run);
+  const stale = isRunStale(resolvable);
+  const display = getStatusDisplay(run?.status, stale);
   // Runtime safety: `run` payload may be missing fields (or be absent) depending on API response.
   // Guard all string slicing to prevent client-side exceptions.
   const rawRunId = (run as unknown as { run_id?: unknown; id?: unknown })?.run_id ?? (run as unknown as { id?: unknown })?.id;

@@ -19,6 +19,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CampaignRun, ObservabilityFunnel } from '../types/campaign';
+import { isRunStale, type ResolvableRun } from '../lib/resolveActiveRun';
 
 interface LatestRunResponse {
   run_id: string;
@@ -49,10 +50,39 @@ interface UseExecutionPollingResult {
 const ACTIVE_STATUSES = ['queued', 'running', 'run_requested', 'in_progress'];
 const DEFAULT_POLLING_INTERVAL = 7000;
 
-function isActiveStatus(status: string | undefined): boolean {
+/**
+ * Convert CampaignRun to ResolvableRun for staleness check.
+ */
+function toResolvableRun(run: CampaignRun): ResolvableRun {
+  return {
+    id: run.id,
+    status: run.status,
+    started_at: run.started_at,
+    created_at: run.started_at,
+    completed_at: run.completed_at,
+  };
+}
+
+/**
+ * Check if a status is active AND not stale.
+ * STALENESS HANDLING: Stale running runs should stop polling.
+ */
+function isActiveStatus(status: string | undefined, run: CampaignRun | null): boolean {
   if (!status) return false;
   const normalizedStatus = status.toLowerCase().replace(/_/g, '_');
-  return ACTIVE_STATUSES.includes(normalizedStatus);
+  const isActive = ACTIVE_STATUSES.includes(normalizedStatus);
+  
+  if (!isActive) return false;
+  
+  // STALENESS HANDLING: Don't poll for stale runs
+  if (run && (normalizedStatus === 'running' || normalizedStatus === 'in_progress')) {
+    const resolvable = toResolvableRun(run);
+    if (isRunStale(resolvable)) {
+      return false;
+    }
+  }
+  
+  return true;
 }
 
 export function useExecutionPolling({
@@ -185,7 +215,7 @@ export function useExecutionPolling({
       intervalRef.current = null;
     }
 
-    const shouldPoll = enabled && isActiveStatus(latestRun?.status);
+    const shouldPoll = enabled && isActiveStatus(latestRun?.status, latestRun);
 
     if (shouldPoll) {
       setIsPolling(true);

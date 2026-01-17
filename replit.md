@@ -68,6 +68,17 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
 - Consume existing `/api/v1/campaigns/:id/runs/latest` endpoint only
 
 ## Recent Changes
+- January 17, 2026: P0 Run Staleness & Active Run Resolution
+  - Created `resolveActiveRun.ts` utility with centralized run selection logic
+  - Run precedence: queued > running (non-stale) > most recent terminal
+  - Staleness threshold: 30 minutes (`RUN_STALE_THRESHOLD_MS = 30 * 60 * 1000`) matching backend watchdog
+  - Stale runs NEVER show as "Running" - use warning copy: "Stale execution — being cleaned up by system"
+  - All execution components receive `runStartedAt` prop for staleness calculation
+  - Updated ExecutionConfidenceBadge with `stale` confidence type
+  - useExecutionPolling stops polling for stale runs automatically
+  - Campaign detail page uses centralized `resolveActiveRun` to select effective run for all components
+  - Components updated: LatestRunStatusCard, ExecutionStageTracker, ActiveStageFocusPanel, ExecutionHealthIndicator
+
 - January 17, 2026: Side-by-Side Campaign Overview Layout
   - Restructured OverviewTab to use two-column grid (40% scope / 60% execution)
   - Left column: CampaignScopeSummary + FunnelSummaryWidget (campaign context)

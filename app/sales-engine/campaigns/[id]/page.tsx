@@ -6,7 +6,7 @@
  * Displays campaign details, metrics, and action buttons.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader, SectionCard } from '../../components/ui';
@@ -71,6 +71,7 @@ import {
   type ApprovalAwarenessState,
 } from '../../components/observability';
 import { deriveExecutionState } from '../../lib/execution-state-mapping';
+import { resolveActiveRun, isRunStale, type ResolvableRun } from '../../lib/resolveActiveRun';
 import { formatEt, formatEtDate } from '../../lib/time';
 import { 
   isTestCampaign, 
@@ -216,8 +217,74 @@ export default function CampaignDetailPage() {
   });
 
   // Use polled data when available, otherwise fall back to initial data
-  const effectiveLatestRun = polledLatestRun || latestRun;
   const effectiveFunnel = polledFunnel || observabilityFunnel;
+
+  // ACTIVE RUN RESOLUTION (P0 Staleness Fix):
+  // Use resolveActiveRun to determine the single "active" run for display.
+  // This ensures:
+  // 1. Queued runs always supersede older running runs
+  // 2. Stale running runs (>30 min) are properly flagged
+  // 3. At most ONE run is displayed as active across all UI surfaces
+  const { activeRun: resolvedActiveRun, isStale: resolvedIsStale, resolutionReason } = useMemo(() => {
+    // Convert CampaignRun[] to ResolvableRun[] for resolution
+    const resolvableRuns: ResolvableRun[] = runsDetailed.map(run => ({
+      id: run.id,
+      campaign_id: run.campaign_id,
+      status: run.status,
+      started_at: run.started_at,
+      created_at: run.started_at,
+      completed_at: run.completed_at,
+    }));
+    
+    // If polled run exists and is more recent, include it
+    if (polledLatestRun) {
+      const polledResolvable: ResolvableRun = {
+        id: polledLatestRun.id,
+        campaign_id: polledLatestRun.campaign_id,
+        status: polledLatestRun.status,
+        started_at: polledLatestRun.started_at,
+        created_at: polledLatestRun.started_at,
+        completed_at: polledLatestRun.completed_at,
+      };
+      // Add polled run if not already in list
+      if (!resolvableRuns.some(r => r.id === polledResolvable.id)) {
+        resolvableRuns.unshift(polledResolvable);
+      }
+    }
+    
+    // If no runs in array but latestRun exists, use it
+    if (resolvableRuns.length === 0 && latestRun) {
+      return {
+        activeRun: latestRun,
+        isStale: isRunStale({
+          id: latestRun.id,
+          status: latestRun.status,
+          started_at: latestRun.started_at,
+          created_at: latestRun.started_at,
+        }),
+        resolutionReason: 'terminal' as const,
+      };
+    }
+    
+    const result = resolveActiveRun(resolvableRuns);
+    
+    // Map resolved run back to CampaignRun if possible
+    if (result.activeRun) {
+      const matchedRun = runsDetailed.find(r => r.id === result.activeRun?.id) || 
+                         (polledLatestRun?.id === result.activeRun?.id ? polledLatestRun : null) ||
+                         (latestRun?.id === result.activeRun?.id ? latestRun : null);
+      return {
+        activeRun: matchedRun,
+        isStale: result.isStale,
+        resolutionReason: result.resolutionReason,
+      };
+    }
+    
+    return { activeRun: null, isStale: false, resolutionReason: 'none' as const };
+  }, [runsDetailed, polledLatestRun, latestRun]);
+
+  // Use resolved active run as the effective latest run
+  const effectiveLatestRun = resolvedActiveRun || polledLatestRun || latestRun;
 
   /**
    * Refresh observability data (status, funnel, runs).
@@ -365,6 +432,7 @@ export default function CampaignDetailPage() {
             governanceState={governanceState}
             runsCount={runs.length}
             latestRun={effectiveLatestRun}
+            isRunStale={resolvedIsStale}
             observabilityFunnel={effectiveFunnel}
             lastUpdatedAt={lastUpdatedAt}
             isPolling={isPolling}
@@ -433,6 +501,7 @@ function OverviewTab({
   governanceState,
   runsCount,
   latestRun,
+  isRunStale,
   observabilityFunnel,
   lastUpdatedAt,
   isPolling,
@@ -444,6 +513,8 @@ function OverviewTab({
   governanceState: CampaignGovernanceState;
   runsCount: number;
   latestRun: CampaignRun | null;
+  /** Whether the resolved active run is stale (>30 min with no progress) */
+  isRunStale: boolean;
   observabilityFunnel: ObservabilityFunnel | null;
   lastUpdatedAt: string | null;
   isPolling: boolean;
@@ -511,6 +582,7 @@ function OverviewTab({
               runPhase={runPhase}
               funnel={observabilityFunnel}
               noRuns={noRuns}
+              isStale={isRunStale}
             />
             <CampaignStatusHeader
               campaignName={campaign.name}
@@ -538,6 +610,7 @@ function OverviewTab({
             funnel={observabilityFunnel}
             noRuns={noRuns}
             isPolling={isPolling}
+            isStale={isRunStale}
           />
 
           {/* Execution Stage Tracker - Vertical stage tracker */}
@@ -546,6 +619,7 @@ function OverviewTab({
             runPhase={runPhase}
             funnel={observabilityFunnel}
             noRuns={noRuns}
+            isStale={isRunStale}
           />
         </div>
       </div>
