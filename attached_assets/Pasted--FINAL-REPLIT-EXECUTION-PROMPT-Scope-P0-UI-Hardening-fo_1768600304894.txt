@@ -1,0 +1,232 @@
+🔒 FINAL REPLIT EXECUTION PROMPT
+
+Scope: P0 UI Hardening for Future Execution Stages (Target-State Aligned)
+
+Context & Objective
+
+We have successfully implemented Execution Clarity & Real-Time Observability for the current 3 execution stages:
+
+org_sourcing
+
+contact_discovery
+
+lead_creation
+
+However, the backend architecture explicitly supports a canonical multi-stage execution lifecycle (future stages include email readiness, personalization, outbound activation, sending, etc.).
+
+The current UI implementation will break or require rework when additional stages are introduced unless we harden it now.
+
+Your task is to implement P0 UI refactors only to make the Campaign Detail experience future-safe, observational, and governance-aligned, without adding new product features or backend assumptions.
+
+🔑 Core Guardrails (MANDATORY)
+
+You must comply with all guardrails below. Violations invalidate the work.
+
+1. Observational-Only Rule (CRITICAL)
+
+The UI must never infer execution state
+
+The UI must only render what the backend has emitted
+
+No heuristics, guesses, or derived states
+
+If the backend has not emitted data → render “Not yet observed”
+
+2. Canonical Authority Rule
+
+campaign_runs.status, campaign_runs.phase, and ODS events remain the sole authoritative sources
+
+The UI must not invent new semantic meanings
+
+The UI stage configuration is presentational only, not execution-defining
+
+Add explicit comments stating this wherever stage configuration exists.
+
+3. No New Execution Semantics
+
+🚫 Do NOT:
+
+Add Smartlead UI
+
+Add personalization UI
+
+Add email enrichment UI
+
+Add outbound activation UI
+
+Add action buttons for future stages
+
+Add new backend fields, events, or APIs
+
+This task is UI hardening only.
+
+✅ Required Deliverables (P0 ONLY)
+A. Make ExecutionStageTracker Fully Data-Driven
+
+Current issue:
+ExecutionStageTracker is hardcoded to 3 stages.
+
+Required change:
+
+Refactor ExecutionStageTracker to render from a config array, not hardcoded JSX.
+
+Include all canonical stages, even if not yet observed.
+
+Required stage config (UI-only, presentational):
+const CANONICAL_STAGE_CONFIG = [
+  { id: 'org_sourcing', label: 'Organizations Sourced' },
+  { id: 'contact_discovery', label: 'Contacts Discovered' },
+  { id: 'lead_creation', label: 'Leads Promoted' },
+  { id: 'email_readiness', label: 'Email Readiness' },
+  { id: 'personalization', label: 'Personalization' },
+  { id: 'outbound_activation', label: 'Outbound Activation' },
+  { id: 'send_in_progress', label: 'Sending' },
+  { id: 'send_completed', label: 'Completed' },
+] as const;
+
+
+Rules:
+
+Stages with no backend data must display “Not yet observed”
+
+Unknown stage IDs must render safely (see fallback rules below)
+
+Stage ordering must come from config only
+
+B. Stage Status Rendering Rules (Strict)
+
+Each stage may render only one of the following states:
+
+State	When Allowed
+Completed	Backend has emitted data for this stage
+Running	campaign_runs.phase === stage.id
+Waiting	No data observed, not current phase
+Blocked	ONLY if backend evidence exists (counts or warning event)
+Not Applicable	Backend explicitly indicates stage not enabled
+
+🚫 The UI must not infer Blocked based on assumptions.
+
+C. ActiveStageFocusPanel — Generalize for Unknown Stages
+
+Current issue:
+Copy is hardcoded to 3 known stages.
+
+Required change:
+
+Refactor copy generator to support any stage ID
+
+Unknown stages must produce neutral copy
+
+Examples:
+
+Known stage:
+“Discovering contacts across 55 organizations”
+
+Unknown/future stage:
+“Stage in progress — awaiting further data”
+
+No assumptions. No marketing language.
+
+D. ExecutionHealthIndicator — Stage-Agnostic
+
+Current issue:
+Health sentence assumes a 3-stage funnel.
+
+Required change:
+
+Health generator must read from observed stage outcomes
+
+Must not assume that leads or sends exist
+
+Must degrade gracefully if future stages are present but empty
+
+Allowed example outputs:
+
+“Execution completed — contacts discovered, no promotable leads”
+
+“Execution in progress — awaiting email readiness”
+
+“Execution completed — no activity observed beyond discovery”
+
+E. ResultsBreakdownCards — Future-Safe Rendering
+
+Required changes:
+
+Cards must be keyed by stage ID, not hardcoded types
+
+Cards render only when backend emits breakdown data
+
+Future stages show no cards until data exists
+
+🚫 Do not add placeholder cards for future stages.
+
+F. Governance & Actions Panel — Extensibility Only
+
+Required changes:
+
+Refactor GovernanceActionsPanel to support stage-aware actions
+
+Do NOT add new actions
+
+Add placeholder architecture only (disabled/hidden)
+
+Example (allowed):
+
+if (stage.id === 'personalization' && actionAvailable === false) {
+  return null;
+}
+
+G. Unknown Stage Fallback (CRITICAL SAFETY)
+
+If the backend emits a stage ID not in CANONICAL_STAGE_CONFIG:
+
+Label: Additional Stage
+
+Status: Observed
+
+No breakdown
+
+Neutral copy only
+
+🚫 Never throw, crash, or hide execution data.
+
+❌ Explicit Non-Goals (Do NOT Do These)
+
+❌ Do not change navigation
+
+❌ Do not merge tabs
+
+❌ Do not add Smartlead or personalization UX
+
+❌ Do not add new API calls
+
+❌ Do not invent execution states
+
+❌ Do not infer readiness or failure
+
+✅ Success Criteria (Must All Be True)
+
+After this work:
+
+New backend stages can be added without UI code changes
+
+The UI never misrepresents execution state
+
+Unknown stages render safely
+
+Campaign Detail remains the single lifecycle truth
+
+All behavior is observational and governance-safe
+
+📦 Deliverables
+
+Code changes committed
+
+Clear inline comments explaining guardrails
+
+No schema or backend changes
+
+No visual regressions to current stages
+
+Proceed with P0 implementation only.
+Do not extend scope without explicit approval.

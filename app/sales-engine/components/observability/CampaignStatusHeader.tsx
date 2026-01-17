@@ -21,6 +21,7 @@
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
+import { formatEt, getRelativeTime } from '../../lib/time';
 import type { CampaignGovernanceState } from '../../lib/campaign-state';
 import type { ExecutionConfidence } from '../../lib/execution-state-mapping';
 
@@ -29,6 +30,8 @@ interface CampaignStatusHeaderProps {
   governanceState: CampaignGovernanceState;
   executionConfidence?: ExecutionConfidence;
   isPlanningOnly?: boolean;
+  lastUpdatedAt?: string | null;
+  isPolling?: boolean;
 }
 
 function getGovernanceDisplay(state: CampaignGovernanceState): {
@@ -162,11 +165,15 @@ export function CampaignStatusHeader({
   governanceState,
   executionConfidence,
   isPlanningOnly = false,
+  lastUpdatedAt,
+  isPolling = false,
 }: CampaignStatusHeaderProps) {
   const governanceDisplay = getGovernanceDisplay(governanceState);
   const executionDisplay = executionConfidence
     ? getExecutionDisplay(executionConfidence)
     : null;
+
+  const isActive = executionConfidence === 'queued' || executionConfidence === 'in_progress';
 
   return (
     <div
@@ -220,12 +227,23 @@ export function CampaignStatusHeader({
             />
 
             {executionDisplay && (
-              <StatusBadge
-                label={executionDisplay.label}
-                bg={executionDisplay.bg}
-                text={executionDisplay.text}
-                border={executionDisplay.border}
-              />
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  backgroundColor: executionDisplay.bg,
+                  color: executionDisplay.text,
+                  border: `1px solid ${executionDisplay.border}`,
+                  borderRadius: NSD_RADIUS.full,
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  animation: isActive ? 'statusPulse 2s ease-in-out infinite' : undefined,
+                }}
+              >
+                {executionDisplay.label}
+              </span>
             )}
 
             {isPlanningOnly && (
@@ -242,15 +260,46 @@ export function CampaignStatusHeader({
 
         <div
           style={{
-            textAlign: 'right',
-            fontSize: '11px',
-            color: NSD_COLORS.text.muted,
-            fontStyle: 'italic',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: '4px',
           }}
         >
-          Read-only view
+          <span
+            style={{
+              fontSize: '11px',
+              color: NSD_COLORS.text.muted,
+              fontStyle: 'italic',
+            }}
+          >
+            Read-only view
+          </span>
+          {lastUpdatedAt && (
+            <span
+              style={{
+                fontSize: '10px',
+                color: isPolling ? NSD_COLORS.semantic.info.text : NSD_COLORS.text.muted,
+              }}
+              title={formatEt(lastUpdatedAt)}
+            >
+              {getRelativeTime(lastUpdatedAt)}
+              {isPolling && ' (auto-refreshing)'}
+            </span>
+          )}
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes statusPulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.7;
+          }
+        }
+      `}</style>
     </div>
   );
 }

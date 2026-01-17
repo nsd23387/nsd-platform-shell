@@ -70,6 +70,54 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
 - Consume existing `/api/v1/campaigns/:id/runs/latest` endpoint only
 
 ## Recent Changes
+- January 17, 2026: P0 UI Hardening for Future Execution Stages (Complete)
+  - Created centralized `CANONICAL_STAGE_CONFIG` in `lib/execution-stages.ts` with all 8 canonical stages
+  - Refactored `ExecutionStageTracker` to render from config array with unknown stage fallback
+    - Completion ONLY when funnelCount > 0 (no inference from runStatus alone)
+    - Unknown stages return "not_observed" even when run is completed
+  - Refactored `ActiveStageFocusPanel` to support any stage ID with neutral copy for unknown stages
+    - Exact-match stage lookup only (no substring inference)
+  - Refactored `ExecutionHealthIndicator` to be stage-agnostic (no 3-stage assumptions)
+    - Exact-match record lookup (no substring inference)
+  - Refactored `ResultsBreakdownCards` to key by stage ID, render only when backend emits data
+    - Zero-count cards render when backend emits data (explains zero outcomes)
+    - No speculative future-stage funnel IDs
+  - Added extensibility placeholder architecture to `GovernanceActionsPanel` (no new actions)
+  - All components now render unknown backend stages safely with "Additional Stage" / "Not yet observed" labels
+  - Future stages can be added to backend without UI code changes
+  - Explicit governance comments document observational-only constraints
+
+- January 16, 2026: Execution Clarity & Real-Time Observability (P0)
+  - **ExecutionStageTracker**: Vertical tracker showing org_sourcing, contact_discovery, lead_creation stages with Waiting/Running/Completed status
+  - **ActiveStageFocusPanel**: Live-updating panel answering "What is the system doing right now?" with human-readable status
+  - **ExecutionHealthIndicator**: Single sentence health line visible without scrolling (e.g., "Execution completed — contacts discovered, no promotable leads")
+  - **ResultsBreakdownCards**: Post-stage completion cards with counts and skip reasons (uses "Skipped" not "Failed")
+  - **AdvisoryCallout**: Non-blocking contextual guidance labeled as "Advisory"
+  - **PollingStatusIndicator**: Shows "Auto-refreshing every 7s" during execution, "Execution idle" when terminal
+  - Layout reorganized: Execution-first UI above the fold in Overview tab
+  - User can answer "What is happening now?" in under 3 seconds
+  - Zero leads promoted is explained without implying failure
+  - All data derived from observed backend funnel stages only (no inference)
+
+- January 16, 2026: ET Timezone + Live Execution Observability
+  - Created timezone utility (`app/sales-engine/lib/time.ts`) with DST-aware ET formatting
+  - All timestamps now display in America/New_York timezone with explicit "ET" label
+  - Added `useExecutionPolling` hook for live observability during execution
+  - Polling runs every 7 seconds while status is queued/running/in_progress
+  - Polling automatically stops on terminal states (completed, failed, etc.)
+  - Added `LastUpdatedIndicator` component showing "Last updated X seconds ago"
+  - Added pulse animation to ExecutionConfidenceBadge when execution is active
+  - Added "Refresh now" button for manual data refresh
+  - CampaignStatusHeader now shows last updated time and auto-refresh indicator
+  - FunnelSummaryWidget displays last updated timestamp in ET
+  - Consolidated polling to single useExecutionPolling mechanism
+
+- January 15, 2026: UX Enhancements for Campaign Detail Page
+  - Added CampaignScopeSummary for full ICP criteria display
+  - Added CampaignStatusHeader for above-the-fold governance and execution state
+  - Added FunnelSummaryWidget for compact pipeline funnel snapshot
+  - Added ForwardMomentumCallout for advisory guidance
+
 - January 15, 2026: Execution Timeline & Explainability UI
   - Added execution state mapping adapter with explicit backend→UI translations
   - Created ExecutionConfidenceBadge with brand-aligned status indicators

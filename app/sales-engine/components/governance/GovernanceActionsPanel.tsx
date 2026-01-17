@@ -7,6 +7,47 @@ import { Icon } from '../../../../design/components/Icon';
 import { isTestCampaign, handleTestCampaignAction } from '../../lib/test-campaign';
 import { useExecutionStatus } from '../../../../hooks/useExecutionStatus';
 
+/**
+ * GOVERNANCE EXTENSIBILITY ARCHITECTURE
+ * 
+ * This interface defines stage-aware actions for future expansion.
+ * Actions are currently limited to governance-level operations.
+ * 
+ * IMPORTANT: This is PLACEHOLDER ARCHITECTURE ONLY.
+ * DO NOT add new actions without explicit backend support.
+ * 
+ * Future stage-aware actions might include:
+ * - approve_personalization: Approve personalization batch
+ * - resolve_email_coverage: Resolve missing email coverage
+ * - connect_outbound: Connect outbound system
+ * - resume_sends: Resume paused sends
+ * 
+ * All future actions must:
+ * 1. Have backend API support
+ * 2. Be observational until backend confirms capability
+ * 3. Not invent new execution semantics
+ */
+export interface StageAction {
+  readonly id: string;
+  readonly stageId: string | null;
+  readonly label: string;
+  readonly description: string;
+  readonly enabled: boolean;
+  readonly visible: boolean;
+}
+
+/**
+ * Check if a stage-specific action is available
+ * 
+ * GOVERNANCE CONSTRAINT:
+ * This function returns false for all future stage actions.
+ * Actions are only enabled when backend explicitly supports them.
+ */
+function isStageActionAvailable(actionId: string, stageId: string | null): boolean {
+  const currentSupportedActions = ['submit', 'approve', 'run'];
+  return currentSupportedActions.includes(actionId);
+}
+
 interface GovernanceActionsPanelProps {
   campaignId: string;
   governanceState: string;
@@ -17,6 +58,8 @@ interface GovernanceActionsPanelProps {
   runsCount?: number;
   /** If true, this is a planning-only campaign that cannot be executed */
   isPlanningOnly?: boolean;
+  /** Current execution phase (for future stage-aware actions) */
+  currentPhase?: string | null;
 }
 
 /**
@@ -24,6 +67,12 @@ interface GovernanceActionsPanelProps {
  * 
  * Displays action buttons for campaign management.
  * Actions execute immediately when clicked.
+ * 
+ * GOVERNANCE CONSTRAINTS (CRITICAL):
+ * - This component is PRESENTATIONAL ONLY for future stage actions.
+ * - Current actions: submit, approve, run
+ * - Future stage actions are HIDDEN until backend support exists.
+ * - DO NOT add new action buttons without explicit backend API.
  * 
  * NOTE: Execution is proxied through /api/execute-campaign
  * to avoid CORS issues. platform-shell never executes campaigns directly.
