@@ -3,25 +3,35 @@
 /**
  * ExecutionStageTracker Component
  * 
- * A vertical stage tracker showing the canonical execution stages:
- * - Organizations Sourced (org_sourcing)
- * - Contacts Discovered (contact_discovery)  
- * - Leads Promoted (lead_creation)
+ * A vertical stage tracker showing the canonical execution stages.
  * 
- * GOVERNANCE CONSTRAINTS:
- * - Status derived from campaign_runs.phase and funnel data
- * - Only show Waiting/Running/Completed (no Failed per-stage)
- * - Read-only display
- * - No inference by time
+ * GOVERNANCE CONSTRAINTS (CRITICAL):
+ * - This component is PRESENTATIONAL ONLY. It does NOT define execution semantics.
+ * - Status is derived ONLY from campaign_runs.phase and funnel data.
+ * - The UI must NEVER infer execution state. It renders what the backend has emitted.
+ * - If the backend has not emitted data for a stage → render "Not yet observed"
+ * - Unknown stage IDs from backend must render safely (see fallback rules)
  * 
- * Each stage shows status and optional count when completed.
+ * Stage status rules:
+ * - completed: ONLY when backend has emitted data for this stage
+ * - running: ONLY when campaign_runs.phase === stage.id
+ * - waiting: No data observed, not current phase
+ * - not_observed: Stage exists in config but no backend data received
  */
 
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
-import type { ObservabilityFunnel, PipelineStage } from '../../types/campaign';
+import {
+  CANONICAL_STAGE_CONFIG,
+  getStageConfig as getCentralStageConfig,
+  getStageIndex,
+  isFutureStage,
+  type CanonicalStageConfig,
+  type StageRenderStatus,
+} from '../../lib/execution-stages';
+import type { ObservabilityFunnel } from '../../types/campaign';
 
-export type StageStatus = 'waiting' | 'running' | 'completed';
+export type StageStatus = 'waiting' | 'running' | 'completed' | 'not_observed';
 
 export interface ExecutionStage {
   id: string;
@@ -30,6 +40,7 @@ export interface ExecutionStage {
   status: StageStatus;
   count?: number;
   countLabel?: string;
+  isFuture: boolean;
 }
 
 interface ExecutionStageTrackerProps {
@@ -37,17 +48,34 @@ interface ExecutionStageTrackerProps {
   runPhase: string | null;
   funnel: ObservabilityFunnel | null;
   noRuns: boolean;
+  showFutureStages?: boolean;
 }
 
-const STAGE_ORDER = ['org_sourcing', 'contact_discovery', 'lead_creation'] as const;
-
+/**
+ * Derive stage status from backend data
+ * 
+ * GOVERNANCE CONSTRAINT (CRITICAL):
+ * This function must ONLY use explicit backend signals.
+ * No heuristics, guesses, or derived states.
+ * 
+ * Rules:
+ * - completed: ONLY when funnelCount > 0 (explicit data exists)
+ * - running: ONLY when campaign_runs.phase === stage.id (exact match)
+ * - waiting: When run exists but no data for this stage yet
+ * - not_observed: When stage has no data and is not current phase
+ * 
+ * No ordering-based inference. Completion is determined by data presence only.
+ */
 function deriveStageStatus(
-  stageId: string,
+  stageConfig: CanonicalStageConfig,
   runStatus: string | null,
   runPhase: string | null,
   funnel: ObservabilityFunnel | null,
   noRuns: boolean
 ): { status: StageStatus; count?: number } {
+  const stageId = stageConfig.id;
+  const funnelStageId = stageConfig.funnelStageId;
+
   if (noRuns || !runStatus) {
     return { status: 'waiting' };
   }
@@ -55,49 +83,25 @@ function deriveStageStatus(
   const normalizedStatus = runStatus?.toLowerCase() || '';
   const normalizedPhase = runPhase?.toLowerCase() || '';
 
-  const stageIndex = STAGE_ORDER.indexOf(stageId as typeof STAGE_ORDER[number]);
-  
-  const currentPhaseIndex = STAGE_ORDER.findIndex(
-    (s) => s === normalizedPhase || normalizedPhase.includes(s)
-  );
+  const funnelCount = funnelStageId
+    ? funnel?.stages?.find((s) => s.stage === funnelStageId)?.count
+    : undefined;
 
-  const funnelStageMap: Record<string, string> = {
-    org_sourcing: 'orgs_sourced',
-    contact_discovery: 'contacts_discovered',
-    lead_creation: 'leads_promoted',
-  };
+  const hasData = funnelCount !== undefined && funnelCount > 0;
 
-  const funnelCount = funnel?.stages?.find(
-    (s) => s.stage === funnelStageMap[stageId]
-  )?.count;
-
-  if (normalizedStatus === 'completed' || normalizedStatus === 'success' || normalizedStatus === 'succeeded') {
+  if (hasData) {
     return { status: 'completed', count: funnelCount };
   }
 
-  if (normalizedStatus === 'failed' || normalizedStatus === 'error') {
-    if (currentPhaseIndex >= 0 && stageIndex < currentPhaseIndex) {
-      return { status: 'completed', count: funnelCount };
-    }
-    if (stageIndex === currentPhaseIndex) {
-      return { status: 'completed', count: funnelCount };
-    }
-    return { status: 'waiting' };
+  if (normalizedPhase === stageId) {
+    return { status: 'running' };
+  }
+
+  if (normalizedStatus === 'completed' || normalizedStatus === 'success' || normalizedStatus === 'succeeded') {
+    return { status: 'not_observed' };
   }
 
   if (normalizedStatus === 'running' || normalizedStatus === 'in_progress') {
-    if (currentPhaseIndex >= 0) {
-      if (stageIndex < currentPhaseIndex) {
-        return { status: 'completed', count: funnelCount };
-      }
-      if (stageIndex === currentPhaseIndex) {
-        return { status: 'running' };
-      }
-      return { status: 'waiting' };
-    }
-    if (stageIndex === 0) {
-      return { status: 'running' };
-    }
     return { status: 'waiting' };
   }
 
@@ -105,41 +109,16 @@ function deriveStageStatus(
     return { status: 'waiting' };
   }
 
+  if (normalizedStatus === 'failed' || normalizedStatus === 'error') {
+    return { status: 'waiting' };
+  }
+
   return { status: 'waiting' };
 }
 
-function getStageConfig(stageId: string): { label: string; sublabel: string; countLabel: string } {
-  switch (stageId) {
-    case 'org_sourcing':
-      return {
-        label: 'Organizations Identified',
-        sublabel: 'Sourcing organizations based on ICP',
-        countLabel: 'organizations sourced',
-      };
-    case 'contact_discovery':
-      return {
-        label: 'Contacts Discovered',
-        sublabel: 'Scanning organizations for contacts',
-        countLabel: 'contacts discovered',
-      };
-    case 'lead_creation':
-      return {
-        label: 'Leads Promoted',
-        sublabel: 'Qualifying contacts for lead promotion',
-        countLabel: 'leads promoted',
-      };
-    default:
-      return {
-        label: stageId,
-        sublabel: '',
-        countLabel: 'items',
-      };
-  }
-}
-
-function StageIndicator({ status }: { status: StageStatus }) {
+function StageIndicator({ status, isFuture }: { status: StageStatus; isFuture: boolean }) {
   const size = 24;
-  
+
   if (status === 'completed') {
     return (
       <div
@@ -196,6 +175,25 @@ function StageIndicator({ status }: { status: StageStatus }) {
     );
   }
 
+  if (status === 'not_observed') {
+    return (
+      <div
+        style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          backgroundColor: NSD_COLORS.surface,
+          border: `2px dashed ${NSD_COLORS.border.default}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          opacity: 0.6,
+        }}
+      />
+    );
+  }
+
   return (
     <div
       style={{
@@ -216,33 +214,47 @@ function StageIndicator({ status }: { status: StageStatus }) {
 function StageRow({
   stage,
   isLast,
+  nextStatus,
 }: {
   stage: ExecutionStage;
   isLast: boolean;
+  nextStatus?: StageStatus;
 }) {
-  const config = getStageConfig(stage.id);
-  
-  const statusLabel = 
-    stage.status === 'completed' && stage.count !== undefined
-      ? `${stage.count.toLocaleString()} ${config.countLabel}`
-      : stage.status === 'running'
-      ? config.sublabel
-      : 'Pending';
+  const getStatusLabel = (): string => {
+    if (stage.status === 'completed' && stage.count !== undefined) {
+      return `${stage.count.toLocaleString()} ${stage.countLabel || 'items'}`;
+    }
+    if (stage.status === 'running') {
+      return stage.sublabel;
+    }
+    if (stage.status === 'not_observed') {
+      return 'Not yet observed';
+    }
+    return 'Pending';
+  };
+
+  const getConnectorColor = (): string => {
+    if (stage.status === 'completed') {
+      return NSD_COLORS.semantic.positive.text;
+    }
+    if (stage.isFuture || stage.status === 'not_observed') {
+      return NSD_COLORS.border.light;
+    }
+    return NSD_COLORS.border.light;
+  };
 
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <StageIndicator status={stage.status} />
+        <StageIndicator status={stage.status} isFuture={stage.isFuture} />
         {!isLast && (
           <div
             style={{
               width: 2,
               height: 32,
-              backgroundColor:
-                stage.status === 'completed'
-                  ? NSD_COLORS.semantic.positive.text
-                  : NSD_COLORS.border.light,
+              backgroundColor: getConnectorColor(),
               marginTop: 4,
+              borderStyle: stage.isFuture ? 'dashed' : 'solid',
             }}
           />
         )}
@@ -258,11 +270,27 @@ function StageRow({
                 ? NSD_COLORS.text.primary
                 : stage.status === 'running'
                 ? NSD_COLORS.secondary
+                : stage.status === 'not_observed'
+                ? NSD_COLORS.text.muted
                 : NSD_COLORS.text.muted,
             marginBottom: 2,
+            opacity: stage.isFuture && stage.status !== 'completed' ? 0.7 : 1,
           }}
         >
-          {config.label}
+          {stage.label}
+          {stage.isFuture && stage.status !== 'completed' && (
+            <span
+              style={{
+                marginLeft: '8px',
+                fontSize: '11px',
+                fontWeight: 400,
+                color: NSD_COLORS.text.muted,
+                fontStyle: 'italic',
+              }}
+            >
+              (future)
+            </span>
+          )}
         </div>
         <div
           style={{
@@ -272,14 +300,34 @@ function StageRow({
               stage.status === 'running'
                 ? NSD_COLORS.secondary
                 : NSD_COLORS.text.muted,
-            fontStyle: stage.status === 'waiting' ? 'italic' : 'normal',
+            fontStyle: stage.status === 'waiting' || stage.status === 'not_observed' ? 'italic' : 'normal',
+            opacity: stage.isFuture && stage.status !== 'completed' ? 0.7 : 1,
           }}
         >
-          {statusLabel}
+          {getStatusLabel()}
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Handle unknown stages from backend
+ * 
+ * GOVERNANCE CONSTRAINT:
+ * If the backend emits a stage ID not in CANONICAL_STAGE_CONFIG,
+ * render it safely with neutral presentation.
+ */
+function createUnknownStage(stageId: string, count?: number): ExecutionStage {
+  return {
+    id: stageId,
+    label: 'Additional Stage',
+    sublabel: 'Stage data observed from backend',
+    status: count !== undefined ? 'completed' : 'waiting',
+    count,
+    countLabel: 'items processed',
+    isFuture: false,
+  };
 }
 
 export function ExecutionStageTracker({
@@ -287,19 +335,43 @@ export function ExecutionStageTracker({
   runPhase,
   funnel,
   noRuns,
+  showFutureStages = false,
 }: ExecutionStageTrackerProps) {
-  const stages: ExecutionStage[] = STAGE_ORDER.map((stageId) => {
-    const { status, count } = deriveStageStatus(stageId, runStatus, runPhase, funnel, noRuns);
-    const config = getStageConfig(stageId);
+  const configToUse = showFutureStages
+    ? CANONICAL_STAGE_CONFIG
+    : CANONICAL_STAGE_CONFIG.filter((s) => !isFutureStage(s.id));
+
+  const stages: ExecutionStage[] = configToUse.map((stageConfig) => {
+    const { status, count } = deriveStageStatus(stageConfig, runStatus, runPhase, funnel, noRuns);
     return {
-      id: stageId,
-      label: config.label,
-      sublabel: config.sublabel,
-      countLabel: config.countLabel,
+      id: stageConfig.id,
+      label: stageConfig.label,
+      sublabel: stageConfig.sublabel,
+      countLabel: stageConfig.countLabel,
       status,
       count,
+      isFuture: isFutureStage(stageConfig.id),
     };
   });
+
+  const unknownStages: ExecutionStage[] = [];
+  if (funnel?.stages) {
+    const knownFunnelIds = new Set(
+      CANONICAL_STAGE_CONFIG.map((s) => s.funnelStageId).filter(Boolean)
+    );
+    
+    funnel.stages.forEach((funnelStage) => {
+      if (!knownFunnelIds.has(funnelStage.stage)) {
+        unknownStages.push(createUnknownStage(funnelStage.stage, funnelStage.count));
+      }
+    });
+  }
+
+  const allStages = [...stages, ...unknownStages];
+
+  if (allStages.length === 0) {
+    return null;
+  }
 
   return (
     <div
@@ -343,8 +415,13 @@ export function ExecutionStageTracker({
       </div>
 
       <div>
-        {stages.map((stage, index) => (
-          <StageRow key={stage.id} stage={stage} isLast={index === stages.length - 1} />
+        {allStages.map((stage, index) => (
+          <StageRow
+            key={stage.id}
+            stage={stage}
+            isLast={index === allStages.length - 1}
+            nextStatus={allStages[index + 1]?.status}
+          />
         ))}
       </div>
 

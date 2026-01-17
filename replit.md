@@ -68,6 +68,17 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
 - Consume existing `/api/v1/campaigns/:id/runs/latest` endpoint only
 
 ## Recent Changes
+- January 17, 2026: P0 UI Hardening for Future Execution Stages
+  - Created centralized `CANONICAL_STAGE_CONFIG` in `lib/execution-stages.ts` with all 8 canonical stages
+  - Refactored `ExecutionStageTracker` to render from config array with unknown stage fallback
+  - Refactored `ActiveStageFocusPanel` to support any stage ID with neutral copy for unknown stages
+  - Refactored `ExecutionHealthIndicator` to be stage-agnostic (no 3-stage assumptions)
+  - Refactored `ResultsBreakdownCards` to key by stage ID, render only when backend emits data
+  - Added extensibility placeholder architecture to `GovernanceActionsPanel` (no new actions)
+  - All components now render unknown backend stages safely with "Additional Stage" / "Not yet observed" labels
+  - Future stages can be added to backend without UI code changes
+  - Explicit governance comments document observational-only constraints
+
 - January 16, 2026: Execution Clarity & Real-Time Observability (P0)
   - **ExecutionStageTracker**: Vertical tracker showing org_sourcing, contact_discovery, lead_creation stages with Waiting/Running/Completed status
   - **ActiveStageFocusPanel**: Live-updating panel answering "What is the system doing right now?" with human-readable status
