@@ -1,0 +1,179 @@
+🔧 Replit Patch Prompt — Canonical Run State Reconciliation (P0)
+
+Objective
+Fix the Campaign Detail UI so it tells an accurate, transparent story that strictly reflects the authoritative execution state from campaign_runs.
+
+The UI must never imply that a campaign is running, queued, or being cleaned up when no such run exists in the database.
+
+🚨 Problem Statement
+
+The UI currently displays misleading states such as:
+
+“Queued — execution will start shortly”
+
+“Previous execution is being cleaned up”
+
+“Awaiting system cleanup”
+
+Even when all runs in public.campaign_runs are terminal (failed).
+
+This occurs because the UI:
+
+Over-weights historical ODS / activity events
+
+Does not reconcile them against the authoritative campaign_runs.status
+
+This violates the execution contract:
+
+campaign_runs is canonical
+
+ODS events are descriptive only
+
+✅ Required Behavioral Rules (Must Enforce)
+
+Single Source of Truth
+
+campaign_runs.status is authoritative for execution state
+
+ODS events may provide context, but NEVER override run status
+
+No Active Run Means No Execution UI
+If the most recent run has status:
+
+failed
+
+completed
+
+skipped
+
+Then the UI MUST:
+
+Show “No active execution”
+
+Show last run outcome (e.g. “Last run failed on Jan 17”)
+
+NOT show:
+
+Queued
+
+Running
+
+Cleaning up
+
+Awaiting system cleanup
+
+Stale Messaging Guardrail
+“Stale / being cleaned up” messaging is ONLY allowed if:
+
+campaign_runs.status = 'running'
+
+AND now() - started_at > 30 minutes
+
+If status ≠ running, stale messaging is forbidden.
+
+Queued Messaging Guardrail
+“Queued — execution will start shortly” is ONLY allowed if:
+
+campaign_runs.status = 'queued'
+
+Never infer queued state from events.
+
+🛠️ Implementation Requirements
+1. Centralize Canonical Run Resolution
+
+Create or update a single helper (if not already present):
+
+resolveCanonicalRunState(run)
+
+
+This function must:
+
+Take the latest campaign_runs row
+
+Return a normalized state:
+
+idle
+
+queued
+
+running
+
+failed
+
+completed
+
+skipped
+
+No component may compute execution state independently.
+
+2. Update UI Components to Respect Canonical State
+
+Update the following components to rely ONLY on canonical state:
+
+ExecutionStatusCard
+
+LatestRunStatus
+
+ExecutionSummary
+
+ExecutionTimeline
+
+ExecutionHealthIndicator
+
+ActiveStageFocusPanel
+
+Explicitly remove logic that:
+
+Infers state from ODS events alone
+
+Shows “cleanup” when no running run exists
+
+3. Correct Messaging Matrix (Mandatory)
+Canonical Status	UI Message
+failed	“Last execution failed”
+completed	“Last execution completed successfully”
+skipped	“Execution skipped (planning only)”
+none / no runs	“No execution has run yet”
+queued	“Execution queued”
+running (<30m)	“Execution in progress”
+running (>30m)	“Execution stalled — system will mark failed”
+
+No other combinations are allowed.
+
+🧪 Verification Steps (Must Pass)
+
+After implementation, verify using this scenario:
+
+Given
+
+SELECT status FROM public.campaign_runs;
+-- returns only 'failed'
+
+
+Then the UI must show
+
+No queued state
+
+No cleanup state
+
+No running indicators
+
+Clear message: “Last execution failed”
+
+⛔ Explicit Non-Goals
+
+Do NOT modify backend execution logic
+
+Do NOT add retries or resurrection logic
+
+Do NOT change schema
+
+Do NOT suppress historical run visibility
+
+Do NOT infer future execution from past events
+
+✅ Completion Criteria
+
+State explicitly when done:
+
+“The Campaign Detail UI now reflects canonical execution state exclusively from campaign_runs. No stale, queued, or cleanup messaging appears unless an active run truly exists.”
