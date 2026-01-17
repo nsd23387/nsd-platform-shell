@@ -1,5 +1,7 @@
 # M67 Sales Engine UI
 
+> **M68-01: Preview runtime flag validation branch.**
+
 ## Overview
 The Sales Engine UI is a governed, read-only interface for campaign observability and approval. Its primary purpose is to provide situational awareness regarding campaign lifecycles, readiness, and outcomes by observing M60 Campaign Management APIs. This UI explicitly does not initiate execution, approval, sourcing, or governance transitions, as all state changes occur in backend systems. A single exception allows for campaign creation (POST /campaign-create), where campaigns are initialized in a `DRAFT` governance state without any execution or sourcing capabilities from this flow. The project adheres to a governance-first architecture, prioritizing truthfulness, explicit handling of `UNKNOWN` states, and avoiding implied autonomy or UI-initiated mutations.
 
