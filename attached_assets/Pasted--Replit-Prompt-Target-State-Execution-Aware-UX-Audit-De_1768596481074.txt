@@ -1,0 +1,205 @@
+✅ Replit Prompt — Target-State Execution-Aware UX Audit & Design Plan (UI-Only, No Implementation Yet)
+
+You are working in the nsd-platform-shell repository (frontend UI only).
+
+This task is UX and information-architecture planning only.
+Do NOT implement code changes yet.
+Your output should be a design-level recommendation and task plan for approval.
+
+Context (Authoritative)
+
+The system follows a governed, stage-based execution architecture.
+Campaigns progress through a multi-stage lifecycle, some of which are already implemented and some planned.
+
+Canonical Execution Stages (Authoritative)
+
+Assume the campaign lifecycle includes the following ordered stages, even if some are not yet live:
+
+org_sourcing
+
+contact_discovery
+
+lead_qualification (promotion)
+
+email_readiness (email present / enrichment pending)
+
+personalization_generation
+
+outbound_activation (e.g., Smartlead connection)
+
+send_in_progress
+
+send_completed
+
+Important constraints:
+
+The UI is observational only
+
+The UI must not invent backend state
+
+Some stages may not yet emit events — design must still anticipate them
+
+Canonical truth always comes from observed backend data and ODS events
+
+Objective
+
+Re-evaluate the entire frontend UX assuming the full execution lifecycle above will exist.
+
+Your task is to ensure the UI:
+
+Scales cleanly as new execution stages come online
+
+Avoids future navigation or layout rework
+
+Clearly communicates where a campaign is in the full lifecycle
+
+Makes it obvious what action (if any) is required next
+
+Preserves governance and non-prescriptive semantics
+
+What To Analyze
+1. Global Navigation
+
+Assess whether current navigation will still make sense once stages like:
+
+personalization
+
+outbound activation
+
+sending
+are visible.
+
+Identify:
+
+Which views become redundant
+
+Which views should be lifecycle-oriented (not page-oriented)
+
+Whether navigation labels remain accurate over time
+
+⚠️ Do NOT rename or merge pages yet — only recommend.
+
+2. Campaign Detail Page (Critical)
+
+Assume the Campaign Detail page must eventually tell a complete execution story from sourcing → sending.
+
+Evaluate:
+
+Whether the current execution-first layout can naturally extend past lead promotion
+
+Where future stages would appear visually
+
+Whether stage tracking should remain vertical, horizontal, or hybrid
+
+How to show:
+
+“Waiting on email readiness”
+
+“Personalization not yet generated”
+
+“Outbound not connected”
+
+“Sending in progress”
+
+Design goal:
+
+A user should understand the entire lifecycle of a campaign by scrolling one page.
+
+3. Actions Required Model
+
+Assess how approvals and actions should evolve once actions become stage-specific, not campaign-wide.
+
+Examples:
+
+Approve personalization batch
+
+Resolve missing email coverage
+
+Connect outbound system
+
+Resume paused sends
+
+Evaluate:
+
+Whether “Actions Required” should remain a page, list, or overlay
+
+How actions map to stages
+
+How to avoid action duplication across pages
+
+4. Observability vs Explanation
+
+Ensure future stages do not overload the UI.
+
+Assess:
+
+What belongs “above the fold”
+
+What should be collapsible
+
+What should remain advisory vs authoritative
+
+How to avoid overwhelming users as stages increase
+
+5. Guardrails (Non-Negotiable)
+
+Your recommendations MUST follow these rules:
+
+❌ Do not invent new backend states or fields
+
+❌ Do not assume Smartlead or personalization is live
+
+❌ Do not suggest heuristic or inferred execution
+
+✅ All future stages are observational placeholders only
+
+✅ Canonical execution truth remains unchanged
+
+✅ UI remains non-blocking and non-prescriptive
+
+Deliverables
+
+Produce only the following (no code):
+
+UX Risk Assessment
+
+Where current UI will break or become confusing as stages expand
+
+Future-Safe UI Model
+
+How navigation, campaign detail, and actions should evolve
+
+Explicitly show how later stages fit without redesign
+
+Recommended Changes (Categorized)
+
+P0: Must adjust now to avoid rework
+
+P1: Safe to defer
+
+P2: Optional / enhancement
+
+Explicit Non-Recommendations
+
+Clearly list what should not be changed yet and why
+
+Execution Readiness Check
+
+Confirm whether current UI is “safe to proceed” with backend expansion
+
+Success Criteria
+
+This output should allow us to:
+
+Confidently proceed with backend execution expansion
+
+Avoid future UI rewrites
+
+Maintain execution clarity across all lifecycle stages
+
+Keep the UI fast, neutral, and governance-aligned
+
+❗ Important
+
+This is a design and planning exercise only.
+Wait for explicit approval before implementing anything.
