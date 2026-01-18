@@ -25,6 +25,10 @@ export interface LatestRun {
   execution_mode?: string;
   created_at?: string;
   updated_at?: string;
+  // Terminal metadata (optional) - emitted by backend on terminal runs
+  error_message?: string | null;
+  failure_reason?: string | null;
+  reason?: string | null;
 }
 
 type LatestRunApiResponse =
@@ -75,6 +79,10 @@ function normalizeLatestRunResponse(data: unknown): { noRuns: boolean; run: Late
         execution_mode: getString(r.execution_mode),
         created_at: getString(r.created_at),
         updated_at: getString(r.updated_at),
+        // Terminal metadata (passthrough from backend)
+        error_message: getString(r.error_message) ?? null,
+        failure_reason: getString(r.failure_reason) ?? null,
+        reason: getString(r.reason) ?? null,
       },
     };
   }
@@ -83,11 +91,15 @@ function normalizeLatestRunResponse(data: unknown): { noRuns: boolean; run: Late
   return {
     noRuns: false,
     run: {
-      run_id: getString((payload as any).run_id),
+      run_id: getString((payload as Record<string, unknown>).run_id),
       status,
-      execution_mode: getString((payload as any).execution_mode),
-      created_at: getString((payload as any).created_at),
-      updated_at: getString((payload as any).updated_at),
+      execution_mode: getString((payload as Record<string, unknown>).execution_mode),
+      created_at: getString((payload as Record<string, unknown>).created_at),
+      updated_at: getString((payload as Record<string, unknown>).updated_at),
+      // Terminal metadata (passthrough from backend)
+      error_message: getString((payload as Record<string, unknown>).error_message) ?? null,
+      failure_reason: getString((payload as Record<string, unknown>).failure_reason) ?? null,
+      reason: getString((payload as Record<string, unknown>).reason) ?? null,
     },
   };
 }

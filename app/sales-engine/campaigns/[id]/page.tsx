@@ -632,9 +632,9 @@ function OverviewTab({
               status: latestRun.status?.toLowerCase(),
               created_at: latestRun.started_at,
               updated_at: latestRun.completed_at,
-              error_message: (latestRun as any).error_message,
-              failure_reason: (latestRun as any).failure_reason,
-              reason: (latestRun as any).reason,
+              error_message: latestRun.error_message ?? null,
+              failure_reason: latestRun.failure_reason ?? null,
+              reason: latestRun.reason ?? null,
             } : null}
             funnel={observabilityFunnel}
             noRuns={noRuns}
