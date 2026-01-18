@@ -56,3 +56,6 @@ export { ExecutionHealthIndicator } from './ExecutionHealthIndicator';
 export { ResultsBreakdownCards } from './ResultsBreakdownCards';
 export { AdvisoryCallout } from './AdvisoryCallout';
 export { PollingStatusIndicator } from './PollingStatusIndicator';
+
+export { ExecutionNarrativeCard } from './ExecutionNarrativeCard';
+export type { ExecutionNarrativeCardProps } from './ExecutionNarrativeCard';
