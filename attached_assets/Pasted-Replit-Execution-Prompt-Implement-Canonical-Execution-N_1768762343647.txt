@@ -1,0 +1,242 @@
+Replit Execution Prompt — Implement Canonical Execution Narrative Mapper (Frontend)
+Objective
+
+Implement a Canonical Execution Narrative Mapper (ENM) in the frontend to ensure the UI presents a truthful, event-driven execution story based solely on backend-authoritative data.
+
+The frontend must stop inferring execution state from partial data (counts, timers, heuristics) and instead project execution truth from campaign_runs + activity.events.
+
+Scope (Strict)
+
+✅ Frontend only
+✅ Read-only
+✅ Observability-driven
+❌ No backend changes
+❌ No schema changes
+❌ No execution semantics changes
+
+Authoritative Inputs (MANDATORY)
+
+The ENM may only consume:
+
+1. campaign_runs (authoritative state)
+
+id
+
+status (queued | running | completed | failed | skipped)
+
+started_at
+
+completed_at
+
+failure_reason
+
+termination_reason
+
+execution_mode
+
+2. activity.events (observability spine)
+
+Filter to:
+
+run.started
+
+run.completed
+
+stage.boundary
+
+run.failure.context
+
+🚫 Do NOT infer state from:
+
+funnel counts alone
+
+missing events
+
+local timers
+
+UI heuristics
+
+Deliverable 1 — Execution Narrative Mapper (Core)
+
+Create a pure function:
+
+mapExecutionNarrative(
+  runs: CampaignRun[],
+  events: ActivityEvent[]
+): ExecutionNarrative
+
+Output shape (exact)
+type ExecutionNarrative = {
+  mode: 'idle' | 'queued' | 'running' | 'terminal'
+  headline: string
+  subheadline?: string
+  stage?: {
+    name: string
+    status: 'pending' | 'active' | 'completed'
+    details?: Record<string, any>
+  }
+  lastEventAt?: string
+  terminal?: {
+    status: 'completed' | 'failed' | 'skipped'
+    reason?: string
+    completedAt: string
+  }
+  trustNote?: string
+}
+
+Deliverable 2 — Canonical Mapping Rules (Must Implement Exactly)
+IDLE
+
+Condition:
+
+No campaign_runs exist
+
+Mode: idle
+Headline: No execution has run yet
+
+QUEUED
+
+Condition:
+
+Latest run status = queued
+
+No run.started event exists
+
+Mode: queued
+Headline: Execution queued
+Subheadline: The system will begin processing shortly.
+
+RUNNING
+
+Condition:
+
+run.started exists
+
+No terminal state
+
+Use latest stage.boundary to determine progress
+
+Rules:
+
+Active stage = most recent stage.boundary:start without a later complete
+
+Do NOT say “no results” while running
+
+Example:
+
+Mode: running
+Headline: Execution in progress
+Subheadline: Processing campaign stages.
+Stage:
+  Name: Organization Sourcing
+  Status: active
+  Details: Apollo search completed — 55 organizations discovered
+
+STALLED (Special Running State)
+
+Condition:
+
+status = running
+
+now − started_at > watchdog threshold
+
+no recent stage.boundary
+
+Headline: Execution stalled
+Subheadline: The system will automatically mark this execution failed if it does not progress.
+
+
+⚠️ This is NOT failure
+⚠️ This is NOT idle
+
+COMPLETED
+
+Condition:
+
+run.completed exists
+
+status = completed
+
+With results:
+Headline: Execution completed successfully
+
+With zero results (ONLY if org_sourcing:complete AND orgsFound = 0):
+Headline: Execution completed — no matching organizations
+Subheadline: No organizations matched the current ICP criteria.
+
+FAILED
+
+Condition:
+
+status = failed
+
+Headline: Execution failed
+Subheadline: The last execution did not complete successfully.
+
+
+If run.failure.context exists → surface details.
+
+Deliverable 3 — Hard UI Rules (Non-Negotiable)
+
+The frontend MUST NEVER:
+
+❌ Show “No organizations found” while execution is running
+❌ Show “Execution idle” if run.started exists
+❌ Show “Not yet executed” if any run exists
+❌ Infer execution state from funnel counts alone
+
+Deliverable 4 — Frontend Integration
+
+Replace all execution-related UI messaging with ENM output in:
+
+Execution Status card
+
+Execution Summary
+
+Execution Timeline
+
+Stage Tracker
+
+Advisory banners
+
+Run History status labels
+
+All of the above must consume only ExecutionNarrative.
+
+Deliverable 5 — Trust Accelerator Copy
+
+When showing historical data:
+
+“The system is idle. You are viewing historical execution data.”
+
+
+When running:
+
+“Counts update as stages complete. Some results may not be visible yet.”
+
+Acceptance Criteria
+
+✅ UI reflects Apollo org search progress when events exist
+✅ UI never contradicts backend events
+✅ Duplicate campaigns do not confuse execution state
+✅ Long-running executions are visible and understandable
+✅ Frontend becomes event-driven, not heuristic-driven
+
+Implementation Notes
+
+ENM must be deterministic and testable
+
+Prefer newest run by created_at
+
+Prefer newest event by created_at
+
+Do not mutate or enrich backend data
+
+Log ENM output during QA for verification
+
+Final Instruction
+
+Implement the Execution Narrative Mapper exactly as specified.
+Do not introduce new interpretations, fallbacks, or inferred states.
+
+The goal is truthful projection, not optimistic UX.
