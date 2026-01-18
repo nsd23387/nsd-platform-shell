@@ -1,8 +1,8 @@
 /**
- * SEO Intelligence - Impact Summary Component
+ * SEO Intelligence - Impact Summary Component (v1)
  * 
  * Displays expected impact assessment for a recommendation.
- * Helps prioritize which recommendations to review first.
+ * Aligned with canonical AI recommendation schema.
  * 
  * GOVERNANCE:
  * - Display-only component
@@ -29,24 +29,18 @@ import {
   fontWeight,
 } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
-import type { ImpactLevel } from '../../../lib/seo/types';
-import { formatImpactLevel } from '../../../lib/seo/formatters';
+import type { ExpectedImpact, RiskLevel, RiskAssessment } from '../../../lib/seo/types';
+import { formatRiskLevel, formatPrimarySuccessMetric } from '../../../lib/seo/formatters';
 
 // ============================================
 // Types
 // ============================================
 
 export interface ImpactSummaryProps {
-  /** Impact level */
-  impact: ImpactLevel;
-  /** Optional description of expected impact */
-  description?: string;
-  /** Expected metrics changes */
-  metrics?: {
-    traffic?: string;
-    ranking?: string;
-    ctr?: string;
-  };
+  /** Expected impact data */
+  impact: ExpectedImpact;
+  /** Risk assessment (optional, for combined view) */
+  risk?: RiskAssessment;
   /** Display variant */
   variant?: 'badge' | 'card' | 'inline';
 }
@@ -58,34 +52,37 @@ export interface ImpactSummaryProps {
 /**
  * Impact Summary - shows expected recommendation impact.
  * 
- * Impact levels:
- * - Critical: Urgent, significant business impact
- * - High: Important, measurable improvement expected
- * - Medium: Moderate improvement expected
- * - Low: Minor optimization
+ * Displays business-first impact estimates:
+ * - SEO metrics (CTR, ranking, impressions)
+ * - Conversion metrics (quote starts, conversion rate)
+ * - Revenue metrics (revenue per session, monthly revenue)
  * 
  * This component displays actual assessments without manipulation.
  */
 export function ImpactSummary({
   impact,
-  description,
-  metrics,
-  variant = 'badge',
+  risk,
+  variant = 'card',
 }: ImpactSummaryProps) {
-  const impactStyle = getImpactStyle(impact);
+  const primaryMetric = impact.primary_success_metric;
+  const riskStyle = risk ? getRiskStyle(risk.level) : null;
 
   if (variant === 'badge') {
     return (
       <span
         style={{
           ...badgeStyles,
-          backgroundColor: impactStyle.bg,
-          color: impactStyle.text,
-          borderColor: impactStyle.border,
+          backgroundColor: riskStyle?.bg ?? background.muted,
+          color: riskStyle?.text ?? text.muted,
+          borderColor: riskStyle?.border ?? text.muted,
         }}
-        title={description}
       >
-        {getImpactIcon(impact)} {formatImpactLevel(impact)}
+        {primaryMetric && (
+          <>
+            {getMetricIcon(primaryMetric)} {formatPrimarySuccessMetric(primaryMetric)}
+          </>
+        )}
+        {!primaryMetric && 'Impact not specified'}
       </span>
     );
   }
@@ -93,17 +90,18 @@ export function ImpactSummary({
   if (variant === 'inline') {
     return (
       <span style={inlineStyles}>
-        <span
-          style={{
-            ...dotStyles,
-            backgroundColor: impactStyle.text,
-          }}
-        />
-        <span style={{ color: impactStyle.text, fontWeight: fontWeight.medium }}>
-          {formatImpactLevel(impact)}
-        </span>
-        {description && (
-          <span style={inlineDescStyles}>— {description}</span>
+        {primaryMetric && (
+          <>
+            <span
+              style={{
+                ...dotStyles,
+                backgroundColor: riskStyle?.text ?? text.muted,
+              }}
+            />
+            <span style={{ color: riskStyle?.text, fontWeight: fontWeight.medium }}>
+              {formatPrimarySuccessMetric(primaryMetric)}
+            </span>
+          </>
         )}
       </span>
     );
@@ -114,53 +112,93 @@ export function ImpactSummary({
     <div
       style={{
         ...cardStyles,
-        borderLeftColor: impactStyle.text,
+        borderLeftColor: riskStyle?.text ?? text.muted,
       }}
     >
       {/* Header */}
       <div style={cardHeaderStyles}>
-        <span style={{ fontSize: fontSize.xl }}>{getImpactIcon(impact)}</span>
         <div>
-          <div
-            style={{
-              ...cardLabelStyles,
-              color: impactStyle.text,
-            }}
-          >
-            {formatImpactLevel(impact)}
-          </div>
           <div style={cardTitleStyles}>Expected Impact</div>
+          {primaryMetric && (
+            <div style={{ ...primaryMetricStyles, color: riskStyle?.text }}>
+              Primary: {formatPrimarySuccessMetric(primaryMetric)}
+            </div>
+          )}
         </div>
+        {risk && (
+          <span style={{ ...riskBadgeStyles, ...riskStyle }}>
+            {formatRiskLevel(risk.level)}
+          </span>
+        )}
       </div>
 
-      {/* Description */}
-      {description && (
-        <p style={cardDescStyles}>{description}</p>
-      )}
+      {/* Metrics Grid */}
+      <div style={metricsGridStyles}>
+        {/* SEO Metrics */}
+        {impact.seo_metrics && (
+          <div style={metricSectionStyles}>
+            <div style={sectionTitleStyles}>SEO</div>
+            {impact.seo_metrics.ctr_lift_percent && (
+              <MetricRow label="CTR Lift" value={impact.seo_metrics.ctr_lift_percent} />
+            )}
+            {impact.seo_metrics.ranking_change_estimate && (
+              <MetricRow label="Ranking" value={impact.seo_metrics.ranking_change_estimate} />
+            )}
+            {impact.seo_metrics.impressions_change && (
+              <MetricRow label="Impressions" value={impact.seo_metrics.impressions_change} />
+            )}
+          </div>
+        )}
 
-      {/* Metrics */}
-      {metrics && (
-        <div style={metricsStyles}>
-          {metrics.traffic && (
-            <div style={metricItemStyles}>
-              <span style={metricLabelStyles}>Traffic</span>
-              <span style={metricValueStyles}>{metrics.traffic}</span>
-            </div>
-          )}
-          {metrics.ranking && (
-            <div style={metricItemStyles}>
-              <span style={metricLabelStyles}>Ranking</span>
-              <span style={metricValueStyles}>{metrics.ranking}</span>
-            </div>
-          )}
-          {metrics.ctr && (
-            <div style={metricItemStyles}>
-              <span style={metricLabelStyles}>CTR</span>
-              <span style={metricValueStyles}>{metrics.ctr}</span>
-            </div>
-          )}
-        </div>
+        {/* Conversion Metrics */}
+        {impact.conversion_metrics && (
+          <div style={metricSectionStyles}>
+            <div style={sectionTitleStyles}>Conversion</div>
+            {impact.conversion_metrics.quote_start_lift && (
+              <MetricRow label="Quote Starts" value={impact.conversion_metrics.quote_start_lift} />
+            )}
+            {impact.conversion_metrics.conversion_rate_lift && (
+              <MetricRow label="Conv. Rate" value={impact.conversion_metrics.conversion_rate_lift} />
+            )}
+          </div>
+        )}
+
+        {/* Revenue Metrics */}
+        {impact.revenue_metrics && (
+          <div style={metricSectionStyles}>
+            <div style={sectionTitleStyles}>Revenue</div>
+            {impact.revenue_metrics.revenue_per_session_lift && (
+              <MetricRow label="Rev/Session" value={impact.revenue_metrics.revenue_per_session_lift} />
+            )}
+            {impact.revenue_metrics.monthly_revenue_estimate && (
+              <MetricRow label="Monthly Est." value={impact.revenue_metrics.monthly_revenue_estimate} />
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* No metrics available */}
+      {!impact.seo_metrics && !impact.conversion_metrics && !impact.revenue_metrics && (
+        <p style={noMetricsStyles}>Impact estimates not available</p>
       )}
+    </div>
+  );
+}
+
+// ============================================
+// Sub-Components
+// ============================================
+
+interface MetricRowProps {
+  label: string;
+  value: string;
+}
+
+function MetricRow({ label, value }: MetricRowProps) {
+  return (
+    <div style={metricRowStyles}>
+      <span style={metricLabelStyles}>{label}</span>
+      <span style={metricValueStyles}>{value}</span>
     </div>
   );
 }
@@ -169,51 +207,48 @@ export function ImpactSummary({
 // Style Helpers
 // ============================================
 
-function getImpactStyle(impact: ImpactLevel): {
+function getRiskStyle(level: RiskLevel): {
   bg: string;
   text: string;
   border: string;
 } {
-  switch (impact) {
-    case 'critical':
+  switch (level) {
+    case 'high':
       return {
         bg: semantic.danger.light,
         text: semantic.danger.dark,
         border: semantic.danger.base,
       };
-    case 'high':
+    case 'medium':
       return {
         bg: semantic.warning.light,
         text: semantic.warning.dark,
         border: semantic.warning.base,
       };
-    case 'medium':
-      return {
-        bg: semantic.info.light,
-        text: semantic.info.dark,
-        border: semantic.info.base,
-      };
     case 'low':
     default:
       return {
-        bg: background.muted,
-        text: text.muted,
-        border: text.muted,
+        bg: semantic.success.light,
+        text: semantic.success.dark,
+        border: semantic.success.base,
       };
   }
 }
 
-function getImpactIcon(impact: ImpactLevel): string {
-  switch (impact) {
-    case 'critical':
-      return '🔴';
-    case 'high':
-      return '🟠';
-    case 'medium':
-      return '🔵';
-    case 'low':
+function getMetricIcon(metric: string): string {
+  switch (metric) {
+    case 'ctr':
+      return '🎯';
+    case 'ranking':
+      return '📈';
+    case 'quote_starts':
+      return '📝';
+    case 'conversion_rate':
+      return '💹';
+    case 'revenue':
+      return '💰';
     default:
-      return '⚪';
+      return '📊';
   }
 }
 
@@ -247,10 +282,6 @@ const dotStyles: React.CSSProperties = {
   borderRadius: '50%',
 };
 
-const inlineDescStyles: React.CSSProperties = {
-  color: text.muted,
-};
-
 const cardStyles: React.CSSProperties = {
   backgroundColor: background.surface,
   borderRadius: radius.lg,
@@ -263,41 +294,58 @@ const cardStyles: React.CSSProperties = {
 
 const cardHeaderStyles: React.CSSProperties = {
   display: 'flex',
-  alignItems: 'center',
-  gap: space['3'],
-};
-
-const cardLabelStyles: React.CSSProperties = {
-  fontFamily: fontFamily.body,
-  fontSize: fontSize.sm,
-  fontWeight: fontWeight.semibold,
+  alignItems: 'flex-start',
+  justifyContent: 'space-between',
 };
 
 const cardTitleStyles: React.CSSProperties = {
   fontFamily: fontFamily.body,
+  fontSize: fontSize.sm,
+  fontWeight: fontWeight.semibold,
+  color: text.primary,
+};
+
+const primaryMetricStyles: React.CSSProperties = {
+  fontFamily: fontFamily.body,
   fontSize: fontSize.xs,
+  marginTop: space['0.5'],
+};
+
+const riskBadgeStyles: React.CSSProperties = {
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.xs,
+  fontWeight: fontWeight.medium,
+  padding: `${space['1']} ${space['2']}`,
+  borderRadius: radius.md,
+  backgroundColor: background.muted,
   color: text.muted,
 };
 
-const cardDescStyles: React.CSSProperties = {
-  fontFamily: fontFamily.body,
-  fontSize: fontSize.sm,
-  color: text.secondary,
-  lineHeight: 1.5,
-  margin: 0,
-};
-
-const metricsStyles: React.CSSProperties = {
-  display: 'flex',
+const metricsGridStyles: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
   gap: space['4'],
-  paddingTop: space['2'],
-  borderTop: `1px solid ${background.muted}`,
 };
 
-const metricItemStyles: React.CSSProperties = {
+const metricSectionStyles: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: space['0.5'],
+  gap: space['2'],
+};
+
+const sectionTitleStyles: React.CSSProperties = {
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.xs,
+  fontWeight: fontWeight.semibold,
+  color: text.muted,
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.05em',
+};
+
+const metricRowStyles: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
 };
 
 const metricLabelStyles: React.CSSProperties = {
@@ -311,6 +359,14 @@ const metricValueStyles: React.CSSProperties = {
   fontSize: fontSize.sm,
   fontWeight: fontWeight.medium,
   color: text.primary,
+};
+
+const noMetricsStyles: React.CSSProperties = {
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.sm,
+  color: text.muted,
+  fontStyle: 'italic',
+  margin: 0,
 };
 
 export default ImpactSummary;

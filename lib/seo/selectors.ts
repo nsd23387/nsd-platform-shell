@@ -1,8 +1,8 @@
 /**
- * SEO Intelligence Domain - Selectors
+ * SEO Intelligence Domain - Selectors (v1)
  * 
  * Pure functions for deriving state from SEO data.
- * These selectors extract, filter, and compute derived values.
+ * Aligned with the canonical AI recommendation schema.
  * 
  * GOVERNANCE:
  * - All selectors are pure functions (no side effects)
@@ -22,12 +22,15 @@ import type {
   SeoRecommendation,
   SeoSnapshot,
   SeoAuditEntry,
-  ApprovalStatus,
-  ImpactLevel,
-  RecommendationType,
+  RecommendationStatus,
+  RiskLevel,
+  SeoRecommendationType,
   IndexStatus,
   CoreWebVitals,
   SeoMetricsSummary,
+  SeoIntentTarget,
+  ConfidenceModel,
+  LearningVerdict,
 } from './types';
 
 import {
@@ -50,6 +53,17 @@ export function selectPagesByIndexStatus(
   // NOT IMPLEMENTED - Stub only
   // This function will filter pages by their indexing status
   throw new Error('NotImplemented: selectPagesByIndexStatus');
+}
+
+/**
+ * Filter pages by intent target.
+ */
+export function selectPagesByIntentTarget(
+  pages: readonly SeoPage[],
+  target: SeoIntentTarget
+): readonly SeoPage[] {
+  // NOT IMPLEMENTED - Stub only
+  throw new Error('NotImplemented: selectPagesByIntentTarget');
 }
 
 /**
@@ -115,11 +129,11 @@ export function selectAveragePosition(
 // ============================================
 
 /**
- * Filter recommendations by approval status.
+ * Filter recommendations by status.
  */
 export function selectRecommendationsByStatus(
   recommendations: readonly SeoRecommendation[],
-  status: ApprovalStatus
+  status: RecommendationStatus
 ): readonly SeoRecommendation[] {
   // NOT IMPLEMENTED - Stub only
   throw new Error('NotImplemented: selectRecommendationsByStatus');
@@ -127,6 +141,7 @@ export function selectRecommendationsByStatus(
 
 /**
  * Get high-impact recommendations that need review.
+ * Based on risk level and confidence.
  */
 export function selectHighImpactPendingRecommendations(
   recommendations: readonly SeoRecommendation[]
@@ -147,11 +162,22 @@ export function selectRecommendationsByConfidence(
 }
 
 /**
+ * Filter recommendations by risk level.
+ */
+export function selectRecommendationsByRiskLevel(
+  recommendations: readonly SeoRecommendation[],
+  riskLevel: RiskLevel
+): readonly SeoRecommendation[] {
+  // NOT IMPLEMENTED - Stub only
+  throw new Error('NotImplemented: selectRecommendationsByRiskLevel');
+}
+
+/**
  * Group recommendations by type.
  */
 export function selectRecommendationsGroupedByType(
   recommendations: readonly SeoRecommendation[]
-): Record<RecommendationType, readonly SeoRecommendation[]> {
+): Record<SeoRecommendationType, readonly SeoRecommendation[]> {
   // NOT IMPLEMENTED - Stub only
   throw new Error('NotImplemented: selectRecommendationsGroupedByType');
 }
@@ -165,6 +191,38 @@ export function selectRecommendationsForPage(
 ): readonly SeoRecommendation[] {
   // NOT IMPLEMENTED - Stub only
   throw new Error('NotImplemented: selectRecommendationsForPage');
+}
+
+/**
+ * Sort recommendations by expected impact (primary success metric).
+ */
+export function selectRecommendationsByImpact(
+  recommendations: readonly SeoRecommendation[],
+  order: 'asc' | 'desc' = 'desc'
+): readonly SeoRecommendation[] {
+  // NOT IMPLEMENTED - Stub only
+  throw new Error('NotImplemented: selectRecommendationsByImpact');
+}
+
+/**
+ * Get recommendations with learning outcomes.
+ */
+export function selectRecommendationsWithOutcomes(
+  recommendations: readonly SeoRecommendation[]
+): readonly SeoRecommendation[] {
+  // NOT IMPLEMENTED - Stub only
+  throw new Error('NotImplemented: selectRecommendationsWithOutcomes');
+}
+
+/**
+ * Get recommendations by learning verdict.
+ */
+export function selectRecommendationsByVerdict(
+  recommendations: readonly SeoRecommendation[],
+  verdict: LearningVerdict
+): readonly SeoRecommendation[] {
+  // NOT IMPLEMENTED - Stub only
+  throw new Error('NotImplemented: selectRecommendationsByVerdict');
 }
 
 // ============================================
@@ -214,8 +272,33 @@ export function selectTrafficTrend(
 export function selectCwvStatus(
   cwv: CoreWebVitals | null
 ): 'good' | 'needs_improvement' | 'poor' | 'unknown' {
-  // NOT IMPLEMENTED - Stub only
-  throw new Error('NotImplemented: selectCwvStatus');
+  if (!cwv) {
+    return 'unknown';
+  }
+  
+  // Check if any metric is in "poor" range
+  if (cwv.lcp !== null && cwv.lcp > CWV_THRESHOLDS.LCP.NEEDS_IMPROVEMENT) {
+    return 'poor';
+  }
+  if (cwv.fid !== null && cwv.fid > CWV_THRESHOLDS.FID.NEEDS_IMPROVEMENT) {
+    return 'poor';
+  }
+  if (cwv.cls !== null && cwv.cls > CWV_THRESHOLDS.CLS.NEEDS_IMPROVEMENT) {
+    return 'poor';
+  }
+  
+  // Check if any metric needs improvement
+  if (cwv.lcp !== null && cwv.lcp > CWV_THRESHOLDS.LCP.GOOD) {
+    return 'needs_improvement';
+  }
+  if (cwv.fid !== null && cwv.fid > CWV_THRESHOLDS.FID.GOOD) {
+    return 'needs_improvement';
+  }
+  if (cwv.cls !== null && cwv.cls > CWV_THRESHOLDS.CLS.GOOD) {
+    return 'needs_improvement';
+  }
+  
+  return 'good';
 }
 
 /**
@@ -238,7 +321,7 @@ export function selectPagesWithPoorCwv(
  */
 export function selectAuditEntriesForEntity(
   entries: readonly SeoAuditEntry[],
-  entityType: SeoAuditEntry['entityType'],
+  entityType: SeoAuditEntry['entity_type'],
   entityId: string
 ): readonly SeoAuditEntry[] {
   // NOT IMPLEMENTED - Stub only
@@ -254,6 +337,17 @@ export function selectRecentAuditEntries(
 ): readonly SeoAuditEntry[] {
   // NOT IMPLEMENTED - Stub only
   throw new Error('NotImplemented: selectRecentAuditEntries');
+}
+
+/**
+ * Get audit entries by user.
+ */
+export function selectAuditEntriesByUser(
+  entries: readonly SeoAuditEntry[],
+  userId: string
+): readonly SeoAuditEntry[] {
+  // NOT IMPLEMENTED - Stub only
+  throw new Error('NotImplemented: selectAuditEntriesByUser');
 }
 
 // ============================================
@@ -272,12 +366,32 @@ export function selectMetricsSummary(
   throw new Error('NotImplemented: selectMetricsSummary');
 }
 
+/**
+ * Get recommendation status counts.
+ */
+export function selectRecommendationStatusCounts(
+  recommendations: readonly SeoRecommendation[]
+): Record<RecommendationStatus, number> {
+  // NOT IMPLEMENTED - Stub only
+  throw new Error('NotImplemented: selectRecommendationStatusCounts');
+}
+
+/**
+ * Get recommendation type distribution.
+ */
+export function selectRecommendationTypeDistribution(
+  recommendations: readonly SeoRecommendation[]
+): Record<SeoRecommendationType, number> {
+  // NOT IMPLEMENTED - Stub only
+  throw new Error('NotImplemented: selectRecommendationTypeDistribution');
+}
+
 // ============================================
 // Confidence Selectors
 // ============================================
 
 /**
- * Classify confidence level.
+ * Classify confidence level from score.
  */
 export function selectConfidenceLevel(
   confidence: number
@@ -289,6 +403,28 @@ export function selectConfidenceLevel(
     return 'medium';
   }
   return 'high';
+}
+
+/**
+ * Classify confidence level from model.
+ */
+export function selectConfidenceLevelFromModel(
+  model: ConfidenceModel
+): 'low' | 'medium' | 'high' {
+  return selectConfidenceLevel(model.score);
+}
+
+/**
+ * Get top confidence factors.
+ */
+export function selectTopConfidenceFactors(
+  model: ConfidenceModel,
+  limit: number = 3
+): ConfidenceModel['factors'] {
+  // Sort by weighted value (weight * value) and take top N
+  return [...model.factors]
+    .sort((a, b) => (b.weight * b.value) - (a.weight * a.value))
+    .slice(0, limit);
 }
 
 /**
@@ -310,4 +446,90 @@ export function selectPositionQuality(
     return 'page_two';
   }
   return 'low';
+}
+
+// ============================================
+// Risk Selectors
+// ============================================
+
+/**
+ * Classify risk level for sorting/filtering.
+ */
+export function selectRiskPriority(level: RiskLevel): number {
+  switch (level) {
+    case 'high':
+      return 3;
+    case 'medium':
+      return 2;
+    case 'low':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Sort recommendations by risk (highest first).
+ */
+export function selectRecommendationsSortedByRisk(
+  recommendations: readonly SeoRecommendation[],
+  order: 'asc' | 'desc' = 'desc'
+): readonly SeoRecommendation[] {
+  const sorted = [...recommendations].sort((a, b) => {
+    const aPriority = selectRiskPriority(a.risk.level);
+    const bPriority = selectRiskPriority(b.risk.level);
+    return bPriority - aPriority;
+  });
+  
+  return order === 'desc' ? sorted : sorted.reverse();
+}
+
+// ============================================
+// Evidence Selectors
+// ============================================
+
+/**
+ * Get unique evidence sources from a recommendation.
+ */
+export function selectEvidenceSources(
+  recommendation: SeoRecommendation
+): readonly string[] {
+  const sources = new Set(
+    recommendation.evidence.signals.map(s => s.source)
+  );
+  return Array.from(sources);
+}
+
+/**
+ * Check if recommendation has strong conversion signals.
+ */
+export function selectHasStrongConversionSignals(
+  recommendation: SeoRecommendation
+): boolean {
+  const conversionSources = ['quote_app', 'woocommerce', 'ga4'];
+  return recommendation.evidence.signals.some(
+    s => conversionSources.includes(s.source)
+  );
+}
+
+// ============================================
+// Learning Outcome Selectors
+// ============================================
+
+/**
+ * Calculate learning success rate from recommendations.
+ */
+export function selectLearningSuccessRate(
+  recommendations: readonly SeoRecommendation[]
+): number | null {
+  const withOutcomes = recommendations.filter(r => r.learning);
+  if (withOutcomes.length === 0) {
+    return null;
+  }
+  
+  const positiveCount = withOutcomes.filter(
+    r => r.learning?.verdict === 'positive'
+  ).length;
+  
+  return positiveCount / withOutcomes.length;
 }

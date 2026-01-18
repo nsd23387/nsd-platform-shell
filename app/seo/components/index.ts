@@ -1,7 +1,8 @@
 /**
- * SEO Intelligence - Components Index
+ * SEO Intelligence - Components Index (v1)
  * 
  * Central export point for all SEO UI components.
+ * Aligned with canonical AI recommendation schema.
  * 
  * GOVERNANCE:
  * - All components are display-focused

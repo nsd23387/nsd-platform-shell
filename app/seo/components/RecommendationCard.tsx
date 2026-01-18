@@ -1,13 +1,13 @@
 /**
- * SEO Intelligence - Recommendation Card Component
+ * SEO Intelligence - Recommendation Card Component (v1)
  * 
- * Displays a single SEO recommendation with type, impact, confidence,
- * and current status. Links to detail view for full diff.
+ * Displays a single SEO recommendation with type, risk, confidence,
+ * and current status. Aligned with canonical AI recommendation schema.
  * 
  * GOVERNANCE:
  * - Display-only component (no direct mutations)
  * - Actions delegate to parent handlers
- * - Shows confidence and impact for informed decisions
+ * - Shows confidence, risk, and evidence for informed decisions
  * 
  * NOT ALLOWED:
  * - Direct API calls
@@ -31,13 +31,14 @@ import {
   fontWeight,
 } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
-import type { SeoRecommendation, ApprovalStatus, ImpactLevel, RecommendationType } from '../../../lib/seo/types';
+import type { SeoRecommendation, RecommendationStatus, RiskLevel, SeoRecommendationType } from '../../../lib/seo/types';
 import {
   formatRecommendationType,
-  formatImpactLevel,
-  formatApprovalStatus,
+  formatRiskLevel,
+  formatRecommendationStatus,
   formatConfidence,
   formatRelativeTime,
+  formatEvidenceSignalCount,
 } from '../../../lib/seo/formatters';
 
 // ============================================
@@ -71,11 +72,12 @@ export function RecommendationCard({
   const {
     id,
     type,
-    expectedImpact,
+    risk,
     confidence,
     status,
-    rationale,
-    generatedAt,
+    evidence,
+    scope,
+    created_at,
   } = recommendation;
 
   const handleClick = () => {
@@ -84,7 +86,7 @@ export function RecommendationCard({
     }
   };
 
-  const impactStyle = getImpactStyle(expectedImpact);
+  const riskStyle = getRiskStyle(risk.level);
   const statusStyle = getStatusStyle(status);
 
   return (
@@ -101,28 +103,39 @@ export function RecommendationCard({
       <div style={headerStyles}>
         <span style={typeStyles}>{formatRecommendationType(type)}</span>
         <span style={{ ...statusBadgeStyles, ...statusStyle }}>
-          {formatApprovalStatus(status)}
+          {formatRecommendationStatus(status)}
         </span>
       </div>
 
-      {/* Rationale preview */}
+      {/* Page URL */}
+      <div style={urlStyles}>
+        <span style={urlLabelStyles}>Page:</span>
+        <span style={urlValueStyles}>{scope.url}</span>
+      </div>
+
+      {/* Evidence summary */}
       {!compact && (
-        <p style={rationaleStyles}>
-          {rationale.length > 150 ? `${rationale.substring(0, 150)}...` : rationale}
+        <p style={summaryStyles}>
+          {evidence.summary.length > 150 
+            ? `${evidence.summary.substring(0, 150)}...` 
+            : evidence.summary}
         </p>
       )}
 
-      {/* Footer: Impact, Confidence, Time */}
+      {/* Footer: Risk, Confidence, Evidence, Time */}
       <div style={footerStyles}>
         <div style={metaGroupStyles}>
-          <span style={{ ...impactBadgeStyles, ...impactStyle }}>
-            {formatImpactLevel(expectedImpact)}
+          <span style={{ ...riskBadgeStyles, ...riskStyle }}>
+            {formatRiskLevel(risk.level)}
           </span>
           <span style={confidenceStyles}>
-            {formatConfidence(confidence)} confidence
+            {formatConfidence(confidence.score)} confidence
+          </span>
+          <span style={evidenceStyles}>
+            {formatEvidenceSignalCount(evidence)}
           </span>
         </div>
-        <span style={timeStyles}>{formatRelativeTime(generatedAt)}</span>
+        <span style={timeStyles}>{formatRelativeTime(created_at)}</span>
       </div>
     </div>
   );
@@ -132,21 +145,19 @@ export function RecommendationCard({
 // Style Helpers
 // ============================================
 
-function getImpactStyle(impact: ImpactLevel): React.CSSProperties {
-  switch (impact) {
-    case 'critical':
-      return { backgroundColor: semantic.danger.light, color: semantic.danger.dark };
+function getRiskStyle(level: RiskLevel): React.CSSProperties {
+  switch (level) {
     case 'high':
-      return { backgroundColor: semantic.warning.light, color: semantic.warning.dark };
+      return { backgroundColor: semantic.danger.light, color: semantic.danger.dark };
     case 'medium':
-      return { backgroundColor: semantic.info.light, color: semantic.info.dark };
+      return { backgroundColor: semantic.warning.light, color: semantic.warning.dark };
     case 'low':
     default:
-      return { backgroundColor: background.muted, color: text.muted };
+      return { backgroundColor: semantic.success.light, color: semantic.success.dark };
   }
 }
 
-function getStatusStyle(status: ApprovalStatus): React.CSSProperties {
+function getStatusStyle(status: RecommendationStatus): React.CSSProperties {
   switch (status) {
     case 'approved':
       return { backgroundColor: statusColors.exceptional.bg, color: statusColors.exceptional.text };
@@ -156,6 +167,8 @@ function getStatusStyle(status: ApprovalStatus): React.CSSProperties {
       return { backgroundColor: statusColors.standard.bg, color: statusColors.standard.text };
     case 'implemented':
       return { backgroundColor: statusColors.active.bg, color: statusColors.active.text };
+    case 'rolled_back':
+      return { backgroundColor: semantic.danger.light, color: semantic.danger.dark };
     case 'pending':
     default:
       return { backgroundColor: statusColors.pending.bg, color: statusColors.pending.text };
@@ -198,7 +211,28 @@ const statusBadgeStyles: React.CSSProperties = {
   borderRadius: radius.full,
 };
 
-const rationaleStyles: React.CSSProperties = {
+const urlStyles: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: space['2'],
+};
+
+const urlLabelStyles: React.CSSProperties = {
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.xs,
+  color: text.muted,
+};
+
+const urlValueStyles: React.CSSProperties = {
+  fontFamily: fontFamily.mono,
+  fontSize: fontSize.xs,
+  color: text.secondary,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};
+
+const summaryStyles: React.CSSProperties = {
   fontFamily: fontFamily.body,
   fontSize: fontSize.sm,
   color: text.secondary,
@@ -219,7 +253,7 @@ const metaGroupStyles: React.CSSProperties = {
   gap: space['2'],
 };
 
-const impactBadgeStyles: React.CSSProperties = {
+const riskBadgeStyles: React.CSSProperties = {
   fontFamily: fontFamily.body,
   fontSize: fontSize.xs,
   fontWeight: fontWeight.medium,
@@ -229,6 +263,12 @@ const impactBadgeStyles: React.CSSProperties = {
 
 const confidenceStyles: React.CSSProperties = {
   fontFamily: fontFamily.mono,
+  fontSize: fontSize.xs,
+  color: text.muted,
+};
+
+const evidenceStyles: React.CSSProperties = {
+  fontFamily: fontFamily.body,
   fontSize: fontSize.xs,
   color: text.muted,
 };

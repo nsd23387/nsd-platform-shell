@@ -1,13 +1,14 @@
 /**
- * SEO Intelligence - Confidence Badge Component
+ * SEO Intelligence - Confidence Badge Component (v1)
  * 
- * Displays AI confidence score as a visual badge.
- * Helps users understand recommendation reliability.
+ * Displays AI confidence score with explainable factors.
+ * Aligned with canonical AI recommendation schema.
  * 
  * GOVERNANCE:
  * - Display-only component
  * - Shows actual confidence values (no manipulation)
  * - Clear visual indicators for confidence levels
+ * - Explainable factors for transparency
  * 
  * NOT ALLOWED:
  * - Hiding low confidence scores
@@ -29,8 +30,9 @@ import {
   fontWeight,
 } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
-import { selectConfidenceLevel } from '../../../lib/seo/selectors';
-import { formatConfidence } from '../../../lib/seo/formatters';
+import type { ConfidenceModel, ConfidenceFactor } from '../../../lib/seo/types';
+import { selectConfidenceLevel, selectTopConfidenceFactors } from '../../../lib/seo/selectors';
+import { formatConfidence, formatConfidenceFactorName } from '../../../lib/seo/formatters';
 import { CONFIDENCE_THRESHOLDS } from '../../../lib/seo/constants';
 
 // ============================================
@@ -38,12 +40,14 @@ import { CONFIDENCE_THRESHOLDS } from '../../../lib/seo/constants';
 // ============================================
 
 export interface ConfidenceBadgeProps {
-  /** Confidence score (0-1) */
-  confidence: number;
+  /** Confidence model with score and factors */
+  confidence: ConfidenceModel;
   /** Show percentage value */
   showValue?: boolean;
   /** Show confidence level label */
   showLabel?: boolean;
+  /** Show top factors */
+  showFactors?: boolean;
   /** Size variant */
   size?: 'sm' | 'md' | 'lg';
 }
@@ -66,11 +70,13 @@ export function ConfidenceBadge({
   confidence,
   showValue = true,
   showLabel = true,
+  showFactors = false,
   size = 'md',
 }: ConfidenceBadgeProps) {
-  const level = selectConfidenceLevel(confidence);
+  const level = selectConfidenceLevel(confidence.score);
   const levelStyle = getLevelStyle(level);
   const sizeStyle = getSizeStyle(size);
+  const topFactors = selectTopConfidenceFactors(confidence, 3);
   
   const levelLabels: Record<string, string> = {
     low: 'Low Confidence',
@@ -82,17 +88,18 @@ export function ConfidenceBadge({
     <div
       style={{
         ...badgeStyles,
-        ...levelStyle,
+        backgroundColor: levelStyle.backgroundColor,
+        borderColor: levelStyle.borderColor,
         ...sizeStyle,
       }}
-      title={`${formatConfidence(confidence)} confidence - ${levelLabels[level]}`}
+      title={confidence.explanation}
     >
       {/* Confidence bar */}
       <div style={barContainerStyles}>
         <div
           style={{
             ...barFillStyles,
-            width: `${Math.min(confidence * 100, 100)}%`,
+            width: `${Math.min(confidence.score * 100, 100)}%`,
             backgroundColor: levelStyle.color,
           }}
         />
@@ -101,12 +108,58 @@ export function ConfidenceBadge({
       {/* Text content */}
       <div style={textContainerStyles}>
         {showValue && (
-          <span style={valueStyles}>{formatConfidence(confidence)}</span>
+          <span style={{ ...valueStyles, color: levelStyle.color }}>
+            {formatConfidence(confidence.score)}
+          </span>
         )}
         {showLabel && (
           <span style={labelStyles}>{levelLabels[level]}</span>
         )}
       </div>
+
+      {/* Factors */}
+      {showFactors && topFactors.length > 0 && (
+        <div style={factorsContainerStyles}>
+          <div style={factorsTitleStyles}>Top Factors</div>
+          {topFactors.map((factor, idx) => (
+            <FactorBar key={idx} factor={factor} />
+          ))}
+        </div>
+      )}
+
+      {/* Explanation */}
+      {showFactors && confidence.explanation && (
+        <div style={explanationStyles}>
+          {confidence.explanation}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// Sub-Components
+// ============================================
+
+function FactorBar({ factor }: { factor: ConfidenceFactor }) {
+  const weightedValue = factor.weight * factor.value;
+  
+  return (
+    <div style={factorRowStyles}>
+      <span style={factorNameStyles}>
+        {formatConfidenceFactorName(factor.name)}
+      </span>
+      <div style={factorBarContainerStyles}>
+        <div
+          style={{
+            ...factorBarFillStyles,
+            width: `${weightedValue * 100}%`,
+          }}
+        />
+      </div>
+      <span style={factorValueStyles}>
+        {Math.round(weightedValue * 100)}%
+      </span>
     </div>
   );
 }
@@ -197,6 +250,71 @@ const labelStyles: React.CSSProperties = {
   fontFamily: fontFamily.body,
   fontSize: fontSize.xs,
   fontWeight: fontWeight.medium,
+  color: text.secondary,
+};
+
+const factorsContainerStyles: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: space['1'],
+  marginTop: space['2'],
+  paddingTop: space['2'],
+  borderTop: `1px solid rgba(0, 0, 0, 0.1)`,
+};
+
+const factorsTitleStyles: React.CSSProperties = {
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.xs,
+  fontWeight: fontWeight.semibold,
+  color: text.muted,
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.05em',
+};
+
+const factorRowStyles: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: space['2'],
+};
+
+const factorNameStyles: React.CSSProperties = {
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.xs,
+  color: text.secondary,
+  flex: '0 0 100px',
+};
+
+const factorBarContainerStyles: React.CSSProperties = {
+  flex: 1,
+  height: '4px',
+  backgroundColor: 'rgba(0, 0, 0, 0.1)',
+  borderRadius: radius.full,
+  overflow: 'hidden',
+};
+
+const factorBarFillStyles: React.CSSProperties = {
+  height: '100%',
+  backgroundColor: 'currentColor',
+  borderRadius: radius.full,
+  opacity: 0.6,
+};
+
+const factorValueStyles: React.CSSProperties = {
+  fontFamily: fontFamily.mono,
+  fontSize: fontSize.xs,
+  color: text.muted,
+  flex: '0 0 32px',
+  textAlign: 'right' as const,
+};
+
+const explanationStyles: React.CSSProperties = {
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.xs,
+  color: text.secondary,
+  fontStyle: 'italic',
+  marginTop: space['2'],
+  paddingTop: space['2'],
+  borderTop: `1px solid rgba(0, 0, 0, 0.1)`,
 };
 
 // ============================================
@@ -204,8 +322,8 @@ const labelStyles: React.CSSProperties = {
 // ============================================
 
 export interface ConfidenceDotProps {
-  /** Confidence score (0-1) */
-  confidence: number;
+  /** Confidence score (0-1) or model */
+  confidence: number | ConfidenceModel;
   /** Size in pixels */
   size?: number;
 }
@@ -214,7 +332,8 @@ export interface ConfidenceDotProps {
  * Compact confidence indicator as a colored dot.
  */
 export function ConfidenceDot({ confidence, size = 8 }: ConfidenceDotProps) {
-  const level = selectConfidenceLevel(confidence);
+  const score = typeof confidence === 'number' ? confidence : confidence.score;
+  const level = selectConfidenceLevel(score);
   const levelStyle = getLevelStyle(level);
 
   return (
@@ -226,7 +345,7 @@ export function ConfidenceDot({ confidence, size = 8 }: ConfidenceDotProps) {
         borderRadius: '50%',
         backgroundColor: levelStyle.color,
       }}
-      title={`${formatConfidence(confidence)} confidence`}
+      title={`${formatConfidence(score)} confidence`}
     />
   );
 }
