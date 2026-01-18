@@ -19,15 +19,16 @@
  * - created_at: string | undefined
  * - updated_at: string | undefined
  * 
- * Backend Condition → UI Meaning Mapping (OBSERVATION-BASED):
+ * Backend Condition → UI Meaning Mapping (CANONICAL MESSAGING MATRIX):
  * ┌─────────────────────────────────────┬─────────────────────────────────────────────────┐
- * │ Backend Condition                   │ UI Meaning                                      │
+ * │ Backend Condition                   │ UI Meaning (Canonical Copy)                     │
  * ├─────────────────────────────────────┼─────────────────────────────────────────────────┤
- * │ No run exists (noRuns=true)         │ "Campaign not executed yet"                     │
- * │ Run exists + status=queued          │ "Awaiting worker pickup"                        │
+ * │ No run exists (noRuns=true)         │ "No execution has run yet" (idle)               │
+ * │ Run exists + status=queued          │ "Execution queued"                              │
  * │ Run exists + status=running         │ "Execution in progress"                         │
- * │ Run exists + status=completed       │ "Execution finished - no steps observed"        │
- * │ Run exists + status=failed          │ "Execution failed"                              │
+ * │ Run exists + status=running + >30m  │ "Execution stalled — system will mark failed"   │
+ * │ Run exists + status=completed       │ "Last execution completed successfully"         │
+ * │ Run exists + status=failed          │ "Last execution failed"                         │
  * │ Run exists + unknown status         │ "Status unknown"                                │
  * └─────────────────────────────────────┴─────────────────────────────────────────────────┘
  * 
@@ -49,8 +50,9 @@ import { isRunStale, RUN_STALE_THRESHOLD_MS, type ResolvableRun } from './resolv
  * OBSERVATION-BASED: 'completed_no_steps_observed' is based on observing
  * that the LatestRun model contains no intermediate execution step data.
  * 
- * STALENESS HANDLING: 'stale' is for runs marked 'running' that exceed
- * the 30-minute threshold, aligning with backend watchdog semantics.
+ * STALENESS HANDLING: 'stale' (displayed as "Stalled") is for runs marked
+ * 'running' that exceed the 30-minute threshold, aligning with backend watchdog.
+ * GOVERNANCE: "stalled" messaging ONLY appears when status='running' AND >30 min.
  */
 export type ExecutionConfidence = 
   | 'completed'                    // Execution finished with observable steps
@@ -192,13 +194,14 @@ export function deriveExecutionState(
     const resolvable = toResolvableRun(run);
     const stale = isRunStale(resolvable);
     
-    // Case 3a: Stale running run - display warning state
+    // Case 3a: Stale running run - display stalled state
+    // GOVERNANCE: "stalled" messaging ONLY allowed when status='running' AND >30 min
     if (stale) {
       return {
         confidence: 'stale',
-        confidenceLabel: 'Stale',
-        confidenceDescription: 'A previous execution did not complete and is being cleaned up by the system.',
-        outcomeStatement: 'This execution has been running for over 30 minutes and is considered stale. The backend watchdog will clean it up automatically.',
+        confidenceLabel: 'Stalled',
+        confidenceDescription: 'Execution stalled — system will mark failed.',
+        outcomeStatement: 'This execution has been running for over 30 minutes without completing. The system watchdog will mark it as failed.',
         timeline: [
           {
             id: 'run_created',
@@ -210,17 +213,11 @@ export function deriveExecutionState(
           {
             id: 'stale_warning',
             type: 'warning',
-            label: 'Execution exceeded 30-minute threshold',
+            label: 'Execution stalled (>30 minutes)',
             isCompleted: true,
           },
-          {
-            id: 'awaiting_cleanup',
-            type: 'info',
-            label: 'Awaiting system cleanup',
-            isCompleted: false,
-          },
         ],
-        nextStepRecommendation: 'This run will be marked as failed by the system watchdog. A new execution can be requested after cleanup.',
+        nextStepRecommendation: 'The system will mark this run as failed. Check execution logs for details.',
       };
     }
     
@@ -443,7 +440,6 @@ export const EXECUTION_TOOLTIPS: Record<string, string> = {
     'Check the run history for details about what went wrong.',
     
   stale:
-    'A stale run means the execution was marked as running but has not completed ' +
-    'within 30 minutes. The backend watchdog will automatically mark it as failed ' +
-    'and clean up the state. A new execution can be requested after cleanup.',
+    'A stalled run means the execution has been running for over 30 minutes without completing. ' +
+    'The system watchdog will mark it as failed. Check execution logs for details.',
 };

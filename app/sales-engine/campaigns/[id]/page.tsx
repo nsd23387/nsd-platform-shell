@@ -67,6 +67,7 @@ import {
   ResultsBreakdownCards,
   AdvisoryCallout,
   PollingStatusIndicator,
+  LastExecutionSummaryCard,
   type ExecutionEvent,
   type ApprovalAwarenessState,
 } from '../../components/observability';
@@ -620,6 +621,23 @@ function OverviewTab({
             funnel={observabilityFunnel}
             noRuns={noRuns}
             isStale={isRunStale}
+          />
+
+          {/* Last Execution Summary - Shows when system is idle (completed/failed)
+              UX Trust Accelerator: Reinforces "The system is idle. You are looking at history." */}
+          <LastExecutionSummaryCard
+            campaignId={campaign.id}
+            run={latestRun ? {
+              run_id: latestRun.id,
+              status: latestRun.status?.toLowerCase(),
+              created_at: latestRun.started_at,
+              updated_at: latestRun.completed_at,
+              error_message: (latestRun as any).error_message,
+              failure_reason: (latestRun as any).failure_reason,
+              reason: (latestRun as any).reason,
+            } : null}
+            funnel={observabilityFunnel}
+            noRuns={noRuns}
           />
         </div>
       </div>

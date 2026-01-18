@@ -79,10 +79,11 @@ function getBadgeStyle(confidence: ExecutionConfidence): BadgeStyle {
         label: 'Failed',
       };
     case 'stale':
+      // GOVERNANCE: "stalled" messaging ONLY allowed when status='running' AND >30 min
       return {
         ...NSD_COLORS.semantic.attention,
         icon: 'warning',
-        label: 'Stale',
+        label: 'Stalled',
       };
     case 'unknown':
     default:

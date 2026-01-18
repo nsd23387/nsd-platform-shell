@@ -237,3 +237,165 @@ export function getStalenessInfo(run: ResolvableRun | null): {
     thresholdMinutes: 30,
   };
 }
+
+/**
+ * CANONICAL RUN STATE
+ * 
+ * This is the SINGLE SOURCE OF TRUTH for execution state.
+ * campaign_runs.status is authoritative. ODS events are descriptive only.
+ * 
+ * All UI components MUST use this function to determine execution state.
+ * No component may compute execution state independently.
+ */
+export type CanonicalRunState = 
+  | 'idle'       // No runs exist
+  | 'queued'     // status = 'queued' | 'run_requested' | 'pending'
+  | 'running'    // status = 'running' | 'in_progress' AND not stale
+  | 'stalled'    // status = 'running' | 'in_progress' AND stale (>30 min)
+  | 'failed'     // status = 'failed' | 'error'
+  | 'completed'  // status = 'completed' | 'success' | 'succeeded'
+  | 'skipped';   // status = 'skipped' | 'partial'
+
+export interface CanonicalRunStateResult {
+  /** The canonical state derived from campaign_runs.status */
+  state: CanonicalRunState;
+  /** The raw status from the run (for display) */
+  rawStatus: string | null;
+  /** Formatted timestamp for display */
+  timestamp: string | null;
+  /** Whether this represents an active execution (queued or running) */
+  isActive: boolean;
+  /** Human-readable message for display */
+  message: string;
+}
+
+/**
+ * MANDATORY MESSAGING MATRIX
+ * 
+ * Canonical Status → UI Message (STRICTLY ENFORCED)
+ * 
+ * failed      → "Last execution failed"
+ * completed   → "Last execution completed successfully"
+ * skipped     → "Execution skipped (planning only)"
+ * none/idle   → "No execution has run yet"
+ * queued      → "Execution queued"
+ * running     → "Execution in progress"
+ * stalled     → "Execution stalled — system will mark failed"
+ * 
+ * NO OTHER COMBINATIONS ARE ALLOWED.
+ */
+const CANONICAL_MESSAGES: Record<CanonicalRunState, string> = {
+  idle: 'No execution has run yet',
+  queued: 'Execution queued',
+  running: 'Execution in progress',
+  stalled: 'Execution stalled — system will mark failed',
+  failed: 'Last execution failed',
+  completed: 'Last execution completed successfully',
+  skipped: 'Execution skipped (planning only)',
+};
+
+/**
+ * Resolve the CANONICAL run state from campaign_runs data.
+ * 
+ * GOVERNANCE CONSTRAINTS (CRITICAL):
+ * 1. campaign_runs.status is the ONLY source of truth
+ * 2. ODS events may provide context but NEVER override status
+ * 3. No component may compute state independently
+ * 4. No "cleanup" or "awaiting cleanup" messaging unless status = 'running' AND > 30 min
+ * 5. No "queued" messaging unless status = 'queued'
+ * 
+ * @param run - The latest campaign run from campaign_runs table
+ * @param noRuns - True if no runs exist for this campaign
+ */
+export function resolveCanonicalRunState(
+  run: ResolvableRun | null,
+  noRuns: boolean
+): CanonicalRunStateResult {
+  // Case 1: No runs exist
+  if (noRuns || !run) {
+    return {
+      state: 'idle',
+      rawStatus: null,
+      timestamp: null,
+      isActive: false,
+      message: CANONICAL_MESSAGES.idle,
+    };
+  }
+
+  const status = normalizeStatus(run.status);
+  const timestamp = run.completed_at || run.updated_at || run.started_at || run.created_at || null;
+
+  // Case 2: Queued
+  if (status === 'queued' || status === 'run_requested' || status === 'pending') {
+    return {
+      state: 'queued',
+      rawStatus: run.status,
+      timestamp,
+      isActive: true,
+      message: CANONICAL_MESSAGES.queued,
+    };
+  }
+
+  // Case 3: Running (check for staleness)
+  if (status === 'running' || status === 'in_progress') {
+    if (isRunStale(run)) {
+      // STALLED: Running > 30 minutes
+      return {
+        state: 'stalled',
+        rawStatus: run.status,
+        timestamp,
+        isActive: false, // Stalled runs are NOT active
+        message: CANONICAL_MESSAGES.stalled,
+      };
+    }
+    return {
+      state: 'running',
+      rawStatus: run.status,
+      timestamp,
+      isActive: true,
+      message: CANONICAL_MESSAGES.running,
+    };
+  }
+
+  // Case 4: Failed
+  if (status === 'failed' || status === 'error') {
+    return {
+      state: 'failed',
+      rawStatus: run.status,
+      timestamp,
+      isActive: false,
+      message: CANONICAL_MESSAGES.failed,
+    };
+  }
+
+  // Case 5: Completed
+  if (status === 'completed' || status === 'success' || status === 'succeeded') {
+    return {
+      state: 'completed',
+      rawStatus: run.status,
+      timestamp,
+      isActive: false,
+      message: CANONICAL_MESSAGES.completed,
+    };
+  }
+
+  // Case 6: Skipped / Partial
+  if (status === 'skipped' || status === 'partial' || status === 'partial_success') {
+    return {
+      state: 'skipped',
+      rawStatus: run.status,
+      timestamp,
+      isActive: false,
+      message: CANONICAL_MESSAGES.skipped,
+    };
+  }
+
+  // Case 7: Unknown status - treat as idle (no active execution)
+  return {
+    state: 'idle',
+    rawStatus: run.status,
+    timestamp,
+    isActive: false,
+    message: `Status: ${run.status || 'Unknown'}`,
+  };
+}

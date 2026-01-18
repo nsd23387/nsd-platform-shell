@@ -36,6 +36,8 @@ export type { ApprovalAwarenessPanelProps, ApprovalAwarenessState } from './Appr
 export { LatestRunStatusCard } from './LatestRunStatusCard';
 export type { default as LatestRunStatusCardDefault } from './LatestRunStatusCard';
 
+export { LastExecutionSummaryCard } from './LastExecutionSummaryCard';
+
 export { ExecutionConfidenceBadge } from './ExecutionConfidenceBadge';
 export { ExecutionTimeline } from './ExecutionTimeline';
 export { NextStepCard } from './NextStepCard';

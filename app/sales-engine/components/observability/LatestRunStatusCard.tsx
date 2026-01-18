@@ -10,12 +10,13 @@
  * NO inference. NO aggregation. NO execution logic.
  * Only renders exact data from GET /api/v1/campaigns/:id/runs/latest
  *
- * UX Copy:
- * - Queued: "Campaign queued for execution"
- * - Running: "Campaign is currently running"
- * - Completed: "Last run completed successfully"
- * - Failed: "Last run failed"
- * - No runs: "This campaign has not been executed yet"
+ * UX Copy (Canonical Messaging Matrix):
+ * - Queued: "Execution queued"
+ * - Running: "Execution in progress"
+ * - Completed: "Last execution completed successfully"
+ * - Failed: "Last execution failed"
+ * - Stalled: "Execution stalled — system will mark failed"
+ * - Idle: "No execution has run yet"
  */
 
 'use client';
@@ -53,16 +54,18 @@ interface StatusDisplay {
 function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
   const normalized = typeof status === 'string' ? status.toLowerCase() : 'unknown';
 
-  // STALE RUN HANDLING: Running runs older than 30 min are displayed as stale
+  // STALE RUN HANDLING: Running runs older than 30 min are displayed as stalled
+  // GOVERNANCE: "stalled" messaging ONLY allowed when status='running' AND >30 min
   if (isStale && (normalized === 'running' || normalized === 'in_progress')) {
     return {
       icon: 'warning',
-      label: 'Stale',
-      copy: 'A previous execution did not complete and is being cleaned up by the system.',
+      label: 'Stalled',
+      copy: 'Execution stalled — system will mark failed',
       ...NSD_COLORS.semantic.attention,
     };
   }
 
+  // CANONICAL MESSAGING MATRIX: Use exact messaging from resolveCanonicalRunState
   switch (normalized) {
     case 'queued':
     case 'run_requested':
@@ -70,7 +73,7 @@ function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
       return {
         icon: 'clock',
         label: 'Queued',
-        copy: 'Campaign queued for execution',
+        copy: 'Execution queued',
         ...NSD_COLORS.semantic.info,
       };
     case 'running':
@@ -78,7 +81,7 @@ function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
       return {
         icon: 'refresh',
         label: 'Running',
-        copy: 'Campaign is currently running',
+        copy: 'Execution in progress',
         ...NSD_COLORS.semantic.active,
       };
     case 'completed':
@@ -87,7 +90,7 @@ function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
       return {
         icon: 'check',
         label: 'Completed',
-        copy: 'Last run completed successfully',
+        copy: 'Last execution completed successfully',
         ...NSD_COLORS.semantic.positive,
       };
     case 'failed':
@@ -95,7 +98,7 @@ function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
       return {
         icon: 'warning',
         label: 'Failed',
-        copy: 'Last run failed',
+        copy: 'Last execution failed',
         ...NSD_COLORS.semantic.critical,
       };
     case 'partial':
@@ -103,14 +106,14 @@ function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
       return {
         icon: 'warning',
         label: 'Partial',
-        copy: 'Last run partially completed',
+        copy: 'Last execution partially completed',
         ...NSD_COLORS.semantic.attention,
       };
     case 'no_runs':
       return {
         icon: 'info',
-        label: 'No runs',
-        copy: 'This campaign has not been executed yet',
+        label: 'Idle',
+        copy: 'No execution has run yet',
         ...NSD_COLORS.semantic.muted,
       };
     default:

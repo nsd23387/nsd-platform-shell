@@ -595,8 +595,8 @@ export async function getCampaignRunsDetailed(id: string): Promise<CampaignRunDe
  * - "run_requested": Execution request sent
  * - "running": Run in progress
  * - "awaiting_approvals": Run completed, leads pending approval
- * - "completed": Last run completed
- * - "failed": Last run failed
+ * - "completed": Last execution completed
+ * - "failed": Last execution failed
  * 
  * UI MUST NOT derive status from any other source.
  * 

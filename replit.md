@@ -46,13 +46,14 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
 **Core Principle**: A user can determine in under 10 seconds whether execution happened, whether it was expected, and whether action is required—without reading logs.
 
 **State Mapping** (`app/sales-engine/lib/execution-state-mapping.ts`):
-| Backend Condition (OBSERVATION-BASED) | UI Meaning |
+| Backend Condition (CANONICAL MESSAGING MATRIX) | UI Meaning |
 |---------------------------------------|------------|
-| No run exists (noRuns=true) | "Campaign not executed yet" |
-| Run + status=queued | "Awaiting worker pickup" |
+| No run exists (noRuns=true) | "No execution has run yet" (idle) |
+| Run + status=queued | "Execution queued" |
 | Run + status=running | "Execution in progress" |
-| Run + status=completed | "Execution finished - no steps observed" |
-| Run + status=failed | "Execution failed" |
+| Run + status=running + >30 min | "Execution stalled — system will mark failed" |
+| Run + status=completed | "Last execution completed successfully" |
+| Run + status=failed | "Last execution failed" |
 | Run + unknown status | "Status unknown" |
 
 **OBSERVATION**: The LatestRun model provides only start/end timestamps without intermediate execution steps. When a run completes, we observe that no execution steps are visible in the data. This is stated as an observation ("no execution steps were observed"), not inference about what the system did or didn't do.
@@ -70,11 +71,33 @@ The Execution Timeline & Explainability feature replaces ambiguous execution ind
 - Consume existing `/api/v1/campaigns/:id/runs/latest` endpoint only
 
 ## Recent Changes
+- January 17, 2026: Last Execution Summary Card (Complete)
+  - Created `LastExecutionSummaryCard` component for historical execution context
+  - Shows when status is failed or completed (terminal states only)
+  - Displays: timestamp (when execution finished), terminal reason (if failed), counts (orgs/contacts/leads), link to observability
+  - UX Trust Accelerator: Reinforces "The system is idle. You are looking at history."
+  - Read-only with no execution controls
+  - Integrated into Overview tab's right column after ExecutionStageTracker
+
+- January 17, 2026: P0 Canonical Run State Reconciliation (Complete)
+  - Created `resolveCanonicalRunState()` function as single source of truth for execution state
+  - Mandatory messaging matrix enforced across all components:
+    - failed = "Last execution failed"
+    - completed = "Last execution completed successfully"
+    - stalled = "Execution stalled — system will mark failed"
+    - idle = "No execution has run yet"
+    - queued = "Execution queued"
+    - running = "Execution in progress"
+  - "Stalled" messaging ONLY appears when status='running' AND >30 min (never for terminal runs)
+  - Removed all misleading "cleanup" or "awaiting cleanup" messaging
+  - Updated all observability components: ExecutionHealthIndicator, ActiveStageFocusPanel, LatestRunStatusCard, ExecutionConfidenceBadge
+  - campaign_runs.status is the ONLY authoritative source of truth
+
 - January 17, 2026: P0 Run Staleness & Active Run Resolution
   - Created `resolveActiveRun.ts` utility with centralized run selection logic
   - Run precedence: queued > running (non-stale) > most recent terminal
   - Staleness threshold: 30 minutes (`RUN_STALE_THRESHOLD_MS = 30 * 60 * 1000`) matching backend watchdog
-  - Stale runs NEVER show as "Running" - use warning copy: "Stale execution — being cleaned up by system"
+  - Stale runs NEVER show as "Running" - use warning copy: "Execution stalled — system will mark failed"
   - All execution components receive `runStartedAt` prop for staleness calculation
   - Updated ExecutionConfidenceBadge with `stale` confidence type
   - useExecutionPolling stops polling for stale runs automatically
