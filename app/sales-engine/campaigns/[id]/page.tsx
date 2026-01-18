@@ -367,7 +367,7 @@ export default function CampaignDetailPage() {
   /**
    * Handle Duplicate Campaign button click.
    * Creates a copy of the current campaign with a new ID and DRAFT status.
-   * Navigates to the new campaign after successful duplication.
+   * Navigates to the edit wizard for review and adjustment.
    */
   const handleDuplicateCampaign = useCallback(async () => {
     if (isDuplicating) return;
@@ -378,7 +378,7 @@ export default function CampaignDetailPage() {
       const result = await duplicateCampaign(campaignId);
 
       if (result.success && result.data) {
-        router.push(`/sales-engine/campaigns/${result.data.campaign.id}`);
+        router.push(`/sales-engine/campaigns/${result.data.campaign.id}/edit`);
       } else {
         console.error('[CampaignDetail] Duplicate failed:', result.error);
         alert(`Failed to duplicate campaign: ${result.error || 'Unknown error'}`);
@@ -390,6 +390,14 @@ export default function CampaignDetailPage() {
       setIsDuplicating(false);
     }
   }, [campaignId, isDuplicating, router]);
+
+  /**
+   * Handle Edit Campaign button click.
+   * Navigates to the edit wizard for this campaign.
+   */
+  const handleEditCampaign = useCallback(() => {
+    router.push(`/sales-engine/campaigns/${campaignId}/edit`);
+  }, [campaignId, router]);
 
   if (loading) {
     return (
@@ -487,6 +495,7 @@ export default function CampaignDetailPage() {
             }}
             onDuplicate={handleDuplicateCampaign}
             isDuplicating={isDuplicating}
+            onEdit={handleEditCampaign}
           />
         )}
 
@@ -544,6 +553,7 @@ function OverviewTab({
   onPlanningOnlyChange,
   onDuplicate,
   isDuplicating,
+  onEdit,
 }: {
   campaign: CampaignDetail;
   governanceState: CampaignGovernanceState;
@@ -562,6 +572,8 @@ function OverviewTab({
   onDuplicate?: () => void;
   /** Whether duplication is in progress */
   isDuplicating?: boolean;
+  /** Callback to edit the campaign */
+  onEdit?: () => void;
 }) {
   // Determine if campaign can be modified
   // Campaign cannot be modified if it's completed, archived, executed, or has runs
@@ -744,6 +756,7 @@ function OverviewTab({
             isPlanningOnly={isPlanningOnly}
             onDuplicate={onDuplicate}
             duplicating={isDuplicating}
+            onEdit={onEdit}
           />
 
           {/* Planning-Only Toggle
