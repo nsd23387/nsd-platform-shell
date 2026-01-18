@@ -64,6 +64,8 @@ interface GovernanceActionsPanelProps {
   onDuplicate?: () => void;
   /** Whether duplication is in progress */
   duplicating?: boolean;
+  /** Callback to edit the campaign */
+  onEdit?: () => void;
 }
 
 /**
@@ -92,6 +94,7 @@ export function GovernanceActionsPanel({
   isPlanningOnly = false,
   onDuplicate,
   duplicating = false,
+  onEdit,
 }: GovernanceActionsPanelProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -436,6 +439,33 @@ export function GovernanceActionsPanel({
           </Link>
         )}
 
+        {/* Edit Campaign button - always visible */}
+        <button
+          onClick={onEdit}
+          disabled={!onEdit}
+          style={{
+            width: '100%',
+            padding: '12px 20px',
+            fontSize: '14px',
+            fontWeight: 500,
+            fontFamily: NSD_TYPOGRAPHY.fontBody,
+            backgroundColor: NSD_COLORS.secondary,
+            color: NSD_COLORS.text.inverse,
+            border: 'none',
+            borderRadius: NSD_RADIUS.md,
+            cursor: !onEdit ? 'not-allowed' : 'pointer',
+            opacity: !onEdit ? 0.7 : 1,
+            marginTop: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}
+        >
+          <Icon name="edit" size={16} color={NSD_COLORS.text.inverse} />
+          Edit Campaign
+        </button>
+
         {/* Duplicate Campaign button - always visible */}
         <button
           onClick={onDuplicate}
@@ -452,7 +482,7 @@ export function GovernanceActionsPanel({
             borderRadius: NSD_RADIUS.md,
             cursor: (duplicating || !onDuplicate) ? 'not-allowed' : 'pointer',
             opacity: (duplicating || !onDuplicate) ? 0.7 : 1,
-            marginTop: '16px',
+            marginTop: '8px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

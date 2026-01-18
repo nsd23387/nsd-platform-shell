@@ -757,6 +757,113 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
 }
 
 // =============================================================================
+// CAMPAIGN UPDATE
+// Updates an existing campaign's configuration.
+// This is a control-plane write for campaign editing.
+//
+// GOVERNANCE ALIGNMENT:
+// Campaign updates are permitted as part of campaign management.
+// Updates do NOT change governance state or initiate execution.
+// =============================================================================
+
+export interface UpdateCampaignPayload {
+  campaign_id: string;
+  name?: string;
+  description?: string;
+  icp?: {
+    keywords?: string[];
+    industries?: string[];
+    geographies?: string[];
+    job_titles?: string[];
+    seniority_levels?: string[];
+    company_size?: { min: number; max: number };
+    roles?: string[];
+  };
+  contact_targeting?: {
+    roles?: string[];
+    seniority?: string[];
+    max_contacts_per_org?: number;
+    email_requirements?: {
+      require_verified?: boolean;
+      exclude_generic?: boolean;
+    };
+  };
+  outreach_context?: {
+    tone?: string;
+    value_propositions?: string[];
+    pain_points?: string[];
+    call_to_action?: string;
+  };
+  campaign_targets?: {
+    target_leads?: number | null;
+    target_emails?: number | null;
+    target_reply_rate?: number | null;
+  };
+  sourcing_config?: {
+    benchmarks_only?: boolean;
+  };
+}
+
+export interface UpdateCampaignResponse {
+  success: boolean;
+  data?: {
+    campaign: {
+      id: string;
+      updated: boolean;
+    };
+  };
+  error?: string;
+}
+
+/**
+ * Update a campaign's configuration.
+ * 
+ * @param payload - The update payload including campaign_id and fields to update
+ * @returns The update result
+ */
+export async function updateCampaign(
+  payload: UpdateCampaignPayload
+): Promise<UpdateCampaignResponse> {
+  if (isApiDisabled) {
+    console.log(`[API] API mode disabled - mock update for campaign ${payload.campaign_id}`);
+    return {
+      success: true,
+      data: {
+        campaign: {
+          id: payload.campaign_id,
+          updated: true,
+        },
+      },
+    };
+  }
+
+  try {
+    const response = await fetch('/api/campaign-update', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || `Update failed: ${response.status}`,
+      };
+    }
+
+    return data as UpdateCampaignResponse;
+  } catch (error) {
+    console.error('[API] updateCampaign error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+// =============================================================================
 // CAMPAIGN DUPLICATION
 // Duplicates an existing campaign with a new ID and DRAFT status.
 // This is a control-plane write similar to campaign creation.
@@ -852,13 +959,8 @@ export async function createCampaign(): Promise<never> {
   throw new ReadOnlyViolationError('POST', '/campaigns (createCampaign)');
 }
 
-/**
- * @deprecated This function has been removed. The Sales Engine UI is read-only.
- * Campaign updates are managed by backend governance systems.
- */
-export async function updateCampaign(): Promise<never> {
-  throw new ReadOnlyViolationError('PATCH', '/campaigns/:id (updateCampaign)');
-}
+// NOTE: updateCampaign is now a working function defined above for campaign editing.
+// The deprecated stub has been removed.
 
 /**
  * @deprecated This function has been removed. The Sales Engine UI is read-only.
