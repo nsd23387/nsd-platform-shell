@@ -1,0 +1,163 @@
+Replit Execution Prompt: Lock ENM as the Sole Execution Truth Source
+
+Objective
+Now that the Canonical Execution Narrative Mapper (ENM) exists, we must hard-lock frontend execution semantics so the UI can never regress into heuristic or contradictory interpretations.
+
+This task enforces a single-source-of-truth rule:
+
+❗ All execution-related UI MUST consume ENM output only
+❗ No component may interpret raw execution data independently
+
+This is a governance hardening task, not a feature change.
+
+Scope of Work
+1. Establish ENM as the Only Execution Interface
+
+Identify the ENM output object (e.g. ExecutionNarrative, ExecutionStateViewModel, or equivalent).
+
+Treat this object as the only allowed input for:
+
+Execution status
+
+Stage messaging
+
+Subheadlines
+
+Warnings (stalled, failed)
+
+Zero-result messaging
+
+“Idle / Queued / Running / Completed / Failed” state
+
+No UI component may read:
+
+campaign_runs.status
+
+started_at / completed_at
+
+Raw activity.events
+
+Funnel counts
+
+Timers or timestamps
+
+outside of the ENM.
+
+2. Audit and Refactor All Execution-Aware Components
+
+Perform a full audit of the following (and any others that display execution state):
+
+ExecutionHealthIndicator
+
+ActiveStageFocusPanel
+
+ExecutionStageTracker
+
+LatestRunStatusCard
+
+ExecutionSummary
+
+PipelineFunnel
+
+RunHistory (status column)
+
+Any “No organizations found / 0 results” messaging
+
+Any “Idle / Not yet executed” messaging
+
+For each component:
+
+❌ Remove direct access to raw backend fields
+
+❌ Remove conditional logic based on timestamps, counts, or status
+
+✅ Accept only ENM output as props
+
+✅ Render purely based on ENM fields (e.g. narrative.state, headline, subheadline, stage, severity)
+
+3. Enforce Compile-Time Guardrails
+
+Add hard enforcement so violations are impossible:
+
+Create a shared type (e.g. ExecutionNarrative)
+
+Components must accept this type explicitly
+
+Prohibit passing raw run/event data via props
+
+If feasible:
+
+Add lint or TS rules that flag usage of:
+
+campaign_runs
+
+activity.events
+
+started_at / completed_at
+inside UI components outside the ENM module
+
+4. Centralize All Execution Copy
+
+All user-visible execution copy must originate from ENM
+
+No inline strings like:
+
+“No organizations found”
+
+“Execution idle”
+
+“In progress”
+
+“Awaiting cleanup”
+
+ENM is responsible for:
+
+Canonical wording
+
+State legality
+
+Timing correctness
+
+UI components must be presentation-only, never interpretive.
+
+5. Add Explicit Documentation
+
+Add a short governance section (e.g. execution-governance.md or in replit.md) stating:
+
+ENM is the sole interpreter of execution state
+
+UI components are non-authoritative
+
+Any future execution UI must integrate via ENM
+
+Violations are considered architectural regressions
+
+Constraints (Non-Negotiable)
+
+❌ Do NOT change backend execution behavior
+
+❌ Do NOT modify execution timing, retries, or status transitions
+
+❌ Do NOT introduce new heuristics
+
+❌ Do NOT add new execution states
+
+This is a read-path governance lock only.
+
+Acceptance Criteria
+
+No UI component reads raw execution data directly
+
+ENM is the only source of execution truth
+
+Zero contradictory execution messaging is possible
+
+Running executions never display terminal conclusions
+
+Future execution stages will not require UI rewrites
+
+Success Definition
+
+The frontend can only ever say what the backend has provably done — never what it assumes is happening.
+
+Proceed carefully and deliberately. This change prevents future trust failures.
