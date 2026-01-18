@@ -60,6 +60,10 @@ interface GovernanceActionsPanelProps {
   isPlanningOnly?: boolean;
   /** Current execution phase (for future stage-aware actions) */
   currentPhase?: string | null;
+  /** Callback to duplicate the campaign */
+  onDuplicate?: () => void;
+  /** Whether duplication is in progress */
+  duplicating?: boolean;
 }
 
 /**
@@ -86,6 +90,8 @@ export function GovernanceActionsPanel({
   submitting = false,
   runsCount = 0,
   isPlanningOnly = false,
+  onDuplicate,
+  duplicating = false,
 }: GovernanceActionsPanelProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -429,6 +435,33 @@ export function GovernanceActionsPanel({
             <span style={{ fontSize: '16px', color: NSD_COLORS.secondary }}>→</span>
           </Link>
         )}
+
+        {/* Duplicate Campaign button - always visible */}
+        <button
+          onClick={onDuplicate}
+          disabled={duplicating || !onDuplicate}
+          style={{
+            width: '100%',
+            padding: '12px 20px',
+            fontSize: '14px',
+            fontWeight: 500,
+            fontFamily: NSD_TYPOGRAPHY.fontBody,
+            backgroundColor: 'transparent',
+            color: NSD_COLORS.secondary,
+            border: `1px solid ${NSD_COLORS.secondary}`,
+            borderRadius: NSD_RADIUS.md,
+            cursor: (duplicating || !onDuplicate) ? 'not-allowed' : 'pointer',
+            opacity: (duplicating || !onDuplicate) ? 0.7 : 1,
+            marginTop: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}
+        >
+          <Icon name="plus" size={16} color={NSD_COLORS.secondary} />
+          {duplicating ? 'Duplicating...' : 'Duplicate Campaign'}
+        </button>
       </div>
     </div>
   );

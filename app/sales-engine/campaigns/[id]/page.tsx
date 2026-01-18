@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader, SectionCard } from '../../components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
@@ -38,6 +38,7 @@ import {
   getCampaignObservabilityStatus,
   getCampaignObservabilityFunnel,
   requestCampaignRun,
+  duplicateCampaign,
 } from '../../lib/api';
 import {
   mapToGovernanceState,
@@ -116,6 +117,9 @@ export default function CampaignDetailPage() {
   // Run request state
   const [isRunRequesting, setIsRunRequesting] = useState(false);
   const [runRequestMessage, setRunRequestMessage] = useState<string | null>(null);
+  // Duplicate campaign state
+  const [isDuplicating, setIsDuplicating] = useState(false);
+  const router = useRouter();
 
   // Derive governance state from backend data
   const governanceState: CampaignGovernanceState = campaign
@@ -360,6 +364,33 @@ export default function CampaignDetailPage() {
     }
   }, [campaignId, isRunRequesting, refreshObservabilityData]);
 
+  /**
+   * Handle Duplicate Campaign button click.
+   * Creates a copy of the current campaign with a new ID and DRAFT status.
+   * Navigates to the new campaign after successful duplication.
+   */
+  const handleDuplicateCampaign = useCallback(async () => {
+    if (isDuplicating) return;
+
+    setIsDuplicating(true);
+
+    try {
+      const result = await duplicateCampaign(campaignId);
+
+      if (result.success && result.data) {
+        router.push(`/sales-engine/campaigns/${result.data.campaign.id}`);
+      } else {
+        console.error('[CampaignDetail] Duplicate failed:', result.error);
+        alert(`Failed to duplicate campaign: ${result.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('[CampaignDetail] Duplicate request failed:', err);
+      alert(`Failed to duplicate campaign: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsDuplicating(false);
+    }
+  }, [campaignId, isDuplicating, router]);
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -454,6 +485,8 @@ export default function CampaignDetailPage() {
                   : prev
               );
             }}
+            onDuplicate={handleDuplicateCampaign}
+            isDuplicating={isDuplicating}
           />
         )}
 
@@ -509,6 +542,8 @@ function OverviewTab({
   isRefreshing,
   onRefresh,
   onPlanningOnlyChange,
+  onDuplicate,
+  isDuplicating,
 }: {
   campaign: CampaignDetail;
   governanceState: CampaignGovernanceState;
@@ -523,6 +558,10 @@ function OverviewTab({
   onRefresh: () => void;
   /** Callback when planning-only state changes (to update parent state) */
   onPlanningOnlyChange?: (newState: boolean) => void;
+  /** Callback to duplicate the campaign */
+  onDuplicate?: () => void;
+  /** Whether duplication is in progress */
+  isDuplicating?: boolean;
 }) {
   // Determine if campaign can be modified
   // Campaign cannot be modified if it's completed, archived, executed, or has runs
@@ -703,6 +742,8 @@ function OverviewTab({
             canApprove={campaign.canApprove}
             runsCount={runsCount}
             isPlanningOnly={isPlanningOnly}
+            onDuplicate={onDuplicate}
+            duplicating={isDuplicating}
           />
 
           {/* Planning-Only Toggle

@@ -757,6 +757,88 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
 }
 
 // =============================================================================
+// CAMPAIGN DUPLICATION
+// Duplicates an existing campaign with a new ID and DRAFT status.
+// This is a control-plane write similar to campaign creation.
+//
+// GOVERNANCE ALIGNMENT:
+// Campaign duplication is explicitly permitted as an extension of the
+// CampaignCreate control-plane write capability. Both create new campaigns
+// in DRAFT state without execution capabilities. This is NOT a UI-initiated
+// execution or approval - it creates a new campaign for human review.
+// =============================================================================
+
+export interface DuplicateCampaignResponse {
+  success: boolean;
+  data?: {
+    campaign: {
+      id: string;
+      name: string;
+      governance_state: 'DRAFT';
+      source_campaign_id: string;
+    };
+  };
+  error?: string;
+}
+
+/**
+ * Duplicate a campaign.
+ * Creates a copy of the campaign with a new ID and DRAFT status.
+ * 
+ * @param sourceCampaignId - The ID of the campaign to duplicate
+ * @param newName - Optional custom name for the duplicated campaign
+ * @returns The duplicated campaign details
+ */
+export async function duplicateCampaign(
+  sourceCampaignId: string,
+  newName?: string
+): Promise<DuplicateCampaignResponse> {
+  // When API is disabled, return a mock response
+  if (isApiDisabled) {
+    console.log(`[API] API mode disabled - mock duplicate for campaign ${sourceCampaignId}`);
+    return {
+      success: true,
+      data: {
+        campaign: {
+          id: `mock-duplicate-${Date.now()}`,
+          name: newName || `Copy of Campaign (mock)`,
+          governance_state: 'DRAFT',
+          source_campaign_id: sourceCampaignId,
+        },
+      },
+    };
+  }
+
+  try {
+    const response = await fetch('/api/campaign-duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_campaign_id: sourceCampaignId,
+        new_name: newName,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || `Duplicate failed: ${response.status}`,
+      };
+    }
+
+    return data as DuplicateCampaignResponse;
+  } catch (error) {
+    console.error('[API] duplicateCampaign error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+// =============================================================================
 // DEPRECATED/REMOVED MUTATION FUNCTIONS
 // These functions have been removed per target-state architecture constraints.
 // The Sales Engine UI is read-only; mutations are managed by backend systems.
