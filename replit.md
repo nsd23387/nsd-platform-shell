@@ -38,6 +38,16 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 18, 2026: Canonical Execution Narrative Mapper (ENM) Implementation
+  - Created `execution-narrative-mapper.ts` with truthful, event-driven execution storytelling
+  - Implements canonical mapping rules: IDLE, QUEUED, RUNNING, STALLED, COMPLETED, FAILED
+  - Parses stage.boundary events to show active stage with details
+  - Enforces hard UI rules: never show "No orgs found" while running
+  - Added trust accelerator copy for historical data and running states
+  - Created `useExecutionNarrative` hook for component consumption
+  - Created `ExecutionNarrativeCard` component for displaying narratives
+  - ENM is deterministic, testable, and event-driven (not heuristic-driven)
+
 - January 18, 2026: Campaign Edit & Duplicate Features (Complete)
   - Created `/api/campaign-update` endpoint for updating campaign configuration
   - Created `/sales-engine/campaigns/[id]/edit` wizard page for editing any campaign
