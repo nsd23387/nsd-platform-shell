@@ -4,16 +4,29 @@
  * Shared layout for all SEO Intelligence pages.
  * Provides navigation, admin context, and read-only indicators.
  * 
- * GOVERNANCE:
+ * ============================================================
+ * GOVERNANCE NOTICE
+ * ============================================================
+ * 
+ * This system does NOT execute SEO changes.
+ * This system does NOT modify website content.
+ * This system ONLY proposes and governs decisions.
+ * All execution happens externally (e.g., website repo via PR).
+ * 
+ * Architectural Constraints:
+ * - ODS is the system of record
+ * - Platform Shell is a read-only façade, except for approvals
+ * - No SEO code may write to website content, CMS, or trigger deployments
+ * - API routes are thin, typed, and explicitly scoped
+ * - All writes must reference a recommendation_id
+ * 
+ * ============================================================
+ * 
+ * ACCESS CONTROL:
  * - Admin-only access (requires authentication)
  * - Read-only by default (write actions explicitly marked)
  * - Non-public (not accessible without authentication)
  * - Uses existing Platform Shell navigation patterns
- * 
- * NOT ALLOWED:
- * - Public access
- * - Unauthenticated access
- * - Hidden admin functions
  */
 
 'use client';
@@ -109,13 +122,14 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
           })}
         </nav>
 
-        {/* Footer - Read-only notice */}
+        {/* Footer - Governance notice */}
         <div style={sidebarFooterStyles}>
           <div style={readOnlyNoticeStyles}>
-            <strong>Read-Only Mode</strong>
+            <strong>Governed Domain</strong>
             <p style={readOnlyTextStyles}>
-              Data is observational only.
-              Changes require approval workflow.
+              Read-only façade.
+              Approvals only.
+              No execution.
             </p>
           </div>
         </div>
@@ -123,13 +137,13 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
 
       {/* Main Content Area */}
       <div style={mainAreaStyles}>
-        {/* Top Banner - Admin Notice */}
+        {/* Top Banner - Governance Notice */}
         <div style={adminBannerStyles}>
           <span style={adminBannerIconStyles}>🔒</span>
           <span style={adminBannerTextStyles}>
-            Admin-only area. All actions are logged for audit purposes.
+            Admin-only. All actions logged. No execution authority.
           </span>
-          <span style={adminBannerBadgeStyles}>INTERNAL</span>
+          <span style={adminBannerBadgeStyles}>ODS-BACKED</span>
         </div>
 
         {/* Page Content */}
@@ -207,11 +221,11 @@ const sidebarFooterStyles: React.CSSProperties = {
 
 const readOnlyNoticeStyles: React.CSSProperties = {
   padding: space['3'],
-  backgroundColor: semantic.info.light,
+  backgroundColor: semantic.warning.light,
   borderRadius: radius.lg,
   fontFamily: fontFamily.body,
   fontSize: fontSize.sm,
-  color: semantic.info.dark,
+  color: semantic.warning.dark,
 };
 
 const readOnlyTextStyles: React.CSSProperties = {

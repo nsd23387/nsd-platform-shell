@@ -2,6 +2,13 @@
 
 This directory contains the server-side data access and business logic for the SEO Intelligence domain within NSD Platform Shell.
 
+> **GOVERNANCE NOTICE**
+> 
+> This system does NOT execute SEO changes.
+> This system does NOT modify website content.
+> This system ONLY proposes and governs decisions.
+> All execution happens externally (e.g., website repo via PR).
+
 ## Purpose
 
 The SEO Intelligence domain provides:
@@ -16,7 +23,7 @@ The SEO Intelligence domain provides:
 
 ```
 server/seo/
-├── fetchers/           # Read-only data access
+├── fetchers/           # Read-only data access (ODS GET calls)
 │   ├── fetchSeoPages.ts
 │   ├── fetchSeoQueries.ts
 │   ├── fetchSeoSnapshots.ts
@@ -30,6 +37,168 @@ server/seo/
 │
 └── README.md           # This file
 ```
+
+---
+
+## ODS Canonical Alignment
+
+This section documents the canonical ODS (nsd-ods-api) table structures that this domain will interface with. **No migrations are implemented here** — this is documentation for alignment purposes.
+
+### System of Record
+
+**ODS (nsd-ods-api) is the system of record for all SEO Intelligence data.**
+
+Platform Shell is a **read-only façade** with the single exception of approval decisions, which are written back to ODS through governed paths.
+
+### Table: `seo_recommendations`
+
+Primary storage for AI-generated SEO recommendations.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` | **Primary Key** — Durable identifier for linking |
+| `type` | `VARCHAR` | Recommendation family (enum) |
+| `scope` | `JSONB` | Page scope, allowed changes, related pages |
+| `evidence` | `JSONB` | Evidence signals from GSC, GA4, etc. |
+| `current_state` | `JSONB` | Snapshot of current on-page state |
+| `proposed_state` | `JSONB` | Diff-ready proposed changes |
+| `confidence` | `JSONB` | Confidence model with factors |
+| `expected_impact` | `JSONB` | Business impact estimates |
+| `risk` | `JSONB` | Risk assessment |
+| `status` | `VARCHAR` | Lifecycle status (enum) |
+| `metadata` | `JSONB` | Traceability (model version, correlation) |
+| `created_at` | `TIMESTAMPTZ` | Creation timestamp |
+| `updated_at` | `TIMESTAMPTZ` | Last update timestamp |
+
+**Access Patterns:**
+- **READ**: Platform Shell fetchers (via ODS API)
+- **WRITE**: Recommendation Engine only (external system)
+- **STATUS UPDATE**: Platform Shell approvals only
+
+**Authoritative Fields:**
+- `id`, `type`, `scope`, `evidence`, `current_state`, `proposed_state`, `confidence`, `expected_impact`, `risk`, `metadata`, `created_at` — Set by Recommendation Engine, immutable after creation
+
+**Mutable Fields:**
+- `status` — Updated by approval workflow
+- `updated_at` — Auto-updated on any change
+
+---
+
+### Table: `seo_approvals`
+
+Stores human approval decisions for recommendations.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` | **Primary Key** |
+| `recommendation_id` | `UUID` | **Foreign Key** → `seo_recommendations.id` |
+| `decision` | `VARCHAR` | approve / reject / defer |
+| `decided_by` | `VARCHAR` | User ID or email |
+| `decided_at` | `TIMESTAMPTZ` | Decision timestamp |
+| `notes` | `TEXT` | Optional approval notes |
+| `reason` | `TEXT` | Required for reject (learning loop) |
+| `defer_until` | `TIMESTAMPTZ` | Required for defer |
+
+**Access Patterns:**
+- **READ**: Platform Shell fetchers
+- **WRITE**: Platform Shell approvals (governed path)
+
+**Constraints:**
+- `recommendation_id` must exist in `seo_recommendations`
+- `decision` must be valid enum value
+- `reason` required when `decision = 'reject'`
+- `defer_until` required when `decision = 'defer'`
+
+**Authoritative Fields:**
+- All fields are authoritative once written
+- Approval records are **append-only** (no updates, no deletes)
+
+---
+
+### Table: `seo_implementation_refs`
+
+Tracks external implementation of approved recommendations.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` | **Primary Key** |
+| `recommendation_id` | `UUID` | **Foreign Key** → `seo_recommendations.id` |
+| `method` | `VARCHAR` | manual / ai_generated_diff |
+| `repo` | `VARCHAR` | Target repo (e.g., "nsd-website") |
+| `pr_url` | `VARCHAR` | Pull request URL |
+| `commit_hash` | `VARCHAR` | Merged commit reference |
+| `implemented_by` | `VARCHAR` | User ID or email |
+| `implemented_at` | `TIMESTAMPTZ` | Implementation timestamp |
+| `rollback_pr_url` | `VARCHAR` | Rollback PR if rolled back |
+| `rolled_back_at` | `TIMESTAMPTZ` | Rollback timestamp |
+
+**Access Patterns:**
+- **READ**: Platform Shell fetchers
+- **WRITE**: External systems only (CI/CD, manual tracking)
+
+**Important:**
+- Platform Shell **NEVER** writes to this table
+- This table tracks that changes happened elsewhere
+- Implementation records are created by the website repo's CI/CD or manual process
+
+---
+
+### Table: `seo_learning_outcomes`
+
+Stores measured outcomes after implementation (learning loop).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` | **Primary Key** |
+| `recommendation_id` | `UUID` | **Foreign Key** → `seo_recommendations.id` |
+| `evaluation_window_days` | `INTEGER` | Measurement period (14, 30, 60 days) |
+| `observed_impact` | `JSONB` | Measured changes (CTR, ranking, etc.) |
+| `verdict` | `VARCHAR` | positive / neutral / negative |
+| `notes` | `TEXT` | Optional analysis notes |
+| `measured_at` | `TIMESTAMPTZ` | Measurement timestamp |
+
+**Access Patterns:**
+- **READ**: Platform Shell fetchers
+- **WRITE**: Analytics pipeline only (external system)
+
+**Important:**
+- Platform Shell **NEVER** writes to this table
+- Outcomes are measured by analytics systems after the evaluation window
+- Data feeds back into recommendation engine for model improvement
+
+---
+
+### Activity Events (Audit Trail)
+
+In addition to the tables above, all significant actions emit events to `activity.events`:
+
+| Event Type | Trigger |
+|------------|---------|
+| `seo.recommendation.created` | Recommendation engine creates new rec |
+| `seo.recommendation.approved` | Admin approves via Platform Shell |
+| `seo.recommendation.rejected` | Admin rejects via Platform Shell |
+| `seo.recommendation.deferred` | Admin defers via Platform Shell |
+| `seo.recommendation.implemented` | External system marks as implemented |
+| `seo.recommendation.rolled_back` | External system marks as rolled back |
+| `seo.recommendation.outcome.measured` | Analytics measures outcome |
+
+**Access Patterns:**
+- **READ**: Platform Shell audit log fetchers
+- **WRITE**: Each system writes its own events
+
+---
+
+### Summary: Platform Shell Permissions
+
+| Table | READ | WRITE |
+|-------|------|-------|
+| `seo_recommendations` | ✅ Yes | ❌ No (status only via approvals) |
+| `seo_approvals` | ✅ Yes | ✅ Yes (governed) |
+| `seo_implementation_refs` | ✅ Yes | ❌ No |
+| `seo_learning_outcomes` | ✅ Yes | ❌ No |
+| `activity.events` | ✅ Yes | ✅ Yes (append only) |
+
+---
 
 ## Governance Rules
 
@@ -150,7 +319,7 @@ If AI-powered automation is introduced:
 
 1. Create file in `fetchers/` directory
 2. Export async function that returns typed data
-3. Add `NOT IMPLEMENTED` warning for stubs
+3. Mark ODS integration points with `// ODS API: GET ...` comments
 4. Document data source in comments
 5. Export from `fetchers/index.ts`
 
@@ -159,7 +328,7 @@ If AI-powered automation is introduced:
 1. Create file in `approvals/` directory
 2. Define `Context` type with user info
 3. Add validation function
-4. Throw `NotImplemented` error in stub
+4. Mark ODS integration points with `// ODS API: POST ...` comments
 5. Document governance constraints
 6. Export from `approvals/index.ts`
 
@@ -172,15 +341,15 @@ If AI-powered automation is introduced:
 
 ## Status
 
-**Current State**: Scaffolding only (no runtime logic)
+**Current State**: Infrastructure + Contracts (no runtime ODS integration)
 
-All functions in this directory are stubs that:
-- Log warnings when called
-- Return empty/null placeholders (fetchers)
-- Throw `NotImplemented` errors (approvals)
+All functions in this directory are:
+- Typed according to canonical schema
+- Stubbed with mock data or TODO placeholders
+- Ready for ODS API integration
+- Documented with governance constraints
 
-This is intentional - implementation requires:
-1. Data source integration
-2. Database schema design
-3. Authentication integration
-4. API route implementation
+Next steps:
+1. ODS API client integration
+2. Authentication middleware
+3. Real data flow testing
