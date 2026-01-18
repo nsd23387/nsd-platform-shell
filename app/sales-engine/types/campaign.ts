@@ -135,6 +135,10 @@ export interface CampaignRun {
   };
   // Provenance
   provenance?: ProvenanceType;
+  // Terminal metadata (optional) - emitted by backend on terminal runs
+  error_message?: string | null;
+  failure_reason?: string | null;
+  reason?: string | null;
 }
 
 export interface CampaignVariant {

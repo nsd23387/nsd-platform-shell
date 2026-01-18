@@ -1,0 +1,119 @@
+Replit Execution Prompt — P0 Type Contract Fix (Vercel Build Failure)
+Context
+
+The Vercel build for nsd-platform-shell is failing due to a TypeScript type mismatch involving the LatestRun type.
+
+The UI now displays terminal execution metadata (error_message, failure_reason, reason) in the Last Execution Summary Card, but these fields are not defined on the canonical LatestRun type. This caused Replit-generated code to temporarily use (as any), which is not acceptable and breaks strict typing during next build.
+
+This is a type-contract alignment task only.
+No runtime behavior should change.
+
+Problem Statement (Exact Failure)
+Type '{ ... error_message ... } | null' is not assignable to type 'LatestRun | null'.
+Object literal may only specify known properties, and 'error_message' does not exist in type 'LatestRun'.
+
+Required Fix (Authoritative)
+1. Update the Canonical Type
+
+Locate the canonical LatestRun type (likely in:
+
+app/sales-engine/types
+
+app/sales-engine/api.ts
+
+or a shared types.ts file)
+
+Extend it to optionally include terminal metadata, matching backend reality:
+
+export interface LatestRun {
+  run_id: string;
+  status: ExecutionStatus;
+  created_at: string;
+  updated_at?: string;
+
+  // NEW — terminal metadata (optional)
+  error_message?: string | null;
+  failure_reason?: string | null;
+  reason?: string | null;
+}
+
+
+Constraints:
+
+Fields MUST be optional
+
+No required fields added
+
+No renaming of existing fields
+
+No new enums or schema assumptions
+
+2. Remove Unsafe Casts
+
+In:
+
+app/sales-engine/campaigns/[id]/page.tsx
+
+
+Remove all (latestRun as any) casts.
+
+Replace with safe, typed access:
+
+error_message: latestRun?.error_message ?? null
+failure_reason: latestRun?.failure_reason ?? null
+reason: latestRun?.reason ?? null
+
+3. Preserve Governance Semantics
+
+You MUST ensure:
+
+No inference logic added
+
+UI remains read-only
+
+No schema changes
+
+No backend changes
+
+No changes to execution state resolution
+
+No suppression of TypeScript errors
+
+No weakening of types (no any, no unknown)
+
+This is purely a contract alignment between UI and backend-emitted data.
+
+4. Validation (Required)
+
+After applying changes:
+
+Run npm run build
+
+Confirm:
+
+✅ No TypeScript errors
+
+✅ No ESLint errors introduced
+
+✅ Vercel build would pass
+
+If any additional type mismatches appear, fix them properly (do not cast or suppress).
+
+Explicit Non-Goals
+
+❌ Do NOT modify backend APIs
+❌ Do NOT add new fields beyond the three listed
+❌ Do NOT change execution semantics
+❌ Do NOT touch polling, staleness logic, or watchdog logic
+❌ Do NOT introduce UI heuristics
+
+Completion Criteria
+
+Reply only with:
+
+Files changed
+
+Confirmation that npm run build passes
+
+Statement:
+“The LatestRun type contract is now aligned with terminal execution metadata and the build passes successfully.”

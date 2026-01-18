@@ -27,6 +27,10 @@ interface LatestRunResponse {
   execution_mode?: string;
   created_at: string;
   updated_at?: string;
+  // Terminal metadata (optional) - emitted by backend on terminal runs
+  error_message?: string | null;
+  failure_reason?: string | null;
+  reason?: string | null;
 }
 
 interface UseExecutionPollingOptions {
