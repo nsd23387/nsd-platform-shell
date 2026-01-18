@@ -31,6 +31,7 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Run Staleness & Active Run Resolution**: A `resolveActiveRun.ts` utility handles run selection logic, considering staleness thresholds (30 minutes) to prevent "Running" status for stalled executions.
 - **Live Execution Observability**: Utilizes a `useExecutionPolling` hook for live updates every 7 seconds during active execution, stopping automatically on terminal states. All timestamps are displayed in America/New_York timezone with an "ET" label.
 - **UI Hardening for Future Execution Stages**: Uses `CANONICAL_STAGE_CONFIG` for all execution stages, ensuring components like `ExecutionStageTracker`, `ActiveStageFocusPanel`, and `ExecutionHealthIndicator` are stage-agnostic and handle unknown stages gracefully, promoting extensibility.
+- **ENM Governance Lock**: The Execution Narrative Mapper (ENM) is the SOLE interpreter of execution state. All execution-aware UI components must consume `ExecutionNarrative` output only. No component may access raw `campaign_runs`, `activity.events`, or derive state from timestamps/counts. See `app/sales-engine/lib/execution-governance.md` for full governance rules.
 
 ## External Dependencies
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.
@@ -38,6 +39,13 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 18, 2026: ENM Governance Lock (Complete)
+  - Created `execution-narrative-governance.ts` with strict ENM-only types
+  - Created ENM-governed components: ExecutionHealthIndicatorENM, ActiveStageFocusPanelENM, LatestRunStatusCardENM, LastExecutionSummaryCardENM
+  - All ENM components consume ONLY ExecutionNarrative output
+  - Added governance documentation in `app/sales-engine/lib/execution-governance.md`
+  - ENM is now the SOLE execution truth source - UI cannot regress into heuristics
+
 - January 18, 2026: Canonical Execution Narrative Mapper (ENM) Implementation
   - Created `execution-narrative-mapper.ts` with truthful, event-driven execution storytelling
   - Implements canonical mapping rules: IDLE, QUEUED, RUNNING, STALLED, COMPLETED, FAILED
