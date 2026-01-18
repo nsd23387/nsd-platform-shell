@@ -38,3 +38,14 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.
 - **ODS API**: Used for bootstrap and identity services.
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
+
+## Recent Changes
+- January 18, 2026: Campaign Edit & Duplicate Features (Complete)
+  - Created `/api/campaign-update` endpoint for updating campaign configuration
+  - Created `/sales-engine/campaigns/[id]/edit` wizard page for editing any campaign
+  - Edit wizard loads existing campaign data and pre-populates all form fields
+  - Created `/api/campaign-duplicate` endpoint to copy campaign data with new ID and DRAFT status
+  - Copies: name (prefixed with "Copy of"), ICP, sourcing_config, lead_qualification_config
+  - Does NOT copy: execution history, runs, metrics (fresh campaign)
+  - Added "Edit Campaign" and "Duplicate Campaign" buttons to GovernanceActionsPanel
+  - After duplication, navigates to edit wizard for review and adjustment
