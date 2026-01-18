@@ -5,6 +5,16 @@
  * Read-only bar visualization.
  * 
  * Updated to use design system tokens.
+ * 
+ * GOVERNANCE NOTE:
+ * This component performs display-only transformations.
+ * Item values come from pre-computed metrics via props.
+ * The percentage calculation (line 38) is for visual bar width only,
+ * NOT for metric derivation. The actual metric values are already
+ * computed upstream and passed as `items[].value`.
+ * 
+ * This is an ALLOWED transformation per governance audit.
+ * See: docs/seo/METRICS_AUDIT.md
  */
 
 import React from 'react';

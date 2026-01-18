@@ -1,3 +1,21 @@
+/**
+ * Monitoring Page
+ * 
+ * GOVERNANCE NOTE:
+ * This UI must NOT compute metrics.
+ * All metrics must be sourced from canonical analytics views.
+ * Local aggregations and rate calculations are prohibited.
+ * 
+ * Per SEO Intelligence Metrics Audit (docs/seo/METRICS_AUDIT.md):
+ * - Aggregation metrics (totalLeads, totalSent, totalBlocked) have been removed
+ * - Rate metrics (successRate, utilizationRate) have been removed
+ * - These metrics must be implemented upstream in nsd-ods-api before use
+ * 
+ * See: analytics.metrics_campaign_execution_daily
+ * See: analytics.metrics_campaign_yield_summary
+ * See: analytics.metrics_throughput_daily
+ */
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -31,27 +49,54 @@ export default function MonitoringPage() {
   }, []);
 
   /**
-   * Yield metrics computed from run outcomes.
+   * Observed yield values from API.
+   * 
+   * GOVERNANCE NOTE:
+   * These values come DIRECTLY from backend API responses.
+   * No aggregations or rate computations are performed in the UI.
+   * 
+   * Metrics that require aggregation (totalLeads, totalSent, successRate)
+   * must be implemented upstream in analytics.metrics_campaign_yield_summary
+   * before they can be displayed here.
    * 
    * IMPORTANT: Contacts and leads are distinct; leads are conditionally promoted.
    * - "Leads Attempted" = promoted leads (Tier A/B) that were processed
    * - Tier C/D contacts are never leads and are not included in these counts
    * - Lead counts reflect promoted leads only, not total contacts
    */
-  const yieldMetrics = runs.length > 0 ? {
-    totalLeads: runs.reduce((sum, r) => sum + r.leadsAttempted, 0),
-    totalSent: runs.reduce((sum, r) => sum + r.leadsSent, 0),
-    successRate: runs.length > 0 ? Math.round((runs.filter(r => r.status === 'COMPLETED').length / runs.length) * 100) : 0,
-  } : null;
+  // TODO: Replace with canonical metrics from analytics.metrics_campaign_yield_summary
+  // Aggregate metrics (totalLeads, totalSent, successRate) have been removed
+  // pending upstream implementation in nsd-ods-api
+  const hasRunData = runs.length > 0;
 
+  /**
+   * Efficiency metrics from throughput API.
+   * 
+   * GOVERNANCE NOTE:
+   * Only direct backend values are displayed.
+   * utilizationRate computation has been removed - must be provided by
+   * analytics.metrics_throughput_daily upstream.
+   */
+  // TODO: Replace utilizationRate with canonical metric from analytics.metrics_throughput_daily
   const efficiencyMetrics = throughput ? {
-    utilizationRate: Math.round((throughput.usedToday / throughput.dailyLimit) * 100),
+    // utilizationRate removed - must be computed upstream
     activeCampaigns: throughput.activeCampaigns,
+    usedToday: throughput.usedToday,
+    dailyLimit: throughput.dailyLimit,
   } : null;
 
+  /**
+   * Safety metrics from API.
+   * 
+   * GOVERNANCE NOTE:
+   * Only direct backend values are displayed.
+   * totalBlocked aggregation has been removed - must be provided by
+   * analytics.metrics_campaign_safety_summary upstream.
+   */
+  // TODO: Replace totalBlocked with canonical metric from analytics.metrics_campaign_safety_summary
   const safetyMetrics = {
     blockedByThroughput: throughput?.blockedByThroughput || 0,
-    totalBlocked: runs.reduce((sum, r) => sum + r.leadsBlocked, 0),
+    // totalBlocked removed - must be computed upstream
   };
 
   if (loading) {
@@ -74,56 +119,86 @@ export default function MonitoringPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px', marginBottom: '32px' }}>
           {/* 
-            Yield metrics display promoted leads only.
-            Contacts and leads are distinct; leads are conditionally promoted.
+            GOVERNANCE NOTE:
+            All metrics displayed here come directly from API responses.
+            No aggregations or rate computations are performed in the UI.
+            
+            Metrics requiring aggregation must be implemented upstream in nsd-ods-api:
+            - analytics.metrics_campaign_yield_summary (totalLeads, totalSent, successRate)
+            - analytics.metrics_throughput_daily (utilizationRate)
+            - analytics.metrics_campaign_safety_summary (totalBlocked)
+          */}
+          
+          {/* 
+            Observed Yield - Currently showing placeholder until upstream metrics available.
             Lead counts do NOT include Tier C/D contacts.
             
-            DEFENSIVE RENDERING: Only show metrics when data exists from API.
+            TODO: Replace with canonical metrics from analytics.metrics_campaign_yield_summary
           */}
-          {yieldMetrics && (
+          {hasRunData && (
             <MetricGroup
               title="Observed Yield"
               icon="chart"
               color="#3730A3"
               metrics={[
-                { label: 'Promoted Leads Attempted', value: yieldMetrics.totalLeads },
-                { label: 'Successfully Sent', value: yieldMetrics.totalSent },
-                { label: 'Completed Runs', value: `${runs.filter(r => r.status === 'COMPLETED').length}` },
+                // NOTE: Aggregate metrics removed per governance audit
+                // Awaiting upstream implementation in analytics.metrics_campaign_yield_summary
+                { label: 'Total Leads Attempted', value: 'Awaiting upstream metric' },
+                { label: 'Successfully Sent', value: 'Awaiting upstream metric' },
+                { label: 'Recent Runs Observed', value: runs.length },
               ]}
             />
           )}
 
+          {/* 
+            Efficiency metrics from throughput API.
+            Utilization rate removed - must be computed upstream.
+            
+            TODO: Replace with canonical metrics from analytics.metrics_throughput_daily
+          */}
           <MetricGroup
             title="Efficiency"
             icon="clock"
             color="#692BAA"
             metrics={[
-              { label: 'Daily Utilization', value: efficiencyMetrics ? `${efficiencyMetrics.utilizationRate}%` : 'Not observed' },
+              // NOTE: utilizationRate removed per governance audit - must be computed upstream
+              { label: 'Daily Utilization', value: 'Awaiting upstream metric' },
               { label: 'Active Campaigns', value: efficiencyMetrics?.activeCampaigns ?? 'Not observed' },
-              { label: 'Throughput Used', value: throughput?.usedToday ?? 'Not observed' },
+              { label: 'Throughput Used Today', value: efficiencyMetrics?.usedToday ?? 'Not observed' },
+              { label: 'Daily Limit', value: efficiencyMetrics?.dailyLimit ?? 'Not observed' },
             ]}
           />
 
-          {runs.length > 0 && (
+          {/* 
+            Run Quality - Shows count by status from API data.
+            This displays individual run statuses, not computed aggregates.
+          */}
+          {hasRunData && (
             <MetricGroup
-              title="Run Quality"
+              title="Run Outcomes"
               icon="star"
               color="#3730A3"
               metrics={[
-                { label: 'Completed Runs', value: runs.filter(r => r.status === 'COMPLETED').length },
-                { label: 'Partial Runs', value: runs.filter(r => r.status === 'PARTIAL').length },
-                { label: 'Failed Runs', value: runs.filter(r => r.status === 'FAILED').length },
+                // These are counts of observed run records, not computed metrics
+                { label: 'Runs Observed', value: runs.length },
               ]}
             />
           )}
 
+          {/* 
+            Safety metrics from API.
+            totalBlocked aggregation removed - must be computed upstream.
+            
+            TODO: Replace with canonical metrics from analytics.metrics_campaign_safety_summary
+          */}
           <MetricGroup
             title="Safety"
             icon="shield"
             color="#991B1B"
             metrics={[
               { label: 'Blocked by Throughput', value: safetyMetrics.blockedByThroughput },
-              { label: 'Leads Blocked (Recent)', value: runs.length > 0 ? safetyMetrics.totalBlocked : 'Not observed' },
+              // NOTE: totalBlocked removed per governance audit - must be computed upstream
+              { label: 'Total Leads Blocked', value: 'Awaiting upstream metric' },
             ]}
           />
         </div>

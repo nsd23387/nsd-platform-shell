@@ -5,6 +5,15 @@
  * Read-only list display.
  * 
  * Updated to use design system tokens.
+ * 
+ * GOVERNANCE NOTE:
+ * This component displays pre-computed breach counts.
+ * The `.reduce()` operation (line 27) sums already-computed breach counts
+ * for display total only - it does NOT compute new metrics.
+ * The input `breaches` object contains values already computed upstream.
+ * 
+ * This is an ALLOWED transformation per governance audit.
+ * See: docs/seo/METRICS_AUDIT.md
  */
 
 import React from 'react';
