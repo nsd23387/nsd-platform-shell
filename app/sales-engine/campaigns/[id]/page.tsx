@@ -368,6 +368,10 @@ export default function CampaignDetailPage() {
    * Handle Duplicate Campaign button click.
    * Creates a copy of the current campaign with a new ID and DRAFT status.
    * Navigates to the edit wizard for review and adjustment.
+   * 
+   * NOTE: A small delay is added before redirect to ensure the database
+   * transaction is fully committed and visible to subsequent reads.
+   * This prevents "Campaign not found" errors on the edit page.
    */
   const handleDuplicateCampaign = useCallback(async () => {
     if (isDuplicating) return;
@@ -378,6 +382,9 @@ export default function CampaignDetailPage() {
       const result = await duplicateCampaign(campaignId);
 
       if (result.success && result.data) {
+        // Add small delay to ensure database commit is visible before redirect
+        // This prevents race condition where edit page loads before campaign is available
+        await new Promise(resolve => setTimeout(resolve, 500));
         router.push(`/sales-engine/campaigns/${result.data.campaign.id}/edit`);
       } else {
         console.error('[CampaignDetail] Duplicate failed:', result.error);
