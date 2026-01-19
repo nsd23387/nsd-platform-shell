@@ -30,12 +30,54 @@ function TagInput({
 }) {
   const [input, setInput] = useState('');
 
+  /**
+   * Process input string and split by commas into individual tags.
+   */
+  const processInput = (inputStr: string): string[] => {
+    return inputStr
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .filter((s) => !tags.includes(s));
+  };
+
+  const addTagsFromInput = (inputStr: string) => {
+    const newTags = processInput(inputStr);
+    if (newTags.length > 0) {
+      onChange([...tags, ...newTags]);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && input.trim()) {
       e.preventDefault();
-      if (!tags.includes(input.trim())) {
-        onChange([...tags, input.trim()]);
-      }
+      addTagsFromInput(input);
+      setInput('');
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value.includes(',')) {
+      addTagsFromInput(value);
+      setInput('');
+    } else {
+      setInput(value);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedText = e.clipboardData.getData('text');
+    if (pastedText.includes(',')) {
+      e.preventDefault();
+      addTagsFromInput(pastedText);
+      setInput('');
+    }
+  };
+
+  const handleBlur = () => {
+    if (input.trim()) {
+      addTagsFromInput(input);
       setInput('');
     }
   };
@@ -105,8 +147,10 @@ function TagInput({
         <input
           type="text"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          onBlur={handleBlur}
           placeholder={tags.length === 0 ? placeholder : ''}
           style={{
             flex: 1,
@@ -119,7 +163,7 @@ function TagInput({
         />
       </div>
       <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
-        Press Enter to add
+        Press Enter or use commas to add multiple values
       </p>
     </div>
   );
