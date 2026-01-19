@@ -946,6 +946,119 @@ export async function duplicateCampaign(
 }
 
 // =============================================================================
+// REAL-TIME EXECUTION STATUS
+// Queries actual database tables instead of stale ODS events.
+// =============================================================================
+
+/**
+ * Real-time execution status response from actual database tables.
+ */
+export interface RealTimeExecutionStatus {
+  campaignId: string;
+  latestRun: {
+    id: string;
+    status: string;
+    phase?: string;
+    stage?: string;
+    startedAt?: string;
+    completedAt?: string;
+    durationSeconds?: number;
+    errorMessage?: string;
+    terminationReason?: string;
+  } | null;
+  funnel: {
+    organizations: {
+      total: number;
+      qualified: number;
+      review: number;
+      disqualified: number;
+    };
+    contacts: {
+      total: number;
+      sourced: number;
+      ready: number;
+      withEmail: number;
+    };
+    leads: {
+      total: number;
+      pending: number;
+      approved: number;
+    };
+  };
+  stages: Array<{
+    stage: string;
+    status: 'pending' | 'running' | 'success' | 'error' | 'skipped';
+    message: string;
+    details?: Record<string, unknown>;
+    completedAt?: string;
+  }>;
+  alerts: Array<{
+    type: 'info' | 'warning' | 'error';
+    message: string;
+  }>;
+  _meta?: {
+    fetchedAt: string;
+    source: string;
+  };
+}
+
+/**
+ * Get real-time campaign execution status.
+ * 
+ * This endpoint queries ACTUAL database tables (not ODS events) for:
+ * - Organization counts from public.organizations
+ * - Contact counts from public.campaign_contacts
+ * - Lead counts from public.leads
+ * - Execution stages from public.execution_logs
+ * - Run status from public.campaign_runs
+ * 
+ * Use this instead of getCampaignObservabilityFunnel when you need
+ * accurate, real-time pipeline counts.
+ */
+export async function getRealTimeExecutionStatus(id: string): Promise<RealTimeExecutionStatus> {
+  if (isApiDisabled) {
+    return {
+      campaignId: id,
+      latestRun: null,
+      funnel: {
+        organizations: { total: 0, qualified: 0, review: 0, disqualified: 0 },
+        contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0 },
+        leads: { total: 0, pending: 0, approved: 0 },
+      },
+      stages: [],
+      alerts: [{ type: 'info', message: 'API disabled for this deployment' }],
+    };
+  }
+
+  try {
+    const response = await fetch(`/api/v1/campaigns/${id}/execution-status`, {
+      headers: buildHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error(`[API] getRealTimeExecutionStatus error: ${response.status}`);
+      throw new Error(`Failed to fetch execution status: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('[API] getRealTimeExecutionStatus error:', error);
+    // Return safe defaults on error
+    return {
+      campaignId: id,
+      latestRun: null,
+      funnel: {
+        organizations: { total: 0, qualified: 0, review: 0, disqualified: 0 },
+        contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0 },
+        leads: { total: 0, pending: 0, approved: 0 },
+      },
+      stages: [],
+      alerts: [{ type: 'error', message: 'Failed to fetch execution status' }],
+    };
+  }
+}
+
+// =============================================================================
 // DEPRECATED/REMOVED MUTATION FUNCTIONS
 // These functions have been removed per target-state architecture constraints.
 // The Sales Engine UI is read-only; mutations are managed by backend systems.
