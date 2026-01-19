@@ -30,12 +30,15 @@ import { Icon } from '../../../../design/components/Icon';
 import { formatEt } from '../../lib/time';
 import type { ObservabilityFunnel } from '../../types/campaign';
 import type { LatestRun } from '../../../../hooks/useLatestRunStatus';
+import type { RealTimeExecutionStatus } from '../../lib/api';
 
 interface LastExecutionSummaryCardProps {
   campaignId: string;
   run: LatestRun | null;
   funnel: ObservabilityFunnel | null;
   noRuns?: boolean;
+  /** Real-time execution status from actual database tables - preferred source */
+  realTimeStatus?: RealTimeExecutionStatus | null;
 }
 
 interface CountMetric {
@@ -44,7 +47,36 @@ interface CountMetric {
   count: number;
 }
 
-function extractCounts(funnel: ObservabilityFunnel | null): CountMetric[] {
+/**
+ * Extract counts from real-time status (preferred) or fallback to funnel data.
+ * Real-time status queries actual database tables and provides accurate counts.
+ */
+function extractCounts(
+  funnel: ObservabilityFunnel | null,
+  realTimeStatus?: RealTimeExecutionStatus | null
+): CountMetric[] {
+  // Prefer real-time status counts (from actual database tables)
+  if (realTimeStatus?.funnel) {
+    return [
+      { 
+        label: 'Organizations', 
+        icon: 'target', 
+        count: realTimeStatus.funnel.organizations.total 
+      },
+      { 
+        label: 'Contacts', 
+        icon: 'users', 
+        count: realTimeStatus.funnel.contacts.total 
+      },
+      { 
+        label: 'Leads', 
+        icon: 'star', 
+        count: realTimeStatus.funnel.leads.total 
+      },
+    ];
+  }
+
+  // Fallback to ODS funnel data
   const stageMap = new Map<string, number>();
   funnel?.stages?.forEach((stage) => {
     stageMap.set(stage.stage, stage.count);
@@ -105,6 +137,7 @@ export function LastExecutionSummaryCard({
   run, 
   funnel,
   noRuns = false,
+  realTimeStatus,
 }: LastExecutionSummaryCardProps) {
   if (noRuns || !run) {
     return null;
@@ -115,7 +148,11 @@ export function LastExecutionSummaryCard({
   }
 
   const config = getStatusConfig(run.status);
-  const counts = extractCounts(funnel);
+  // Use real-time counts (from actual DB tables) when available
+  const counts = extractCounts(funnel, realTimeStatus);
+  
+  // Get any active alerts from real-time status
+  const alerts = realTimeStatus?.alerts || [];
   const isFailed = isFailedStatus(run.status);
   const finishedAt = run.updated_at || run.created_at;
   const rawReason = (run as Record<string, unknown>).error_message || 
@@ -316,6 +353,56 @@ export function LastExecutionSummaryCard({
           </div>
         ))}
       </div>
+
+      {/* Alerts from real-time status (if any) */}
+      {alerts.length > 0 && (
+        <div
+          style={{
+            marginBottom: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          {alerts.map((alert, index) => {
+            const alertColors = alert.type === 'error' 
+              ? { bg: NSD_COLORS.semantic.critical.bg, border: NSD_COLORS.semantic.critical.border, text: NSD_COLORS.semantic.critical.text }
+              : alert.type === 'warning'
+              ? { bg: NSD_COLORS.semantic.attention.bg, border: NSD_COLORS.semantic.attention.border, text: NSD_COLORS.semantic.attention.text }
+              : { bg: NSD_COLORS.semantic.info.bg, border: NSD_COLORS.semantic.info.border, text: NSD_COLORS.semantic.info.text };
+            
+            return (
+              <div
+                key={index}
+                style={{
+                  padding: '10px 12px',
+                  backgroundColor: alertColors.bg,
+                  borderRadius: NSD_RADIUS.md,
+                  border: `1px solid ${alertColors.border}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <Icon 
+                  name={alert.type === 'error' ? 'warning' : 'info'} 
+                  size={14} 
+                  color={alertColors.text} 
+                />
+                <span
+                  style={{
+                    fontSize: '12px',
+                    color: alertColors.text,
+                    fontWeight: 500,
+                  }}
+                >
+                  {alert.message}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Link to monitoring tab (observability) */}
       <Link
