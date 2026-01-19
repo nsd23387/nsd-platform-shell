@@ -19,11 +19,14 @@ import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens'
 import type { ExecutionNarrative } from '../../lib/execution-narrative-mapper';
 import { 
   isNarrativeActive,
+  KEYWORD_COPY,
   type ExecutionNarrativeConsumerProps 
 } from '../../lib/execution-narrative-governance';
+import { KeywordCoverageWarningBannerENM } from './KeywordCoverageWarningBannerENM';
 
 interface ActiveStageFocusPanelENMProps extends ExecutionNarrativeConsumerProps {
   isPolling?: boolean;
+  showKeywordContext?: boolean;
 }
 
 /**
@@ -35,10 +38,14 @@ interface ActiveStageFocusPanelENMProps extends ExecutionNarrativeConsumerProps 
 export function ActiveStageFocusPanelENM({
   narrative,
   isPolling = false,
+  showKeywordContext = true,
 }: ActiveStageFocusPanelENMProps) {
   const isActive = isNarrativeActive(narrative);
   const isStalled = narrative.isStalled === true;
   const isIdle = narrative.mode === 'idle';
+  const keywordContext = narrative.keywordContext;
+  const hasZeroResultKeywords = keywordContext?.keywordsWithZeroResults && 
+    keywordContext.keywordsWithZeroResults.length > 0;
 
   const bgColor = isStalled
     ? NSD_COLORS.semantic.attention.bg
@@ -136,6 +143,26 @@ export function ActiveStageFocusPanelENM({
           >
             {narrative.subheadline}
           </p>
+        )}
+        {showKeywordContext && isActive && hasZeroResultKeywords && (
+          <p
+            style={{
+              margin: '6px 0 0 0',
+              fontSize: '12px',
+              fontFamily: NSD_TYPOGRAPHY.fontBody,
+              color: textColor,
+              opacity: 0.85,
+              fontStyle: 'italic',
+            }}
+          >
+            {KEYWORD_COPY.CONTINUING_AVAILABLE}
+          </p>
+        )}
+        {showKeywordContext && keywordContext && (keywordContext.hasLowCoverageWarning || hasZeroResultKeywords) && (
+          <KeywordCoverageWarningBannerENM
+            keywordContext={keywordContext}
+            isRunning={isActive}
+          />
         )}
       </div>
 
