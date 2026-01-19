@@ -18,10 +18,10 @@
  * No backend execution behavior is modified.
  */
 
-import type { ExecutionNarrative, NarrativeStage, TerminalState } from './execution-narrative-mapper';
+import type { ExecutionNarrative, NarrativeStage, TerminalState, KeywordContext } from './execution-narrative-mapper';
 
 // Re-export canonical types
-export type { ExecutionNarrative, NarrativeStage, TerminalState };
+export type { ExecutionNarrative, NarrativeStage, TerminalState, KeywordContext };
 
 /**
  * Execution mode - the canonical UI state machine
@@ -184,6 +184,12 @@ export const EXECUTION_COPY = {
     trustNote: 'Counts update as stages complete. Some results may not be visible yet.',
     label: 'Running',
   },
+  RUNNING_KEYWORD_SEARCH: {
+    headline: 'Execution in progress',
+    subheadline: 'Searching organizations using multiple keywords',
+    trustNote: 'Counts update as stages complete. Some results may not be visible yet.',
+    label: 'Running',
+  },
   STALLED: {
     headline: 'Execution stalled',
     subheadline: 'The system will automatically mark this execution failed if it does not progress.',
@@ -200,12 +206,33 @@ export const EXECUTION_COPY = {
     subheadline: 'No organizations matched the current ICP criteria.',
     label: 'Completed',
   },
+  COMPLETED_PARTIAL_KEYWORDS: {
+    headline: 'Execution completed with partial keyword coverage',
+    subheadline: 'Some keywords returned no organizations, but results were found for others.',
+    label: 'Completed',
+  },
   FAILED: {
     headline: 'Execution failed',
     subheadline: 'The last execution did not complete successfully.',
     trustNote: 'The system is idle. You are viewing historical execution data.',
     label: 'Failed',
   },
+} as const;
+
+/**
+ * ========================================================================
+ * KEYWORD-AWARE COPY CONSTANTS
+ * 
+ * Messaging for keyword-level observability during org sourcing.
+ * ========================================================================
+ */
+
+export const KEYWORD_COPY = {
+  SEARCHING_MULTIPLE: 'Searching organizations using multiple keywords',
+  SOME_ZERO_RESULTS_PREFIX: 'Some keywords returned no results:',
+  CONTINUING_AVAILABLE: 'Continuing with available keywords',
+  LOW_COVERAGE_WARNING: 'Some campaign keywords produced no results. This can happen due to market density or keyword specificity.',
+  PARTIAL_SUCCESS_NOTE: 'Not all keywords returned results, but the search continued with available matches.',
 } as const;
 
 /**

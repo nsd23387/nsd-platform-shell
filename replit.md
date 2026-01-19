@@ -41,6 +41,20 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 19, 2026: Keyword-Aware ENM Narrative for Org Sourcing Observability
+  - Extended ExecutionNarrative with KeywordContext interface (totalKeywords, keywordsWithResults, keywordsWithZeroResults, hasLowCoverageWarning, warningMessage)
+  - ENM mapper now parses org_sourcing:keyword_summary, org_sourcing:keyword_health, and run.warning (keyword_coverage_low) events
+  - Added KEYWORD_COPY constants for informational messaging about keyword coverage
+  - Created KeywordCoverageWarningBannerENM component for informational warnings (amber styling, not failure)
+  - Updated ActiveStageFocusPanelENM to display keyword context and warning banner during org_sourcing stage
+  - UI guardrail: Keyword warnings are INFORMATIONAL, not failures
+
+- January 19, 2026: Fix Duplicate Campaign Edit Flow
+  - Created `/api/campaign-get/[id]` endpoint to fetch campaigns from Supabase
+  - Updated edit page to use Supabase-based fetch instead of M60 API
+  - Duplicated campaigns now load correctly in the edit wizard
+  - Root cause: Duplicates were created in Supabase but edit page fetched from M60 API
+
 - January 18, 2026: ENM Governance Lock (Complete)
   - Created `execution-narrative-governance.ts` with strict ENM-only types
   - Created ENM-governed components: ExecutionHealthIndicatorENM, ActiveStageFocusPanelENM, LatestRunStatusCardENM, LastExecutionSummaryCardENM
