@@ -30,7 +30,6 @@ interface CampaignGetSuccessResponse {
     campaign: {
       id: string;
       name: string;
-      description?: string;
       status: string;
       icp: Record<string, unknown> | null;
       sourcing_config: Record<string, unknown> | null;
@@ -75,7 +74,7 @@ export async function GET(
 
     const { data: campaign, error: fetchError } = await supabase
       .from('campaigns')
-      .select('id, name, description, status, icp, sourcing_config, lead_qualification_config, created_at, updated_at')
+      .select('id, name, status, icp, sourcing_config, lead_qualification_config, created_at, updated_at')
       .eq('id', campaignId)
       .single();
 
@@ -111,7 +110,6 @@ export async function GET(
         campaign: {
           id: campaign.id,
           name: campaign.name,
-          description: campaign.description || undefined,
           status: campaign.status,
           icp: campaign.icp,
           sourcing_config: campaign.sourcing_config,
