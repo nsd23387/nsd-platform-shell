@@ -18,8 +18,19 @@ import { useRouter, useParams } from 'next/navigation';
 import { Icon } from '../../../../../design/components/Icon';
 import { WizardStep, WizardNav, FormField, TagInput } from '../../../components/wizard';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../../lib/design-tokens';
-import { getCampaign, updateCampaign } from '../../../lib/api';
+import { updateCampaign } from '../../../lib/api';
 import { featureFlags } from '../../../../../config/appConfig';
+
+async function fetchCampaignFromSupabase(campaignId: string) {
+  const response = await fetch(`/api/campaign-get/${campaignId}`);
+  const result = await response.json();
+  
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || 'Failed to load campaign');
+  }
+  
+  return result.data.campaign;
+}
 
 const WIZARD_STEPS = [
   { id: 'identity', label: 'Campaign Identity' },
@@ -97,7 +108,7 @@ export default function EditCampaignPage() {
   useEffect(() => {
     async function loadCampaign() {
       try {
-        const campaign = await getCampaign(campaignId);
+        const campaign = await fetchCampaignFromSupabase(campaignId);
         
         const icp = campaign.icp || {};
         const icpAny = icp as Record<string, unknown>;
@@ -105,31 +116,31 @@ export default function EditCampaignPage() {
         const sourcingAny = sourcingConfig as Record<string, unknown>;
         const outreach = (sourcingAny.outreach_context as Record<string, unknown>) || {};
         const contactTargeting = (sourcingAny.contact_targeting as Record<string, unknown>) || {};
-        const targets = sourcingConfig.targets || {};
+        const targets = (sourcingAny.targets as Record<string, unknown>) || {};
         const companySize = (icpAny.company_size as { min?: number; max?: number }) || {};
 
         setFormData({
           name: campaign.name || '',
           description: campaign.description || '',
-          industries: icp.industries || [],
+          industries: (icpAny.industries as string[]) || [],
           geographies: (icpAny.geographies as string[]) || [],
           jobTitles: (icpAny.job_titles as string[]) || [],
           seniorityLevels: (icpAny.seniority_levels as string[]) || [],
-          keywords: icp.keywords || [],
-          companySizeMin: icp.employeeSize?.min || companySize.min || 0,
-          companySizeMax: icp.employeeSize?.max || companySize.max || 10000,
-          roles: icp.roles || (contactTargeting.roles as string[]) || [],
+          keywords: (icpAny.keywords as string[]) || [],
+          companySizeMin: companySize.min || 0,
+          companySizeMax: companySize.max || 10000,
+          roles: (icpAny.roles as string[]) || (contactTargeting.roles as string[]) || [],
           seniority: (contactTargeting.seniority as string[]) || [],
           maxContactsPerOrg: (contactTargeting.max_contacts_per_org as number) || 3,
           requireVerifiedEmail: ((contactTargeting.email_requirements as Record<string, unknown>)?.require_verified as boolean) ?? true,
           tone: (outreach.tone as string) || 'professional',
-          valuePropositions: icp.valuePropositions || (outreach.value_propositions as string[]) || [],
-          painPoints: icp.painPoints || (outreach.pain_points as string[]) || [],
+          valuePropositions: (outreach.value_propositions as string[]) || [],
+          painPoints: (outreach.pain_points as string[]) || [],
           callToAction: (outreach.call_to_action as string) || '',
-          targetLeads: targets.target_leads ?? null,
-          targetEmails: targets.target_emails ?? null,
-          targetReplyRate: targets.target_reply_rate ?? null,
-          planningOnly: sourcingConfig.benchmarks_only ?? false,
+          targetLeads: (targets.target_leads as number) ?? null,
+          targetEmails: (targets.target_emails as number) ?? null,
+          targetReplyRate: (targets.target_reply_rate as number) ?? null,
+          planningOnly: (sourcingAny.benchmarks_only as boolean) ?? false,
         });
         
         setIsLoading(false);
