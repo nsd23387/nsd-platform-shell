@@ -1,0 +1,64 @@
+You are working on the NSD Campaign Management frontend.
+
+Context:
+- Canonical Execution Narrative Mapper (ENM) is implemented and authoritative.
+- Backend now emits rich keyword-level observability:
+  - org_sourcing:keyword_summary
+  - org_sourcing:keyword_health
+  - keywordsWithZeroResults
+  - run.warning (keyword_coverage_low)
+- All execution-related UI MUST consume ENM output only.
+- UI must NOT interpret raw ODS events directly.
+
+Task:
+Enhance the ENM-to-UI narrative layer to clearly explain keyword behavior during org sourcing.
+
+Requirements:
+
+1) Keyword-Aware Execution Narrative
+When ENM state = RUNNING and stage = org_sourcing:
+- If keyword_health exists:
+  - Show:
+    “Searching organizations using multiple keywords”
+  - If keywordsWithZeroResults is non-empty:
+    - Show secondary copy:
+      “Some keywords returned no results: boxing, crossfit”
+    - Add reassurance copy:
+      “Continuing with available keywords”
+
+2) Warning-Aware UI Messaging
+When ENM includes a run.warning with reason = keyword_coverage_low:
+- Display a non-error warning banner:
+  - Tone: informational, not alarming
+  - Example:
+    “Some campaign keywords produced no results. This can happen due to market density or keyword specificity.”
+
+3) Strict UI Guardrails
+The UI must NEVER:
+- Show “0 organizations found” while execution is RUNNING
+- Treat keyword coverage warnings as failures
+- Infer broken execution from missing keyword results
+
+4) ENM-Only Contract Enforcement
+- All UI logic must derive from ENM output
+- No component may read activity.events directly
+- No component may compute keyword effectiveness itself
+
+5) States to Handle Explicitly
+Ensure clean narrative handling for:
+- RUNNING + org_sourcing
+- RUNNING + keyword_health present
+- RUNNING + keyword_coverage_low warning
+- COMPLETED with partial keyword success
+
+Constraints:
+- No backend changes
+- No new API endpoints
+- No schema changes
+- No execution logic changes
+- ENM remains the single source of truth
+
+Deliverables:
+- Updated ENM → UI mapping logic
+- Updated user-facing copy
+- Confirmation that no component reads raw ODS data
