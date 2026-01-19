@@ -95,6 +95,27 @@ export interface TerminalState {
 }
 
 /**
+ * Keyword context for org sourcing observability.
+ * 
+ * Derived from:
+ * - org_sourcing:keyword_summary
+ * - org_sourcing:keyword_health
+ * - run.warning (keyword_coverage_low)
+ */
+export interface KeywordContext {
+  /** Total keywords being searched */
+  totalKeywords?: number;
+  /** Keywords that returned results */
+  keywordsWithResults?: string[];
+  /** Keywords that returned zero results */
+  keywordsWithZeroResults?: string[];
+  /** Whether there's a keyword coverage warning */
+  hasLowCoverageWarning?: boolean;
+  /** Warning message if present */
+  warningMessage?: string;
+}
+
+/**
  * ExecutionNarrative - The canonical output of the ENM.
  * 
  * This is the ONLY structure UI components should consume for execution state.
@@ -117,6 +138,8 @@ export interface ExecutionNarrative {
   trustNote?: string;
   /** Whether this is a stalled execution (special running state) */
   isStalled?: boolean;
+  /** Keyword context for org sourcing stage (when applicable) */
+  keywordContext?: KeywordContext;
   /** Raw status from campaign_runs for debugging */
   _rawStatus?: string;
 }
@@ -201,9 +224,59 @@ function filterENMEvents(events: ActivityEventForENM[]): ActivityEventForENM[] {
     'campaign.run.started',
     'campaign.run.completed',
     'campaign.run.failed',
+    'org_sourcing:keyword_summary',
+    'org_sourcing:keyword_health',
+    'run.warning',
   ];
   
   return events.filter(e => ENM_EVENT_TYPES.includes(e.event_type));
+}
+
+/**
+ * Extract keyword context from events during org sourcing.
+ * 
+ * Parses:
+ * - org_sourcing:keyword_summary: Total keywords and summary
+ * - org_sourcing:keyword_health: Keywords with/without results
+ * - run.warning (reason=keyword_coverage_low): Low coverage warning
+ */
+function extractKeywordContext(events: ActivityEventForENM[]): KeywordContext | undefined {
+  const keywordSummary = events.find(e => e.event_type === 'org_sourcing:keyword_summary');
+  const keywordHealth = events.find(e => e.event_type === 'org_sourcing:keyword_health');
+  const keywordWarning = events.find(
+    e => e.event_type === 'run.warning' && e.reason === 'keyword_coverage_low'
+  );
+  
+  if (!keywordSummary && !keywordHealth && !keywordWarning) {
+    return undefined;
+  }
+  
+  const context: KeywordContext = {};
+  
+  if (keywordSummary?.details) {
+    const details = keywordSummary.details;
+    if (typeof details.totalKeywords === 'number') {
+      context.totalKeywords = details.totalKeywords;
+    }
+  }
+  
+  if (keywordHealth?.details) {
+    const details = keywordHealth.details;
+    if (Array.isArray(details.keywordsWithResults)) {
+      context.keywordsWithResults = details.keywordsWithResults as string[];
+    }
+    if (Array.isArray(details.keywordsWithZeroResults)) {
+      context.keywordsWithZeroResults = details.keywordsWithZeroResults as string[];
+    }
+  }
+  
+  if (keywordWarning) {
+    context.hasLowCoverageWarning = true;
+    context.warningMessage = keywordWarning.details?.message as string || 
+      'Some campaign keywords produced no results. This can happen due to market density or keyword specificity.';
+  }
+  
+  return Object.keys(context).length > 0 ? context : undefined;
 }
 
 /**
@@ -438,6 +511,7 @@ export function mapExecutionNarrative(
   if (status === 'running' || status === 'in_progress' || (hasStarted && !isTerminalStatus(status))) {
     const stale = isRunStaleWithEvents(latestRun, runEvents);
     const activeStage = getActiveStage(runEvents);
+    const keywordContext = extractKeywordContext(runEvents);
     
     // STALLED: Running > 30 minutes without recent stage.boundary
     if (stale) {
@@ -448,6 +522,7 @@ export function mapExecutionNarrative(
         stage: activeStage || undefined,
         lastEventAt: mostRecentEvent?.occurred_at,
         isStalled: true,
+        keywordContext,
         trustNote: 'This execution has exceeded the 30-minute threshold without completing.',
         _rawStatus: latestRun.status,
       };
@@ -458,7 +533,13 @@ export function mapExecutionNarrative(
     const stageDetails = activeStage?.details;
     let runningSubheadline = 'Processing campaign stages.';
     
-    if (activeStage && stageDetails) {
+    // Keyword-aware subheadline for org_sourcing stage
+    const isOrgSourcing = activeStage?.name?.toLowerCase().includes('organization sourcing') ||
+                          activeStage?.name?.toLowerCase() === 'org_sourcing';
+    
+    if (isOrgSourcing && keywordContext?.totalKeywords && keywordContext.totalKeywords > 1) {
+      runningSubheadline = 'Searching organizations using multiple keywords';
+    } else if (activeStage && stageDetails) {
       const orgs = stageDetails.organizationsDiscovered;
       // Only show org count if > 0 - never show "0 organizations" while running
       if (typeof orgs === 'number' && orgs > 0) {
@@ -475,6 +556,7 @@ export function mapExecutionNarrative(
       stage: activeStage || undefined,
       lastEventAt: mostRecentEvent?.occurred_at,
       isStalled: false,
+      keywordContext,
       trustNote: 'Counts update as stages complete. Some results may not be visible yet.',
       _rawStatus: latestRun.status,
     };
@@ -507,6 +589,7 @@ export function mapExecutionNarrative(
   // =====================================================================
   if (status === 'completed' || status === 'success' || status === 'succeeded') {
     const zeroResults = isCompletedWithZeroResults(runEvents);
+    const keywordContext = extractKeywordContext(runEvents);
     
     if (zeroResults) {
       return {
@@ -518,6 +601,7 @@ export function mapExecutionNarrative(
           status: 'completed',
           completedAt: latestRun.completed_at || latestRun.updated_at || mostRecentEvent?.occurred_at || '',
         },
+        keywordContext,
         trustNote: 'The system is idle. You are viewing historical execution data.',
         _rawStatus: latestRun.status,
       };
@@ -531,6 +615,7 @@ export function mapExecutionNarrative(
         status: 'completed',
         completedAt: latestRun.completed_at || latestRun.updated_at || mostRecentEvent?.occurred_at || '',
       },
+      keywordContext,
       trustNote: 'The system is idle. You are viewing historical execution data.',
       _rawStatus: latestRun.status,
     };
