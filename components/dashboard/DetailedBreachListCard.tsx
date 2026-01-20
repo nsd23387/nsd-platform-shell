@@ -8,6 +8,15 @@
  * Does NOT include 'standard' or 'pending' items.
  * 
  * Updated to use design system tokens.
+ * 
+ * GOVERNANCE NOTE:
+ * This component displays pre-computed breach data from Activity Spine.
+ * The `.reduce()` operation (line 71) sums already-computed aggregate counts
+ * for display total only - it does NOT compute new metrics.
+ * SLA status is determined upstream; the UI only filters and displays.
+ * 
+ * This is an ALLOWED transformation per governance audit.
+ * See: docs/seo/METRICS_AUDIT.md
  */
 
 import React from 'react';
