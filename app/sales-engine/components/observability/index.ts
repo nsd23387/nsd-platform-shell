@@ -59,3 +59,10 @@ export { PollingStatusIndicator } from './PollingStatusIndicator';
 
 export { ExecutionNarrativeCard } from './ExecutionNarrativeCard';
 export type { ExecutionNarrativeCardProps } from './ExecutionNarrativeCard';
+
+// Execution Health & Trust UX Components
+export { ExecutionHealthBanner } from './ExecutionHealthBanner';
+export type { ExecutionHealthBannerProps } from './ExecutionHealthBanner';
+
+export { ExecutionDataSourceBadge } from './ExecutionDataSourceBadge';
+export type { ExecutionDataSourceBadgeProps } from './ExecutionDataSourceBadge';

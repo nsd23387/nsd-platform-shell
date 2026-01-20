@@ -71,6 +71,8 @@ import {
   AdvisoryCallout,
   PollingStatusIndicator,
   LastExecutionSummaryCard,
+  ExecutionHealthBanner,
+  ExecutionDataSourceBadge,
   type ExecutionEvent,
   type ApprovalAwarenessState,
 } from '../../components/observability';
@@ -84,6 +86,7 @@ import {
 } from '../../lib/test-campaign';
 import { PlanningOnlyToggle } from '../../components/PlanningOnlyToggle';
 import { useExecutionPolling } from '../../hooks/useExecutionPolling';
+import { useRealTimeStatus } from '../../hooks/useRealTimeStatus';
 import { LastUpdatedIndicator } from '../../components/observability/LastUpdatedIndicator';
 
 type TabType = 'overview' | 'monitoring' | 'learning';
@@ -230,11 +233,27 @@ export default function CampaignDetailPage() {
     enabled: !loading && !isTest,
   });
 
+  // Real-time execution status with caching (DATA AUTHORITY)
+  const {
+    realTimeStatus: cachedRealTimeStatus,
+    isPolling: isRealTimePolling,
+    lastUpdatedAt: realTimeLastUpdatedAt,
+    refreshNow: refreshRealTimeStatus,
+  } = useRealTimeStatus({
+    campaignId,
+    enabled: !loading && !isTest,
+    cacheTtlMs: 7000, // 7 second cache TTL
+    pollingIntervalMs: 7000,
+  });
+
+  // Prefer cached real-time status over initial fetch
+  const effectiveRealTimeStatus = cachedRealTimeStatus || realTimeStatus;
+
   // Convert real-time status to ObservabilityFunnel format for component compatibility
   const realTimeFunnel: ObservabilityFunnel | null = useMemo(() => {
-    if (!realTimeStatus || !realTimeStatus.funnel) return null;
+    if (!effectiveRealTimeStatus || !effectiveRealTimeStatus.funnel) return null;
     
-    const { organizations, contacts, leads } = realTimeStatus.funnel;
+    const { organizations, contacts, leads } = effectiveRealTimeStatus.funnel;
     const stages: Array<{ stage: string; label: string; count: number; confidence: 'observed' | 'conditional' }> = [];
     
     // Only include stages with actual data (count > 0)
@@ -264,11 +283,11 @@ export default function CampaignDetailPage() {
     }
     
     return {
-      campaign_id: realTimeStatus.campaignId,
+      campaign_id: effectiveRealTimeStatus.campaignId,
       stages,
-      last_updated_at: realTimeStatus._meta?.fetchedAt || new Date().toISOString(),
+      last_updated_at: effectiveRealTimeStatus._meta?.fetchedAt || new Date().toISOString(),
     };
-  }, [realTimeStatus]);
+  }, [effectiveRealTimeStatus]);
 
   // Use real-time funnel when it has data, otherwise fall back to polled/ODS funnel
   // This ensures we show accurate counts from actual database tables
@@ -540,9 +559,9 @@ export default function CampaignDetailPage() {
             latestRun={effectiveLatestRun}
             isRunStale={resolvedIsStale}
             observabilityFunnel={effectiveFunnel}
-            realTimeStatus={realTimeStatus}
-            lastUpdatedAt={lastUpdatedAt}
-            isPolling={isPolling}
+            realTimeStatus={effectiveRealTimeStatus}
+            lastUpdatedAt={realTimeLastUpdatedAt || lastUpdatedAt}
+            isPolling={isPolling || isRealTimePolling}
             isRefreshing={isRefreshing}
             onRefresh={refreshNow}
             onPlanningOnlyChange={(newState) => {
@@ -678,6 +697,16 @@ function OverviewTab({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* ============================================
+          EXECUTION HEALTH BANNER (Primary Status)
+          Top-level banner summarizing execution state in plain English.
+          DATA AUTHORITY: Uses real-time execution status only.
+          ============================================ */}
+      <ExecutionHealthBanner
+        realTimeStatus={realTimeStatus}
+        isPolling={isPolling}
+      />
+
+      {/* ============================================
           ABOVE THE FOLD: Side-by-Side Layout
           Left: Campaign Scope (context)
           Right: Execution Status (what's happening)
@@ -692,7 +721,15 @@ function OverviewTab({
           <CampaignScopeSummary icp={campaign.icp} />
           
           {/* Pipeline Funnel Summary - Quick visibility (uses real-time data when available) */}
-          <FunnelSummaryWidget funnel={observabilityFunnel} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <FunnelSummaryWidget funnel={observabilityFunnel} />
+            {/* Data Authority Indicator - Shows source of pipeline counts */}
+            <ExecutionDataSourceBadge
+              lastUpdatedAt={lastUpdatedAt}
+              isRealTime={!!realTimeStatus?.funnel}
+              compact={true}
+            />
+          </div>
         </div>
 
         {/* RIGHT COLUMN: Execution Status (60%) */}
