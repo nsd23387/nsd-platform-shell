@@ -41,6 +41,19 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 20, 2026: Comprehensive UX/UI Redesign (Minimalist Neon-Focused)
+  - Added NSD_GLOW, NSD_GRADIENTS, NSD_TRANSITIONS design tokens for neon-inspired effects
+  - Added gradient accent bar at top of all major pages (magenta → violet brand gradient)
+  - Redesigned CampaignListHeader with glass-style stat cards: icons, large numbers, gradient top borders
+  - Created SkeletonLoader component with brand-colored shimmer effect for loading states
+  - Created EmptyState component with neon sign-style SVG illustration
+  - Redesigned filter pills with gradient fill for active state and hover glow effects
+  - Updated Button component with gradient CTA styling and hover glow animations
+  - Redesigned WizardNav stepper with gradient connecting line and filled step circles
+  - Updated search bar with rounded corners, shadow, and focus glow effect
+  - Increased page margins (48-64px) and typography hierarchy for minimalist white space
+  - All buttons have micro-animations (hover glow, translateY lift effect)
+
 - January 20, 2026: NSD Brand Color Compliance (Complete Overhaul)
   - Removed ALL yellow (#FEF3C7, #92400E, #FCD34D), green (#D1FAE5, #6EE7B7, #065F46), and red (#FEE2E2, #FECACA, #991B1B) colors
   - Updated design-tokens.ts with NSD-only palette: magenta, indigo, violet

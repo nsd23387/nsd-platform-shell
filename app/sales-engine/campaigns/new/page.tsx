@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Icon } from '../../../../design/components/Icon';
 import { WizardStep, WizardNav, FormField, TagInput } from '../../components/wizard';
-import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, NSD_SPACING, NSD_GRADIENTS, NSD_SHADOWS, NSD_GLOW, NSD_TRANSITIONS } from '../../lib/design-tokens';
 import type {
   CampaignCreatePayload,
   CampaignCreateResponse,
@@ -560,52 +560,52 @@ export default function NewCampaignPage() {
    * - Right column: Form content area
    */
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        backgroundColor: NSD_COLORS.surface,
-        padding: '32px',
-      }}
-    >
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Header Section */}
-        <div style={{ marginBottom: '24px' }}>
-          <Link
-            href="/sales-engine"
+    <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
+      <div
+        style={{
+          height: '4px',
+          background: NSD_GRADIENTS.accentBar,
+        }}
+      />
+      <div style={{ padding: `${NSD_SPACING.xxl} ${NSD_SPACING.page}` }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ marginBottom: NSD_SPACING.lg }}>
+            <Link
+              href="/sales-engine"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: NSD_SPACING.sm,
+                fontSize: '14px',
+                color: NSD_COLORS.secondary,
+                textDecoration: 'none',
+                transition: NSD_TRANSITIONS.fast,
+              }}
+            >
+              <Icon name="arrow-left" size={16} color={NSD_COLORS.secondary} />
+              Back to Campaigns
+            </Link>
+          </div>
+
+          <h1
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '14px',
-              color: NSD_COLORS.secondary,
-              textDecoration: 'none',
+              ...NSD_TYPOGRAPHY.pageTitle,
+              color: NSD_COLORS.primary,
+              fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+              margin: `0 0 ${NSD_SPACING.sm} 0`,
             }}
           >
-            <Icon name="arrow-left" size={16} color={NSD_COLORS.secondary} />
-            Back to Campaigns
-          </Link>
-        </div>
-
-        <h1
-          style={{
-            margin: '0 0 8px 0',
-            fontSize: '28px',
-            fontWeight: 600,
-            color: NSD_COLORS.primary,
-            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-          }}
-        >
-          Create Campaign
-        </h1>
-        <p
-          style={{
-            margin: '0 0 24px 0',
-            fontSize: '14px',
-            color: NSD_COLORS.text.secondary,
-          }}
-        >
-          Configure a new campaign. It will be created in Draft state.
-        </p>
+            Create Campaign
+          </h1>
+          <p
+            style={{
+              ...NSD_TYPOGRAPHY.body,
+              color: NSD_COLORS.text.secondary,
+              margin: `0 0 ${NSD_SPACING.xl} 0`,
+            }}
+          >
+            Configure a new campaign. It will be created in Draft state.
+          </p>
 
         {/* Two-column layout: Vertical Nav (left) + Content (right) */}
         <div
@@ -1045,22 +1045,26 @@ export default function NewCampaignPage() {
           style={{
             display: 'flex',
             justifyContent: 'space-between',
-            marginTop: '24px',
+            marginTop: NSD_SPACING.xl,
+            paddingTop: NSD_SPACING.lg,
+            borderTop: `1px solid ${NSD_COLORS.border.light}`,
           }}
         >
           <button
             onClick={goPrev}
             disabled={currentStep === 0}
             style={{
-              padding: '12px 24px',
+              padding: '14px 28px',
               backgroundColor: NSD_COLORS.background,
               color: currentStep === 0 ? NSD_COLORS.text.muted : NSD_COLORS.text.primary,
-              fontSize: '14px',
+              fontSize: '15px',
               fontWeight: 500,
-              borderRadius: NSD_RADIUS.md,
+              borderRadius: NSD_RADIUS.lg,
               border: `1px solid ${NSD_COLORS.border.default}`,
               cursor: currentStep === 0 ? 'not-allowed' : 'pointer',
               opacity: currentStep === 0 ? 0.5 : 1,
+              transition: NSD_TRANSITIONS.default,
+              boxShadow: NSD_SHADOWS.sm,
             }}
           >
             Previous
@@ -1070,14 +1074,24 @@ export default function NewCampaignPage() {
             <button
               onClick={goNext}
               style={{
-                padding: '12px 24px',
-                backgroundColor: NSD_COLORS.primary,
+                padding: '14px 32px',
+                background: NSD_GRADIENTS.ctaButton,
                 color: NSD_COLORS.text.inverse,
-                fontSize: '14px',
+                fontSize: '15px',
                 fontWeight: 500,
-                borderRadius: NSD_RADIUS.md,
+                borderRadius: NSD_RADIUS.lg,
                 border: 'none',
                 cursor: 'pointer',
+                transition: NSD_TRANSITIONS.glow,
+                boxShadow: NSD_SHADOWS.md,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = NSD_GLOW.ctaHover;
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = NSD_SHADOWS.md;
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               Continue
@@ -1087,14 +1101,16 @@ export default function NewCampaignPage() {
               onClick={handleSubmit}
               disabled={isSubmitting || !formData.name.trim()}
               style={{
-                padding: '12px 32px',
-                backgroundColor: isSubmitting || !formData.name.trim() ? NSD_COLORS.text.muted : NSD_COLORS.cta,
+                padding: '14px 36px',
+                background: isSubmitting || !formData.name.trim() ? NSD_COLORS.text.muted : NSD_GRADIENTS.ctaButton,
                 color: NSD_COLORS.text.inverse,
-                fontSize: '14px',
+                fontSize: '15px',
                 fontWeight: 500,
-                borderRadius: NSD_RADIUS.md,
+                borderRadius: NSD_RADIUS.lg,
                 border: 'none',
                 cursor: isSubmitting || !formData.name.trim() ? 'not-allowed' : 'pointer',
+                transition: NSD_TRANSITIONS.glow,
+                boxShadow: isSubmitting || !formData.name.trim() ? 'none' : NSD_SHADOWS.md,
               }}
             >
               {isSubmitting ? 'Submitting...' : 'Create Campaign'}
@@ -1105,7 +1121,10 @@ export default function NewCampaignPage() {
           {/* End Right Column */}
         </div>
         {/* End Two-column layout */}
+        </div>
+        {/* End max-width container */}
       </div>
+      {/* End padding wrapper */}
     </div>
   );
 }

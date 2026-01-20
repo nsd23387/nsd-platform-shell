@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Campaign, CampaignStatus, DashboardThroughput, NeedsAttentionItem } from './types/campaign';
 import { listCampaigns, getDashboardThroughput, getNeedsAttention } from './lib/api';
-import { PageHeader, StatusChip, Button, DataTable, CampaignListHeader, MiniPipelineIndicator, ExecutionStatusBadge } from './components/ui';
+import { PageHeader, StatusChip, Button, DataTable, CampaignListHeader, MiniPipelineIndicator, ExecutionStatusBadge, SkeletonTable, EmptyState } from './components/ui';
 import type { ExecutionState } from './components/ui/ExecutionStatusBadge';
-import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from './lib/design-tokens';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, NSD_SHADOWS, NSD_GRADIENTS, NSD_TRANSITIONS, NSD_SPACING, NSD_GLOW } from './lib/design-tokens';
 import { Icon } from '../../design/components/Icon';
 import { getTestCampaigns, shouldShowTestCampaigns, isTestCampaign } from './lib/test-campaign';
 
@@ -223,12 +223,38 @@ export default function SalesEnginePage() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px' }}>
-        <PageHeader
-          title="Campaigns"
-          description="Observe and manage your sales campaigns"
-          actions={
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div
+        style={{
+          height: '4px',
+          background: NSD_GRADIENTS.accentBar,
+        }}
+      />
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: `${NSD_SPACING.xxl} ${NSD_SPACING.page}` }}>
+        <div style={{ marginBottom: NSD_SPACING.xxl }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: NSD_SPACING.md }}>
+            <div>
+              <h1
+                style={{
+                  ...NSD_TYPOGRAPHY.pageTitle,
+                  color: NSD_COLORS.text.primary,
+                  fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+                  margin: 0,
+                }}
+              >
+                Campaigns
+              </h1>
+              <p
+                style={{
+                  ...NSD_TYPOGRAPHY.body,
+                  color: NSD_COLORS.text.secondary,
+                  marginTop: NSD_SPACING.sm,
+                  marginBottom: 0,
+                }}
+              >
+                Observe and manage your sales campaigns
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: NSD_SPACING.md }}>
               <Link href="/sales-engine/home" style={{ textDecoration: 'none' }}>
                 <Button variant="secondary" icon="chart">
                   Dashboard
@@ -240,8 +266,8 @@ export default function SalesEnginePage() {
                 </Button>
               </Link>
             </div>
-          }
-        />
+          </div>
+        </div>
 
         <CampaignListHeader
           activeCampaigns={activeCampaigns}
@@ -251,18 +277,18 @@ export default function SalesEnginePage() {
           isLoading={summaryLoading}
         />
 
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', alignItems: 'center' }}>
-          <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ display: 'flex', gap: NSD_SPACING.lg, marginBottom: NSD_SPACING.lg, alignItems: 'center' }}>
+          <div style={{ flex: 1, position: 'relative', maxWidth: '400px' }}>
             <div
               style={{
                 position: 'absolute',
-                left: '14px',
+                left: '16px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 pointerEvents: 'none',
               }}
             >
-              <Icon name="target" size={16} color={NSD_COLORS.text.muted} />
+              <Icon name="target" size={18} color={NSD_COLORS.text.muted} />
             </div>
             <input
               type="text"
@@ -271,13 +297,23 @@ export default function SalesEnginePage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
                 width: '100%',
-                padding: '10px 14px 10px 40px',
-                fontSize: '14px',
+                padding: '14px 18px 14px 48px',
+                fontSize: '15px',
                 fontFamily: NSD_TYPOGRAPHY.fontBody,
                 backgroundColor: NSD_COLORS.background,
-                border: `1px solid ${NSD_COLORS.border.default}`,
-                borderRadius: NSD_RADIUS.md,
+                border: `1px solid ${NSD_COLORS.border.light}`,
+                borderRadius: NSD_RADIUS.xl,
                 outline: 'none',
+                boxShadow: NSD_SHADOWS.input,
+                transition: NSD_TRANSITIONS.default,
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.boxShadow = NSD_SHADOWS.inputFocus;
+                e.currentTarget.style.borderColor = NSD_COLORS.magenta.base;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.boxShadow = NSD_SHADOWS.input;
+                e.currentTarget.style.borderColor = NSD_COLORS.border.light;
               }}
             />
           </div>
@@ -286,68 +322,60 @@ export default function SalesEnginePage() {
         <div
           style={{
             display: 'flex',
-            gap: '6px',
+            gap: NSD_SPACING.sm,
             flexWrap: 'wrap',
-            marginBottom: '20px',
+            marginBottom: NSD_SPACING.xl,
           }}
         >
-          {FILTER_OPTIONS.map((filter) => (
-            <button
-              key={filter.value}
-              onClick={() => handleFilterChange(filter.value)}
-              style={{
-                padding: '6px 14px',
-                fontSize: '13px',
-                fontWeight: 500,
-                fontFamily: NSD_TYPOGRAPHY.fontBody,
-                backgroundColor:
-                  statusFilter === filter.value ? NSD_COLORS.primary : NSD_COLORS.background,
-                color:
-                  statusFilter === filter.value
-                    ? NSD_COLORS.text.inverse
-                    : NSD_COLORS.text.secondary,
-                border: `1px solid ${
-                  statusFilter === filter.value ? NSD_COLORS.primary : NSD_COLORS.border.default
-                }`,
-                borderRadius: NSD_RADIUS.full,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {filter.label}
-            </button>
-          ))}
+          {FILTER_OPTIONS.map((filter) => {
+            const isActive = statusFilter === filter.value;
+            return (
+              <button
+                key={filter.value}
+                onClick={() => handleFilterChange(filter.value)}
+                style={{
+                  padding: '8px 18px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  fontFamily: NSD_TYPOGRAPHY.fontBody,
+                  background: isActive ? NSD_GRADIENTS.brand : 'transparent',
+                  color: isActive ? NSD_COLORS.text.inverse : NSD_COLORS.text.secondary,
+                  border: isActive ? 'none' : `1px solid ${NSD_COLORS.border.light}`,
+                  borderRadius: NSD_RADIUS.full,
+                  cursor: 'pointer',
+                  transition: NSD_TRANSITIONS.glow,
+                  boxShadow: isActive ? NSD_GLOW.magentaSubtle : 'none',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.borderColor = NSD_COLORS.magenta.base;
+                    e.currentTarget.style.color = NSD_COLORS.magenta.base;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.borderColor = NSD_COLORS.border.light;
+                    e.currentTarget.style.color = NSD_COLORS.text.secondary;
+                  }
+                }}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
         </div>
 
-        {loading && (
-          <div style={{ textAlign: 'center', padding: '48px' }}>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                border: `3px solid ${NSD_COLORS.border.light}`,
-                borderTopColor: NSD_COLORS.secondary,
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                margin: '0 auto 16px',
-              }}
-            />
-            <p style={{ color: NSD_COLORS.text.secondary, fontSize: '14px' }}>
-              Loading campaigns...
-            </p>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          </div>
-        )}
+        {loading && <SkeletonTable rows={5} columns={5} />}
 
         {error && (
           <div
             style={{
-              padding: '16px',
+              padding: NSD_SPACING.lg,
               backgroundColor: NSD_COLORS.semantic.critical.bg,
-              borderRadius: NSD_RADIUS.lg,
+              borderRadius: NSD_RADIUS.xl,
               color: NSD_COLORS.semantic.critical.text,
               border: `1px solid ${NSD_COLORS.semantic.critical.border}`,
-              marginBottom: '24px',
+              marginBottom: NSD_SPACING.lg,
             }}
           >
             {error}
@@ -355,39 +383,21 @@ export default function SalesEnginePage() {
         )}
 
         {!loading && !error && filteredCampaigns.length === 0 && (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '48px',
-              backgroundColor: NSD_COLORS.background,
-              borderRadius: NSD_RADIUS.lg,
-              border: `1px solid ${NSD_COLORS.border.light}`,
-            }}
-          >
-            <p
-              style={{
-                margin: '0 0 16px 0',
-                fontSize: '16px',
-                color: NSD_COLORS.text.secondary,
-              }}
-            >
-              {searchQuery
-                ? 'No campaigns match your search.'
-                : statusFilter !== 'ALL'
-                ? `No ${FILTER_OPTIONS.find((f) => f.value === statusFilter)?.label.toLowerCase()} campaigns.`
-                : 'No campaigns found.'}
-            </p>
-            {!searchQuery && statusFilter === 'ALL' && (
-              <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
-                <Button variant="primary">Create Your First Campaign</Button>
-              </Link>
-            )}
-            {statusFilter !== 'ALL' && (
-              <Button variant="secondary" onClick={() => handleFilterChange('ALL')}>
-                View All Campaigns
-              </Button>
-            )}
-          </div>
+          searchQuery || statusFilter !== 'ALL' ? (
+            <EmptyState
+              title={searchQuery ? 'No matches found' : `No ${FILTER_OPTIONS.find((f) => f.value === statusFilter)?.label.toLowerCase()} campaigns`}
+              description={searchQuery ? 'Try adjusting your search terms' : 'Try a different filter or create a new campaign'}
+              actionLabel={statusFilter !== 'ALL' ? 'View All Campaigns' : undefined}
+              onAction={statusFilter !== 'ALL' ? () => handleFilterChange('ALL') : undefined}
+            />
+          ) : (
+            <EmptyState
+              title="No campaigns yet"
+              description="Create your first campaign to start generating leads for your neon sign business"
+              actionLabel="Create Your First Campaign"
+              actionHref="/sales-engine/campaigns/new"
+            />
+          )
         )}
 
         {!loading && !error && filteredCampaigns.length > 0 && (
