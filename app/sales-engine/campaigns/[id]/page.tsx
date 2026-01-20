@@ -411,8 +411,8 @@ export default function CampaignDetailPage() {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface, padding: '32px' }}>
         <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-          <div style={{ padding: '24px', backgroundColor: '#fef2f2', borderRadius: NSD_RADIUS.md, marginBottom: '24px' }}>
-            <p style={{ margin: 0, color: '#b91c1c' }}>{error || 'Campaign not found'}</p>
+          <div style={{ padding: '24px', backgroundColor: NSD_COLORS.semantic.critical.bg, borderRadius: NSD_RADIUS.md, marginBottom: '24px' }}>
+            <p style={{ margin: 0, color: NSD_COLORS.semantic.critical.text }}>{error || 'Campaign not found'}</p>
           </div>
           <Link href="/sales-engine" style={{ color: NSD_COLORS.secondary, textDecoration: 'none' }}>
             Back to Campaigns

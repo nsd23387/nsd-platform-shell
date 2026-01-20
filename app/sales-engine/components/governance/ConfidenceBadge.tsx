@@ -119,7 +119,7 @@ function BlockedMetricModal({ onClose }: { onClose: () => void }) {
         <div
           style={{
             padding: '16px',
-            backgroundColor: '#FEF2F2',
+            backgroundColor: NSD_COLORS.semantic.critical.bg,
             borderRadius: NSD_RADIUS.md,
             marginBottom: '16px',
           }}
@@ -128,7 +128,7 @@ function BlockedMetricModal({ onClose }: { onClose: () => void }) {
             style={{
               margin: 0,
               fontSize: '14px',
-              color: '#991B1B',
+              color: NSD_COLORS.semantic.critical.text,
               lineHeight: 1.6,
             }}
           >

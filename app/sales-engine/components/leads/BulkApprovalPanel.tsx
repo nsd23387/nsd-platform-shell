@@ -132,7 +132,7 @@ export function BulkApprovalPanel({
           <div
             style={{
               padding: '12px 16px',
-              backgroundColor: '#FEE2E2',
+              backgroundColor: NSD_COLORS.semantic.critical.bg,
               borderRadius: NSD_RADIUS.md,
               marginBottom: '16px',
               display: 'flex',
@@ -140,8 +140,8 @@ export function BulkApprovalPanel({
               gap: '10px',
             }}
           >
-            <Icon name="warning" size={16} color="#991B1B" />
-            <span style={{ fontSize: '13px', color: '#991B1B' }}>{error}</span>
+            <Icon name="warning" size={16} color={NSD_COLORS.semantic.critical.text} />
+            <span style={{ fontSize: '13px', color: NSD_COLORS.semantic.critical.text }}>{error}</span>
           </div>
         )}
 
@@ -204,7 +204,7 @@ export function BulkApprovalPanel({
           <div
             style={{
               padding: '14px',
-              backgroundColor: counts.pending_approval > 0 ? '#FEF3C7' : NSD_COLORS.surface,
+              backgroundColor: counts.pending_approval > 0 ? NSD_COLORS.semantic.attention.bg : NSD_COLORS.surface,
               borderRadius: NSD_RADIUS.md,
               textAlign: 'center',
             }}
@@ -214,7 +214,7 @@ export function BulkApprovalPanel({
                 display: 'block',
                 fontSize: '11px',
                 fontWeight: 500,
-                color: counts.pending_approval > 0 ? '#92400E' : NSD_COLORS.text.muted,
+                color: counts.pending_approval > 0 ? NSD_COLORS.semantic.attention.text : NSD_COLORS.text.muted,
                 textTransform: 'uppercase',
                 letterSpacing: '0.03em',
                 marginBottom: '4px',
@@ -227,7 +227,7 @@ export function BulkApprovalPanel({
                 fontSize: '24px',
                 fontWeight: 700,
                 fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-                color: counts.pending_approval > 0 ? '#92400E' : NSD_COLORS.text.muted,
+                color: counts.pending_approval > 0 ? NSD_COLORS.semantic.attention.text : NSD_COLORS.text.muted,
               }}
             >
               {counts.pending_approval}

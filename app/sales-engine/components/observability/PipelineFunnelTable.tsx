@@ -313,17 +313,17 @@ export function PipelineFunnelTable({
     return (
       <div
         style={{
-          backgroundColor: '#FEE2E2',
+          backgroundColor: NSD_COLORS.semantic.critical.bg,
           borderRadius: NSD_RADIUS.lg,
-          border: '1px solid #FECACA',
+          border: `1px solid ${NSD_COLORS.semantic.critical.border}`,
           padding: '20px',
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
         }}
       >
-        <Icon name="warning" size={20} color="#991B1B" />
-        <p style={{ margin: 0, fontSize: '14px', color: '#991B1B' }}>{error}</p>
+        <Icon name="warning" size={20} color={NSD_COLORS.semantic.critical.text} />
+        <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.semantic.critical.text }}>{error}</p>
       </div>
     );
   }
