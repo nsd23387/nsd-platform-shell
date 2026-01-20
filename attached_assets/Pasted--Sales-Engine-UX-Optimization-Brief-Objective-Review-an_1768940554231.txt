@@ -1,0 +1,203 @@
+# Sales Engine UX Optimization Brief
+
+## Objective
+
+Review and optimize the Sales Engine app to be **campaign-focused** with effective information hierarchy optimized for the user journey. Evaluate whether all current navigation sections (Dashboard, Campaigns, Approvals, Runs, Monitoring) are necessary or if we can simplify the experience.
+
+---
+
+## Current State
+
+### Existing Navigation Structure
+```
+/sales-engine/home         → Dashboard (throughput, attention items, recent runs)
+/sales-engine/             → Campaigns list (main listing with filters)
+/sales-engine/campaigns/[id] → Campaign detail (Overview, Observability, Learning tabs)
+/sales-engine/campaigns/new  → Campaign creation wizard
+/sales-engine/approvals    → Pending approvals list
+/sales-engine/runs         → Approved/ready campaigns + safety gates
+/sales-engine/monitoring   → Performance metrics + run history
+```
+
+### What Already Exists (Build On This)
+- Comprehensive campaign detail page with real-time execution status
+- Pipeline funnel visualization (Organizations → Contacts → Leads → Messages)
+- Execution timeline and stage tracking components
+- NSD brand design tokens implemented in `/app/sales-engine/lib/design-tokens.ts`
+- 40+ observability components in `/app/sales-engine/components/observability/`
+- Read-only governance model (no direct execution controls)
+
+---
+
+## Key Questions to Resolve
+
+### 1. Navigation Consolidation
+The current 5-section navigation may be redundant for a campaign-focused app:
+
+| Current Section | Primary Purpose | Redundancy Assessment |
+|-----------------|-----------------|----------------------|
+| Dashboard | Quick stats, attention items | Could be campaign list header? |
+| Campaigns | Campaign listing | Core - must keep |
+| Approvals | Pending approvals queue | Subset of campaigns with status filter? |
+| Runs | Ready campaigns | Subset of campaigns with status filter? |
+| Monitoring | Aggregate metrics | Could fold into Dashboard or campaign detail? |
+
+**Recommendation to evaluate:** Simplify to 2-3 sections:
+- **Campaigns** (primary) - with smart filters for approvals, ready, etc.
+- **Dashboard** (optional) - only if aggregate metrics add value
+- Remove standalone Approvals/Runs/Monitoring if they're just filtered campaign views
+
+### 2. User Journey Optimization
+
+**Primary User Journeys:**
+
+1. **Campaign Manager Journey**
+   - Create campaign → Submit for approval → Monitor execution → Review results
+   - Key insight: All actions center on individual campaigns
+
+2. **Approver Journey**  
+   - See campaigns pending review → Review details → Approve/reject
+   - Key insight: Could be a filter on campaigns list, not separate page
+
+3. **Operations Journey**
+   - Check system health → Identify blocked campaigns → Investigate issues
+   - Key insight: Dashboard summary + campaign drill-down
+
+**Principle:** Route users to campaign detail as quickly as possible. The campaign detail page should be the primary workspace.
+
+### 3. Information Architecture
+
+**Campaign List View - Should Surface:**
+- Campaign name and status (clear visual hierarchy)
+- Latest execution state (idle, running, completed, blocked)
+- Key metric: contacts discovered / leads promoted
+- Time since last activity
+- Quick action: View details
+
+**Campaign Detail View - Already Comprehensive:**
+- Overview tab: Scope, status, pipeline funnel
+- Observability tab: Execution timeline, stage tracking
+- Learning tab: Performance signals
+
+**Dashboard (if kept) - Should Surface:**
+- System health at a glance (throughput usage)
+- Campaigns needing attention (blocked, failed, stale)
+- Aggregate metrics ONLY if actionable
+
+---
+
+## NSD Brand Guidelines (Must Follow)
+
+### Color Palette
+```typescript
+primary: '#020F5A'    // Navy - headers, active states
+secondary: '#692BAA'  // Purple - secondary actions, accents
+cta: '#CC368F'        // Magenta - primary CTAs only (sparingly)
+```
+
+### Semantic Status Colors (NO red/yellow/green literals)
+```typescript
+semantic: {
+  active: { bg: '#E0E7FF', text: '#3730A3' },    // Indigo - running
+  positive: { bg: '#E0E7FF', text: '#3730A3' },  // Indigo - completed
+  attention: { bg: '#FEF3C7', text: '#92400E' }, // Amber - needs review
+  critical: { bg: '#FEE2E2', text: '#991B1B' },  // Coral - failed/blocked
+  muted: { bg: '#F3F4F6', text: '#6B7280' },     // Gray - idle/pending
+}
+```
+
+### Typography
+- Headers: Poppins (600 max weight)
+- Body/UI: Inter
+- NO bold (700+) fonts
+- Generous white space (4px grid)
+
+### UI Principles
+- Prefer borders over fills
+- Minimal shadows (borders instead)
+- Calm, editorial aesthetic
+- No urgency-inducing elements
+- Read-only indicators where appropriate
+
+---
+
+## Proposed Simplified Structure
+
+### Option A: Minimal (Recommended)
+```
+/sales-engine/              → Campaigns list with smart header stats
+/sales-engine/campaigns/[id] → Campaign detail (keep as-is)
+/sales-engine/campaigns/new  → Campaign creation
+```
+- Fold dashboard stats into campaigns list header
+- Use filters for approvals/runs/monitoring views
+- Single navigation focus
+
+### Option B: Two-Section
+```
+/sales-engine/              → Dashboard + campaigns combined
+/sales-engine/campaigns/[id] → Campaign detail
+/sales-engine/campaigns/new  → Campaign creation
+```
+- Dashboard section above campaigns list
+- Collapsible or tabbed metrics area
+
+### Option C: Keep Dashboard Separate (Current + Cleanup)
+```
+/sales-engine/home          → Dashboard (simplified)
+/sales-engine/              → Campaigns list
+/sales-engine/campaigns/[id] → Campaign detail
+/sales-engine/campaigns/new  → Campaign creation
+```
+- Remove Approvals, Runs, Monitoring as standalone pages
+- Add filters to campaigns list for these views
+
+---
+
+## Implementation Guidance
+
+### Files to Review
+- `/app/sales-engine/page.tsx` - Campaigns list
+- `/app/sales-engine/home/page.tsx` - Dashboard
+- `/app/sales-engine/approvals/page.tsx` - Consider removing
+- `/app/sales-engine/runs/page.tsx` - Consider removing
+- `/app/sales-engine/monitoring/page.tsx` - Consider folding in
+- `/app/sales-engine/components/ui/NavBar.tsx` - Update navigation
+
+### Files to Preserve (Working Well)
+- `/app/sales-engine/campaigns/[id]/page.tsx` - Campaign detail
+- `/app/sales-engine/components/observability/*` - All observability components
+- `/app/sales-engine/lib/design-tokens.ts` - Brand tokens
+- `/app/sales-engine/hooks/*` - Real-time execution hooks
+
+### Design Token Reference
+Import from: `import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../lib/design-tokens';`
+
+---
+
+## Success Criteria
+
+1. **Simplified Navigation**: Reduced from 5 sections to 2-3 maximum
+2. **Campaign-Centric**: Users land on campaigns, detail page is primary workspace
+3. **Information Density**: Right info at right time, no redundant views
+4. **Brand Compliance**: All UI uses NSD design tokens, no hardcoded colors
+5. **Mobile Consideration**: Works on tablet (1024px minimum)
+6. **Preserved Functionality**: All existing features remain accessible
+
+---
+
+## Out of Scope
+
+- Changes to campaign detail page (already optimized)
+- Changes to campaign creation wizard
+- Backend API changes
+- Authentication/authorization changes
+
+---
+
+## Reference Materials
+
+- Design tokens: `/app/sales-engine/lib/design-tokens.ts`
+- Brand rules: `/design/brand/usage-rules.md`
+- Anti-patterns: `/design/brand/anti-patterns.md`
+- Existing components: `/app/sales-engine/components/`
