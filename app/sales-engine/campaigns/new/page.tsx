@@ -249,8 +249,8 @@ export default function NewCampaignPage() {
       keywords: formData.keywords,
     },
     contact_targeting: {
-      roles: formData.roles,
-      seniority: formData.seniority,
+      roles: formData.roles.length > 0 ? formData.roles : formData.jobTitles,
+      seniority: formData.seniority.length > 0 ? formData.seniority : formData.seniorityLevels,
       max_contacts_per_org: formData.maxContactsPerOrg,
       email_requirements: {
         require_verified: formData.requireVerifiedEmail,
@@ -922,19 +922,40 @@ export default function NewCampaignPage() {
           stepNumber={4}
           totalSteps={WIZARD_STEPS.length}
         >
+          {/* Show inheritance notice when ICP values exist */}
+          {(formData.jobTitles.length > 0 || formData.seniorityLevels.length > 0) && (
+            <div
+              style={{
+                backgroundColor: NSD_COLORS.semantic.info.bg,
+                borderRadius: NSD_RADIUS.md,
+                padding: '12px 16px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}
+            >
+              <Icon name="info" size={16} color={NSD_COLORS.semantic.info.text} />
+              <span style={{ fontSize: '13px', color: NSD_COLORS.semantic.info.text }}>
+                Job Titles and Seniority from ICP Definition are available. Override below if needed.
+              </span>
+            </div>
+          )}
           <TagInput
             label="Target Roles"
             name="roles"
-            values={formData.roles}
+            values={formData.roles.length > 0 ? formData.roles : formData.jobTitles}
             onChange={(v) => updateField('roles', v)}
             placeholder="e.g., Sales, Marketing"
+            helpText={formData.roles.length === 0 && formData.jobTitles.length > 0 ? "Using Job Titles from ICP Definition" : undefined}
           />
           <TagInput
             label="Seniority Levels"
             name="seniority"
-            values={formData.seniority}
+            values={formData.seniority.length > 0 ? formData.seniority : formData.seniorityLevels}
             onChange={(v) => updateField('seniority', v)}
             placeholder="e.g., Director, VP, C-Level"
+            helpText={formData.seniority.length === 0 && formData.seniorityLevels.length > 0 ? "Using Seniority Levels from ICP Definition" : undefined}
           />
           <FormField
             label="Max Contacts per Organization"

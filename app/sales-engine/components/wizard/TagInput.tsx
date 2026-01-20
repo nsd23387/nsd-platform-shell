@@ -35,6 +35,21 @@ export function TagInput({
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const pastedText = e.clipboardData.getData('text');
+    if (pastedText.includes(',')) {
+      e.preventDefault();
+      const newTags = pastedText
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag && !values.includes(tag));
+      if (newTags.length > 0) {
+        onChange([...values, ...newTags]);
+      }
+      setInputValue('');
+    }
+  };
+
   const removeTag = (tagToRemove: string) => {
     onChange(values.filter((tag) => tag !== tagToRemove));
   };
@@ -75,7 +90,7 @@ export function TagInput({
               alignItems: 'center',
               gap: '6px',
               padding: '4px 10px',
-              backgroundColor: '#EEF2FF',
+              backgroundColor: NSD_COLORS.semantic.info.bg,
               color: NSD_COLORS.primary,
               borderRadius: NSD_RADIUS.full,
               fontSize: '13px',
@@ -111,6 +126,7 @@ export function TagInput({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={values.length === 0 ? placeholder : ''}
           style={{
             flex: 1,
