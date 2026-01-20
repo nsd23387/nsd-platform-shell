@@ -14,7 +14,7 @@
  */
 
 import React from 'react';
-import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, NSD_SHADOWS, NSD_GRADIENTS, NSD_TRANSITIONS, NSD_SPACING, NSD_GLOW } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 
 interface Step {
@@ -37,39 +37,62 @@ export interface WizardNavProps {
  */
 export function WizardNav({ steps, currentStep, onStepClick }: WizardNavProps) {
   const completedCount = steps.filter(s => s.completed).length;
-  const progressPercent = Math.round((completedCount / steps.length) * 100);
+  const progressPercent = Math.round(((currentStep + 1) / steps.length) * 100);
 
   return (
     <div
       style={{
-        width: '280px',
-        minWidth: '280px',
-        padding: '24px',
+        width: '300px',
+        minWidth: '300px',
+        padding: NSD_SPACING.lg,
         backgroundColor: NSD_COLORS.background,
-        borderRadius: NSD_RADIUS.lg,
+        borderRadius: NSD_RADIUS.xl,
         border: `1px solid ${NSD_COLORS.border.light}`,
+        boxShadow: NSD_SHADOWS.card,
         height: 'fit-content',
         position: 'sticky',
-        top: '24px',
+        top: NSD_SPACING.lg,
       }}
     >
-      {/* Header */}
       <h3
         style={{
-          margin: '0 0 20px 0',
-          fontSize: '12px',
-          fontWeight: 600,
-          color: NSD_COLORS.text.secondary,
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
+          margin: `0 0 ${NSD_SPACING.lg} 0`,
+          ...NSD_TYPOGRAPHY.label,
+          color: NSD_COLORS.text.muted,
           fontFamily: NSD_TYPOGRAPHY.fontDisplay,
         }}
       >
         Campaign Setup
       </h3>
 
-      {/* Vertical Step List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: NSD_SPACING.xs, position: 'relative' }}>
+        <div
+          style={{
+            position: 'absolute',
+            left: '19px',
+            top: '20px',
+            bottom: '20px',
+            width: '2px',
+            background: `linear-gradient(180deg, ${NSD_COLORS.magenta.base} 0%, ${NSD_COLORS.violet.base} 100%)`,
+            opacity: 0.2,
+            borderRadius: '1px',
+          }}
+        />
+        
+        <div
+          style={{
+            position: 'absolute',
+            left: '19px',
+            top: '20px',
+            width: '2px',
+            height: `${(currentStep / (steps.length - 1)) * 100}%`,
+            maxHeight: 'calc(100% - 40px)',
+            background: NSD_GRADIENTS.brand,
+            borderRadius: '1px',
+            transition: 'height 0.4s ease',
+          }}
+        />
+
         {steps.map((step, index) => {
           const isActive = index === currentStep;
           const isCompleted = step.completed;
@@ -84,59 +107,61 @@ export function WizardNav({ steps, currentStep, onStepClick }: WizardNavProps) {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
-                padding: '12px 14px',
-                backgroundColor: isActive ? `${NSD_COLORS.secondary}12` : 'transparent',
+                gap: NSD_SPACING.md,
+                padding: '14px 16px',
+                backgroundColor: isActive ? NSD_COLORS.violet.light : 'transparent',
                 border: 'none',
-                borderRadius: NSD_RADIUS.md,
+                borderRadius: NSD_RADIUS.lg,
                 cursor: isClickable ? 'pointer' : isActive ? 'default' : 'not-allowed',
                 opacity: isClickable || isActive ? 1 : 0.5,
-                transition: 'all 0.15s ease',
+                transition: NSD_TRANSITIONS.default,
                 width: '100%',
                 textAlign: 'left',
+                position: 'relative',
+                zIndex: 1,
               }}
             >
-              {/* Step Number/Icon */}
               <div
                 style={{
-                  width: '28px',
-                  height: '28px',
+                  width: '40px',
+                  height: '40px',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isActive
-                    ? NSD_COLORS.secondary
+                  background: isActive
+                    ? NSD_GRADIENTS.brand
                     : isCompleted
-                    ? NSD_COLORS.semantic.positive.text
-                    : NSD_COLORS.border.light,
+                    ? NSD_COLORS.violet.base
+                    : NSD_COLORS.background,
+                  border: !isActive && !isCompleted ? `2px solid ${NSD_COLORS.border.default}` : 'none',
                   color: isActive || isCompleted ? '#fff' : NSD_COLORS.text.muted,
-                  fontSize: '12px',
+                  fontSize: '14px',
                   fontWeight: 600,
                   flexShrink: 0,
-                  transition: 'all 0.15s ease',
+                  transition: NSD_TRANSITIONS.default,
+                  boxShadow: isActive ? NSD_GLOW.magentaSubtle : 'none',
                 }}
               >
                 {isCompleted ? (
-                  <Icon name="check" size={14} color="#fff" />
+                  <Icon name="check" size={16} color="#fff" />
                 ) : (
                   index + 1
                 )}
               </div>
 
-              {/* Step Label */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
                     fontSize: '14px',
                     fontWeight: isActive ? 600 : 500,
                     color: isActive
-                      ? NSD_COLORS.secondary
+                      ? NSD_COLORS.violet.dark
                       : isCompleted
                       ? NSD_COLORS.text.primary
                       : NSD_COLORS.text.secondary,
                     fontFamily: NSD_TYPOGRAPHY.fontBody,
-                    lineHeight: 1.3,
+                    lineHeight: 1.4,
                   }}
                 >
                   {step.label}
@@ -144,23 +169,13 @@ export function WizardNav({ steps, currentStep, onStepClick }: WizardNavProps) {
                 {isActive && (
                   <div
                     style={{
-                      fontSize: '11px',
-                      color: NSD_COLORS.secondary,
+                      fontSize: '12px',
+                      color: NSD_COLORS.magenta.dark,
                       marginTop: '2px',
+                      fontWeight: 500,
                     }}
                   >
                     Current step
-                  </div>
-                )}
-                {isCompleted && !isActive && (
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: NSD_COLORS.semantic.positive.text,
-                      marginTop: '2px',
-                    }}
-                  >
-                    Completed
                   </div>
                 )}
               </div>
@@ -169,13 +184,12 @@ export function WizardNav({ steps, currentStep, onStepClick }: WizardNavProps) {
         })}
       </div>
 
-      {/* Progress Summary */}
       <div
         style={{
-          marginTop: '24px',
-          padding: '16px',
+          marginTop: NSD_SPACING.lg,
+          padding: NSD_SPACING.md,
           backgroundColor: NSD_COLORS.surface,
-          borderRadius: NSD_RADIUS.md,
+          borderRadius: NSD_RADIUS.lg,
         }}
       >
         <div
@@ -183,39 +197,40 @@ export function WizardNav({ steps, currentStep, onStepClick }: WizardNavProps) {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '8px',
+            marginBottom: NSD_SPACING.sm,
           }}
         >
-          <span style={{ fontSize: '12px', color: NSD_COLORS.text.secondary }}>
+          <span style={{ ...NSD_TYPOGRAPHY.label, color: NSD_COLORS.text.muted }}>
             Progress
           </span>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+          <span style={{ fontSize: '14px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
             {progressPercent}%
           </span>
         </div>
         <div
           style={{
             width: '100%',
-            height: '6px',
+            height: '8px',
             backgroundColor: NSD_COLORS.border.light,
-            borderRadius: '3px',
+            borderRadius: NSD_RADIUS.full,
             overflow: 'hidden',
           }}
         >
           <div
             style={{
-              width: `${((currentStep + 1) / steps.length) * 100}%`,
+              width: `${progressPercent}%`,
               height: '100%',
-              backgroundColor: NSD_COLORS.primary,
-              transition: 'width 0.3s ease',
+              background: NSD_GRADIENTS.brand,
+              borderRadius: NSD_RADIUS.full,
+              transition: 'width 0.4s ease',
             }}
           />
         </div>
         <div
           style={{
-            fontSize: '11px',
+            fontSize: '12px',
             color: NSD_COLORS.text.muted,
-            marginTop: '8px',
+            marginTop: NSD_SPACING.sm,
           }}
         >
           Step {currentStep + 1} of {steps.length} • {steps.length - currentStep - 1} remaining
