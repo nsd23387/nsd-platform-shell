@@ -66,3 +66,13 @@ export type { ExecutionHealthBannerProps } from './ExecutionHealthBanner';
 
 export { ExecutionDataSourceBadge } from './ExecutionDataSourceBadge';
 export type { ExecutionDataSourceBadgeProps } from './ExecutionDataSourceBadge';
+
+// Contact Pipeline Components (4-State Model)
+export { ContactFunnelCard } from './ContactFunnelCard';
+export type { ContactFunnelCardProps } from './ContactFunnelCard';
+
+export { ContactProgressBar } from './ContactProgressBar';
+export type { ContactProgressBarProps } from './ContactProgressBar';
+
+export { BlockedContactsBreakdown } from './BlockedContactsBreakdown';
+export type { BlockedContactsBreakdownProps } from './BlockedContactsBreakdown';
