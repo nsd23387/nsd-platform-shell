@@ -97,14 +97,14 @@ export default function SalesEngineHomePage() {
               alignItems: 'center',
               gap: '16px',
               padding: '16px 24px',
-              backgroundColor: activeNotice.type === 'warning' ? '#fefce8' : activeNotice.type === 'error' ? '#fef2f2' : '#eff6ff',
+              backgroundColor: activeNotice.type === 'warning' ? NSD_COLORS.semantic.attention.bg : activeNotice.type === 'error' ? NSD_COLORS.semantic.critical.bg : NSD_COLORS.semantic.info.bg,
               borderRadius: NSD_RADIUS.lg,
-              border: `1px solid ${activeNotice.type === 'warning' ? '#fde047' : activeNotice.type === 'error' ? '#fecaca' : '#bfdbfe'}`,
+              border: `1px solid ${activeNotice.type === 'warning' ? NSD_COLORS.semantic.attention.border : activeNotice.type === 'error' ? NSD_COLORS.semantic.critical.border : NSD_COLORS.semantic.info.border}`,
               marginBottom: '32px',
             }}
           >
-            <Icon name="info" size={20} color={activeNotice.type === 'warning' ? '#ca8a04' : activeNotice.type === 'error' ? '#dc2626' : '#2563eb'} />
-            <span style={{ flex: 1, fontSize: '14px', color: activeNotice.type === 'warning' ? '#854d0e' : activeNotice.type === 'error' ? '#991b1b' : '#1e40af' }}>
+            <Icon name="info" size={20} color={activeNotice.type === 'warning' ? NSD_COLORS.semantic.attention.text : activeNotice.type === 'error' ? NSD_COLORS.semantic.critical.text : NSD_COLORS.semantic.info.text} />
+            <span style={{ flex: 1, fontSize: '14px', color: activeNotice.type === 'warning' ? NSD_COLORS.semantic.attention.text : activeNotice.type === 'error' ? NSD_COLORS.semantic.critical.text : NSD_COLORS.semantic.info.text }}>
               {activeNotice.message}
             </span>
           </div>

@@ -12,6 +12,7 @@ import type {
   SystemNotice,
   RecentRunOutcome,
 } from '../types/campaign';
+import { NSD_COLORS, NSD_RADIUS, getSemanticStatusStyle } from '../lib/design-tokens';
 
 interface SalesEngineDashboardProps {
   onStatusFilter?: (status: string | null) => void;
@@ -61,7 +62,7 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
 
   if (loading) {
     return (
-      <div style={{ padding: '32px', textAlign: 'center', color: '#6b7280' }}>
+      <div style={{ padding: '32px', textAlign: 'center', color: NSD_COLORS.text.secondary }}>
         Loading dashboard...
       </div>
     );
@@ -69,7 +70,7 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
 
   if (error) {
     return (
-      <div style={{ padding: '16px', backgroundColor: '#fef2f2', borderRadius: '8px', color: '#b91c1c', fontSize: '14px' }}>
+      <div style={{ padding: '16px', backgroundColor: NSD_COLORS.semantic.critical.bg, borderRadius: '8px', color: NSD_COLORS.semantic.critical.text, fontSize: '14px' }}>
         {error}
       </div>
     );
@@ -87,16 +88,16 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
             alignItems: 'center',
             gap: '12px',
             padding: '16px 20px',
-            backgroundColor: '#fefce8',
+            backgroundColor: NSD_COLORS.semantic.attention.bg,
             borderRadius: '12px',
-            border: '1px solid #fde047',
+            border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
           }}
         >
-          <Icon name="warning" size={20} color="#ca8a04" />
-          <span style={{ flex: 1, fontSize: '14px', color: '#854d0e', fontFamily: 'var(--font-body, Inter, sans-serif)' }}>
+          <Icon name="warning" size={20} color={NSD_COLORS.semantic.attention.text} />
+          <span style={{ flex: 1, fontSize: '14px', color: NSD_COLORS.semantic.attention.text, fontFamily: 'var(--font-body, Inter, sans-serif)' }}>
             {activeNotice.message}
           </span>
-          <span style={{ fontSize: '12px', color: '#a16207' }}>
+          <span style={{ fontSize: '12px', color: NSD_COLORS.semantic.attention.text }}>
             {new Date().toLocaleTimeString()}
           </span>
         </div>
@@ -105,49 +106,49 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
         {/* Throughput Snapshot */}
         {throughput && (
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e5e7eb', padding: '24px' }}>
+          <div style={{ backgroundColor: NSD_COLORS.background, borderRadius: NSD_RADIUS.lg, border: `1px solid ${NSD_COLORS.border.light}`, padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-              <Icon name="clock" size={20} color="#8b5cf6" />
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#1e1e4a', fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
+              <Icon name="clock" size={20} color={NSD_COLORS.secondary} />
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: NSD_COLORS.primary, fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
                 Throughput Observability
               </h3>
             </div>
 
             <div style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>Daily Capacity</span>
-                <span style={{ fontSize: '14px', fontWeight: 600, color: '#1e1e4a' }}>
+                <span style={{ fontSize: '14px', color: NSD_COLORS.text.secondary }}>Daily Capacity</span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: NSD_COLORS.primary }}>
                   {throughput.usedToday} / {throughput.dailyLimit}
                 </span>
               </div>
-              <div style={{ width: '100%', height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: '8px', backgroundColor: NSD_COLORS.border.light, borderRadius: '4px', overflow: 'hidden' }}>
                 <div
                   style={{
                     width: `${(throughput.usedToday / throughput.dailyLimit) * 100}%`,
                     height: '100%',
-                    backgroundColor: '#692BAA',
+                    backgroundColor: NSD_COLORS.secondary,
                     transition: 'width 0.3s ease',
                   }}
                 />
               </div>
-              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+              <div style={{ fontSize: '12px', color: NSD_COLORS.text.secondary, marginTop: '4px' }}>
                 {throughput.dailyLimit - throughput.usedToday} remaining today
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: '16px' }}>
-              <div style={{ flex: 1, padding: '12px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
-                <div style={{ fontSize: '12px', color: '#6b7280' }}>Approved Campaigns</div>
-                <div style={{ fontSize: '20px', fontWeight: 600, color: '#3730A3' }}>{throughput.activeCampaigns}</div>
+              <div style={{ flex: 1, padding: '12px', backgroundColor: NSD_COLORS.surface, borderRadius: '8px' }}>
+                <div style={{ fontSize: '12px', color: NSD_COLORS.text.secondary }}>Approved Campaigns</div>
+                <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.secondary }}>{throughput.activeCampaigns}</div>
               </div>
-              <div style={{ flex: 1, padding: '12px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
-                <div style={{ fontSize: '12px', color: '#6b7280' }}>Blocked by Throughput</div>
-                <div style={{ fontSize: '20px', fontWeight: 600, color: '#991B1B' }}>{throughput.blockedByThroughput}</div>
+              <div style={{ flex: 1, padding: '12px', backgroundColor: NSD_COLORS.surface, borderRadius: '8px' }}>
+                <div style={{ fontSize: '12px', color: NSD_COLORS.text.secondary }}>Blocked by Throughput</div>
+                <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.semantic.critical.text }}>{throughput.blockedByThroughput}</div>
               </div>
             </div>
 
-            <div style={{ marginTop: '12px', padding: '10px 12px', backgroundColor: '#eff6ff', borderRadius: '6px' }}>
-              <p style={{ margin: 0, fontSize: '12px', color: '#1e40af' }}>
+            <div style={{ marginTop: '12px', padding: '10px 12px', backgroundColor: NSD_COLORS.semantic.info.bg, borderRadius: NSD_RADIUS.sm }}>
+              <p style={{ margin: 0, fontSize: '12px', color: NSD_COLORS.semantic.info.text }}>
                 Throughput is managed by backend systems. This view is observational only.
               </p>
             </div>
@@ -157,10 +158,10 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
 
       {/* Recent Execution Outcomes (Observed) */}
       {recentRuns.length > 0 && (
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e5e7eb', padding: '24px' }}>
+        <div style={{ backgroundColor: NSD_COLORS.background, borderRadius: NSD_RADIUS.lg, border: `1px solid ${NSD_COLORS.border.light}`, padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-            <Icon name="runs" size={20} color="#8b5cf6" />
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#1e1e4a', fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
+            <Icon name="runs" size={20} color={NSD_COLORS.secondary} />
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: NSD_COLORS.primary, fontFamily: 'var(--font-display, Poppins, sans-serif)' }}>
               Recent Execution Outcomes
             </h3>
           </div>
@@ -168,39 +169,42 @@ export function SalesEngineDashboard({ onStatusFilter }: SalesEngineDashboardPro
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Campaign</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Status</th>
+                <tr style={{ borderBottom: `1px solid ${NSD_COLORS.border.light}` }}>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: NSD_COLORS.text.secondary, fontWeight: 500 }}>Campaign</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', color: NSD_COLORS.text.secondary, fontWeight: 500 }}>Status</th>
                   {/* Lead count = promoted leads only, not total contacts */}
-                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Promoted Leads Attempted</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Sent</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>Blocked</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.secondary, fontWeight: 500 }}>Promoted Leads Attempted</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.secondary, fontWeight: 500 }}>Sent</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', color: NSD_COLORS.text.secondary, fontWeight: 500 }}>Blocked</th>
                 </tr>
               </thead>
               <tbody>
-                {recentRuns.map((run) => (
-                  <tr key={run.runId} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '12px', fontSize: '14px', color: '#1e1e4a' }}>{run.campaignName}</td>
-                    <td style={{ padding: '12px' }}>
-                      <span
-                        style={{
-                          padding: '4px 8px',
-                          backgroundColor: run.status === 'COMPLETED' ? '#E0E7FF' : run.status === 'FAILED' ? '#FEE2E2' : '#FEF3C7',
-                          color: run.status === 'COMPLETED' ? '#3730A3' : run.status === 'FAILED' ? '#991B1B' : '#92400E',
-                          border: `1px solid ${run.status === 'COMPLETED' ? '#A5B4FC' : run.status === 'FAILED' ? '#FECACA' : '#FCD34D'}`,
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          fontWeight: 500,
-                        }}
-                      >
-                        {run.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#6b7280' }}>{run.leadsAttempted}</td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#3730A3' }}>{run.leadsSent}</td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#991B1B' }}>{run.leadsBlocked}</td>
-                  </tr>
-                ))}
+                {recentRuns.map((run) => {
+                  const statusStyle = getSemanticStatusStyle(run.status);
+                  return (
+                    <tr key={run.runId} style={{ borderBottom: `1px solid ${NSD_COLORS.surface}` }}>
+                      <td style={{ padding: '12px', fontSize: '14px', color: NSD_COLORS.primary }}>{run.campaignName}</td>
+                      <td style={{ padding: '12px' }}>
+                        <span
+                          style={{
+                            padding: '4px 8px',
+                            backgroundColor: statusStyle.bg,
+                            color: statusStyle.text,
+                            border: `1px solid ${statusStyle.border}`,
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: 500,
+                          }}
+                        >
+                          {run.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.text.secondary }}>{run.leadsAttempted}</td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.secondary }}>{run.leadsSent}</td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: NSD_COLORS.semantic.critical.text }}>{run.leadsBlocked}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

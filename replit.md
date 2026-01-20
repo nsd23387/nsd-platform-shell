@@ -14,7 +14,7 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 The architecture adheres to a read-only principle, enforcing observation over control. All API interactions, except for the `campaign-create` endpoint, are read-only proxies to the M60 API, enforced by a runtime guard (`read-only-guard.ts`).
 
 **UI/UX Design:**
-- **Color Scheme**: Utilizes NSD Brand Tokens with Deep Indigo, Violet, and a magenta CTA.
+- **Color Scheme**: Strictly adheres to Neon Signs Depot brand colors - NO yellow, green, or red. Uses only magenta (#CC368F, #912D73, #FCE7F3), indigo (#020F5A, #E8EAF6), and violet (#692BAA, #4A1D7A, #EDE7F6) from the logo gradient. CTA uses magenta.
 - **Campaign Creation Wizard**: Employs a mandatory vertical left-hand navigation stepper for visibility of all steps and independent navigation.
 - **Form Fields Governance**: Strictly defines required fields (`name`, `keywords[]`, `geographies[]`) and explicitly forbids others to maintain data integrity and prevent UI-initiated execution parameters.
 - **Governance Components**: Includes `ReadOnlyBanner`, `CampaignStateBadge`, `ExecutionReadinessPanel`, `ConfidenceBadge`, `ProvenancePill`, and `LearningSignalsPanel` for visual communication of governance, readiness, and data quality.
@@ -39,6 +39,19 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 20, 2026: NSD Brand Color Compliance (Complete Overhaul)
+  - Removed ALL yellow (#FEF3C7, #92400E, #FCD34D), green (#D1FAE5, #6EE7B7, #065F46), and red (#FEE2E2, #FECACA, #991B1B) colors
+  - Updated design-tokens.ts with NSD-only palette: magenta, indigo, violet
+  - Semantic status colors now use brand palette:
+    - semantic.attention (warning/review): magenta light (#FCE7F3, #912D73, #F9A8D4)
+    - semantic.positive (success/completed): violet (#EDE7F6, #4A1D7A, #CE93D8)
+    - semantic.critical (error/failed): magenta (#FCE7F3, #912D73, #F48FB1)
+    - semantic.info (informational): indigo light (#E8EAF6, #020F5A, #C5CAE9)
+    - semantic.active (running): indigo (#E8EAF6, #020F5A, #9FA8DA)
+  - Updated all governance state, status, confidence, and provenance styling functions
+  - Fixed 15+ components with hardcoded legacy colors
+  - Brand reference: www.neonsignsdepot.com, logo gradient #CC368F → #912D73 → #692BAA
+
 - January 20, 2026: Campaign-Centric UX Optimization (Option A: Minimal)
   - Simplified navigation from 5 sections to campaign-focused single view
   - Created CampaignListHeader component with collapsible summary stats (active campaigns, needs attention, daily capacity)
@@ -50,7 +63,7 @@ The architecture adheres to a read-only principle, enforcing observation over co
   - Updated /approvals, /runs, /monitoring pages to redirect to campaigns with appropriate filter query params
   - TagInput now supports paste with comma-separated values auto-splitting into tags
   - Contact Targeting step now auto-inherits ICP job_titles/seniority_levels (reduces duplicate data entry)
-  - Fixed hardcoded colors to use NSD_COLORS design tokens consistently
+  - All hardcoded colors replaced with NSD_COLORS design tokens
 
 - January 19, 2026: Keyword-Aware ENM Narrative for Org Sourcing Observability
   - Extended ExecutionNarrative with KeywordContext interface (totalKeywords, keywordsWithResults, keywordsWithZeroResults, hasLowCoverageWarning, warningMessage)
