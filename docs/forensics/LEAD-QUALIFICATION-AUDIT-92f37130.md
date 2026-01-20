@@ -29,14 +29,14 @@ Run these queries against the production database to diagnose the issue.
 ### 2.1 Organization Status Breakdown
 
 ```sql
--- Check organization qualification status distribution
+-- Check organization status distribution (column is 'status', not 'qualification_status')
 SELECT 
-    qualification_status,
+    status,
     COUNT(*) as count,
     ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage
 FROM public.organizations
 WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9'
-GROUP BY qualification_status
+GROUP BY status
 ORDER BY count DESC;
 ```
 
@@ -51,13 +51,12 @@ ORDER BY count DESC;
 SELECT 
     id,
     name,
-    qualification_status,
-    qualification_score,
-    qualification_reason,
+    status,
+    score,
     created_at
 FROM public.organizations
 WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9'
-ORDER BY qualification_score DESC NULLS LAST
+ORDER BY score DESC NULLS LAST
 LIMIT 20;
 ```
 
@@ -189,15 +188,14 @@ LIMIT 50;
 ### 2.10 Full Pipeline State Summary
 
 ```sql
--- Comprehensive pipeline state check
+-- Comprehensive pipeline state check (uses 'status' column for orgs)
 WITH pipeline_state AS (
     SELECT
         (SELECT COUNT(*) FROM public.organizations WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9') as total_orgs,
-        (SELECT COUNT(*) FROM public.organizations WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9' AND qualification_status = 'qualified') as qualified_orgs,
-        (SELECT COUNT(*) FROM public.organizations WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9' AND qualification_status = 'review') as review_orgs,
+        (SELECT COUNT(*) FROM public.organizations WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9' AND status = 'qualified') as qualified_orgs,
+        (SELECT COUNT(*) FROM public.organizations WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9' AND status = 'review') as review_orgs,
         (SELECT COUNT(*) FROM public.campaign_contacts WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9') as total_contacts,
         (SELECT COUNT(*) FROM public.campaign_contacts WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9' AND email IS NOT NULL AND email != '') as contacts_with_email,
-        (SELECT COUNT(*) FROM public.campaign_contacts WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9' AND email_verified = true) as contacts_email_verified,
         (SELECT COUNT(*) FROM public.campaign_contacts WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9' AND tier IN (0, 1)) as tier_ab_contacts,
         (SELECT COUNT(*) FROM public.leads WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9') as total_leads
 )
@@ -207,13 +205,11 @@ SELECT
     review_orgs,
     total_contacts,
     contacts_with_email,
-    contacts_email_verified,
     tier_ab_contacts,
     total_leads,
     CASE 
-        WHEN qualified_orgs = 0 THEN '🔴 BLOCKER: No orgs qualified (all in review)'
+        WHEN qualified_orgs = 0 AND review_orgs > 0 THEN '🔴 BLOCKER: No orgs qualified (all in review)'
         WHEN contacts_with_email = 0 THEN '🔴 BLOCKER: No contacts have emails'
-        WHEN contacts_email_verified = 0 THEN '🟡 WARNING: No verified emails'
         WHEN tier_ab_contacts = 0 THEN '🔴 BLOCKER: No Tier A/B contacts'
         ELSE '✅ Pipeline looks OK - check lead creation logic'
     END as diagnosis
@@ -283,9 +279,9 @@ The campaign's `lead_qualification_config` may have criteria that no contacts me
 ```sql
 -- Option: Bulk approve organizations for this campaign (if appropriate)
 UPDATE public.organizations
-SET qualification_status = 'qualified'
+SET status = 'qualified'
 WHERE campaign_id = '92f37130-3800-4811-bb17-2e46d5d9b4f9'
-AND qualification_status = 'review';
+AND status = 'review';
 ```
 
 ### If Emails Are Blocking:
