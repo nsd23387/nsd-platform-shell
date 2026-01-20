@@ -22,13 +22,31 @@ import { useState, useEffect, useCallback } from 'react';
 export interface LatestRun {
   run_id?: string;
   status?: string;
+  stage?: string;
   execution_mode?: string;
   created_at?: string;
   updated_at?: string;
   // Terminal metadata (optional) - emitted by backend on terminal runs
   error_message?: string | null;
   failure_reason?: string | null;
+  termination_reason?: string | null;
   reason?: string | null;
+}
+
+/**
+ * Check if a run is an "incomplete" run (intentional stop, not error).
+ * 
+ * SEMANTIC ALIGNMENT (Target-State Execution):
+ * When status = "failed" AND termination_reason = "unprocessed_work_remaining",
+ * this is NOT an error - it's an intentional execution halt to prevent
+ * incomplete processing. The UI must display this as "Incomplete" with
+ * info severity, not as a failure/error.
+ */
+export function isIncompleteRun(run: LatestRun | null): boolean {
+  if (!run) return false;
+  const status = run.status?.toLowerCase();
+  const reason = run.termination_reason?.toLowerCase();
+  return status === 'failed' && reason === 'unprocessed_work_remaining';
 }
 
 type LatestRunApiResponse =
@@ -76,12 +94,14 @@ function normalizeLatestRunResponse(data: unknown): { noRuns: boolean; run: Late
       run: {
         run_id: runId,
         status: runStatus,
+        stage: getString(r.stage),
         execution_mode: getString(r.execution_mode),
         created_at: getString(r.created_at),
         updated_at: getString(r.updated_at),
         // Terminal metadata (passthrough from backend)
         error_message: getString(r.error_message) ?? null,
         failure_reason: getString(r.failure_reason) ?? null,
+        termination_reason: getString(r.termination_reason) ?? getString(r.terminationReason) ?? null,
         reason: getString(r.reason) ?? null,
       },
     };
@@ -93,12 +113,14 @@ function normalizeLatestRunResponse(data: unknown): { noRuns: boolean; run: Late
     run: {
       run_id: getString((payload as Record<string, unknown>).run_id),
       status,
+      stage: getString((payload as Record<string, unknown>).stage),
       execution_mode: getString((payload as Record<string, unknown>).execution_mode),
       created_at: getString((payload as Record<string, unknown>).created_at),
       updated_at: getString((payload as Record<string, unknown>).updated_at),
       // Terminal metadata (passthrough from backend)
       error_message: getString((payload as Record<string, unknown>).error_message) ?? null,
       failure_reason: getString((payload as Record<string, unknown>).failure_reason) ?? null,
+      termination_reason: getString((payload as Record<string, unknown>).termination_reason) ?? getString((payload as Record<string, unknown>).terminationReason) ?? null,
       reason: getString((payload as Record<string, unknown>).reason) ?? null,
     },
   };

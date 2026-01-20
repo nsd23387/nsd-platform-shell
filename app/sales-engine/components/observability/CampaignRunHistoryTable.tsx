@@ -45,8 +45,13 @@ export interface CampaignRunHistoryTableProps {
 
 /**
  * Get status badge styling - uses brand-aligned semantic colors.
+ * 
+ * TARGET-STATE EXECUTION SEMANTICS:
+ * Supports "incomplete" status for runs that terminated with
+ * termination_reason = "unprocessed_work_remaining".
+ * This is NOT an error - displayed with info/warning styling.
  */
-function getStatusBadgeStyle(status: string): {
+function getStatusBadgeStyle(status: string, terminationReason?: string | null): {
   bg: string;
   text: string;
   border: string;
@@ -54,6 +59,18 @@ function getStatusBadgeStyle(status: string): {
 } {
   // Runtime safety: backend may add statuses or return null-ish values; never crash the table.
   const normalized = typeof status === 'string' ? status.toUpperCase() : 'UNKNOWN';
+  
+  // INCOMPLETE RUN: failed + unprocessed_work_remaining = intentional halt, not error
+  const isIncomplete = normalized === 'FAILED' && 
+    terminationReason?.toLowerCase() === 'unprocessed_work_remaining';
+  
+  if (isIncomplete) {
+    return {
+      ...NSD_COLORS.semantic.attention,
+      label: 'Incomplete',
+    };
+  }
+  
   const semanticStyle = getSemanticStatusStyle(
     (normalized === 'COMPLETED' || normalized === 'FAILED' || normalized === 'PARTIAL'
       ? (normalized as 'COMPLETED' | 'FAILED' | 'PARTIAL')
@@ -64,6 +81,7 @@ function getStatusBadgeStyle(status: string): {
     COMPLETED: 'Completed',
     FAILED: 'Failed',
     PARTIAL: 'Partial',
+    INCOMPLETE: 'Incomplete',
   };
   
   return { ...semanticStyle, label: labels[normalized] || (typeof status === 'string' ? status : 'Unknown') };
@@ -71,9 +89,13 @@ function getStatusBadgeStyle(status: string): {
 
 /**
  * RunStatusBadge - Displays run status with brand-aligned styling.
+ * 
+ * TARGET-STATE EXECUTION SEMANTICS:
+ * Accepts optional terminationReason to properly display "Incomplete"
+ * for runs with termination_reason = "unprocessed_work_remaining".
  */
-function RunStatusBadge({ status }: { status: string }) {
-  const style = getStatusBadgeStyle(status);
+function RunStatusBadge({ status, terminationReason }: { status: string; terminationReason?: string | null }) {
+  const style = getStatusBadgeStyle(status, terminationReason);
 
   return (
     <span
@@ -318,7 +340,10 @@ export function CampaignRunHistoryTable({
                     {typeof run.id === 'string' && run.id.length > 0 ? `${run.id.slice(0, 8)}...` : '—'}
                   </td>
                   <td style={{ padding: '12px 16px' }}>
-                    <RunStatusBadge status={typeof run.status === 'string' ? run.status : 'Unknown'} />
+                    <RunStatusBadge 
+                      status={typeof run.status === 'string' ? run.status : 'Unknown'} 
+                      terminationReason={(run as { termination_reason?: string }).termination_reason}
+                    />
                   </td>
                   <td style={{ padding: '12px 16px', fontSize: '13px', color: NSD_COLORS.text.primary }}>
                     {formatDate(run.started_at)}

@@ -357,6 +357,51 @@ export function ExecutionNarrativeCard({
             </div>
           )}
 
+          {/* INCOMPLETE RUN: Invariant enforcement (not an error) */}
+          {isTerminal && narrative.terminal?.status === 'skipped' && narrative.terminal?.reason?.includes('Invariant') && (
+            <div
+              style={{
+                marginTop: '12px',
+                padding: '10px 12px',
+                backgroundColor: `${NSD_COLORS.semantic.attention.text}08`,
+                borderRadius: NSD_RADIUS.sm,
+                border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <Icon
+                  name="info"
+                  size={14}
+                  color={NSD_COLORS.semantic.attention.text}
+                />
+                <div>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      color: NSD_COLORS.semantic.attention.text,
+                      marginBottom: '4px',
+                    }}
+                  >
+                    Invariant Enforced
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      color: NSD_COLORS.text.primary,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {narrative.terminal.reason}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isTerminal && narrative.terminal?.completedAt && (
             <p
               style={{

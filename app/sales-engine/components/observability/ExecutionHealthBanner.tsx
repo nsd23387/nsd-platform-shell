@@ -98,10 +98,25 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
   }
 
   // FAILED STATE
+  // TARGET-STATE EXECUTION SEMANTICS:
+  // When terminationReason = "unprocessed_work_remaining", this is NOT an error.
+  // It's an intentional execution halt to ensure correctness.
   if (runStatus === 'failed') {
     const failedStage = latestRun?.stage || stages.find(s => s.status === 'error')?.stage;
     const reason = latestRun?.terminationReason || latestRun?.errorMessage;
+    const isIncomplete = reason?.toLowerCase() === 'unprocessed_work_remaining';
     
+    // INCOMPLETE RUN: intentional halt, not error
+    if (isIncomplete) {
+      return {
+        type: 'warning',
+        icon: 'info',
+        message: 'Run incomplete — pending work remaining',
+        subMessage: 'Execution halted to prevent incomplete processing. Some contacts still require processing.',
+      };
+    }
+    
+    // ACTUAL FAILURE: system error
     return {
       type: 'error',
       icon: 'warning',

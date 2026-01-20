@@ -564,9 +564,34 @@ export function mapExecutionNarrative(
   
   // =====================================================================
   // CASE 4: FAILED - status = failed
+  // 
+  // TARGET-STATE EXECUTION SEMANTICS:
+  // When termination_reason = "unprocessed_work_remaining", this is NOT an error.
+  // It's an intentional execution halt to ensure correctness.
+  // Display as "Incomplete" with info severity, not as a failure.
   // =====================================================================
   if (status === 'failed' || status === 'error') {
     const failureContext = getFailureContext(runEvents);
+    const terminationReason = latestRun.termination_reason?.toLowerCase();
+    
+    // INCOMPLETE RUN: failed + unprocessed_work_remaining = intentional halt
+    if (terminationReason === 'unprocessed_work_remaining') {
+      return {
+        mode: 'terminal',
+        headline: 'Run incomplete — pending work remaining',
+        subheadline: 'Execution halted to prevent incomplete processing. Some contacts still require processing.',
+        lastEventAt: mostRecentEvent?.occurred_at,
+        terminal: {
+          status: 'skipped', // Use 'skipped' to get info-style badge, not error
+          reason: 'Invariant enforced: execution stopped with remaining processable contacts to ensure correctness.',
+          completedAt: latestRun.completed_at || latestRun.updated_at || mostRecentEvent?.occurred_at || '',
+        },
+        trustNote: 'This is not an error. The system stopped intentionally to maintain data integrity.',
+        _rawStatus: latestRun.status,
+      };
+    }
+    
+    // ACTUAL FAILURE: system error or unexpected termination
     const failureReason = latestRun.failure_reason || latestRun.termination_reason || failureContext;
     
     return {
@@ -664,6 +689,10 @@ function isTerminalStatus(status: string): boolean {
 
 /**
  * Get the narrative badge style based on mode.
+ * 
+ * TARGET-STATE EXECUTION SEMANTICS:
+ * - terminal.status === 'skipped' with invariant reason = info/warning style (not error)
+ * - terminal.status === 'failed' = error style (actual failures only)
  */
 export function getNarrativeBadgeStyle(narrative: ExecutionNarrative): {
   bg: string;
@@ -687,6 +716,11 @@ export function getNarrativeBadgeStyle(narrative: ExecutionNarrative): {
       }
       if (narrative.terminal?.status === 'completed') {
         return { bg: '#D4EDDA', text: '#155724', border: '#C3E6CB' };
+      }
+      // INCOMPLETE/SKIPPED: Use warning/attention style (yellow/amber)
+      // This includes invariant-enforced stops which are NOT errors
+      if (narrative.terminal?.status === 'skipped') {
+        return { bg: '#FFF3CD', text: '#856404', border: '#FFEEBA' };
       }
       return { bg: '#FFF3CD', text: '#856404', border: '#FFEEBA' };
     default:
