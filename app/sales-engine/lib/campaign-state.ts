@@ -116,6 +116,7 @@ export function getGovernanceStateLabel(state: CampaignGovernanceState): string 
 
 /**
  * Get styling configuration for governance state badges.
+ * Uses NSD Brand colors (magenta, indigo, violet) - NO yellow, green, or red.
  */
 export function getGovernanceStateStyle(state: CampaignGovernanceState): {
   bg: string;
@@ -123,11 +124,11 @@ export function getGovernanceStateStyle(state: CampaignGovernanceState): {
   border: string;
 } {
   const styles: Record<CampaignGovernanceState, { bg: string; text: string; border: string }> = {
-    DRAFT: { bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },
-    PENDING_APPROVAL: { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
-    APPROVED_READY: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
-    BLOCKED: { bg: '#FEE2E2', text: '#991B1B', border: '#FECACA' },
-    EXECUTED: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
+    DRAFT: { bg: '#E8EAF6', text: '#020F5A', border: '#C5CAE9' },           // Indigo tint
+    PENDING_APPROVAL: { bg: '#FCE7F3', text: '#912D73', border: '#F9A8D4' }, // Magenta tint
+    APPROVED_READY: { bg: '#EDE7F6', text: '#4A1D7A', border: '#CE93D8' },   // Violet tint
+    BLOCKED: { bg: '#FCE7F3', text: '#912D73', border: '#F48FB1' },          // Magenta
+    EXECUTED: { bg: '#EDE7F6', text: '#4A1D7A', border: '#CE93D8' },         // Violet
   };
   return styles[state] || styles.BLOCKED;
 }
@@ -146,6 +147,7 @@ export function getConfidenceLabel(confidence: MetricConfidence): string {
 
 /**
  * Get styling for confidence badges.
+ * Uses NSD Brand colors (magenta, indigo, violet) - NO yellow, green, or red.
  */
 export function getConfidenceStyle(confidence: MetricConfidence): {
   bg: string;
@@ -154,9 +156,9 @@ export function getConfidenceStyle(confidence: MetricConfidence): {
   muted: boolean;
 } {
   const styles: Record<MetricConfidence, { bg: string; text: string; border: string; muted: boolean }> = {
-    SAFE: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7', muted: false },
-    CONDITIONAL: { bg: '#FEF3C7', text: '#92400E', border: '#FCD34D', muted: false },
-    BLOCKED: { bg: '#F3F4F6', text: '#9CA3AF', border: '#D1D5DB', muted: true },
+    SAFE: { bg: '#EDE7F6', text: '#4A1D7A', border: '#CE93D8', muted: false },       // Violet
+    CONDITIONAL: { bg: '#FCE7F3', text: '#912D73', border: '#F9A8D4', muted: false }, // Magenta light
+    BLOCKED: { bg: '#F3F4F6', text: '#9CA3AF', border: '#D1D5DB', muted: true },      // Gray
   };
   return styles[confidence] || styles.BLOCKED;
 }
@@ -174,6 +176,7 @@ export function getProvenanceLabel(provenance: ProvenanceType): string {
 
 /**
  * Get styling for provenance pills.
+ * Uses NSD Brand colors (magenta, indigo, violet) - NO yellow, green, or red.
  */
 export function getProvenanceStyle(provenance: ProvenanceType): {
   bg: string;
@@ -181,8 +184,8 @@ export function getProvenanceStyle(provenance: ProvenanceType): {
   border: string;
 } {
   const styles: Record<ProvenanceType, { bg: string; text: string; border: string }> = {
-    CANONICAL: { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
-    LEGACY_OBSERVED: { bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },
+    CANONICAL: { bg: '#E8EAF6', text: '#020F5A', border: '#C5CAE9' },        // Indigo
+    LEGACY_OBSERVED: { bg: '#FCE7F3', text: '#912D73', border: '#F9A8D4' },  // Magenta light
   };
   return styles[provenance] || styles.LEGACY_OBSERVED;
 }

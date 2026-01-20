@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Campaign } from '../types/campaign';
+import { NSD_COLORS } from '../lib/design-tokens';
 
 interface CampaignFormData {
   name: string;
@@ -47,12 +48,12 @@ export function CampaignForm({ campaign, onSubmit, onCancel, isLoading }: Campai
       <div
         style={{
           padding: '24px',
-          backgroundColor: '#fef3c7',
+          backgroundColor: NSD_COLORS.semantic.attention.bg,
           borderRadius: '8px',
           textAlign: 'center',
         }}
       >
-        <p style={{ margin: 0, color: '#92400e' }}>
+        <p style={{ margin: 0, color: NSD_COLORS.semantic.attention.text }}>
           This campaign cannot be edited in its current state.
         </p>
       </div>
@@ -65,10 +66,10 @@ export function CampaignForm({ campaign, onSubmit, onCancel, isLoading }: Campai
         <div
           style={{
             padding: '12px 16px',
-            backgroundColor: '#fef2f2',
+            backgroundColor: NSD_COLORS.semantic.critical.bg,
             borderRadius: '8px',
             marginBottom: '16px',
-            color: '#b91c1c',
+            color: NSD_COLORS.semantic.critical.text,
             fontSize: '14px',
           }}
         >

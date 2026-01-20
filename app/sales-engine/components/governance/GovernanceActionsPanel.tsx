@@ -314,7 +314,7 @@ export function GovernanceActionsPanel({
                 fontSize: '14px',
                 fontWeight: 600,
                 fontFamily: NSD_TYPOGRAPHY.fontBody,
-                backgroundColor: '#16A34A',
+                backgroundColor: NSD_COLORS.semantic.positive.text,
                 color: NSD_COLORS.text.inverse,
                 border: 'none',
                 borderRadius: NSD_RADIUS.md,
