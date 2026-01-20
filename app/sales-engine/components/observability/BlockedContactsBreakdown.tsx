@@ -131,13 +131,13 @@ export function BlockedContactsBreakdown({
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              backgroundColor: NSD_COLORS.semantic.critical.bg,
+              backgroundColor: `${NSD_COLORS.secondary}15`,  // Light purple tint
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Icon name="warning" size={16} color={NSD_COLORS.semantic.critical.text} />
+            <Icon name="info" size={16} color={NSD_COLORS.secondary} />
           </div>
           <div style={{ textAlign: 'left' }}>
             <span

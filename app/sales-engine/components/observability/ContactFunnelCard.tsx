@@ -34,29 +34,30 @@ export interface ContactFunnelCardProps {
   pollInterval?: number;
 }
 
+// NSD Brand-Aligned Colors (NO red/yellow/green)
 const STAGE_CONFIG = [
   { 
     key: 'pending', 
     label: 'Awaiting Scoring', 
-    color: '#9CA3AF',
+    color: NSD_COLORS.text.muted,  // Gray - idle/pending
     description: 'Contacts discovered, waiting to be scored',
   },
   { 
     key: 'processing', 
     label: 'Scoring / Enriching', 
-    color: '#3B82F6',
+    color: NSD_COLORS.primary,  // Deep navy - active processing
     description: 'Being evaluated for ICP fit and email discovery',
   },
   { 
     key: 'ready', 
     label: 'Ready for Promotion', 
-    color: '#10B981',
+    color: NSD_COLORS.cta,  // Magenta - ready/positive
     description: 'Have usable email, can be promoted to leads',
   },
   { 
     key: 'blocked', 
     label: 'Blocked', 
-    color: '#EF4444',
+    color: NSD_COLORS.secondary,  // Purple - blocked (NOT red)
     description: 'Cannot become leads (no email, low score, etc.)',
   },
 ];
@@ -252,7 +253,7 @@ export function ContactFunnelCard({
           padding: '16px 20px',
           borderTop: `1px solid ${NSD_COLORS.border.light}`,
           backgroundColor: stats.readyWithoutLead > 0 
-            ? `${NSD_COLORS.semantic.positive.bg}` 
+            ? `${NSD_COLORS.cta}10`  // Light magenta tint
             : NSD_COLORS.background,
         }}
       >
@@ -265,12 +266,12 @@ export function ContactFunnelCard({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Icon name="check" size={16} color="#10B981" />
+              <Icon name="check" size={16} color={NSD_COLORS.cta} />
               <span
                 style={{
                   fontSize: '14px',
                   fontWeight: 600,
-                  color: '#10B981',
+                  color: NSD_COLORS.cta,  // Magenta
                 }}
               >
                 {stats.readyWithoutLead.toLocaleString()} ready for promotion
@@ -281,7 +282,7 @@ export function ContactFunnelCard({
                 onClick={onPromoteClick}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: NSD_COLORS.primary,
+                  backgroundColor: NSD_COLORS.cta,  // Magenta CTA button
                   color: NSD_COLORS.text.inverse,
                   border: 'none',
                   borderRadius: NSD_RADIUS.md,

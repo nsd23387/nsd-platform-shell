@@ -23,22 +23,23 @@ export interface ContactProgressBarProps {
   height?: number;
 }
 
+// NSD Brand-Aligned Colors (NO red/yellow/green)
 const SEGMENT_CONFIG = {
   pending: { 
     label: 'Awaiting Scoring', 
-    color: '#9CA3AF',
+    color: NSD_COLORS.text.muted,  // Gray - idle/pending
   },
   processing: { 
     label: 'Scoring/Enriching', 
-    color: '#3B82F6',
+    color: NSD_COLORS.primary,  // Deep navy - active processing
   },
   ready: { 
     label: 'Ready', 
-    color: '#10B981',
+    color: NSD_COLORS.cta,  // Magenta - ready/positive
   },
   blocked: { 
     label: 'Blocked', 
-    color: '#EF4444',
+    color: NSD_COLORS.secondary,  // Purple - blocked (NOT red)
   },
 };
 

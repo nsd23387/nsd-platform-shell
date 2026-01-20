@@ -3,7 +3,7 @@
 **Campaign ID:** `92f37130-3800-4811-bb17-2e46d5d9b4f9`  
 **Campaign Name:** Q1 2026 - Gym Campaign Texas  
 **Audit Date:** January 20, 2026  
-**Status:** 🔴 Zero Leads Created Despite 77 Orgs + 1153 Contacts
+**Status:** BLOCKED - Zero Leads Created Despite 77 Orgs + 1153 Contacts
 
 ---
 
@@ -14,11 +14,11 @@ The campaign has successfully sourced **77 organizations** and discovered **1153
 ### Current State
 | Stage | Count | Status |
 |-------|-------|--------|
-| Organizations Sourced | 77 | ✅ Complete |
-| Organizations Qualified | 0 | ⚠️ All in Review |
-| Contacts Discovered | 1,153 | ✅ Complete |
-| Leads Created | 0 | 🔴 Blocked |
-| Leads Approved | 0 | 🔴 Blocked |
+| Organizations Sourced | 77 | Complete |
+| Organizations Qualified | 0 | All in Review |
+| Contacts Discovered | 1,153 | Complete |
+| Leads Created | 0 | Blocked |
+| Leads Approved | 0 | Blocked |
 
 ---
 
@@ -208,10 +208,10 @@ SELECT
     tier_ab_contacts,
     total_leads,
     CASE 
-        WHEN qualified_orgs = 0 AND review_orgs > 0 THEN '🔴 BLOCKER: No orgs qualified (all in review)'
-        WHEN contacts_with_email = 0 THEN '🔴 BLOCKER: No contacts have emails'
-        WHEN tier_ab_contacts = 0 THEN '🔴 BLOCKER: No Tier A/B contacts'
-        ELSE '✅ Pipeline looks OK - check lead creation logic'
+        WHEN qualified_orgs = 0 AND review_orgs > 0 THEN 'BLOCKER: No orgs qualified (all in review)'
+        WHEN contacts_with_email = 0 THEN 'BLOCKER: No contacts have emails'
+        WHEN tier_ab_contacts = 0 THEN 'BLOCKER: No Tier A/B contacts'
+        ELSE 'Pipeline looks OK - check lead creation logic'
     END as diagnosis
 FROM pipeline_state;
 ```
@@ -297,37 +297,37 @@ After unblocking, re-run the campaign to trigger lead promotion from qualified c
 
 ```
 ┌─────────────────┐
-│  Org Sourcing   │ ✅ 77 orgs
+│  Org Sourcing   │ [DONE] 77 orgs
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│  Org Scoring    │ ⚠️ 0 qualified, 77 review
+│  Org Scoring    │ [REVIEW] 0 qualified, 77 review
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│ Org Approval    │ 🔴 BLOCKED - All in review?
+│ Org Approval    │ [BLOCKED] All in review?
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│Contact Sourcing │ ✅ 1153 contacts
+│Contact Sourcing │ [DONE] 1153 contacts
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│Email Discovery  │ ❓ Status unknown
+│Email Discovery  │ [PENDING] Status unknown
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│Lead Promotion   │ 🔴 0 leads created
+│Lead Promotion   │ [BLOCKED] 0 leads created
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│Lead Approval    │ ⏸️ Waiting
+│Lead Approval    │ [WAITING]
 └─────────────────┘
 ```
 
@@ -348,16 +348,16 @@ If the issue is in lead promotion logic, review these files in the `nsd-sales-en
 
 | Check | Query | Status |
 |-------|-------|--------|
-| Org qualification distribution | 2.1 | ⏳ Pending |
-| Org scores and reasons | 2.2 | ⏳ Pending |
-| Contact status distribution | 2.3 | ⏳ Pending |
-| Contact email status | 2.4 | ⏳ Pending |
-| Contact tier distribution | 2.5 | ⏳ Pending |
-| Lead qualification config | 2.6 | ⏳ Pending |
-| Lead-related execution logs | 2.7 | ⏳ Pending |
-| Blocking conditions | 2.8 | ⏳ Pending |
-| Contacts meeting lead criteria | 2.9 | ⏳ Pending |
-| Full pipeline state | 2.10 | ⏳ Pending |
+| Org qualification distribution | 2.1 | Pending |
+| Org scores and reasons | 2.2 | Pending |
+| Contact status distribution | 2.3 | Pending |
+| Contact email status | 2.4 | Pending |
+| Contact tier distribution | 2.5 | Pending |
+| Lead qualification config | 2.6 | Pending |
+| Lead-related execution logs | 2.7 | Pending |
+| Blocking conditions | 2.8 | Pending |
+| Contacts meeting lead criteria | 2.9 | Pending |
+| Full pipeline state | 2.10 | Pending |
 
 ---
 
