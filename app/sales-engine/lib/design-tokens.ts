@@ -195,12 +195,17 @@ export const NSD_SPACING = {
   lg: '24px',
   xl: '32px',
   xxl: '48px',
+  xxxl: '64px',
+  page: '48px',
+  pageXl: '64px',
 } as const;
 
 export const NSD_RADIUS = {
   sm: '6px',
   md: '10px',
   lg: '16px',
+  xl: '20px',
+  xxl: '24px',
   full: '9999px',
 } as const;
 
@@ -208,19 +213,58 @@ export const NSD_TYPOGRAPHY = {
   fontDisplay: 'var(--font-display, Poppins, sans-serif)',
   fontBody: 'var(--font-body, Inter, sans-serif)',
   
-  heading1: { fontSize: '32px', fontWeight: 600, lineHeight: 1.2 },
+  pageTitle: { fontSize: '40px', fontWeight: 600, lineHeight: 1.15, letterSpacing: '-0.02em' },
+  heading1: { fontSize: '32px', fontWeight: 600, lineHeight: 1.2, letterSpacing: '-0.01em' },
   heading2: { fontSize: '24px', fontWeight: 600, lineHeight: 1.3 },
   heading3: { fontSize: '18px', fontWeight: 600, lineHeight: 1.4 },
   heading4: { fontSize: '16px', fontWeight: 600, lineHeight: 1.4 },
   
-  body: { fontSize: '14px', fontWeight: 400, lineHeight: 1.5 },
-  bodySmall: { fontSize: '13px', fontWeight: 400, lineHeight: 1.5 },
-  caption: { fontSize: '12px', fontWeight: 400, lineHeight: 1.4 },
-  label: { fontSize: '12px', fontWeight: 500, lineHeight: 1.4, letterSpacing: '0.05em', textTransform: 'uppercase' as const },
+  statNumber: { fontSize: '48px', fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.02em' },
+  statLabel: { fontSize: '11px', fontWeight: 500, lineHeight: 1.4, letterSpacing: '0.08em', textTransform: 'uppercase' as const },
+  
+  body: { fontSize: '15px', fontWeight: 400, lineHeight: 1.6 },
+  bodySmall: { fontSize: '14px', fontWeight: 400, lineHeight: 1.5 },
+  caption: { fontSize: '13px', fontWeight: 400, lineHeight: 1.4 },
+  label: { fontSize: '11px', fontWeight: 500, lineHeight: 1.4, letterSpacing: '0.06em', textTransform: 'uppercase' as const },
 } as const;
 
 export const NSD_SHADOWS = {
   sm: '0 1px 2px rgba(0, 0, 0, 0.04)',
   md: '0 2px 8px rgba(0, 0, 0, 0.06)',
   lg: '0 4px 16px rgba(0, 0, 0, 0.08)',
+  xl: '0 8px 32px rgba(0, 0, 0, 0.10)',
+  card: '0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03)',
+  cardHover: '0 4px 20px rgba(0, 0, 0, 0.08)',
+  input: '0 1px 2px rgba(0, 0, 0, 0.03), 0 2px 6px rgba(0, 0, 0, 0.02)',
+  inputFocus: '0 0 0 3px rgba(204, 54, 143, 0.12)',
+} as const;
+
+export const NSD_GLOW = {
+  magenta: '0 0 20px rgba(204, 54, 143, 0.3)',
+  magentaSubtle: '0 0 12px rgba(204, 54, 143, 0.15)',
+  magentaStrong: '0 0 30px rgba(204, 54, 143, 0.4)',
+  violet: '0 0 20px rgba(105, 43, 170, 0.3)',
+  violetSubtle: '0 0 12px rgba(105, 43, 170, 0.15)',
+  indigo: '0 0 20px rgba(2, 15, 90, 0.2)',
+  indigoSubtle: '0 0 12px rgba(2, 15, 90, 0.1)',
+  ctaHover: '0 4px 20px rgba(204, 54, 143, 0.35)',
+  ctaActive: '0 2px 12px rgba(204, 54, 143, 0.25)',
+} as const;
+
+export const NSD_GRADIENTS = {
+  brand: 'linear-gradient(135deg, #CC368F 0%, #912D73 50%, #692BAA 100%)',
+  brandHorizontal: 'linear-gradient(90deg, #CC368F 0%, #912D73 50%, #692BAA 100%)',
+  brandSubtle: 'linear-gradient(135deg, rgba(204, 54, 143, 0.1) 0%, rgba(105, 43, 170, 0.1) 100%)',
+  ctaButton: 'linear-gradient(135deg, #CC368F 0%, #912D73 100%)',
+  ctaButtonHover: 'linear-gradient(135deg, #D84E9E 0%, #A33882 100%)',
+  shimmer: 'linear-gradient(90deg, transparent 0%, rgba(204, 54, 143, 0.08) 50%, transparent 100%)',
+  accentBar: 'linear-gradient(90deg, #CC368F 0%, #912D73 35%, #692BAA 100%)',
+} as const;
+
+export const NSD_TRANSITIONS = {
+  fast: 'all 0.15s ease',
+  default: 'all 0.2s ease',
+  slow: 'all 0.3s ease',
+  glow: 'box-shadow 0.25s ease, transform 0.2s ease',
+  color: 'color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease',
 } as const;
