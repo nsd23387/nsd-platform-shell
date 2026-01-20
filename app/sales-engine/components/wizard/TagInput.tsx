@@ -132,7 +132,7 @@ export function TagInput({
               alignItems: 'center',
               gap: '6px',
               padding: '4px 10px',
-              backgroundColor: '#EEF2FF',
+              backgroundColor: NSD_COLORS.semantic.info.bg,
               color: NSD_COLORS.primary,
               borderRadius: NSD_RADIUS.full,
               fontSize: '13px',

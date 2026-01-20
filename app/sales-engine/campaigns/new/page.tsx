@@ -171,12 +171,12 @@ export default function NewCampaignPage() {
                 justifyContent: 'center',
                 width: '64px',
                 height: '64px',
-                backgroundColor: '#FEF3C7',
+                backgroundColor: NSD_COLORS.semantic.attention.bg,
                 borderRadius: '50%',
                 margin: '0 auto 24px',
               }}
             >
-              <Icon name="warning" size={32} color="#92400E" />
+              <Icon name="warning" size={32} color={NSD_COLORS.semantic.attention.text} />
             </div>
 
             <h1
@@ -636,7 +636,7 @@ export default function NewCampaignPage() {
         {(submitResult?.error || Object.keys(errors).length > 0) && (
           <div
             style={{
-              backgroundColor: '#FEE2E2',
+              backgroundColor: NSD_COLORS.semantic.critical.bg,
               borderRadius: NSD_RADIUS.md,
               padding: '16px',
               marginBottom: '24px',
@@ -645,13 +645,13 @@ export default function NewCampaignPage() {
               gap: '12px',
             }}
           >
-            <Icon name="warning" size={20} color="#991B1B" />
+            <Icon name="warning" size={20} color={NSD_COLORS.semantic.critical.text} />
             <div>
-              <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: '#991B1B' }}>
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: NSD_COLORS.semantic.critical.text }}>
                 {submitResult?.error || 'Please fix the errors below before continuing'}
               </p>
               {Object.keys(errors).length > 0 && (
-                <ul style={{ margin: '8px 0 0 0', padding: '0 0 0 16px', fontSize: '13px', color: '#991B1B' }}>
+                <ul style={{ margin: '8px 0 0 0', padding: '0 0 0 16px', fontSize: '13px', color: NSD_COLORS.semantic.critical.text }}>
                   {Object.entries(errors).map(([field, message]) => (
                     <li key={field}>{message}</li>
                   ))}
@@ -875,6 +875,25 @@ export default function NewCampaignPage() {
           stepNumber={3}
           totalSteps={WIZARD_STEPS.length}
         >
+          {/* Show inheritance notice when ICP values exist */}
+          {(formData.jobTitles.length > 0 || formData.seniorityLevels.length > 0) && (
+            <div
+              style={{
+                backgroundColor: NSD_COLORS.semantic.info.bg,
+                borderRadius: NSD_RADIUS.md,
+                padding: '12px 16px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}
+            >
+              <Icon name="info" size={16} color={NSD_COLORS.semantic.info.text} />
+              <span style={{ fontSize: '13px', color: NSD_COLORS.semantic.info.text }}>
+                Job Titles and Seniority from ICP Definition are available. Override below if needed.
+              </span>
+            </div>
+          )}
           <TagInput
             label="Job Titles / Roles"
             name="jobTitles"

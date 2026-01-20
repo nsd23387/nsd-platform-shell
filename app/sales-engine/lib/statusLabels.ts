@@ -2,9 +2,11 @@
  * Status Labels
  * 
  * This module provides status labels and styles for the Sales Engine UI.
+ * Uses NSD Brand colors (magenta, indigo, violet) - NO yellow, green, or red.
  */
 
 import type { CampaignStatus } from '../types/campaign';
+import { NSD_COLORS } from './design-tokens';
 
 /**
  * Status labels for display.
@@ -20,13 +22,13 @@ export const STATUS_LABELS: Record<CampaignStatus, string> = {
 };
 
 export const STATUS_STYLES: Record<CampaignStatus, { bg: string; text: string; border: string }> = {
-  DRAFT: { bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },
-  PENDING_REVIEW: { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
-  RUNNABLE: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
-  RUNNING: { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
-  COMPLETED: { bg: '#D1FAE5', text: '#065F46', border: '#6EE7B7' },
-  FAILED: { bg: '#FEE2E2', text: '#991B1B', border: '#FECACA' },
-  ARCHIVED: { bg: '#F3F4F6', text: '#4B5563', border: '#D1D5DB' },
+  DRAFT: NSD_COLORS.status.draft,
+  PENDING_REVIEW: NSD_COLORS.status.pendingReview,
+  RUNNABLE: NSD_COLORS.status.approvedReady,
+  RUNNING: NSD_COLORS.status.running,
+  COMPLETED: NSD_COLORS.status.completed,
+  FAILED: NSD_COLORS.status.failed,
+  ARCHIVED: NSD_COLORS.status.archived,
 };
 
 export function getStatusLabel(status: CampaignStatus): string {

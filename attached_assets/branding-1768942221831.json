@@ -1,0 +1,90 @@
+{
+  "colorScheme": "light",
+  "fonts": [
+    {
+      "family": "system-ui",
+      "count": 104
+    },
+    {
+      "family": "sans-serif",
+      "count": 104
+    },
+    {
+      "family": "Inter",
+      "count": 73
+    },
+    {
+      "family": "Poppins",
+      "count": 31
+    }
+  ],
+  "colors": {
+    "primary": "#FCE7F3",
+    "accent": "#020F5A",
+    "background": "#FCFCFC",
+    "textPrimary": "#020F5A",
+    "link": "#020F5A"
+  },
+  "typography": {
+    "fontFamilies": {
+      "primary": "Inter",
+      "heading": "Poppins"
+    },
+    "fontStacks": {
+      "body": [
+        "Inter",
+        "system-ui",
+        "sans-serif"
+      ],
+      "heading": [
+        "Poppins",
+        "system-ui",
+        "sans-serif"
+      ],
+      "paragraph": [
+        "Inter",
+        "system-ui",
+        "sans-serif"
+      ]
+    },
+    "fontSizes": {
+      "h1": "62.4px",
+      "h2": "51.2px",
+      "body": "18px"
+    }
+  },
+  "spacing": {
+    "baseUnit": 8,
+    "borderRadius": "6px"
+  },
+  "components": {},
+  "images": {
+    "logo": "File saved at: attached_assets/logo.svg",
+    "favicon": "File saved at: attached_assets/favicon.ico",
+    "ogImage": "File saved at: attached_assets/ogImage.png"
+  },
+  "__framework_hints": [],
+  "__llm_logo_reasoning": {
+    "selectedIndex": 0,
+    "reasoning": "Strong indicators: header logo linking to homepage, header location, visible, highest logo on page, alt matches logo/brand, src contains logo, reasonable size. Score: 115 (clear winner by 107 points)",
+    "confidence": 0.9
+  },
+  "__llm_button_reasoning": {
+    "primary": {
+      "index": -1,
+      "text": "N/A",
+      "reasoning": "LLM failed"
+    },
+    "secondary": {
+      "index": -1,
+      "text": "N/A",
+      "reasoning": "LLM failed"
+    },
+    "confidence": 0
+  },
+  "confidence": {
+    "buttons": 0,
+    "colors": 0,
+    "overall": 0
+  }
+}

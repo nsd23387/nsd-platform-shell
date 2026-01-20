@@ -74,8 +74,8 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
             style={{
               fontSize: '11px',
               padding: '2px 8px',
-              backgroundColor: '#fef3c7',
-              color: '#92400e',
+              backgroundColor: NSD_COLORS.semantic.attention.bg,
+              color: NSD_COLORS.semantic.attention.text,
               borderRadius: '4px',
             }}
           >

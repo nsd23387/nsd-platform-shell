@@ -10,7 +10,7 @@
  * UI GUARDRAILS:
  * - NEVER treats keyword coverage warnings as failures
  * - NEVER shows this as an error state
- * - Uses informational styling (amber/yellow, not red)
+ * - Uses informational styling (magenta light, not red/yellow)
  */
 
 'use client';
@@ -50,20 +50,20 @@ export function KeywordCoverageWarningBannerENM({
         alignItems: 'flex-start',
         gap: '12px',
         padding: '12px 16px',
-        backgroundColor: '#FFFBEB',
-        border: '1px solid #FCD34D',
+        backgroundColor: NSD_COLORS.semantic.attention.bg,
+        border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
         borderRadius: NSD_RADIUS.md,
         marginTop: '12px',
       }}
     >
-      <Icon name="info" size={18} color="#B45309" />
+      <Icon name="info" size={18} color={NSD_COLORS.semantic.attention.text} />
       <div style={{ flex: 1 }}>
         <p
           style={{
             margin: 0,
             fontSize: '14px',
             fontWeight: 500,
-            color: '#92400E',
+            color: NSD_COLORS.semantic.attention.text,
             fontFamily: NSD_TYPOGRAPHY.fontBody,
             lineHeight: 1.5,
           }}
@@ -76,7 +76,7 @@ export function KeywordCoverageWarningBannerENM({
               style={{
                 margin: 0,
                 fontSize: '13px',
-                color: '#B45309',
+                color: NSD_COLORS.semantic.attention.text,
                 fontFamily: NSD_TYPOGRAPHY.fontBody,
               }}
             >
@@ -90,7 +90,7 @@ export function KeywordCoverageWarningBannerENM({
                 style={{
                   margin: '4px 0 0 0',
                   fontSize: '13px',
-                  color: '#78716C',
+                  color: NSD_COLORS.text.muted,
                   fontFamily: NSD_TYPOGRAPHY.fontBody,
                 }}
               >

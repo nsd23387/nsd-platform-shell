@@ -37,10 +37,10 @@ export interface PromotionDetailsPanelProps {
 function getTierStyle(tier: PromotionTier): { bg: string; text: string; border: string } {
   const styles: Record<PromotionTier, { bg: string; text: string; border: string }> = {
     A: NSD_COLORS.semantic.positive,
-    B: { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
+    B: NSD_COLORS.semantic.info,
     // Tier C/D should never appear in lead views, but included for completeness
-    C: { bg: '#FEF3C7', text: '#92400E', border: '#FCD34D' },
-    D: { bg: '#F3F4F6', text: '#6B7280', border: '#D1D5DB' },
+    C: NSD_COLORS.semantic.attention,
+    D: NSD_COLORS.semantic.muted,
   };
   return styles[tier] || styles.D;
 }

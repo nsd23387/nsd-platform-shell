@@ -203,8 +203,8 @@ export default function EditCampaignPage() {
             </Link>
           </div>
           <div style={{ backgroundColor: NSD_COLORS.background, borderRadius: NSD_RADIUS.lg, border: `1px solid ${NSD_COLORS.border.light}`, padding: '48px', textAlign: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '64px', height: '64px', backgroundColor: '#FEF3C7', borderRadius: '50%', margin: '0 auto 24px' }}>
-              <Icon name="warning" size={32} color="#92400E" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '64px', height: '64px', backgroundColor: NSD_COLORS.semantic.attention.bg, borderRadius: '50%', margin: '0 auto 24px' }}>
+              <Icon name="warning" size={32} color={NSD_COLORS.semantic.attention.text} />
             </div>
             <h1 style={{ margin: '0 0 16px 0', fontSize: '24px', fontWeight: 600, color: NSD_COLORS.primary, fontFamily: NSD_TYPOGRAPHY.fontDisplay }}>Campaign Editing Disabled</h1>
             <p style={{ margin: '0 0 24px 0', fontSize: '15px', color: NSD_COLORS.text.secondary, lineHeight: 1.6 }}>Campaign editing is currently unavailable.</p>
@@ -236,10 +236,10 @@ export default function EditCampaignPage() {
               Back to Campaigns
             </Link>
           </div>
-          <div style={{ backgroundColor: '#FEE2E2', borderRadius: NSD_RADIUS.lg, padding: '24px', textAlign: 'center' }}>
-            <Icon name="warning" size={32} color="#991B1B" />
-            <h2 style={{ margin: '16px 0 8px 0', fontSize: '18px', color: '#991B1B' }}>Failed to Load Campaign</h2>
-            <p style={{ margin: 0, color: '#991B1B' }}>{loadError}</p>
+          <div style={{ backgroundColor: NSD_COLORS.semantic.critical.bg, borderRadius: NSD_RADIUS.lg, padding: '24px', textAlign: 'center' }}>
+            <Icon name="warning" size={32} color={NSD_COLORS.semantic.critical.text} />
+            <h2 style={{ margin: '16px 0 8px 0', fontSize: '18px', color: NSD_COLORS.semantic.critical.text }}>Failed to Load Campaign</h2>
+            <p style={{ margin: 0, color: NSD_COLORS.semantic.critical.text }}>{loadError}</p>
           </div>
         </div>
       </div>
@@ -411,14 +411,14 @@ export default function EditCampaignPage() {
 
           <div style={{ flex: 1, minWidth: 0 }}>
             {(submitResult?.error || Object.keys(errors).length > 0) && (
-              <div style={{ backgroundColor: '#FEE2E2', borderRadius: NSD_RADIUS.md, padding: '16px', marginBottom: '24px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                <Icon name="warning" size={20} color="#991B1B" />
+              <div style={{ backgroundColor: NSD_COLORS.semantic.critical.bg, borderRadius: NSD_RADIUS.md, padding: '16px', marginBottom: '24px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <Icon name="warning" size={20} color={NSD_COLORS.semantic.critical.text} />
                 <div>
-                  <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: '#991B1B' }}>
+                  <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: NSD_COLORS.semantic.critical.text }}>
                     {submitResult?.error || 'Please fix the errors below before continuing'}
                   </p>
                   {Object.keys(errors).length > 0 && (
-                    <ul style={{ margin: '8px 0 0 0', padding: '0 0 0 16px', fontSize: '13px', color: '#991B1B' }}>
+                    <ul style={{ margin: '8px 0 0 0', padding: '0 0 0 16px', fontSize: '13px', color: NSD_COLORS.semantic.critical.text }}>
                       {Object.entries(errors).map(([field, message]) => (
                         <li key={field}>{message}</li>
                       ))}
