@@ -39,6 +39,19 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 20, 2026: Campaign-Centric UX Optimization (Option A: Minimal)
+  - Simplified navigation from 5 sections to campaign-focused single view
+  - Created CampaignListHeader component with collapsible summary stats (active campaigns, needs attention, daily capacity)
+  - Created MiniPipelineIndicator component for compact pipeline visibility (Orgs → Contacts → Leads) in table rows
+  - Created ExecutionStatusBadge component for execution state indicators (idle, running, completed, failed)
+  - Enhanced campaigns table with execution status, pipeline progress, and relative time columns
+  - Added smart filter pills: All, Draft, Pending Review, Ready, Running, Completed, Failed
+  - Removed NavBar from campaigns page - replaced with inline filter pills
+  - Updated /approvals, /runs, /monitoring pages to redirect to campaigns with appropriate filter query params
+  - TagInput now supports paste with comma-separated values auto-splitting into tags
+  - Contact Targeting step now auto-inherits ICP job_titles/seniority_levels (reduces duplicate data entry)
+  - Fixed hardcoded colors to use NSD_COLORS design tokens consistently
+
 - January 19, 2026: Keyword-Aware ENM Narrative for Org Sourcing Observability
   - Extended ExecutionNarrative with KeywordContext interface (totalKeywords, keywordsWithResults, keywordsWithZeroResults, hasLowCoverageWarning, warningMessage)
   - ENM mapper now parses org_sourcing:keyword_summary, org_sourcing:keyword_health, and run.warning (keyword_coverage_low) events
