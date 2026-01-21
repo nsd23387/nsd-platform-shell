@@ -37,16 +37,46 @@ export interface LatestRun {
  * Check if a run is an "incomplete" run (intentional stop, not error).
  * 
  * SEMANTIC ALIGNMENT (Target-State Execution):
- * When status = "failed" AND termination_reason = "unprocessed_work_remaining",
- * this is NOT an error - it's an intentional execution halt to prevent
- * incomplete processing. The UI must display this as "Incomplete" with
- * info severity, not as a failure/error.
+ * When status = "failed" AND termination_reason indicates an intentional pause,
+ * this is NOT an error - it's an intentional execution halt. 
+ * The UI must display this as "Incomplete" with info severity, not as a failure/error.
+ * 
+ * Intentional pause reasons include:
+ * - unprocessed_work_remaining: Batch complete, work remains
+ * - execution_timeout: Time limit reached, partial progress preserved
+ * - batch_limit_reached: Processing limit reached
+ * - rate_limit_exceeded: External rate limiting
  */
 export function isIncompleteRun(run: LatestRun | null): boolean {
   if (!run) return false;
   const status = run.status?.toLowerCase();
-  const reason = run.termination_reason?.toLowerCase();
-  return status === 'failed' && reason === 'unprocessed_work_remaining';
+  const reason = run.termination_reason?.toLowerCase() || '';
+  
+  if (status !== 'failed') return false;
+  
+  // Check for intentional pause reasons
+  return (
+    reason === 'unprocessed_work_remaining' ||
+    reason === 'execution_timeout' ||
+    reason === 'batch_limit_reached' ||
+    reason === 'rate_limit_exceeded' ||
+    reason.includes('timeout') ||
+    reason.includes('limit')
+  );
+}
+
+/**
+ * Check if a run stopped due to execution timeout specifically.
+ */
+export function isTimeoutRun(run: LatestRun | null): boolean {
+  if (!run) return false;
+  const status = run.status?.toLowerCase();
+  const reason = run.termination_reason?.toLowerCase() || '';
+  
+  return status === 'failed' && (
+    reason === 'execution_timeout' ||
+    reason.includes('timeout')
+  );
 }
 
 type LatestRunApiResponse =

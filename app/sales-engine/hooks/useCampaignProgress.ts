@@ -98,6 +98,23 @@ function computePercent(processed: number, total: number): number {
   return Math.min(100, Math.round((processed / total) * 100));
 }
 
+/**
+ * Check if termination reason indicates an intentional pause (not an error).
+ * These are all valid "progress continues on next run" scenarios.
+ */
+function isIntentionalPause(terminationReason: string | null): boolean {
+  if (!terminationReason) return false;
+  const reason = terminationReason.toLowerCase();
+  return (
+    reason === 'unprocessed_work_remaining' ||
+    reason === 'execution_timeout' ||
+    reason === 'batch_limit_reached' ||
+    reason === 'rate_limit_exceeded' ||
+    reason.includes('timeout') ||
+    reason.includes('limit')
+  );
+}
+
 function deriveProgressState(
   latestRunStatus: string | null,
   terminationReason: string | null,
@@ -114,8 +131,9 @@ function deriveProgressState(
     return 'in_progress';
   }
   
-  // Paused: incomplete run with remaining work
-  if (latestRunStatus === 'failed' && terminationReason?.toLowerCase() === 'unprocessed_work_remaining') {
+  // Paused: failed run with intentional pause reason (NOT an error)
+  // This includes: execution_timeout, unprocessed_work_remaining, batch_limit_reached
+  if (latestRunStatus === 'failed' && isIntentionalPause(terminationReason)) {
     return 'paused';
   }
   
@@ -124,22 +142,43 @@ function deriveProgressState(
     return 'exhausted';
   }
   
-  // Default: in progress (has work but not actively running)
+  // Default: paused (has work but not actively running)
+  // This catches cases where run completed but work remains
   return 'paused';
 }
 
 function deriveStatusMessage(
   state: CampaignProgressState['state'],
   remainingCount: number,
-  latestRunStatus: string | null
+  latestRunStatus: string | null,
+  terminationReason: string | null
 ): string {
   switch (state) {
     case 'not_started':
       return 'Campaign has not started processing yet.';
     case 'in_progress':
       return 'Processing in progress. Live updates shown.';
-    case 'paused':
-      return `Processing paused. ${remainingCount.toLocaleString()} contacts awaiting processing. Progress continues when next run executes.`;
+    case 'paused': {
+      const reason = terminationReason?.toLowerCase();
+      const remainingMsg = `${remainingCount.toLocaleString()} contacts awaiting processing.`;
+      
+      // Explain the specific pause reason
+      if (reason === 'execution_timeout') {
+        return `Processing paused (execution timeout). ${remainingMsg} Progress shown reflects completed work.`;
+      }
+      if (reason === 'unprocessed_work_remaining') {
+        return `Processing paused (batch complete). ${remainingMsg} Progress continues on next run.`;
+      }
+      if (reason === 'batch_limit_reached' || reason?.includes('limit')) {
+        return `Processing paused (limit reached). ${remainingMsg} Progress continues on next run.`;
+      }
+      if (reason?.includes('timeout')) {
+        return `Processing paused (timeout). ${remainingMsg} Partial progress preserved.`;
+      }
+      
+      // Default paused message
+      return `Processing paused. ${remainingMsg} Progress continues when next run executes.`;
+    }
     case 'exhausted':
       return 'All contacts processed. Campaign complete.';
     default:
@@ -179,8 +218,15 @@ function shouldStopPolling(
     return true;
   }
   
-  // Stop if failed (but not incomplete)
-  if (latestRunStatus === 'failed' && terminationReason?.toLowerCase() !== 'unprocessed_work_remaining') {
+  // NEVER stop polling on intentional pauses (timeout, batch limit, etc.)
+  // These are valid states where progress is shown and monitoring continues
+  if (latestRunStatus === 'failed' && isIntentionalPause(terminationReason)) {
+    // Continue polling at reduced rate for paused campaigns
+    return false;
+  }
+  
+  // Stop if truly failed (actual error, not intentional pause)
+  if (latestRunStatus === 'failed') {
     return true;
   }
   
@@ -252,7 +298,7 @@ export function useCampaignProgress(campaignId: string | null): UseCampaignProgr
       
       // Derive progress state
       const state = deriveProgressState(runStatus, terminationReason, hasContacts, hasRemainingWork);
-      const statusMessage = deriveStatusMessage(state, remainingCount, runStatus);
+      const statusMessage = deriveStatusMessage(state, remainingCount, runStatus, terminationReason);
       
       // Build stage progress
       const stageProgress: StageProgress[] = [

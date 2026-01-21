@@ -90,9 +90,17 @@ export function CampaignProgressCard({
   const isComplete = progress.state === 'exhausted';
   const isNotStarted = progress.state === 'not_started';
   
-  // Check if this is an incomplete run (termination_reason = unprocessed_work_remaining)
-  const isIncompleteRun = progress.latestRun.status?.toLowerCase() === 'failed' &&
-    progress.latestRun.terminationReason?.toLowerCase() === 'unprocessed_work_remaining';
+  // Check if this is an intentional pause (not an actual error)
+  const terminationReason = progress.latestRun.terminationReason?.toLowerCase() || '';
+  const isIntentionalPause = progress.latestRun.status?.toLowerCase() === 'failed' && (
+    terminationReason === 'unprocessed_work_remaining' ||
+    terminationReason === 'execution_timeout' ||
+    terminationReason === 'batch_limit_reached' ||
+    terminationReason === 'rate_limit_exceeded' ||
+    terminationReason.includes('timeout') ||
+    terminationReason.includes('limit')
+  );
+  const isTimeoutPause = terminationReason === 'execution_timeout' || terminationReason.includes('timeout');
   
   // Check for edge states
   const hasNoContacts = progress.stages.every(s => s.total === 0);
@@ -292,7 +300,8 @@ export function CampaignProgressCard({
             <WhyPausedExplainer
               show={isPaused}
               remainingCount={progress.remainingCount}
-              isIncompleteRun={isIncompleteRun}
+              isIncompleteRun={isIntentionalPause}
+              isTimeout={isTimeoutPause}
               compact={compact}
             />
           </div>

@@ -24,7 +24,7 @@
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
-import { useLatestRunStatus, type LatestRun, isIncompleteRun } from '../../../../hooks/useLatestRunStatus';
+import { useLatestRunStatus, type LatestRun, isIncompleteRun, isTimeoutRun } from '../../../../hooks/useLatestRunStatus';
 import { isRunStale, RUN_STALE_THRESHOLD_MS, type ResolvableRun } from '../../lib/resolveActiveRun';
 
 interface LatestRunStatusCardProps {
@@ -51,12 +51,12 @@ interface StatusDisplay {
  * When isStale=true and status is 'running', display a warning state
  * instead of misleading "Running" indicator.
  * 
- * INCOMPLETE RUN HANDLING (Target-State Execution Semantics):
- * When isIncomplete=true (status=failed AND termination_reason=unprocessed_work_remaining),
- * display as "Incomplete" with info severity, NOT as an error.
+ * INCOMPLETE/TIMEOUT RUN HANDLING (Target-State Execution Semantics):
+ * When isIncomplete=true or isTimeout=true (status=failed AND termination_reason indicates intentional pause),
+ * display as "Incomplete" or "Timeout" with info severity, NOT as an error.
  * This is intentional behavior - the system stopped to prevent incomplete processing.
  */
-function getStatusDisplay(status?: string, isStale?: boolean, isIncomplete?: boolean): StatusDisplay {
+function getStatusDisplay(status?: string, isStale?: boolean, isIncomplete?: boolean, isTimeout?: boolean): StatusDisplay {
   const normalized = typeof status === 'string' ? status.toLowerCase() : 'unknown';
 
   // STALE RUN HANDLING: Running runs older than 30 min are displayed as stalled
@@ -70,7 +70,18 @@ function getStatusDisplay(status?: string, isStale?: boolean, isIncomplete?: boo
     };
   }
 
-  // INCOMPLETE RUN HANDLING: failed + unprocessed_work_remaining = Incomplete (not error)
+  // TIMEOUT HANDLING: execution time limit reached, partial progress preserved
+  // This is NOT an error - progress is preserved
+  if (isTimeout) {
+    return {
+      icon: 'info',
+      label: 'Timeout',
+      copy: 'Execution paused — timeout reached. Progress preserved.',
+      ...NSD_COLORS.semantic.attention,
+    };
+  }
+
+  // INCOMPLETE RUN HANDLING: failed + intentional pause = Incomplete (not error)
   // This is intentional execution halt, not a system failure
   if (isIncomplete) {
     return {
@@ -190,7 +201,8 @@ function RunDetailsCard({ run }: { run: LatestRun }) {
   const resolvable = toResolvableRun(run);
   const stale = isRunStale(resolvable);
   const incomplete = isIncompleteRun(run);
-  const display = getStatusDisplay(run?.status, stale, incomplete);
+  const timeout = isTimeoutRun(run);
+  const display = getStatusDisplay(run?.status, stale, incomplete, timeout);
   // Runtime safety: `run` payload may be missing fields (or be absent) depending on API response.
   // Guard all string slicing to prevent client-side exceptions.
   const rawRunId = (run as unknown as { run_id?: unknown; id?: unknown })?.run_id ?? (run as unknown as { id?: unknown })?.id;

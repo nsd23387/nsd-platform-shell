@@ -22,8 +22,10 @@ export interface WhyPausedExplainerProps {
   show: boolean;
   /** Number of remaining items to process */
   remainingCount?: number;
-  /** Whether this is due to unprocessed_work_remaining termination */
+  /** Whether this is due to an intentional pause (batch limit, remaining work, etc.) */
   isIncompleteRun?: boolean;
+  /** Whether this is specifically due to execution timeout */
+  isTimeout?: boolean;
   /** Compact mode */
   compact?: boolean;
 }
@@ -32,11 +34,17 @@ export function WhyPausedExplainer({
   show,
   remainingCount = 0,
   isIncompleteRun = false,
+  isTimeout = false,
   compact = false,
 }: WhyPausedExplainerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   
   if (!show) return null;
+  
+  // Customize content based on pause reason
+  const title = isTimeout 
+    ? 'Why did processing pause (timeout)?' 
+    : 'Why is processing paused?';
   
   return (
     <div
@@ -77,7 +85,7 @@ export function WhyPausedExplainer({
             fontFamily: NSD_TYPOGRAPHY.fontBody,
           }}
         >
-          Why is processing paused?
+          {title}
         </span>
         {/* Expand/collapse indicator */}
         <svg
@@ -117,7 +125,9 @@ export function WhyPausedExplainer({
               lineHeight: 1.6,
             }}
           >
-            Campaign runs are intentionally bounded for safety and reliability.
+            {isTimeout 
+              ? 'The run reached its maximum execution time. All completed work has been saved.'
+              : 'Campaign runs are intentionally bounded for safety and reliability.'}
           </p>
           
           <ul
@@ -129,9 +139,19 @@ export function WhyPausedExplainer({
               lineHeight: 1.7,
             }}
           >
-            <li>Processing pauses when a run reaches its safe execution limit</li>
-            <li>This ensures data integrity and prevents incomplete records</li>
-            <li>Progress resumes automatically when the next run executes</li>
+            {isTimeout ? (
+              <>
+                <li>Partial progress from this run is fully preserved</li>
+                <li>Contacts processed before timeout are reflected in progress</li>
+                <li>Remaining contacts will be processed on the next run</li>
+              </>
+            ) : (
+              <>
+                <li>Processing pauses when a run reaches its safe execution limit</li>
+                <li>This ensures data integrity and prevents incomplete records</li>
+                <li>Progress resumes automatically when the next run executes</li>
+              </>
+            )}
           </ul>
           
           {remainingCount > 0 && (
@@ -147,7 +167,7 @@ export function WhyPausedExplainer({
             </p>
           )}
           
-          {isIncompleteRun && (
+          {(isIncompleteRun || isTimeout) && (
             <div
               style={{
                 marginTop: '12px',
@@ -164,8 +184,9 @@ export function WhyPausedExplainer({
                   fontStyle: 'italic',
                 }}
               >
-                This is normal system behavior, not an error. The campaign will continue
-                processing when backend execution resumes.
+                {isTimeout 
+                  ? 'This is normal behavior for large campaigns. Progress shown is accurate and will continue on next run.'
+                  : 'This is normal system behavior, not an error. The campaign will continue processing when backend execution resumes.'}
               </p>
             </div>
           )}

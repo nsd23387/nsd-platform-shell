@@ -99,15 +99,39 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
 
   // FAILED STATE
   // TARGET-STATE EXECUTION SEMANTICS:
-  // When terminationReason = "unprocessed_work_remaining", this is NOT an error.
+  // When terminationReason indicates an intentional pause, this is NOT an error.
   // It's an intentional execution halt to ensure correctness.
+  // Intentional pauses include: unprocessed_work_remaining, execution_timeout, batch_limit_reached
   if (runStatus === 'failed') {
     const failedStage = latestRun?.stage || stages.find(s => s.status === 'error')?.stage;
     const reason = latestRun?.terminationReason || latestRun?.errorMessage;
-    const isIncomplete = reason?.toLowerCase() === 'unprocessed_work_remaining';
+    const reasonLower = reason?.toLowerCase() || '';
+    
+    // Check if this is an intentional pause (not a real error)
+    const isIntentionalPause = (
+      reasonLower === 'unprocessed_work_remaining' ||
+      reasonLower === 'execution_timeout' ||
+      reasonLower === 'batch_limit_reached' ||
+      reasonLower === 'rate_limit_exceeded' ||
+      reasonLower.includes('timeout') ||
+      reasonLower.includes('limit')
+    );
+    
+    // TIMEOUT: execution time limit reached, partial progress valid
+    if (reasonLower === 'execution_timeout' || reasonLower.includes('timeout')) {
+      const totalProcessed = funnel.organizations.total + funnel.contacts.total + funnel.leads.total;
+      return {
+        type: 'warning',
+        icon: 'info',
+        message: 'Processing paused — execution timeout',
+        subMessage: totalProcessed > 0
+          ? `Partial progress preserved: ${totalProcessed.toLocaleString()} items processed. Processing continues on next run.`
+          : 'Processing will continue on next run. Progress shown reflects completed work.',
+      };
+    }
     
     // INCOMPLETE RUN: intentional halt, not error
-    if (isIncomplete) {
+    if (isIntentionalPause) {
       return {
         type: 'warning',
         icon: 'info',

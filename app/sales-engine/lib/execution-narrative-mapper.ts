@@ -566,16 +566,43 @@ export function mapExecutionNarrative(
   // CASE 4: FAILED - status = failed
   // 
   // TARGET-STATE EXECUTION SEMANTICS:
-  // When termination_reason = "unprocessed_work_remaining", this is NOT an error.
-  // It's an intentional execution halt to ensure correctness.
-  // Display as "Incomplete" with info severity, not as a failure.
+  // When termination_reason indicates an intentional pause, this is NOT an error.
+  // Intentional pauses include: unprocessed_work_remaining, execution_timeout, batch_limit_reached
+  // Display as "Incomplete" or "Timeout" with info severity, not as a failure.
   // =====================================================================
   if (status === 'failed' || status === 'error') {
     const failureContext = getFailureContext(runEvents);
-    const terminationReason = latestRun.termination_reason?.toLowerCase();
+    const terminationReason = latestRun.termination_reason?.toLowerCase() || '';
     
-    // INCOMPLETE RUN: failed + unprocessed_work_remaining = intentional halt
-    if (terminationReason === 'unprocessed_work_remaining') {
+    // Check for intentional pause reasons
+    const isIntentionalPause = (
+      terminationReason === 'unprocessed_work_remaining' ||
+      terminationReason === 'execution_timeout' ||
+      terminationReason === 'batch_limit_reached' ||
+      terminationReason === 'rate_limit_exceeded' ||
+      terminationReason.includes('timeout') ||
+      terminationReason.includes('limit')
+    );
+    
+    // TIMEOUT: execution time limit reached, partial progress preserved
+    if (terminationReason === 'execution_timeout' || terminationReason.includes('timeout')) {
+      return {
+        mode: 'terminal',
+        headline: 'Processing paused — execution timeout',
+        subheadline: 'Execution reached time limit. Partial progress has been preserved and will continue on next run.',
+        lastEventAt: mostRecentEvent?.occurred_at,
+        terminal: {
+          status: 'skipped', // Use 'skipped' to get info-style badge, not error
+          reason: 'Execution timeout: partial progress preserved. Remaining work will continue on next run.',
+          completedAt: latestRun.completed_at || latestRun.updated_at || mostRecentEvent?.occurred_at || '',
+        },
+        trustNote: 'This is normal for large campaigns. Progress shown is accurate.',
+        _rawStatus: latestRun.status,
+      };
+    }
+    
+    // INCOMPLETE RUN: other intentional halts (batch limit, remaining work, etc.)
+    if (isIntentionalPause) {
       return {
         mode: 'terminal',
         headline: 'Run incomplete — pending work remaining',

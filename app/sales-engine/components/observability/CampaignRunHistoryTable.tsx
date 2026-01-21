@@ -47,9 +47,9 @@ export interface CampaignRunHistoryTableProps {
  * Get status badge styling - uses brand-aligned semantic colors.
  * 
  * TARGET-STATE EXECUTION SEMANTICS:
- * Supports "incomplete" status for runs that terminated with
- * termination_reason = "unprocessed_work_remaining".
- * This is NOT an error - displayed with info/warning styling.
+ * Supports "incomplete" and "timeout" statuses for runs that terminated with
+ * intentional pause reasons (unprocessed_work_remaining, execution_timeout, etc.)
+ * These are NOT errors - displayed with info/warning styling.
  */
 function getStatusBadgeStyle(status: string, terminationReason?: string | null): {
   bg: string;
@@ -59,12 +59,28 @@ function getStatusBadgeStyle(status: string, terminationReason?: string | null):
 } {
   // Runtime safety: backend may add statuses or return null-ish values; never crash the table.
   const normalized = typeof status === 'string' ? status.toUpperCase() : 'UNKNOWN';
+  const reason = terminationReason?.toLowerCase() || '';
   
-  // INCOMPLETE RUN: failed + unprocessed_work_remaining = intentional halt, not error
-  const isIncomplete = normalized === 'FAILED' && 
-    terminationReason?.toLowerCase() === 'unprocessed_work_remaining';
+  // Check for intentional pause reasons
+  const isIntentionalPause = normalized === 'FAILED' && (
+    reason === 'unprocessed_work_remaining' ||
+    reason === 'execution_timeout' ||
+    reason === 'batch_limit_reached' ||
+    reason === 'rate_limit_exceeded' ||
+    reason.includes('timeout') ||
+    reason.includes('limit')
+  );
   
-  if (isIncomplete) {
+  // TIMEOUT: execution time limit reached, partial progress preserved
+  if (normalized === 'FAILED' && (reason === 'execution_timeout' || reason.includes('timeout'))) {
+    return {
+      ...NSD_COLORS.semantic.attention,
+      label: 'Timeout',
+    };
+  }
+  
+  // INCOMPLETE RUN: other intentional halts
+  if (isIntentionalPause) {
     return {
       ...NSD_COLORS.semantic.attention,
       label: 'Incomplete',
@@ -82,6 +98,7 @@ function getStatusBadgeStyle(status: string, terminationReason?: string | null):
     FAILED: 'Failed',
     PARTIAL: 'Partial',
     INCOMPLETE: 'Incomplete',
+    TIMEOUT: 'Timeout',
   };
   
   return { ...semanticStyle, label: labels[normalized] || (typeof status === 'string' ? status : 'Unknown') };
