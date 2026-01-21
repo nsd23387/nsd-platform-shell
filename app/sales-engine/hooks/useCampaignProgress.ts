@@ -1,0 +1,423 @@
+/**
+ * useCampaignProgress Hook
+ * 
+ * Provides near-real-time campaign progress visibility through read-only polling.
+ * 
+ * GOVERNANCE:
+ * - Read-only: No mutations, no execution control
+ * - Progress derived from entity state counts, not run status
+ * - Runs are bounded work units, not progress indicators
+ * - Polling is conditional and self-terminating
+ * 
+ * POLLING RULES:
+ * - 2s interval while running
+ * - 3s interval while queued
+ * - 5s interval when incomplete (paused with remaining work)
+ * - Stops when exhausted or failed (non-incomplete)
+ */
+
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface StageProgress {
+  stage: string;
+  label: string;
+  processed: number;
+  total: number;
+  percent: number;
+  remaining: number;
+  confidence: 'observed' | 'estimated';
+}
+
+export interface CampaignProgressState {
+  /** Overall campaign progress state */
+  state: 'not_started' | 'in_progress' | 'paused' | 'exhausted';
+  /** Progress per stage */
+  stages: StageProgress[];
+  /** Latest run info */
+  latestRun: {
+    id: string | null;
+    status: string | null;
+    terminationReason: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+  };
+  /** Whether there are contacts remaining to process */
+  hasRemainingWork: boolean;
+  /** Count of remaining items to process */
+  remainingCount: number;
+  /** Human-readable status message */
+  statusMessage: string;
+  /** Last updated timestamp */
+  lastUpdatedAt: string;
+  /** Delta from last poll (for impact summary) */
+  delta: {
+    orgsAdded: number;
+    contactsDiscovered: number;
+    leadsPromoted: number;
+  } | null;
+}
+
+export interface UseCampaignProgressResult {
+  progress: CampaignProgressState | null;
+  isPolling: boolean;
+  isLoading: boolean;
+  error: string | null;
+  /** Manual refresh trigger */
+  refresh: () => void;
+  /** Start polling */
+  startPolling: () => void;
+  /** Stop polling */
+  stopPolling: () => void;
+}
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const POLL_INTERVALS = {
+  running: 2000,    // 2s while actively processing
+  queued: 3000,     // 3s while waiting for execution
+  incomplete: 5000, // 5s when paused with remaining work
+  idle: 10000,      // 10s when idle (minimal background refresh)
+} as const;
+
+const MAX_POLLS = 300; // Safety limit: 10 minutes at 2s interval
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+function computePercent(processed: number, total: number): number {
+  if (total === 0) return 0;
+  return Math.min(100, Math.round((processed / total) * 100));
+}
+
+function deriveProgressState(
+  latestRunStatus: string | null,
+  terminationReason: string | null,
+  hasContacts: boolean,
+  hasRemainingWork: boolean
+): CampaignProgressState['state'] {
+  // Not started: no contacts discovered yet
+  if (!hasContacts) {
+    return 'not_started';
+  }
+  
+  // Currently running
+  if (latestRunStatus === 'running' || latestRunStatus === 'queued' || latestRunStatus === 'in_progress') {
+    return 'in_progress';
+  }
+  
+  // Paused: incomplete run with remaining work
+  if (latestRunStatus === 'failed' && terminationReason?.toLowerCase() === 'unprocessed_work_remaining') {
+    return 'paused';
+  }
+  
+  // Exhausted: no remaining work
+  if (!hasRemainingWork) {
+    return 'exhausted';
+  }
+  
+  // Default: in progress (has work but not actively running)
+  return 'paused';
+}
+
+function deriveStatusMessage(
+  state: CampaignProgressState['state'],
+  remainingCount: number,
+  latestRunStatus: string | null
+): string {
+  switch (state) {
+    case 'not_started':
+      return 'Campaign has not started processing yet.';
+    case 'in_progress':
+      return 'Processing in progress. Live updates shown.';
+    case 'paused':
+      return `Processing paused. ${remainingCount.toLocaleString()} contacts awaiting processing. Progress continues when next run executes.`;
+    case 'exhausted':
+      return 'All contacts processed. Campaign complete.';
+    default:
+      return `Status: ${latestRunStatus || 'Unknown'}`;
+  }
+}
+
+function getPollInterval(
+  state: CampaignProgressState['state'],
+  latestRunStatus: string | null
+): number {
+  if (latestRunStatus === 'running' || latestRunStatus === 'in_progress') {
+    return POLL_INTERVALS.running;
+  }
+  if (latestRunStatus === 'queued') {
+    return POLL_INTERVALS.queued;
+  }
+  if (state === 'paused') {
+    return POLL_INTERVALS.incomplete;
+  }
+  return POLL_INTERVALS.idle;
+}
+
+function shouldStopPolling(
+  state: CampaignProgressState['state'],
+  latestRunStatus: string | null,
+  terminationReason: string | null,
+  pollCount: number
+): boolean {
+  // Safety limit
+  if (pollCount >= MAX_POLLS) {
+    return true;
+  }
+  
+  // Stop if exhausted
+  if (state === 'exhausted') {
+    return true;
+  }
+  
+  // Stop if failed (but not incomplete)
+  if (latestRunStatus === 'failed' && terminationReason?.toLowerCase() !== 'unprocessed_work_remaining') {
+    return true;
+  }
+  
+  return false;
+}
+
+// ============================================================================
+// Hook Implementation
+// ============================================================================
+
+export function useCampaignProgress(campaignId: string | null): UseCampaignProgressResult {
+  const [progress, setProgress] = useState<CampaignProgressState | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Refs for polling control
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollCountRef = useRef(0);
+  const previousCountsRef = useRef<{ orgs: number; contacts: number; leads: number } | null>(null);
+  const pollingEnabledRef = useRef(false);
+  
+  // Fetch progress data
+  const fetchProgress = useCallback(async () => {
+    if (!campaignId) return;
+    
+    try {
+      // Fetch funnel data and latest run in parallel
+      const [funnelResponse, runResponse] = await Promise.all([
+        fetch(`/api/v1/campaigns/${campaignId}/observability/funnel`),
+        fetch(`/api/v1/campaigns/${campaignId}/runs/latest`),
+      ]);
+      
+      if (!funnelResponse.ok || !runResponse.ok) {
+        throw new Error('Failed to fetch campaign progress');
+      }
+      
+      const funnelData = await funnelResponse.json();
+      const runData = await runResponse.json();
+      
+      // Extract counts from funnel
+      const stages = funnelData.stages || [];
+      const orgCount = stages.find((s: { stage: string }) => s.stage === 'orgs_sourced')?.count || 0;
+      const contactCount = stages.find((s: { stage: string }) => s.stage === 'contacts_discovered')?.count || 0;
+      const leadCount = stages.find((s: { stage: string }) => s.stage === 'leads_promoted')?.count || 0;
+      const pendingApprovalCount = stages.find((s: { stage: string }) => s.stage === 'leads_awaiting_approval')?.count || 0;
+      const approvedCount = stages.find((s: { stage: string }) => s.stage === 'leads_approved')?.count || 0;
+      
+      // Extract run info
+      const latestRun = runData.run || runData;
+      const runStatus = runData.status === 'no_runs' ? null : (latestRun?.status || runData.status || null);
+      const terminationReason = latestRun?.termination_reason || latestRun?.terminationReason || null;
+      
+      // Compute delta from previous poll
+      let delta: CampaignProgressState['delta'] = null;
+      if (previousCountsRef.current) {
+        delta = {
+          orgsAdded: Math.max(0, orgCount - previousCountsRef.current.orgs),
+          contactsDiscovered: Math.max(0, contactCount - previousCountsRef.current.contacts),
+          leadsPromoted: Math.max(0, leadCount - previousCountsRef.current.leads),
+        };
+      }
+      previousCountsRef.current = { orgs: orgCount, contacts: contactCount, leads: leadCount };
+      
+      // Estimate remaining work (contacts not yet promoted to leads)
+      const remainingCount = Math.max(0, contactCount - leadCount);
+      const hasRemainingWork = remainingCount > 0;
+      const hasContacts = contactCount > 0;
+      
+      // Derive progress state
+      const state = deriveProgressState(runStatus, terminationReason, hasContacts, hasRemainingWork);
+      const statusMessage = deriveStatusMessage(state, remainingCount, runStatus);
+      
+      // Build stage progress
+      const stageProgress: StageProgress[] = [
+        {
+          stage: 'organizations',
+          label: 'Organizations Sourced',
+          processed: orgCount,
+          total: orgCount, // Orgs are always 100% of what we have
+          percent: orgCount > 0 ? 100 : 0,
+          remaining: 0,
+          confidence: 'observed',
+        },
+        {
+          stage: 'contacts',
+          label: 'Contacts Discovered',
+          processed: contactCount,
+          total: contactCount,
+          percent: contactCount > 0 ? 100 : 0,
+          remaining: 0,
+          confidence: 'observed',
+        },
+        {
+          stage: 'leads',
+          label: 'Leads Promoted',
+          processed: leadCount,
+          total: contactCount, // Leads are promoted from contacts
+          percent: computePercent(leadCount, contactCount),
+          remaining: remainingCount,
+          confidence: 'observed',
+        },
+        {
+          stage: 'approved',
+          label: 'Leads Approved',
+          processed: approvedCount,
+          total: leadCount,
+          percent: computePercent(approvedCount, leadCount),
+          remaining: pendingApprovalCount,
+          confidence: 'observed',
+        },
+      ];
+      
+      const newProgress: CampaignProgressState = {
+        state,
+        stages: stageProgress,
+        latestRun: {
+          id: latestRun?.run_id || latestRun?.id || null,
+          status: runStatus,
+          terminationReason,
+          startedAt: latestRun?.started_at || latestRun?.created_at || null,
+          completedAt: latestRun?.completed_at || null,
+        },
+        hasRemainingWork,
+        remainingCount,
+        statusMessage,
+        lastUpdatedAt: new Date().toISOString(),
+        delta,
+      };
+      
+      setProgress(newProgress);
+      setError(null);
+      
+      // Check if we should stop polling
+      if (pollingEnabledRef.current && shouldStopPolling(state, runStatus, terminationReason, pollCountRef.current)) {
+        stopPollingInternal();
+      }
+      
+    } catch (err) {
+      console.error('[useCampaignProgress] Fetch error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch progress');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [campaignId]);
+  
+  // Internal stop polling (doesn't update ref)
+  const stopPollingInternal = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    setIsPolling(false);
+  }, []);
+  
+  // Public stop polling
+  const stopPolling = useCallback(() => {
+    pollingEnabledRef.current = false;
+    stopPollingInternal();
+  }, [stopPollingInternal]);
+  
+  // Start polling
+  const startPolling = useCallback(() => {
+    if (!campaignId) return;
+    
+    pollingEnabledRef.current = true;
+    pollCountRef.current = 0;
+    setIsPolling(true);
+    
+    // Initial fetch
+    fetchProgress();
+    
+    // Set up interval based on current state
+    const setupInterval = () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+      
+      const interval = progress 
+        ? getPollInterval(progress.state, progress.latestRun.status)
+        : POLL_INTERVALS.running;
+      
+      pollIntervalRef.current = setInterval(() => {
+        if (!pollingEnabledRef.current) {
+          stopPollingInternal();
+          return;
+        }
+        
+        pollCountRef.current++;
+        fetchProgress();
+      }, interval);
+    };
+    
+    setupInterval();
+  }, [campaignId, fetchProgress, progress, stopPollingInternal]);
+  
+  // Manual refresh
+  const refresh = useCallback(() => {
+    setIsLoading(true);
+    fetchProgress();
+  }, [fetchProgress]);
+  
+  // Initial fetch on mount
+  useEffect(() => {
+    if (campaignId) {
+      fetchProgress();
+    }
+  }, [campaignId, fetchProgress]);
+  
+  // Auto-start polling if run is active
+  useEffect(() => {
+    if (progress && !isPolling) {
+      const runStatus = progress.latestRun.status;
+      if (runStatus === 'running' || runStatus === 'queued' || runStatus === 'in_progress') {
+        startPolling();
+      }
+    }
+  }, [progress, isPolling, startPolling]);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
+  
+  return {
+    progress,
+    isPolling,
+    isLoading,
+    error,
+    refresh,
+    startPolling,
+    stopPolling,
+  };
+}
+
+export default useCampaignProgress;

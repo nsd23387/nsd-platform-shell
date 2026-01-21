@@ -73,9 +73,12 @@ import {
   LastExecutionSummaryCard,
   ExecutionHealthBanner,
   ExecutionDataSourceBadge,
+  CampaignProgressCard,
+  LastRunImpactSummary,
   type ExecutionEvent,
   type ApprovalAwarenessState,
 } from '../../components/observability';
+import { useCampaignProgress } from '../../hooks/useCampaignProgress';
 import { deriveExecutionState } from '../../lib/execution-state-mapping';
 import { resolveActiveRun, isRunStale, type ResolvableRun } from '../../lib/resolveActiveRun';
 import { formatEt, formatEtDate } from '../../lib/time';
@@ -1068,6 +1071,13 @@ function MonitoringTab({
     });
   }
 
+  // Campaign Progress Hook - Near-real-time progress visibility
+  const {
+    progress: campaignProgress,
+    isPolling: isProgressPolling,
+    isLoading: isProgressLoading,
+  } = useCampaignProgress(campaign.id);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* DEV-ONLY: Debug banner showing endpoint status */}
@@ -1122,6 +1132,31 @@ function MonitoringTab({
             {runRequestMessage}
           </span>
         </div>
+      )}
+
+      {/* ============================================
+          CAMPAIGN PROGRESS CARD (Near-Real-Time Visibility)
+          Shows progress derived from entity state counts.
+          Progress continues across runs - runs are work units, not progress.
+          ============================================ */}
+      {campaignProgress && (
+        <CampaignProgressCard
+          progress={campaignProgress}
+          isPolling={isProgressPolling}
+          isLoading={isProgressLoading}
+        />
+      )}
+
+      {/* Last Run Impact Summary - Shows what the last run accomplished */}
+      {campaignProgress?.latestRun?.id && (
+        <LastRunImpactSummary
+          runId={campaignProgress.latestRun.id}
+          status={campaignProgress.latestRun.status}
+          terminationReason={campaignProgress.latestRun.terminationReason}
+          delta={campaignProgress.delta}
+          startedAt={campaignProgress.latestRun.startedAt}
+          completedAt={campaignProgress.latestRun.completedAt}
+        />
       )}
 
       {/* ============================================

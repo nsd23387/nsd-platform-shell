@@ -76,3 +76,13 @@ export type { ContactProgressBarProps } from './ContactProgressBar';
 
 export { BlockedContactsBreakdown } from './BlockedContactsBreakdown';
 export type { BlockedContactsBreakdownProps } from './BlockedContactsBreakdown';
+
+// Campaign Progress Components (Near-Real-Time Visibility)
+export { CampaignProgressCard } from './CampaignProgressCard';
+export type { CampaignProgressCardProps } from './CampaignProgressCard';
+
+export { StageProgressBar } from './StageProgressBar';
+export type { StageProgressBarProps } from './StageProgressBar';
+
+export { LastRunImpactSummary } from './LastRunImpactSummary';
+export type { LastRunImpactSummaryProps } from './LastRunImpactSummary';

@@ -10,3 +10,5 @@ export { MiniPipelineIndicator } from './MiniPipelineIndicator';
 export { ExecutionStatusBadge } from './ExecutionStatusBadge';
 export { SkeletonLoader, SkeletonRow, SkeletonTable } from './SkeletonLoader';
 export { EmptyState } from './EmptyState';
+export { LastUpdatedTimestamp } from './LastUpdatedTimestamp';
+export type { LastUpdatedTimestampProps } from './LastUpdatedTimestamp';
