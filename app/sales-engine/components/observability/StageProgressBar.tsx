@@ -160,6 +160,7 @@ export function StageProgressBar({
           position: 'relative',
         }}
       >
+        {/* Background track */}
         <div
           style={{
             height: '100%',
@@ -167,11 +168,30 @@ export function StageProgressBar({
             backgroundColor: barColor,
             borderRadius: NSD_RADIUS.full,
             transition: 'width 0.5s ease-out, background-color 0.3s ease',
-            ...(isActive && {
-              animation: 'progressPulse 2s ease-in-out infinite',
-            }),
+            position: 'relative',
+            overflow: 'hidden',
           }}
-        />
+        >
+          {/* Shimmer effect when active */}
+          {isActive && percent > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: `linear-gradient(
+                  90deg,
+                  transparent 0%,
+                  rgba(255,255,255,0.3) 50%,
+                  transparent 100%
+                )`,
+                animation: 'shimmer 2s ease-in-out infinite',
+              }}
+            />
+          )}
+        </div>
       </div>
       
       {/* Footer: Percentage + Remaining */}
@@ -213,9 +233,9 @@ export function StageProgressBar({
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }
-        @keyframes progressPulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.85; }
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
         }
       `}</style>
     </div>

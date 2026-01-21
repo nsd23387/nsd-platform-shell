@@ -18,6 +18,7 @@ import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens'
 import { Icon } from '../../../../design/components/Icon';
 import { StageProgressBar } from './StageProgressBar';
 import { LastUpdatedTimestamp } from '../ui/LastUpdatedTimestamp';
+import { WhyPausedExplainer } from './WhyPausedExplainer';
 import type { CampaignProgressState } from '../../hooks/useCampaignProgress';
 
 export interface CampaignProgressCardProps {
@@ -29,6 +30,8 @@ export interface CampaignProgressCardProps {
   isLoading?: boolean;
   /** Compact mode */
   compact?: boolean;
+  /** Show throughput indicators */
+  showThroughput?: boolean;
 }
 
 /**
@@ -79,9 +82,21 @@ export function CampaignProgressCard({
   isPolling = false,
   isLoading = false,
   compact = false,
+  showThroughput = false,
 }: CampaignProgressCardProps) {
   const statusBadge = getStatusBadge(progress.state);
   const isActive = progress.state === 'in_progress';
+  const isPaused = progress.state === 'paused';
+  const isComplete = progress.state === 'exhausted';
+  const isNotStarted = progress.state === 'not_started';
+  
+  // Check if this is an incomplete run (termination_reason = unprocessed_work_remaining)
+  const isIncompleteRun = progress.latestRun.status?.toLowerCase() === 'failed' &&
+    progress.latestRun.terminationReason?.toLowerCase() === 'unprocessed_work_remaining';
+  
+  // Check for edge states
+  const hasNoContacts = progress.stages.every(s => s.total === 0);
+  const allContactsProcessed = !progress.hasRemainingWork && progress.stages.some(s => s.processed > 0);
   
   return (
     <div
@@ -171,6 +186,53 @@ export function CampaignProgressCard({
           >
             Loading progress...
           </div>
+        ) : hasNoContacts && isNotStarted ? (
+          /* Empty State: No contacts yet */
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '32px 20px',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                backgroundColor: NSD_COLORS.surface,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '16px',
+              }}
+            >
+              <Icon name="users" size={24} color={NSD_COLORS.text.muted} />
+            </div>
+            <p
+              style={{
+                margin: '0 0 8px 0',
+                fontSize: '14px',
+                fontWeight: 500,
+                color: NSD_COLORS.text.primary,
+              }}
+            >
+              No processable contacts yet
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '13px',
+                color: NSD_COLORS.text.muted,
+                maxWidth: '280px',
+              }}
+            >
+              Progress will appear here once organization sourcing and contact discovery begin.
+            </p>
+          </div>
         ) : (
           <>
             {progress.stages.map((stage, index) => (
@@ -193,8 +255,10 @@ export function CampaignProgressCard({
         style={{
           padding: compact ? '12px 16px' : '14px 20px',
           borderTop: `1px solid ${NSD_COLORS.border.light}`,
-          backgroundColor: progress.state === 'paused' 
+          backgroundColor: isPaused 
             ? NSD_COLORS.semantic.attention.bg 
+            : isComplete
+            ? NSD_COLORS.semantic.positive.bg
             : NSD_COLORS.surface,
         }}
       >
@@ -202,24 +266,61 @@ export function CampaignProgressCard({
           <Icon
             name={statusBadge.icon}
             size={16}
-            color={progress.state === 'paused' 
+            color={isPaused 
               ? NSD_COLORS.semantic.attention.text 
+              : isComplete
+              ? NSD_COLORS.semantic.positive.text
               : NSD_COLORS.text.secondary}
           />
+          <div style={{ flex: 1 }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: '13px',
+                color: isPaused
+                  ? NSD_COLORS.semantic.attention.text
+                  : isComplete
+                  ? NSD_COLORS.semantic.positive.text
+                  : NSD_COLORS.text.secondary,
+                lineHeight: 1.5,
+              }}
+            >
+              {progress.statusMessage}
+            </p>
+            
+            {/* Why Paused Explainer - shown when paused/incomplete */}
+            <WhyPausedExplainer
+              show={isPaused}
+              remainingCount={progress.remainingCount}
+              isIncompleteRun={isIncompleteRun}
+              compact={compact}
+            />
+          </div>
+        </div>
+      </div>
+      
+      {/* Completion Celebration (subtle) */}
+      {isComplete && (
+        <div
+          style={{
+            padding: '12px 20px',
+            borderTop: `1px solid ${NSD_COLORS.semantic.positive.border}`,
+            backgroundColor: `${NSD_COLORS.semantic.positive.text}05`,
+            textAlign: 'center',
+          }}
+        >
           <p
             style={{
               margin: 0,
-              fontSize: '13px',
-              color: progress.state === 'paused'
-                ? NSD_COLORS.semantic.attention.text
-                : NSD_COLORS.text.secondary,
-              lineHeight: 1.5,
+              fontSize: '12px',
+              color: NSD_COLORS.semantic.positive.text,
+              fontWeight: 500,
             }}
           >
-            {progress.statusMessage}
+            All contacts have been processed. Campaign pipeline complete.
           </p>
         </div>
-      </div>
+      )}
       
       {/* Inline keyframes */}
       <style jsx>{`

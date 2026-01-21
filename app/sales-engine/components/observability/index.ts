@@ -86,3 +86,9 @@ export type { StageProgressBarProps } from './StageProgressBar';
 
 export { LastRunImpactSummary } from './LastRunImpactSummary';
 export type { LastRunImpactSummaryProps } from './LastRunImpactSummary';
+
+export { WhyPausedExplainer } from './WhyPausedExplainer';
+export type { WhyPausedExplainerProps } from './WhyPausedExplainer';
+
+export { ThroughputIndicator } from './ThroughputIndicator';
+export type { ThroughputIndicatorProps, ThroughputStats } from './ThroughputIndicator';
