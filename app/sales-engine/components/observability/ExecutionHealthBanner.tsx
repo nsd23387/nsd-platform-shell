@@ -151,19 +151,47 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
     };
   }
 
-  // CONTACTS WITHOUT LEADS WARNING
+  // CONTACTS WITHOUT LEADS - Stage-aware messaging
+  // SEMANTIC ALIGNMENT: Zero leads ≠ zero progress if scoring has occurred
   if (funnel.contacts.total > 0 && funnel.leads.total === 0) {
+    const scoredCount = funnel.contacts.scored || 0;
+    const enrichedCount = funnel.contacts.enriched || 0;
+    
+    // Check what stage we're at
+    if (scoredCount > 0) {
+      // Progress made in scoring - not stalled!
+      if (enrichedCount === 0) {
+        // Blocked at email enrichment
+        return {
+          type: 'info', // Info, not warning - this is progress
+          icon: 'info',
+          message: 'Processing paused — contact scoring in progress',
+          subMessage: `${scoredCount.toLocaleString()} of ${funnel.contacts.total.toLocaleString()} contacts scored. Email enrichment pending before leads can be created.`,
+        };
+      } else {
+        // Enriched but no leads yet
+        return {
+          type: 'info',
+          icon: 'info',
+          message: 'Processing paused — email enrichment in progress',
+          subMessage: `${enrichedCount.toLocaleString()} contacts enriched. Lead promotion pending.`,
+        };
+      }
+    }
+    
+    // No scoring yet - waiting for scoring to start
     const hasRelevantAlert = alerts.some(a => 
       a.message.toLowerCase().includes('email') || 
-      a.message.toLowerCase().includes('contact')
+      a.message.toLowerCase().includes('contact') ||
+      a.message.toLowerCase().includes('scoring')
     );
     
     if (hasRelevantAlert || runStatus === 'running') {
       return {
-        type: 'warning',
+        type: 'info',
         icon: 'info',
-        message: 'Contacts sourced but need email discovery before leads can be created.',
-        subMessage: `${funnel.contacts.total.toLocaleString()} contacts discovered so far.`,
+        message: 'Contacts sourced — scoring in progress',
+        subMessage: `${funnel.contacts.total.toLocaleString()} contacts discovered. Processing will continue through scoring and enrichment.`,
       };
     }
   }

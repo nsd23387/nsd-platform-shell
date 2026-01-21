@@ -38,11 +38,14 @@ interface FunnelMetric {
 }
 
 function extractFunnelMetrics(funnel: ObservabilityFunnel | null): FunnelMetric[] {
+  // AUTHORITATIVE PIPELINE ORDER:
+  // Organizations Sourced → Contacts Discovered → Contacts Scored → Leads Promoted → Emails Sent
   const metrics: FunnelMetric[] = [
-    { stage: 'orgs_sourced', label: 'Organizations sourced', icon: 'briefcase', count: 0 },
-    { stage: 'contacts_discovered', label: 'Contacts discovered', icon: 'users', count: 0 },
-    { stage: 'leads_promoted', label: 'Leads promoted', icon: 'star', count: 0 },
-    { stage: 'emails_sent', label: 'Messages sent', icon: 'mail', count: 0 },
+    { stage: 'orgs_sourced', label: 'Organizations', icon: 'briefcase', count: 0 },
+    { stage: 'contacts_discovered', label: 'Contacts', icon: 'users', count: 0 },
+    { stage: 'contacts_scored', label: 'Scored', icon: 'check', count: 0 },
+    { stage: 'leads_promoted', label: 'Leads', icon: 'star', count: 0 },
+    { stage: 'emails_sent', label: 'Sent', icon: 'mail', count: 0 },
   ];
 
   if (!funnel || !funnel.stages) return metrics;

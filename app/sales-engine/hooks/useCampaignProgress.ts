@@ -59,6 +59,7 @@ export interface CampaignProgressState {
   delta: {
     orgsAdded: number;
     contactsDiscovered: number;
+    contactsScored: number;
     leadsPromoted: number;
   } | null;
 }
@@ -147,12 +148,19 @@ function deriveProgressState(
   return 'paused';
 }
 
-function deriveStatusMessage(
-  state: CampaignProgressState['state'],
-  remainingCount: number,
-  latestRunStatus: string | null,
-  terminationReason: string | null
-): string {
+interface StatusMessageContext {
+  state: CampaignProgressState['state'];
+  latestRunStatus: string | null;
+  terminationReason: string | null;
+  contactCount: number;
+  scoredCount: number;
+  enrichedCount: number;
+  leadCount: number;
+}
+
+function deriveStatusMessage(ctx: StatusMessageContext): string {
+  const { state, latestRunStatus, terminationReason, contactCount, scoredCount, enrichedCount, leadCount } = ctx;
+  
   switch (state) {
     case 'not_started':
       return 'Campaign has not started processing yet.';
@@ -160,6 +168,22 @@ function deriveStatusMessage(
       return 'Processing in progress. Live updates shown.';
     case 'paused': {
       const reason = terminationReason?.toLowerCase();
+      
+      // Determine which stage we're blocked at
+      // SEMANTIC ALIGNMENT: Zero leads ≠ zero progress if scoring has occurred
+      if (scoredCount > 0 && leadCount === 0) {
+        // Progress made in scoring, blocked at enrichment or promotion
+        if (enrichedCount === 0) {
+          // Blocked at email enrichment
+          return `Processing paused — contact scoring in progress. ${scoredCount.toLocaleString()} of ${contactCount.toLocaleString()} contacts scored. Email enrichment pending before leads can be created.`;
+        } else {
+          // Enriched but no leads yet
+          return `Processing paused — email enrichment in progress. ${enrichedCount.toLocaleString()} contacts enriched. Lead promotion pending.`;
+        }
+      }
+      
+      // Calculate total remaining work
+      const remainingCount = Math.max(0, contactCount - leadCount);
       const remainingMsg = `${remainingCount.toLocaleString()} contacts awaiting processing.`;
       
       // Explain the specific pause reason
@@ -246,7 +270,7 @@ export function useCampaignProgress(campaignId: string | null): UseCampaignProgr
   // Refs for polling control
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollCountRef = useRef(0);
-  const previousCountsRef = useRef<{ orgs: number; contacts: number; leads: number } | null>(null);
+  const previousCountsRef = useRef<{ orgs: number; contacts: number; scored: number; leads: number } | null>(null);
   const pollingEnabledRef = useRef(false);
   
   // Fetch progress data
@@ -268,9 +292,12 @@ export function useCampaignProgress(campaignId: string | null): UseCampaignProgr
       const runData = await runResponse.json();
       
       // Extract counts from funnel
+      // AUTHORITATIVE PIPELINE: Orgs → Contacts → Scored → Enriched → Leads → Approved
       const stages = funnelData.stages || [];
       const orgCount = stages.find((s: { stage: string }) => s.stage === 'orgs_sourced')?.count || 0;
       const contactCount = stages.find((s: { stage: string }) => s.stage === 'contacts_discovered')?.count || 0;
+      const scoredCount = stages.find((s: { stage: string }) => s.stage === 'contacts_scored')?.count || 0;
+      const enrichedCount = stages.find((s: { stage: string }) => s.stage === 'contacts_enriched')?.count || 0;
       const leadCount = stages.find((s: { stage: string }) => s.stage === 'leads_promoted')?.count || 0;
       const pendingApprovalCount = stages.find((s: { stage: string }) => s.stage === 'leads_awaiting_approval')?.count || 0;
       const approvedCount = stages.find((s: { stage: string }) => s.stage === 'leads_approved')?.count || 0;
@@ -286,21 +313,39 @@ export function useCampaignProgress(campaignId: string | null): UseCampaignProgr
         delta = {
           orgsAdded: Math.max(0, orgCount - previousCountsRef.current.orgs),
           contactsDiscovered: Math.max(0, contactCount - previousCountsRef.current.contacts),
+          contactsScored: Math.max(0, scoredCount - (previousCountsRef.current.scored || 0)),
           leadsPromoted: Math.max(0, leadCount - previousCountsRef.current.leads),
         };
       }
-      previousCountsRef.current = { orgs: orgCount, contacts: contactCount, leads: leadCount };
+      previousCountsRef.current = { orgs: orgCount, contacts: contactCount, scored: scoredCount, leads: leadCount };
       
-      // Estimate remaining work (contacts not yet promoted to leads)
-      const remainingCount = Math.max(0, contactCount - leadCount);
-      const hasRemainingWork = remainingCount > 0;
+      // Determine remaining work at each stage
+      // Key insight: zero leads ≠ zero progress if scoring has occurred
+      const scoringRemaining = Math.max(0, contactCount - scoredCount);
+      const enrichmentRemaining = Math.max(0, scoredCount - enrichedCount);
+      const promotionRemaining = Math.max(0, enrichedCount - leadCount);
+      const hasRemainingWork = scoringRemaining > 0 || enrichmentRemaining > 0 || promotionRemaining > 0;
       const hasContacts = contactCount > 0;
+      const hasProgress = scoredCount > 0 || leadCount > 0; // Progress exists if ANY scoring has occurred
+      
+      // Total remaining count for display purposes
+      const remainingCount = scoringRemaining + enrichmentRemaining + promotionRemaining;
       
       // Derive progress state
       const state = deriveProgressState(runStatus, terminationReason, hasContacts, hasRemainingWork);
-      const statusMessage = deriveStatusMessage(state, remainingCount, runStatus, terminationReason);
+      const statusMessage = deriveStatusMessage({
+        state,
+        latestRunStatus: runStatus,
+        terminationReason,
+        contactCount,
+        scoredCount,
+        enrichedCount,
+        leadCount,
+      });
       
-      // Build stage progress
+      // Build stage progress with STAGE-RELATIVE percentages
+      // Key semantic: Each stage's denominator is its upstream gate
+      // Organizations → Contacts → Scored → Enriched → Leads → Approved
       const stageProgress: StageProgress[] = [
         {
           stage: 'organizations',
@@ -321,12 +366,35 @@ export function useCampaignProgress(campaignId: string | null): UseCampaignProgr
           confidence: 'observed',
         },
         {
+          // CONTACTS SCORED: Denominator = contacts discovered
+          stage: 'scored',
+          label: 'Contacts Scored',
+          processed: scoredCount,
+          total: contactCount,
+          percent: computePercent(scoredCount, contactCount),
+          remaining: scoringRemaining,
+          confidence: 'observed',
+        },
+        {
+          // CONTACTS ENRICHED: Denominator = contacts scored
+          // This shows email enrichment progress relative to scored contacts
+          stage: 'enriched',
+          label: 'Contacts with Email',
+          processed: enrichedCount,
+          total: scoredCount, // Enrichment pool is scored contacts
+          percent: computePercent(enrichedCount, scoredCount),
+          remaining: enrichmentRemaining,
+          confidence: 'observed',
+        },
+        {
+          // LEADS PROMOTED: Denominator = enriched contacts
+          // Leads can only be created from contacts with emails
           stage: 'leads',
           label: 'Leads Promoted',
           processed: leadCount,
-          total: contactCount, // Leads are promoted from contacts
-          percent: computePercent(leadCount, contactCount),
-          remaining: remainingCount,
+          total: enrichedCount, // Leads are promoted from enriched contacts
+          percent: computePercent(leadCount, enrichedCount),
+          remaining: promotionRemaining,
           confidence: 'observed',
         },
         {

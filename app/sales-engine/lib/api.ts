@@ -979,6 +979,10 @@ export interface RealTimeExecutionStatus {
       sourced: number;
       ready: number;
       withEmail: number;
+      /** Contacts that have been scored for ICP fit */
+      scored: number;
+      /** Contacts with verified email addresses (enriched) */
+      enriched: number;
     };
     leads: {
       total: number;
@@ -1020,7 +1024,7 @@ export async function getRealTimeExecutionStatus(id: string): Promise<RealTimeEx
       latestRun: null,
       funnel: {
         organizations: { total: 0, qualified: 0, review: 0, disqualified: 0 },
-        contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0 },
+        contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0, scored: 0, enriched: 0 },
         leads: { total: 0, pending: 0, approved: 0 },
       },
       stages: [],
@@ -1039,7 +1043,7 @@ export async function getRealTimeExecutionStatus(id: string): Promise<RealTimeEx
     // Parse funnel data
     let funnel = {
       organizations: { total: 0, qualified: 0, review: 0, disqualified: 0 },
-      contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0 },
+      contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0, scored: 0, enriched: 0 },
       leads: { total: 0, pending: 0, approved: 0 },
     };
 
@@ -1065,6 +1069,9 @@ export async function getRealTimeExecutionStatus(id: string): Promise<RealTimeEx
           sourced: stageMap.get('contacts_sourced') || 0,
           ready: stageMap.get('contacts_ready') || 0,
           withEmail: stageMap.get('contacts_with_email') || 0,
+          // NEW: First-class pipeline stages for scoring and enrichment
+          scored: stageMap.get('contacts_scored') || 0,
+          enriched: stageMap.get('contacts_enriched') || 0,
         },
         leads: {
           total: stageMap.get('leads_promoted') || stageMap.get('leads_created') || 0,
@@ -1104,12 +1111,28 @@ export async function getRealTimeExecutionStatus(id: string): Promise<RealTimeEx
     // Generate alerts based on state
     const alerts: RealTimeExecutionStatus['alerts'] = [];
     
-    // Alert: Contacts exist but no leads
+    // Alert: Contacts exist but no leads - provide stage-aware messaging
     if (funnel.contacts.total > 0 && funnel.leads.total === 0) {
-      alerts.push({
-        type: 'info',
-        message: 'Contacts sourced. Email discovery in progress before leads can be created.',
-      });
+      // SEMANTIC ALIGNMENT: Zero leads ≠ zero progress if scoring has occurred
+      if (funnel.contacts.scored > 0) {
+        // Scoring has happened, blocked at enrichment or promotion
+        if (funnel.contacts.enriched === 0) {
+          alerts.push({
+            type: 'info',
+            message: `Contact scoring in progress. ${funnel.contacts.scored.toLocaleString()} of ${funnel.contacts.total.toLocaleString()} contacts scored. Email enrichment pending before leads can be created.`,
+          });
+        } else {
+          alerts.push({
+            type: 'info',
+            message: `Email enrichment in progress. ${funnel.contacts.enriched.toLocaleString()} contacts enriched. Lead promotion pending.`,
+          });
+        }
+      } else {
+        alerts.push({
+          type: 'info',
+          message: 'Contacts sourced. Scoring in progress before leads can be created.',
+        });
+      }
     }
 
     // Alert: No organizations yet
@@ -1139,7 +1162,7 @@ export async function getRealTimeExecutionStatus(id: string): Promise<RealTimeEx
       latestRun: null,
       funnel: {
         organizations: { total: 0, qualified: 0, review: 0, disqualified: 0 },
-        contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0 },
+        contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0, scored: 0, enriched: 0 },
         leads: { total: 0, pending: 0, approved: 0 },
       },
       stages: [],

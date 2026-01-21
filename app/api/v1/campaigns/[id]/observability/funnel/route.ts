@@ -134,6 +134,27 @@ export async function GET(
         `, [campaignId]);
         const contactCount = parseInt(contactResult.rows[0]?.count || '0', 10);
 
+        // Get SCORED contacts count (status = 'scored' or any status beyond discovered)
+        // Contacts are scored when they have been processed for ICP fit
+        const scoredResult = await db.query(`
+          SELECT COUNT(*) as count
+          FROM public.campaign_contacts
+          WHERE campaign_id = $1
+          AND status IN ('scored', 'enriched', 'promoted', 'blocked')
+        `, [campaignId]);
+        const scoredCount = parseInt(scoredResult.rows[0]?.count || '0', 10);
+
+        // Get ENRICHED contacts count (contacts with email addresses)
+        // This is the gate before lead promotion
+        const enrichedResult = await db.query(`
+          SELECT COUNT(*) as count
+          FROM public.campaign_contacts
+          WHERE campaign_id = $1
+          AND email IS NOT NULL
+          AND email != ''
+        `, [campaignId]);
+        const enrichedCount = parseInt(enrichedResult.rows[0]?.count || '0', 10);
+
         // Get lead count from public.leads
         const leadResult = await db.query(`
           SELECT COUNT(*) as count
@@ -155,6 +176,9 @@ export async function GET(
         }
 
         // Build stages from actual counts
+        // AUTHORITATIVE PIPELINE ORDER:
+        // Organizations Sourced → Contacts Discovered → Contacts Scored → Contacts Enriched → Leads Promoted → Leads Approved
+        
         if (orgCount > 0) {
           stages.push({
             stage: 'orgs_sourced',
@@ -175,13 +199,39 @@ export async function GET(
           });
         }
 
-        if (leadCount > 0) {
+        // CONTACTS SCORED: Always show if contacts exist (even if 0 scored)
+        // This is critical for showing progress when scoring is in progress
+        if (contactCount > 0) {
+          stages.push({
+            stage: 'contacts_scored',
+            label: 'Contacts scored',
+            count: scoredCount,
+            confidence: 'observed',
+            tooltip: 'Contacts evaluated for ICP fit',
+          });
+        }
+
+        // CONTACTS ENRICHED: Show if scoring has started (even if 0 enriched)
+        // This shows the email enrichment gate
+        if (scoredCount > 0) {
+          stages.push({
+            stage: 'contacts_enriched',
+            label: 'Contacts with email',
+            count: enrichedCount,
+            confidence: 'observed',
+            tooltip: 'Scored contacts with verified email addresses',
+          });
+        }
+
+        // LEADS PROMOTED: Show if enrichment has started (even if 0 leads)
+        // Leads require enriched contacts
+        if (enrichedCount > 0 || leadCount > 0) {
           stages.push({
             stage: 'leads_promoted',
             label: 'Leads promoted',
             count: leadCount,
             confidence: 'observed',
-            tooltip: 'Contacts promoted to leads',
+            tooltip: 'Enriched contacts promoted to leads',
           });
         }
 
@@ -223,7 +273,7 @@ export async function GET(
           });
         }
 
-        console.log(`[observability/funnel] Campaign ${campaignId}: ${orgCount} orgs, ${contactCount} contacts, ${leadCount} leads`);
+        console.log(`[observability/funnel] Campaign ${campaignId}: ${orgCount} orgs, ${contactCount} contacts, ${scoredCount} scored, ${enrichedCount} enriched, ${leadCount} leads`);
 
       } catch (dbError) {
         console.error('[observability/funnel] Database query error:', dbError);
