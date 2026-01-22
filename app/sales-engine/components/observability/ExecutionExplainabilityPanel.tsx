@@ -31,9 +31,33 @@ import { ExecutionConfidenceBadge } from './ExecutionConfidenceBadge';
 import { ExecutionTimeline } from './ExecutionTimeline';
 import { NextStepCard } from './NextStepCard';
 
+/**
+ * Props for ExecutionExplainabilityPanel.
+ * 
+ * DATA SOURCE PRIORITY:
+ * 1. If `run` is provided, use it directly (execution-state driven)
+ * 2. If `run` is undefined but `campaignId` is provided, fetch via useLatestRunStatus (legacy)
+ * 
+ * For P1.5 compliance, always pass `run` from executionStatus to avoid legacy endpoint calls.
+ */
 interface ExecutionExplainabilityPanelProps {
   campaignId: string;
   compact?: boolean;
+  /** Optional pre-fetched run data from execution-state. If provided, skips internal fetch. */
+  run?: {
+    id: string;
+    status?: string | null;
+    stage?: string | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    errorMessage?: string | null;
+    terminationReason?: string | null;
+    phase?: string | null;
+  } | null;
+  /** True if we know there are no runs (from execution-state) */
+  noRuns?: boolean;
+  /** True if data is still loading */
+  loading?: boolean;
 }
 
 function LoadingState() {
@@ -224,19 +248,61 @@ function ExplainabilityContent({
   );
 }
 
+/**
+ * Convert execution-state run format to the format expected by deriveExecutionState.
+ */
+function convertExecutionRunForState(run: NonNullable<ExecutionExplainabilityPanelProps['run']>) {
+  return {
+    run_id: run.id,
+    status: run.status?.toLowerCase() || undefined,
+    created_at: run.startedAt || undefined,
+    updated_at: run.completedAt || run.startedAt || undefined,
+    error_message: run.errorMessage || undefined,
+    failure_reason: run.terminationReason || undefined,
+    termination_reason: run.terminationReason || undefined,
+    reason: run.terminationReason || undefined,
+  };
+}
+
+/**
+ * ExecutionExplainabilityPanel - Main component.
+ * 
+ * DATA SOURCE:
+ * - If `run` prop is provided, uses it directly (P1.5 compliant - execution-state driven)
+ * - Otherwise falls back to useLatestRunStatus hook (legacy - makes /runs/latest call)
+ * 
+ * For single-source-of-truth compliance, parent components should always pass
+ * `run` data from useRealTimeStatus/executionStatus.
+ */
 export function ExecutionExplainabilityPanel({
   campaignId,
   compact = false,
+  run: propRun,
+  noRuns: propNoRuns,
+  loading: propLoading,
 }: ExecutionExplainabilityPanelProps) {
-  const { run, noRuns, notFound, serviceUnavailable, loading, error } =
-    useLatestRunStatus(campaignId);
+  // Only fetch if run data not provided via props
+  const shouldFetch = propRun === undefined && propNoRuns === undefined;
+  const hookResult = useLatestRunStatus(shouldFetch ? campaignId : null);
+  
+  // Use prop data if provided, otherwise use hook data
+  const loading = propLoading ?? (shouldFetch ? hookResult.loading : false);
+  const noRuns = propNoRuns ?? hookResult.noRuns;
+  const notFound = shouldFetch ? hookResult.notFound : false;
+  const serviceUnavailable = shouldFetch ? hookResult.serviceUnavailable : false;
+  const error = shouldFetch ? hookResult.error : null;
+  
+  // Convert prop run format for deriveExecutionState
+  const runForState = propRun 
+    ? convertExecutionRunForState(propRun)
+    : hookResult.run;
 
   // Loading state
   if (loading) {
     return <LoadingState />;
   }
 
-  // Error states
+  // Error states (only from hook, prop-based usage won't have these)
   if (notFound) {
     return <ErrorState message="Campaign not found" />;
   }
@@ -245,12 +311,12 @@ export function ExecutionExplainabilityPanel({
     return <ErrorState message="Execution service unavailable" />;
   }
 
-  if (error && !run && !noRuns) {
+  if (error && !runForState && !noRuns) {
     return <ErrorState message={error} />;
   }
 
   // Derive execution state from backend signals
-  const executionState = deriveExecutionState(run, noRuns);
+  const executionState = deriveExecutionState(runForState, noRuns);
 
   return (
     <div

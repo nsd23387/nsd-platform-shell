@@ -136,11 +136,12 @@ export async function GET(
 
         // Get SCORED contacts count (status = 'scored' or any status beyond discovered)
         // Contacts are scored when they have been processed for ICP fit
+        // NOTE: Cast status to text to avoid enum type mismatch errors
         const scoredResult = await db.query(`
           SELECT COUNT(*) as count
           FROM public.campaign_contacts
           WHERE campaign_id = $1
-          AND status IN ('scored', 'enriched', 'promoted', 'blocked')
+          AND status::text IN ('scored', 'enriched', 'promoted', 'blocked')
         `, [campaignId]);
         const scoredCount = parseInt(scoredResult.rows[0]?.count || '0', 10);
 

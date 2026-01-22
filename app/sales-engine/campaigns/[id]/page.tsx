@@ -859,8 +859,34 @@ function MonitoringTab({
         {/* LEFT COLUMN: Status & Context (40%) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <ApprovalAwarenessPanel approvalState={approvalState} />
-          <LatestRunStatusCard campaignId={campaign.id} />
-          <ExecutionExplainabilityPanel campaignId={campaign.id} />
+          <LatestRunStatusCard 
+            campaignId={campaign.id}
+            run={executionRun ? {
+              id: executionRun.id,
+              status: executionRun.status,
+              stage: executionRun.stage,
+              startedAt: executionRun.startedAt,
+              completedAt: executionRun.completedAt,
+              errorMessage: executionRun.errorMessage,
+              terminationReason: executionRun.terminationReason,
+              phase: executionRun.phase,
+            } : null}
+            noRuns={!executionRun && runs.length === 0}
+          />
+          <ExecutionExplainabilityPanel 
+            campaignId={campaign.id}
+            run={executionRun ? {
+              id: executionRun.id,
+              status: executionRun.status,
+              stage: executionRun.stage,
+              startedAt: executionRun.startedAt,
+              completedAt: executionRun.completedAt,
+              errorMessage: executionRun.errorMessage,
+              terminationReason: executionRun.terminationReason,
+              phase: executionRun.phase,
+            } : null}
+            noRuns={!executionRun && runs.length === 0}
+          />
         </div>
 
         {/* RIGHT COLUMN: Metrics & Data (60%) */}

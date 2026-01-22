@@ -133,11 +133,12 @@ async function getOrganizationCounts(db: Pool, campaignId: string): Promise<Orga
 
 async function getContactCounts(db: Pool, campaignId: string): Promise<ContactCounts> {
   try {
+    // NOTE: Cast status to text to avoid enum type mismatch errors
     const result = await db.query(`
       SELECT 
         COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'sourced') as sourced,
-        COUNT(*) FILTER (WHERE status = 'ready') as ready,
+        COUNT(*) FILTER (WHERE status::text = 'sourced') as sourced,
+        COUNT(*) FILTER (WHERE status::text = 'ready') as ready,
         COUNT(*) FILTER (WHERE email IS NOT NULL AND email != '') as with_email
       FROM public.campaign_contacts 
       WHERE campaign_id = $1

@@ -75,15 +75,16 @@ export async function GET(
 
     // Query contact stats grouped by status
     // Status values based on actual schema: sourced, scored, ready, blocked
+    // NOTE: Cast status to text to avoid enum type mismatch errors
     const result = await db.query(`
       SELECT 
         COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'sourced' AND scored_at IS NULL) as pending,
-        COUNT(*) FILTER (WHERE status = 'sourced' AND scored_at IS NOT NULL AND readiness_checked_at IS NULL) as processing,
-        COUNT(*) FILTER (WHERE status = 'ready' OR (email_usable = true AND lead_id IS NULL)) as ready,
-        COUNT(*) FILTER (WHERE status = 'blocked' OR email_usable = false) as blocked,
+        COUNT(*) FILTER (WHERE status::text = 'sourced' AND scored_at IS NULL) as pending,
+        COUNT(*) FILTER (WHERE status::text = 'sourced' AND scored_at IS NOT NULL AND readiness_checked_at IS NULL) as processing,
+        COUNT(*) FILTER (WHERE status::text = 'ready' OR (email_usable = true AND lead_id IS NULL)) as ready,
+        COUNT(*) FILTER (WHERE status::text = 'blocked' OR email_usable = false) as blocked,
         COUNT(*) FILTER (WHERE lead_id IS NOT NULL) as leads_created,
-        COUNT(*) FILTER (WHERE (status = 'ready' OR email_usable = true) AND lead_id IS NULL) as ready_without_lead
+        COUNT(*) FILTER (WHERE (status::text = 'ready' OR email_usable = true) AND lead_id IS NULL) as ready_without_lead
       FROM public.campaign_contacts
       WHERE campaign_id = $1
     `, [campaignId]);

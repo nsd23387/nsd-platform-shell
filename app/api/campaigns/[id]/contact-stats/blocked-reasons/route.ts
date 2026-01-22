@@ -116,6 +116,7 @@ export async function GET(
     const db = getPool();
 
     // Get blocked contacts with their block reasons
+    // NOTE: Cast status to text to avoid enum type mismatch errors
     const result = await db.query(`
       SELECT 
         email_block_reason,
@@ -123,7 +124,7 @@ export async function GET(
         COUNT(*) as count
       FROM public.campaign_contacts
       WHERE campaign_id = $1
-      AND (email_usable = false OR status = 'blocked')
+      AND (email_usable = false OR status::text = 'blocked')
       GROUP BY email_block_reason, status_reason
       ORDER BY count DESC
     `, [campaignId]);

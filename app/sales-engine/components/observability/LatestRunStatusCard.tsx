@@ -27,8 +27,33 @@ import { Icon } from '../../../../design/components/Icon';
 import { useLatestRunStatus, type LatestRun, isIncompleteRun, isTimeoutRun, isInvariantViolation } from '../../../../hooks/useLatestRunStatus';
 import { isRunStale, RUN_STALE_THRESHOLD_MS, type ResolvableRun } from '../../lib/resolveActiveRun';
 
+/**
+ * Props for LatestRunStatusCard.
+ * 
+ * DATA SOURCE PRIORITY:
+ * 1. If `run` is provided, use it directly (execution-state driven)
+ * 2. If `run` is undefined but `campaignId` is provided, fetch via useLatestRunStatus (legacy)
+ * 
+ * For P1.5 compliance, always pass `run` from executionStatus to avoid legacy endpoint calls.
+ */
 interface LatestRunStatusCardProps {
   campaignId: string;
+  /** Optional pre-fetched run data from execution-state. If provided, skips internal fetch. */
+  run?: {
+    id: string;
+    status?: string | null;
+    stage?: string | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    errorMessage?: string | null;
+    terminationReason?: string | null;
+    phase?: string | null;
+    executionMode?: string | null;
+  } | null;
+  /** True if we know there are no runs (from execution-state) */
+  noRuns?: boolean;
+  /** True if data is still loading */
+  loading?: boolean;
 }
 
 /**
@@ -568,24 +593,62 @@ function LoadingCard() {
 }
 
 /**
+ * Convert execution-state run format to LatestRun format for internal components.
+ */
+function convertExecutionRunToLatestRun(run: NonNullable<LatestRunStatusCardProps['run']>): LatestRun {
+  return {
+    run_id: run.id,
+    status: run.status || undefined,
+    created_at: run.startedAt || undefined,
+    updated_at: run.completedAt || run.startedAt || undefined,
+    error_message: run.errorMessage || undefined,
+    failure_reason: run.terminationReason || undefined,
+    termination_reason: run.terminationReason || undefined,
+    reason: run.terminationReason || undefined,
+    execution_mode: run.executionMode || undefined,
+  };
+}
+
+/**
  * LatestRunStatusCard - Main component.
  *
  * Displays the latest campaign run state using Sales Engine's canonical read model.
- * - 200: Show run status
- * - 204: "No runs yet"
- * - 404: "Campaign not found"
- * - 5xx: "Execution service unavailable"
+ * 
+ * DATA SOURCE:
+ * - If `run` prop is provided, uses it directly (P1.5 compliant - execution-state driven)
+ * - Otherwise falls back to useLatestRunStatus hook (legacy - makes /runs/latest call)
+ * 
+ * For single-source-of-truth compliance, parent components should always pass
+ * `run` data from useRealTimeStatus/executionStatus.
  */
-export function LatestRunStatusCard({ campaignId }: LatestRunStatusCardProps) {
-  const { run, noRuns, notFound, serviceUnavailable, loading, error } =
-    useLatestRunStatus(campaignId);
+export function LatestRunStatusCard({ 
+  campaignId, 
+  run: propRun, 
+  noRuns: propNoRuns,
+  loading: propLoading,
+}: LatestRunStatusCardProps) {
+  // Only fetch if run data not provided via props
+  const shouldFetch = propRun === undefined && propNoRuns === undefined;
+  const hookResult = useLatestRunStatus(shouldFetch ? campaignId : null);
+  
+  // Use prop data if provided, otherwise use hook data
+  const loading = propLoading ?? (shouldFetch ? hookResult.loading : false);
+  const noRuns = propNoRuns ?? hookResult.noRuns;
+  const notFound = shouldFetch ? hookResult.notFound : false;
+  const serviceUnavailable = shouldFetch ? hookResult.serviceUnavailable : false;
+  const error = shouldFetch ? hookResult.error : null;
+  
+  // Convert prop run to LatestRun format if provided
+  const run: LatestRun | null = propRun 
+    ? convertExecutionRunToLatestRun(propRun)
+    : hookResult.run;
 
   // Loading state
   if (loading) {
     return <LoadingCard />;
   }
 
-  // Error states
+  // Error states (only from hook, prop-based usage won't have these)
   if (notFound) {
     return <ErrorCard message="Campaign not found" />;
   }
