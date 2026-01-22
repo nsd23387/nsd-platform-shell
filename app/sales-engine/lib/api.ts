@@ -1052,18 +1052,22 @@ export interface RealTimeExecutionStatus {
 }
 
 /**
- * Get canonical execution state.
+ * Get canonical execution state from sales-engine.
  * 
- * THIS IS THE SOLE EXECUTION AUTHORITY.
+ * ARCHITECTURAL CONSTRAINT:
+ * - Sales-engine is the SOLE execution authority
+ * - Platform-shell does NOT implement execution logic
+ * - This function calls a proxy that forwards to sales-engine
  * 
- * Calls: GET /api/v1/campaigns/:id/execution-state
+ * Proxy: GET /api/proxy/execution-state?campaignId=xxx
+ * Target: GET ${SALES_ENGINE_URL}/api/v1/campaigns/:id/execution-state
  * 
- * NO fallbacks to legacy endpoints.
- * NO inference from events.
+ * NO fallbacks. NO inference. NO local database queries.
  * If this fails, the UI must show an error state.
  */
 export async function getExecutionState(id: string): Promise<ExecutionState> {
-  const endpoint = `/api/v1/campaigns/${id}/execution-state`;
+  // Use proxy endpoint to avoid CORS and keep SALES_ENGINE_URL server-side
+  const endpoint = `/api/proxy/execution-state?campaignId=${encodeURIComponent(id)}`;
   
   if (isApiDisabled) {
     return {
@@ -1078,77 +1082,27 @@ export async function getExecutionState(id: string): Promise<ExecutionState> {
     };
   }
 
-  console.log('[execution-state] Fetching canonical state:', { campaignId: id });
+  console.log('[getExecutionState] Fetching from sales-engine:', { campaignId: id });
 
   const response = await fetch(endpoint, { headers: buildHeaders() });
-
-  // Check for compatibility deprecation warnings
   const data = await response.json();
-  if (data._compatibility?.deprecated) {
-    console.warn(
-      '[execution-state] Deprecated compatibility endpoint used. Migrate to:',
-      data._compatibility.canonical || endpoint
-    );
-  }
 
   if (!response.ok) {
-    console.error('[execution-state] Fetch failed:', { campaignId: id, status: response.status });
-    throw new Error(`Execution state unavailable: ${response.status}`);
+    console.error('[getExecutionState] Fetch failed:', { 
+      campaignId: id, 
+      status: response.status,
+      error: data.error,
+    });
+    throw new Error(data.message || `Execution state unavailable: ${response.status}`);
   }
 
-  console.log('[execution-state] Canonical state received:', {
+  console.log('[getExecutionState] Received from sales-engine:', {
     campaignId: id,
     runId: data.run?.id ?? 'none',
     runStatus: data.run?.status ?? 'no_runs',
   });
 
   return data as ExecutionState;
-}
-
-/**
- * Get real-time campaign execution status.
- * 
- * @deprecated Use getExecutionState() instead.
- * This function maps ExecutionState to the legacy RealTimeExecutionStatus shape
- * for backward compatibility during migration.
- */
-export async function getRealTimeExecutionStatus(id: string): Promise<RealTimeExecutionStatus> {
-  try {
-    const state = await getExecutionState(id);
-    
-    // Map canonical ExecutionState to legacy RealTimeExecutionStatus shape
-    return {
-      campaignId: state.campaignId,
-      latestRun: state.run ? {
-        id: state.run.id,
-        status: state.run.status,
-        stage: state.run.stage,
-        startedAt: state.run.startedAt,
-        completedAt: state.run.endedAt,
-        errorMessage: state.run.errorMessage,
-        terminationReason: state.run.terminationReason,
-      } : null,
-      funnel: {
-        organizations: state.funnel.organizations,
-        contacts: {
-          ...state.funnel.contacts,
-          scored: 0, // Not available in canonical shape
-          enriched: 0, // Not available in canonical shape
-        },
-        leads: state.funnel.leads,
-      },
-      stages: [],
-      alerts: [],
-      _meta: {
-        fetchedAt: state.lastUpdatedAt,
-        source: 'execution-state-canonical',
-      },
-    };
-  } catch (error) {
-    console.error('[API] getRealTimeExecutionStatus error:', error);
-    // NO FALLBACK - throw the error to surface in UI
-    throw error;
-  }
 }
 
 // =============================================================================

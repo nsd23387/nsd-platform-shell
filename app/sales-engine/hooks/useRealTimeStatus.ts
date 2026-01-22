@@ -5,11 +5,17 @@
  * 
  * CANONICAL EXECUTION STATE HOOK
  * 
- * Provides real-time execution status with lightweight caching and TTL.
+ * Provides execution status from sales-engine with lightweight caching and TTL.
  * This hook is the primary interface for the DATA AUTHORITY pattern.
  * 
- * DATA SOURCE: GET /api/v1/campaigns/:id/execution-state
- * This is the SOLE EXECUTION AUTHORITY. No fallbacks. No legacy endpoints.
+ * ARCHITECTURAL CONSTRAINT:
+ * - Sales-engine is the SOLE execution authority
+ * - Platform-shell does NOT implement execution logic
+ * - Data flows: sales-engine → proxy → this hook → UI components
+ * 
+ * DATA SOURCE: 
+ * - Proxy: GET /api/proxy/execution-state?campaignId=xxx
+ * - Target: GET ${SALES_ENGINE_URL}/api/v1/campaigns/:id/execution-state
  * 
  * CACHING STRATEGY:
  * - In-memory cache per campaign with TTL (default: 7 seconds)
@@ -26,8 +32,42 @@
  * - No stale UI risks (TTL ensures refresh)
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getRealTimeExecutionStatus, type RealTimeExecutionStatus } from '../lib/api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { getExecutionState, type ExecutionState, type RealTimeExecutionStatus } from '../lib/api';
+
+/**
+ * Map ExecutionState (canonical) to RealTimeExecutionStatus (UI-compatible).
+ * This maintains backward compatibility with existing UI components.
+ */
+function mapToRealTimeStatus(state: ExecutionState): RealTimeExecutionStatus {
+  return {
+    campaignId: state.campaignId,
+    latestRun: state.run ? {
+      id: state.run.id,
+      status: state.run.status,
+      stage: state.run.stage,
+      startedAt: state.run.startedAt,
+      completedAt: state.run.endedAt,
+      errorMessage: state.run.errorMessage,
+      terminationReason: state.run.terminationReason,
+    } : null,
+    funnel: {
+      organizations: state.funnel.organizations,
+      contacts: {
+        ...state.funnel.contacts,
+        scored: 0,
+        enriched: 0,
+      },
+      leads: state.funnel.leads,
+    },
+    stages: [],
+    alerts: [],
+    _meta: {
+      fetchedAt: state.lastUpdatedAt,
+      source: 'sales-engine-canonical',
+    },
+  };
+}
 
 interface CacheEntry {
   data: RealTimeExecutionStatus;
@@ -117,7 +157,7 @@ export function useRealTimeStatus({
   const lastCampaignIdRef = useRef<string>(campaignId);
 
   /**
-   * Fetch fresh data, optionally bypassing cache.
+   * Fetch fresh data from sales-engine, optionally bypassing cache.
    */
   const fetchStatus = useCallback(async (bypassCache = false): Promise<RealTimeExecutionStatus | null> => {
     // Check cache first (unless bypassing)
@@ -129,9 +169,10 @@ export function useRealTimeStatus({
       }
     }
 
-    // Fetch fresh data
+    // Fetch fresh data from sales-engine via proxy
     try {
-      const data = await getRealTimeExecutionStatus(campaignId);
+      const executionState = await getExecutionState(campaignId);
+      const data = mapToRealTimeStatus(executionState);
       
       // Update cache
       statusCache.set(campaignId, {
