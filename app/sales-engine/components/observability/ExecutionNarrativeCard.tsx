@@ -313,7 +313,54 @@ export function ExecutionNarrativeCard({
             </p>
           )}
 
-          {isTerminal && narrative.terminal?.status === 'failed' && (
+          {/* INVARIANT VIOLATION: Critical failure with explicit warning */}
+          {isTerminal && narrative.terminal?.status === 'failed' && narrative.terminal?.reason?.toLowerCase().includes('invariant') && (
+            <div
+              style={{
+                marginTop: '12px',
+                padding: '12px',
+                backgroundColor: `${NSD_COLORS.semantic.critical.text}15`,
+                borderRadius: NSD_RADIUS.sm,
+                border: `2px solid ${NSD_COLORS.semantic.critical.border}`,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <Icon
+                  name="warning"
+                  size={16}
+                  color={NSD_COLORS.semantic.critical.text}
+                />
+                <div>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      color: NSD_COLORS.semantic.critical.text,
+                      marginBottom: '6px',
+                    }}
+                  >
+                    Invariant Violation — Results Not Valid
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      color: NSD_COLORS.text.primary,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    A critical system invariant was violated. Results from this run are not valid.
+                    Do not treat this run as completed.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Regular failure (not invariant violation) */}
+          {isTerminal && narrative.terminal?.status === 'failed' && !narrative.terminal?.reason?.toLowerCase().includes('invariant') && (
             <div
               style={{
                 marginTop: '12px',

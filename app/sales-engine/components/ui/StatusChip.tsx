@@ -50,6 +50,10 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; b
     label: 'Failed – see timeline', 
     ...NSD_COLORS.semantic.critical,
   },
+  invariant_violation: {
+    label: 'Invariant Violation – results invalid',
+    ...NSD_COLORS.semantic.critical,
+  },
   blocked: { 
     label: 'Blocked – see reason', 
     ...NSD_COLORS.semantic.critical,

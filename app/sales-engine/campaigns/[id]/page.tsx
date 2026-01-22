@@ -805,9 +805,11 @@ function OverviewTab({
       </div>
 
       {/* Results Breakdown Cards - Post-stage completion details (full width) */}
+      {/* DEFENSIVE GUARD: Pass failureReason to prevent showing results for invariant violations */}
       <ResultsBreakdownCards
         funnel={observabilityFunnel}
         runStatus={runStatus}
+        failureReason={latestRun?.failure_reason || latestRun?.reason}
       />
 
       {/* Advisory Callout - Non-blocking guidance (full width) */}

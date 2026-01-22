@@ -569,12 +569,42 @@ export function mapExecutionNarrative(
   // When termination_reason indicates an intentional pause, this is NOT an error.
   // Intentional pauses include: unprocessed_work_remaining, execution_timeout, batch_limit_reached
   // Display as "Incomplete" or "Timeout" with info severity, not as a failure.
+  // 
+  // INVARIANT VIOLATION SEMANTICS:
+  // When reason = "invariant_violation", this is a HARD FAILURE that must be
+  // surfaced explicitly. The UI must NOT present this as completed or show results.
   // =====================================================================
   if (status === 'failed' || status === 'error') {
     const failureContext = getFailureContext(runEvents);
     const terminationReason = latestRun.termination_reason?.toLowerCase() || '';
+    const failureReasonRaw = latestRun.failure_reason?.toLowerCase() || '';
     
-    // Check for intentional pause reasons
+    // INVARIANT VIOLATION: Critical failure - must display explicit failure banner
+    // DO NOT present as completed, DO NOT show results as valid
+    const isInvariantViolation = (
+      terminationReason === 'invariant_violation' ||
+      failureReasonRaw === 'invariant_violation' ||
+      terminationReason.includes('invariant') ||
+      failureReasonRaw.includes('invariant')
+    );
+    
+    if (isInvariantViolation) {
+      return {
+        mode: 'terminal',
+        headline: 'Execution failed — invariant violation',
+        subheadline: 'A critical system invariant was violated during execution. Results from this run are invalid.',
+        lastEventAt: mostRecentEvent?.occurred_at,
+        terminal: {
+          status: 'failed',
+          reason: 'Invariant violation: execution stopped due to data integrity failure. Results are not valid.',
+          completedAt: latestRun.completed_at || latestRun.updated_at || mostRecentEvent?.occurred_at || '',
+        },
+        trustNote: 'This run failed validation. Do NOT treat results as complete or accurate.',
+        _rawStatus: latestRun.status,
+      };
+    }
+    
+    // Check for intentional pause reasons (NOT invariant violation)
     const isIntentionalPause = (
       terminationReason === 'unprocessed_work_remaining' ||
       terminationReason === 'execution_timeout' ||
@@ -610,7 +640,7 @@ export function mapExecutionNarrative(
         lastEventAt: mostRecentEvent?.occurred_at,
         terminal: {
           status: 'skipped', // Use 'skipped' to get info-style badge, not error
-          reason: 'Invariant enforced: execution stopped with remaining processable contacts to ensure correctness.',
+          reason: 'Intentional halt: execution stopped with remaining processable contacts to ensure correctness.',
           completedAt: latestRun.completed_at || latestRun.updated_at || mostRecentEvent?.occurred_at || '',
         },
         trustNote: 'This is not an error. The system stopped intentionally to maintain data integrity.',

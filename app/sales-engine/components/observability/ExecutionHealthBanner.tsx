@@ -102,10 +102,30 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
   // When terminationReason indicates an intentional pause, this is NOT an error.
   // It's an intentional execution halt to ensure correctness.
   // Intentional pauses include: unprocessed_work_remaining, execution_timeout, batch_limit_reached
+  // 
+  // INVARIANT VIOLATION SEMANTICS:
+  // When reason = "invariant_violation", this is a HARD FAILURE that must be
+  // surfaced explicitly. The UI must NOT present this as completed or show results.
   if (runStatus === 'failed') {
     const failedStage = latestRun?.stage || stages.find(s => s.status === 'error')?.stage;
     const reason = latestRun?.terminationReason || latestRun?.errorMessage;
     const reasonLower = reason?.toLowerCase() || '';
+    
+    // INVARIANT VIOLATION: Critical failure - must display explicit failure banner
+    // Do NOT present as completed. Do NOT show results as valid.
+    const isInvariantViolation = (
+      reasonLower === 'invariant_violation' ||
+      reasonLower.includes('invariant')
+    );
+    
+    if (isInvariantViolation) {
+      return {
+        type: 'error',
+        icon: 'warning',
+        message: 'Execution failed — invariant violation',
+        subMessage: 'A critical system invariant was violated. Results from this run are not valid.',
+      };
+    }
     
     // Check if this is an intentional pause (not a real error)
     const isIntentionalPause = (

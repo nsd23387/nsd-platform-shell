@@ -101,7 +101,35 @@ function isFailedStatus(status?: string): boolean {
   return normalized === 'failed';
 }
 
-function getStatusConfig(status?: string): { 
+/**
+ * Check if a run failed due to an invariant violation.
+ * 
+ * INVARIANT VIOLATION SEMANTICS:
+ * When status = "failed" AND reason = "invariant_violation", this indicates
+ * a critical system invariant was violated during execution.
+ * - Display explicit failure banner
+ * - Do NOT show results as valid
+ * - Do NOT show "Completed – results available"
+ */
+function isInvariantViolation(run: LatestRun): boolean {
+  const status = run.status?.toLowerCase();
+  if (status !== 'failed') return false;
+  
+  const reason = ((run as Record<string, unknown>).reason as string || '').toLowerCase();
+  const failureReason = ((run as Record<string, unknown>).failure_reason as string || '').toLowerCase();
+  const terminationReason = ((run as Record<string, unknown>).termination_reason as string || '').toLowerCase();
+  
+  return (
+    reason === 'invariant_violation' ||
+    failureReason === 'invariant_violation' ||
+    terminationReason === 'invariant_violation' ||
+    reason.includes('invariant') ||
+    failureReason.includes('invariant') ||
+    terminationReason.includes('invariant')
+  );
+}
+
+function getStatusConfig(status?: string, isInvariant?: boolean): { 
   label: string; 
   icon: 'check' | 'warning'; 
   bgColor: string; 
@@ -110,6 +138,19 @@ function getStatusConfig(status?: string): {
   headerCopy: string;
 } {
   const normalized = status?.toLowerCase() || '';
+  
+  // INVARIANT VIOLATION: Critical failure - explicit display required
+  // Do NOT show results as valid. Use distinct messaging.
+  if (isInvariant) {
+    return {
+      label: 'Invariant Violation',
+      icon: 'warning',
+      bgColor: NSD_COLORS.semantic.critical.bg,
+      borderColor: NSD_COLORS.semantic.critical.border,
+      textColor: NSD_COLORS.semantic.critical.text,
+      headerCopy: 'Execution failed — invariant violation',
+    };
+  }
   
   if (normalized === 'failed') {
     return {
@@ -147,9 +188,14 @@ export function LastExecutionSummaryCard({
     return null;
   }
 
-  const config = getStatusConfig(run.status);
-  // Use real-time counts (from actual DB tables) when available
-  const counts = extractCounts(funnel, realTimeStatus);
+  // Check for invariant violation BEFORE setting up display
+  const hasInvariantViolation = isInvariantViolation(run);
+  
+  const config = getStatusConfig(run.status, hasInvariantViolation);
+  
+  // DEFENSIVE GUARD: Do NOT show counts/results for invariant violations
+  // Results from invariant violation runs are not valid and should not be displayed
+  const counts = hasInvariantViolation ? [] : extractCounts(funnel, realTimeStatus);
   
   // Get any active alerts from real-time status
   const alerts = realTimeStatus?.alerts || [];
@@ -250,8 +296,57 @@ export function LastExecutionSummaryCard({
         </span>
       </div>
 
-      {/* Terminal reason (if failed) */}
-      {isFailed && terminalReason && (
+      {/* Invariant violation warning - explicit, cannot be missed */}
+      {hasInvariantViolation && (
+        <div
+          style={{
+            marginBottom: '16px',
+            padding: '12px',
+            backgroundColor: `${NSD_COLORS.semantic.critical.text}15`,
+            borderRadius: NSD_RADIUS.md,
+            border: `2px solid ${NSD_COLORS.semantic.critical.border}`,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '8px',
+            }}
+          >
+            <Icon name="warning" size={16} color={NSD_COLORS.semantic.critical.text} />
+            <div>
+              <span
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  color: NSD_COLORS.semantic.critical.text,
+                  marginBottom: '6px',
+                }}
+              >
+                Invariant Violation — Results Not Valid
+              </span>
+              <span
+                style={{
+                  fontSize: '13px',
+                  color: NSD_COLORS.text.primary,
+                  lineHeight: 1.5,
+                }}
+              >
+                A critical system invariant was violated during execution. 
+                Results from this run are not valid and should not be used. 
+                Do not treat this run as completed.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Terminal reason (if failed and NOT invariant violation) */}
+      {isFailed && terminalReason && !hasInvariantViolation && (
         <div
           style={{
             marginBottom: '16px',
@@ -297,62 +392,64 @@ export function LastExecutionSummaryCard({
         </div>
       )}
 
-      {/* Counts */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '12px',
-          marginBottom: '16px',
-          flexWrap: 'wrap',
-        }}
-      >
-        {counts.map((metric) => (
-          <div
-            key={metric.label}
-            style={{
-              flex: '1 1 80px',
-              minWidth: '80px',
-              padding: '12px 16px',
-              backgroundColor: NSD_COLORS.surface,
-              borderRadius: NSD_RADIUS.md,
-              border: `1px solid ${NSD_COLORS.border.light}`,
-              textAlign: 'center',
-            }}
-          >
+      {/* Counts - DEFENSIVE GUARD: Only render if counts exist and run is valid */}
+      {counts.length > 0 && !hasInvariantViolation && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '12px',
+            marginBottom: '16px',
+            flexWrap: 'wrap',
+          }}
+        >
+          {counts.map((metric) => (
             <div
+              key={metric.label}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                marginBottom: '6px',
+                flex: '1 1 80px',
+                minWidth: '80px',
+                padding: '12px 16px',
+                backgroundColor: NSD_COLORS.surface,
+                borderRadius: NSD_RADIUS.md,
+                border: `1px solid ${NSD_COLORS.border.light}`,
+                textAlign: 'center',
               }}
             >
-              <Icon name={metric.icon} size={12} color={NSD_COLORS.text.muted} />
-              <span
+              <div
                 style={{
-                  fontSize: '10px',
-                  color: NSD_COLORS.text.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.03em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  marginBottom: '6px',
                 }}
               >
-                {metric.label}
-              </span>
+                <Icon name={metric.icon} size={12} color={NSD_COLORS.text.muted} />
+                <span
+                  style={{
+                    fontSize: '10px',
+                    color: NSD_COLORS.text.muted,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
+                  }}
+                >
+                  {metric.label}
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: '20px',
+                  fontWeight: 600,
+                  fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+                  color: NSD_COLORS.primary,
+                }}
+              >
+                {metric.count.toLocaleString()}
+              </div>
             </div>
-            <div
-              style={{
-                fontSize: '20px',
-                fontWeight: 600,
-                fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-                color: NSD_COLORS.primary,
-              }}
-            >
-              {metric.count.toLocaleString()}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Alerts from real-time status (if any) */}
       {alerts.length > 0 && (

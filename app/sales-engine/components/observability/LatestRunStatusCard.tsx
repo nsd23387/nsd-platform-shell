@@ -24,7 +24,7 @@
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
-import { useLatestRunStatus, type LatestRun, isIncompleteRun, isTimeoutRun } from '../../../../hooks/useLatestRunStatus';
+import { useLatestRunStatus, type LatestRun, isIncompleteRun, isTimeoutRun, isInvariantViolation } from '../../../../hooks/useLatestRunStatus';
 import { isRunStale, RUN_STALE_THRESHOLD_MS, type ResolvableRun } from '../../lib/resolveActiveRun';
 
 interface LatestRunStatusCardProps {
@@ -55,8 +55,13 @@ interface StatusDisplay {
  * When isIncomplete=true or isTimeout=true (status=failed AND termination_reason indicates intentional pause),
  * display as "Incomplete" or "Timeout" with info severity, NOT as an error.
  * This is intentional behavior - the system stopped to prevent incomplete processing.
+ * 
+ * INVARIANT VIOLATION HANDLING:
+ * When isInvariantViolation=true (status=failed AND reason=invariant_violation),
+ * display explicit failure banner. Do NOT show as completed. Do NOT show results.
+ * This is a critical failure that must be surfaced.
  */
-function getStatusDisplay(status?: string, isStale?: boolean, isIncomplete?: boolean, isTimeout?: boolean): StatusDisplay {
+function getStatusDisplay(status?: string, isStale?: boolean, isIncomplete?: boolean, isTimeout?: boolean, isInvariantViolationFlag?: boolean): StatusDisplay {
   const normalized = typeof status === 'string' ? status.toLowerCase() : 'unknown';
 
   // STALE RUN HANDLING: Running runs older than 30 min are displayed as stalled
@@ -67,6 +72,17 @@ function getStatusDisplay(status?: string, isStale?: boolean, isIncomplete?: boo
       label: 'Stalled',
       copy: 'Execution stalled — system will mark failed',
       ...NSD_COLORS.semantic.attention,
+    };
+  }
+
+  // INVARIANT VIOLATION HANDLING: Critical failure - must surface explicitly
+  // Do NOT present as completed. Do NOT show results as valid.
+  if (isInvariantViolationFlag) {
+    return {
+      icon: 'warning',
+      label: 'Invariant Violation',
+      copy: 'Execution failed — invariant violation. Results are not valid.',
+      ...NSD_COLORS.semantic.critical,
     };
   }
 
@@ -196,13 +212,18 @@ function toResolvableRun(run: LatestRun): ResolvableRun {
  * INCOMPLETE RUN HANDLING (Target-State Execution Semantics):
  * Checks if run is incomplete (failed + unprocessed_work_remaining)
  * and displays as "Incomplete" with info severity, not error.
+ * 
+ * INVARIANT VIOLATION HANDLING:
+ * Checks if run failed due to invariant violation and displays
+ * explicit failure banner. Results are NOT shown for these runs.
  */
 function RunDetailsCard({ run }: { run: LatestRun }) {
   const resolvable = toResolvableRun(run);
   const stale = isRunStale(resolvable);
   const incomplete = isIncompleteRun(run);
   const timeout = isTimeoutRun(run);
-  const display = getStatusDisplay(run?.status, stale, incomplete, timeout);
+  const invariantViolation = isInvariantViolation(run);
+  const display = getStatusDisplay(run?.status, stale, incomplete, timeout, invariantViolation);
   // Runtime safety: `run` payload may be missing fields (or be absent) depending on API response.
   // Guard all string slicing to prevent client-side exceptions.
   const rawRunId = (run as unknown as { run_id?: unknown; id?: unknown })?.run_id ?? (run as unknown as { id?: unknown })?.id;

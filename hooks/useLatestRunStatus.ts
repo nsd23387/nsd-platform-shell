@@ -79,6 +79,40 @@ export function isTimeoutRun(run: LatestRun | null): boolean {
   );
 }
 
+/**
+ * Check if a run failed due to an invariant violation.
+ * 
+ * INVARIANT VIOLATION SEMANTICS:
+ * When status = "failed" AND reason = "invariant_violation", this indicates
+ * a critical system invariant was violated during execution. This is NOT
+ * an intentional pause - it's a hard failure that should:
+ * - Display an explicit failure banner
+ * - NOT show results as valid
+ * - NOT show "Completed – results available"
+ * 
+ * This ensures the UI correctly reflects execution truth and does not mask
+ * invalid runs as completed.
+ */
+export function isInvariantViolation(run: LatestRun | null): boolean {
+  if (!run) return false;
+  const status = run.status?.toLowerCase();
+  const reason = run.reason?.toLowerCase() || '';
+  const failureReason = run.failure_reason?.toLowerCase() || '';
+  const terminationReason = run.termination_reason?.toLowerCase() || '';
+  
+  if (status !== 'failed') return false;
+  
+  // Check all possible reason fields for invariant_violation
+  return (
+    reason === 'invariant_violation' ||
+    failureReason === 'invariant_violation' ||
+    terminationReason === 'invariant_violation' ||
+    reason.includes('invariant') ||
+    failureReason.includes('invariant') ||
+    terminationReason.includes('invariant')
+  );
+}
+
 type LatestRunApiResponse =
   // New contract (platform-shell): 200 { status: "no_runs" }
   | { status: 'no_runs' }

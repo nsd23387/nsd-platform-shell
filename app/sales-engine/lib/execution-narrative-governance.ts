@@ -114,9 +114,34 @@ export function isNarrativeFailed(narrative: ExecutionNarrative): boolean {
 }
 
 /**
- * Check if narrative represents a completed state
+ * Check if narrative represents an invariant violation failure.
+ * 
+ * INVARIANT VIOLATION SEMANTICS:
+ * When terminal.status = 'failed' AND reason includes 'invariant', this indicates
+ * a critical system invariant was violated during execution.
+ * - Display explicit failure banner
+ * - Do NOT show results as valid
+ * - Do NOT show "Completed – results available"
+ */
+export function isNarrativeInvariantViolation(narrative: ExecutionNarrative): boolean {
+  if (narrative.mode !== 'terminal') return false;
+  if (narrative.terminal?.status !== 'failed') return false;
+  
+  const reason = (narrative.terminal?.reason || '').toLowerCase();
+  return reason.includes('invariant');
+}
+
+/**
+ * Check if narrative represents a completed state.
+ * 
+ * GOVERNANCE NOTE: Invariant violations are NEVER considered "completed".
+ * Always check isNarrativeInvariantViolation() before treating a terminal state
+ * as a successful completion.
  */
 export function isNarrativeCompleted(narrative: ExecutionNarrative): boolean {
+  // DEFENSIVE GUARD: Invariant violations are never "completed"
+  if (isNarrativeInvariantViolation(narrative)) return false;
+  
   return narrative.mode === 'terminal' && narrative.terminal?.status === 'completed';
 }
 
@@ -216,6 +241,12 @@ export const EXECUTION_COPY = {
     subheadline: 'The last execution did not complete successfully.',
     trustNote: 'The system is idle. You are viewing historical execution data.',
     label: 'Failed',
+  },
+  INVARIANT_VIOLATION: {
+    headline: 'Execution failed — invariant violation',
+    subheadline: 'A critical system invariant was violated during execution. Results from this run are invalid.',
+    trustNote: 'This run failed validation. Do NOT treat results as complete or accurate.',
+    label: 'Invariant Violation',
   },
 } as const;
 
