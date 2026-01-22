@@ -9,49 +9,21 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.SALES_ENGINE_API_BASE_URL || process.env.NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL;
 
+/**
+ * Returns empty array for attention items when no backend is configured.
+ * 
+ * IMPORTANT: Existing campaigns have not reached execution stage, so there
+ * are no attention items (failed runs, stale approvals, etc.) to display.
+ * Showing placeholder attention items would create an inconsistency with
+ * other observability components showing "Ready for execution" or
+ * "No activity observed yet".
+ * 
+ * Attention items will be populated from backend-observed events once
+ * campaigns are actually executed and require attention.
+ */
 function getMockAttentionItems() {
-  return [
-    {
-      id: 'att-001',
-      campaignId: 'camp-002',
-      campaignName: 'Product Launch Sequence',
-      reason: 'pending_approval_stale',
-      status: 'PENDING_REVIEW',
-      lastUpdated: '2025-01-18T16:45:00Z',
-      primaryAction: {
-        label: 'Review Campaign',
-        href: '/sales-engine/campaigns/camp-002?tab=overview',
-        type: 'review',
-      },
-    },
-    {
-      id: 'att-002',
-      campaignId: 'camp-003',
-      campaignName: 'Re-engagement Campaign',
-      reason: 'approved_not_observed',
-      status: 'RUNNABLE',
-      lastUpdated: '2025-01-17T10:00:00Z',
-      primaryAction: {
-        // Updated: No "Start Run" - observability only
-        label: 'View Observability',
-        href: '/sales-engine/campaigns/camp-003?tab=monitoring',
-        type: 'view',
-      },
-    },
-    {
-      id: 'att-003',
-      campaignId: 'camp-004',
-      campaignName: 'Holiday Promo',
-      reason: 'execution_failed',
-      status: 'FAILED',
-      lastUpdated: '2025-01-20T08:30:00Z',
-      primaryAction: {
-        label: 'View Errors',
-        href: '/sales-engine/campaigns/camp-004?tab=monitoring',
-        type: 'view',
-      },
-    },
-  ];
+  // Return empty array - no attention items exist yet
+  return [];
 }
 
 export async function GET(request: NextRequest) {

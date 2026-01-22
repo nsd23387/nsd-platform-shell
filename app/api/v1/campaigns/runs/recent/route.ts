@@ -2,29 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.SALES_ENGINE_API_BASE_URL || process.env.NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL;
 
+/**
+ * Returns empty array for recent runs when no backend is configured.
+ * 
+ * IMPORTANT: Existing campaigns have not yet been executed, so there are
+ * no recent runs to display. Showing placeholder runs would create an
+ * inconsistency with other observability components showing "Ready for execution"
+ * or "No activity observed yet".
+ * 
+ * Recent run data will be populated from backend-observed events once
+ * campaigns are actually executed.
+ */
 function getMockRecentRuns() {
-  return [
-    {
-      runId: 'run-001',
-      campaignId: 'camp-001',
-      campaignName: 'Q4 Enterprise Outreach',
-      status: 'COMPLETED',
-      leadsAttempted: 150,
-      leadsSent: 142,
-      leadsBlocked: 8,
-      completedAt: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      runId: 'run-002',
-      campaignId: 'camp-002',
-      campaignName: 'SMB Product Launch',
-      status: 'PARTIAL',
-      leadsAttempted: 75,
-      leadsSent: 68,
-      leadsBlocked: 7,
-      completedAt: new Date(Date.now() - 7200000).toISOString(),
-    },
-  ];
+  // Return empty array - no runs have been executed yet
+  return [];
 }
 
 export async function GET(request: NextRequest) {
