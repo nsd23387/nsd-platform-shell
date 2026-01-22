@@ -698,6 +698,10 @@ function OverviewTab({
   const runPhase = (latestRun as any)?.phase?.toLowerCase() || null;
   const noRuns = runsCount === 0;
 
+  // Execution state run - used by CurrentStageIndicator
+  // This is the canonical run object from execution state
+  const executionRun = realTimeStatus?.latestRun ?? null;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* ============================================
@@ -766,12 +770,10 @@ function OverviewTab({
             onRefresh={onRefresh}
           />
 
-          {/* Current Stage Indicator (P1) - Simple stage name and elapsed time
-              Data source: execution-state.run.stage (via realTimeStatus.latestRun.stage)
-              Hidden when stage is null */}
+          {/* Current Stage Indicator - Execution-state driven */}
           <CurrentStageIndicator
-            stage={realTimeStatus?.latestRun?.stage}
-            runStartedAt={realTimeStatus?.latestRun?.startedAt || latestRun?.started_at}
+            stage={executionRun?.stage}
+            startedAt={executionRun?.startedAt}
             isRunning={runStatus === 'running' || runStatus === 'in_progress' || runStatus === 'queued'}
           />
 

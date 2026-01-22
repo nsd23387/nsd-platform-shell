@@ -3,30 +3,37 @@
 /**
  * CurrentStageIndicator Component
  * 
- * Displays the current execution stage name and elapsed time.
+ * Execution-state driven stage display.
  * 
- * GOVERNANCE CONSTRAINTS (P1 Incremental):
- * - Stage name comes ONLY from execution-state.run.stage
+ * DATA CONTRACT:
+ * - run.stage: Current stage identifier (ONLY source of truth)
+ * - run.startedAt: When the run started (used for elapsed time)
+ * 
+ * GOVERNANCE CONSTRAINTS:
  * - Do NOT infer progress
  * - Do NOT aggregate events
  * - Do NOT compute percentages
- * - Do NOT change polling behavior
+ * - Do NOT subscribe to event streams
  * 
  * UI Behavior:
  * - Show: "Current stage: Contact Sourcing"
- * - Show: "Stage started Xs ago" (uses run start time if stage-specific time unavailable)
- * - Hide completely if stage === null
+ * - Show: "Started Xs ago" when running
+ * - Hide completely if run.stage === null
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 
+/**
+ * Props sourced from execution state.
+ * This component is execution-state driven, period.
+ */
 interface CurrentStageIndicatorProps {
-  /** Current stage from execution-state.run.stage - ONLY source of truth */
+  /** run.stage - Current execution stage identifier */
   stage: string | null | undefined;
-  /** Run start time - used as approximation for stage timing when stage-specific time unavailable */
-  runStartedAt?: string | null;
+  /** run.startedAt - When the current run started */
+  startedAt?: string | null;
   /** Whether the run is actively executing */
   isRunning?: boolean;
 }
@@ -82,29 +89,29 @@ function getElapsedTime(startedAt: string | null | undefined): string | null {
 
 export function CurrentStageIndicator({
   stage,
-  runStartedAt,
+  startedAt,
   isRunning = false,
 }: CurrentStageIndicatorProps) {
   const [elapsedTime, setElapsedTime] = useState<string | null>(null);
 
   // Update elapsed time every 5 seconds when running
   const updateElapsedTime = useCallback(() => {
-    if (isRunning && runStartedAt) {
-      setElapsedTime(getElapsedTime(runStartedAt));
+    if (isRunning && startedAt) {
+      setElapsedTime(getElapsedTime(startedAt));
     } else {
       setElapsedTime(null);
     }
-  }, [isRunning, runStartedAt]);
+  }, [isRunning, startedAt]);
 
   useEffect(() => {
     updateElapsedTime();
     
     // Only set interval if running and we have a start time
-    if (isRunning && runStartedAt) {
+    if (isRunning && startedAt) {
       const interval = setInterval(updateElapsedTime, 5000);
       return () => clearInterval(interval);
     }
-  }, [isRunning, runStartedAt, updateElapsedTime]);
+  }, [isRunning, startedAt, updateElapsedTime]);
 
   // DEFENSIVE GUARD: Hide completely if stage is null/undefined/empty
   if (!stage || stage.trim() === '') {
