@@ -3,8 +3,13 @@
 /**
  * useRealTimeStatus Hook
  * 
+ * CANONICAL EXECUTION STATE HOOK
+ * 
  * Provides real-time execution status with lightweight caching and TTL.
  * This hook is the primary interface for the DATA AUTHORITY pattern.
+ * 
+ * DATA SOURCE: GET /api/v1/campaigns/:id/execution-state
+ * This is the SOLE EXECUTION AUTHORITY. No fallbacks. No legacy endpoints.
  * 
  * CACHING STRATEGY:
  * - In-memory cache per campaign with TTL (default: 7 seconds)

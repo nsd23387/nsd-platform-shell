@@ -5,9 +5,12 @@
  * 
  * Displays campaign details, metrics, and action buttons.
  * 
- * EXECUTION DATA AUTHORITY:
+ * EXECUTION DATA AUTHORITY (CANONICAL):
  * All execution-related data flows through useRealTimeStatus,
- * which polls /execution-status (the single source of truth).
+ * which calls /execution-state (the SOLE source of execution truth).
+ * 
+ * NO legacy endpoints: /observability/*, /runs/latest, /runs
+ * NO fallback logic. If execution-state fails, show error state.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -20,11 +23,8 @@ import type {
   CampaignDetail,
   CampaignMetrics,
   MetricsHistoryEntry,
-  CampaignRun,
-  CampaignRunDetailed,
   CampaignVariant,
   ThroughputConfig,
-  CampaignObservability,
   ObservabilityFunnel,
   CampaignExecutionStatus,
 } from '../../types/campaign';
@@ -32,11 +32,8 @@ import {
   getCampaign,
   getCampaignMetrics,
   getCampaignMetricsHistory,
-  getCampaignRuns,
-  getCampaignRunsDetailed,
   getCampaignVariants,
   getCampaignThroughput,
-  getCampaignObservability,
   requestCampaignRun,
   duplicateCampaign,
   type RealTimeExecutionStatus,
@@ -53,7 +50,6 @@ import { MetricsDisplay } from '../../components/MetricsDisplay';
 import {
   CampaignExecutionStatusCard,
   PipelineFunnelTable,
-  CampaignRunHistoryTable,
   SendMetricsPanel,
   ExecutionTimelineFeed,
   ApprovalAwarenessPanel,
@@ -103,11 +99,8 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [metrics, setMetrics] = useState<CampaignMetrics | null>(null);
   const [metricsHistory, setMetricsHistory] = useState<MetricsHistoryEntry[]>([]);
-  const [runs, setRuns] = useState<CampaignRun[]>([]);
-  const [runsDetailed, setRunsDetailed] = useState<CampaignRunDetailed[]>([]);
   const [variants, setVariants] = useState<CampaignVariant[]>([]);
   const [throughput, setThroughput] = useState<ThroughputConfig | null>(null);
-  const [observability, setObservability] = useState<CampaignObservability | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
@@ -216,7 +209,6 @@ export default function CampaignDetailPage() {
             setThroughput(getTestCampaignThroughput(campaignId));
             setMetrics(null);
             setMetricsHistory([]);
-            setRuns([]);
             setVariants([]);
           } else {
             setError('Test campaign not found or not available in this environment');
@@ -229,32 +221,24 @@ export default function CampaignDetailPage() {
         setCampaign(campaignData);
 
         // Load non-execution data in parallel
-        // NOTE: Execution data comes from useRealTimeStatus exclusively
+        // CANONICAL: Execution data comes ONLY from useRealTimeStatus -> /execution-state
+        // NO legacy endpoints: /runs, /observability
         const [
           metricsData,
           historyData,
-          runsData,
-          runsDetailedData,
           variantsData,
           throughputData,
-          observabilityData,
         ] = await Promise.allSettled([
           getCampaignMetrics(campaignId),
           getCampaignMetricsHistory(campaignId),
-          getCampaignRuns(campaignId),
-          getCampaignRunsDetailed(campaignId),
           getCampaignVariants(campaignId),
           getCampaignThroughput(campaignId),
-          getCampaignObservability(campaignId),
         ]);
 
         if (metricsData.status === 'fulfilled') setMetrics(metricsData.value);
         if (historyData.status === 'fulfilled') setMetricsHistory(historyData.value);
-        if (runsData.status === 'fulfilled') setRuns(runsData.value);
-        if (runsDetailedData.status === 'fulfilled') setRunsDetailed(runsDetailedData.value);
         if (variantsData.status === 'fulfilled') setVariants(variantsData.value);
         if (throughputData.status === 'fulfilled') setThroughput(throughputData.value);
-        if (observabilityData.status === 'fulfilled') setObservability(observabilityData.value);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load campaign');
       } finally {
@@ -402,7 +386,6 @@ export default function CampaignDetailPage() {
           <OverviewTab
             campaign={campaign}
             governanceState={governanceState}
-            runsCount={runs.length}
             executionStatus={executionStatus}
             executionFunnel={executionFunnel}
             executionRun={executionRun}
@@ -436,9 +419,6 @@ export default function CampaignDetailPage() {
           <MonitoringTab
             campaign={campaign}
             metrics={metrics}
-            runs={runs}
-            runsDetailed={runsDetailed}
-            observability={observability}
             executionStatus={executionStatus}
             executionFunnel={executionFunnel}
             executionRun={executionRun}
@@ -459,13 +439,12 @@ export default function CampaignDetailPage() {
 /**
  * OverviewTab
  * 
- * All execution data flows from executionStatus (via useRealTimeStatus).
- * No secondary polling or fallback logic.
+ * CANONICAL: All execution data flows from executionStatus (via useRealTimeStatus).
+ * No secondary polling. No fallback logic. No legacy endpoints.
  */
 function OverviewTab({
   campaign,
   governanceState,
-  runsCount,
   executionStatus,
   executionFunnel,
   executionRun,
@@ -483,7 +462,6 @@ function OverviewTab({
 }: {
   campaign: CampaignDetail;
   governanceState: CampaignGovernanceState;
-  runsCount: number;
   executionStatus: RealTimeExecutionStatus | null;
   executionFunnel: ObservabilityFunnel | null;
   executionRun: RealTimeExecutionStatus['latestRun'] | null;
@@ -499,12 +477,15 @@ function OverviewTab({
   isDuplicating?: boolean;
   onEdit?: () => void;
 }) {
+  // Derive run count from execution state only (no legacy /runs endpoint)
+  const hasExecutionHistory = !!executionRun;
+  
   const canModifyConfig =
     campaign.canEdit !== false &&
     campaign.status !== 'COMPLETED' &&
     campaign.status !== 'ARCHIVED' &&
     governanceState !== 'EXECUTED' &&
-    runsCount === 0;
+    !hasExecutionHistory;
 
   // Derive execution state from execution run
   const executionState = deriveExecutionState(
@@ -514,11 +495,11 @@ function OverviewTab({
       created_at: executionRun.startedAt,
       updated_at: executionRun.completedAt,
     } : null,
-    runsCount === 0
+    !hasExecutionHistory
   );
 
   const isPlanningOnly = campaign.sourcing_config?.benchmarks_only === true;
-  const noRuns = runsCount === 0 && !executionRun;
+  const noRuns = !executionRun;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -666,7 +647,7 @@ function OverviewTab({
             governanceState={governanceState}
             canSubmit={campaign.canSubmit}
             canApprove={campaign.canApprove}
-            runsCount={runsCount}
+            runsCount={hasExecutionHistory ? 1 : 0}
             isPlanningOnly={isPlanningOnly}
             onDuplicate={onDuplicate}
             duplicating={isDuplicating}
@@ -688,15 +669,13 @@ function OverviewTab({
 /**
  * MonitoringTab
  * 
- * All execution data flows from executionStatus (via useRealTimeStatus).
- * No legacy /observability/status, /observability/funnel, or /runs/latest calls.
+ * CANONICAL: All execution data flows from executionStatus (via useRealTimeStatus).
+ * Source: /execution-state ONLY
+ * No legacy endpoints: /observability/*, /runs/*, /runs/latest
  */
 function MonitoringTab({
   campaign,
   metrics,
-  runs,
-  runsDetailed,
-  observability,
   executionStatus,
   executionFunnel,
   executionRun,
@@ -706,9 +685,6 @@ function MonitoringTab({
 }: {
   campaign: CampaignDetail;
   metrics: CampaignMetrics | null;
-  runs: CampaignRun[];
-  runsDetailed: CampaignRunDetailed[];
-  observability: CampaignObservability | null;
   executionStatus: RealTimeExecutionStatus | null;
   executionFunnel: ObservabilityFunnel | null;
   executionRun: RealTimeExecutionStatus['latestRun'] | null;
@@ -716,14 +692,7 @@ function MonitoringTab({
   isRunRequesting: boolean;
   runRequestMessage: string | null;
 }) {
-  const scrollToRunHistory = () => {
-    const element = document.getElementById('run-history');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  // Derive execution status from executionRun (single source)
+  // Derive execution status from executionRun (single source - /execution-state)
   const currentStatus: CampaignExecutionStatus = 
     (executionRun?.status?.toLowerCase() as CampaignExecutionStatus) || 'idle';
   
@@ -744,82 +713,46 @@ function MonitoringTab({
     campaign.status === 'RUNNABLE' && 
     currentStatus === 'idle';
 
-  // Derive approval awareness state
+  // Derive approval awareness state (from execution-state only)
   const approvalState: ApprovalAwarenessState = {
     isApproved: !!(campaign.approved_at || campaign.status === 'RUNNABLE' || campaign.status === 'RUNNING' || campaign.status === 'COMPLETED'),
     approvedAt: campaign.approved_at,
     approvedBy: campaign.approved_by,
     status: campaign.status,
-    hasRuns: runsDetailed.length > 0 || runs.length > 0 || !!executionRun,
+    hasRuns: !!executionRun,
     blockingReason: executionRun?.errorMessage,
   };
   
-  // Build execution events from run data for timeline display
-  const executionEvents: ExecutionEvent[] = runsDetailed.flatMap((run) => {
-    const events: ExecutionEvent[] = [];
-    
-    if (run.status === 'RUNNING' as any) {
-      events.push({
-        id: `${run.id}-queued`,
-        event_type: 'run.queued',
-        run_id: run.id,
-        campaign_id: campaign.id,
-        occurred_at: run.started_at,
-        outcome: 'success',
-      });
-    }
-    
-    events.push({
-      id: `${run.id}-started`,
+  // Build minimal execution events from current run only
+  // NOTE: Run history is disabled (Option A) - no legacy /runs endpoint calls
+  const executionEvents: ExecutionEvent[] = [];
+  
+  if (executionRun) {
+    // Add current run events
+    executionEvents.push({
+      id: `${executionRun.id}-started`,
       event_type: 'campaign.run.started',
-      run_id: run.id,
+      run_id: executionRun.id,
       campaign_id: campaign.id,
-      occurred_at: run.started_at,
+      occurred_at: executionRun.startedAt || new Date().toISOString(),
       outcome: 'success',
     });
     
-    if (run.completed_at && run.status !== 'FAILED') {
-      if (run.orgs_sourced && run.orgs_sourced > 0) {
-        events.push({
-          id: `${run.id}-orgs`,
-          event_type: 'apollo.org.search.completed',
-          run_id: run.id,
-          campaign_id: campaign.id,
-          occurred_at: run.started_at,
-          outcome: 'success',
-          details: { count: run.orgs_sourced },
-        });
-      }
-      
-      if (run.leads_promoted && run.leads_promoted > 0) {
-        events.push({
-          id: `${run.id}-leads`,
-          event_type: 'lead.promoted',
-          run_id: run.id,
-          campaign_id: campaign.id,
-          occurred_at: run.started_at,
-          outcome: 'success',
-          details: { count: run.leads_promoted },
-        });
-      }
-    }
-    
-    if (run.completed_at) {
-      events.push({
-        id: `${run.id}-completed`,
-        event_type: run.status === 'FAILED' ? 'campaign.run.failed' : 
-                    run.status === 'PARTIAL' ? 'campaign.run.partial' : 'campaign.run.completed',
-        run_id: run.id,
+    if (executionRun.completedAt) {
+      const isFailed = executionRun.status?.toLowerCase() === 'failed';
+      const isPartial = executionRun.status?.toLowerCase() === 'partial';
+      executionEvents.push({
+        id: `${executionRun.id}-completed`,
+        event_type: isFailed ? 'campaign.run.failed' : 
+                    isPartial ? 'campaign.run.partial' : 'campaign.run.completed',
+        run_id: executionRun.id,
         campaign_id: campaign.id,
-        occurred_at: run.completed_at,
-        outcome: run.status === 'FAILED' ? 'failed' : 
-                 run.status === 'PARTIAL' ? 'partial' : 'success',
-        reason: run.error_details?.[0],
+        occurred_at: executionRun.completedAt,
+        outcome: isFailed ? 'failed' : isPartial ? 'partial' : 'success',
+        reason: executionRun.terminationReason,
       });
     }
-    
-    return events;
-  });
+  }
   
   if (isRunRequesting || currentStatus === 'run_requested') {
     executionEvents.unshift({
@@ -859,8 +792,34 @@ function MonitoringTab({
         {/* LEFT COLUMN: Status & Context (40%) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <ApprovalAwarenessPanel approvalState={approvalState} />
-          <LatestRunStatusCard campaignId={campaign.id} />
-          <ExecutionExplainabilityPanel campaignId={campaign.id} />
+          <LatestRunStatusCard 
+            campaignId={campaign.id}
+            run={executionRun ? {
+              id: executionRun.id,
+              status: executionRun.status,
+              stage: executionRun.stage,
+              startedAt: executionRun.startedAt,
+              completedAt: executionRun.completedAt,
+              errorMessage: executionRun.errorMessage,
+              terminationReason: executionRun.terminationReason,
+              phase: executionRun.phase,
+            } : null}
+            noRuns={!executionRun}
+          />
+          <ExecutionExplainabilityPanel 
+            campaignId={campaign.id}
+            run={executionRun ? {
+              id: executionRun.id,
+              status: executionRun.status,
+              stage: executionRun.stage,
+              startedAt: executionRun.startedAt,
+              completedAt: executionRun.completedAt,
+              errorMessage: executionRun.errorMessage,
+              terminationReason: executionRun.terminationReason,
+              phase: executionRun.phase,
+            } : null}
+            noRuns={!executionRun}
+          />
         </div>
 
         {/* RIGHT COLUMN: Metrics & Data (60%) */}
@@ -880,53 +839,52 @@ function MonitoringTab({
 
           <PipelineFunnelTable
             stages={pipelineStages}
-            loading={!executionFunnel && !observability}
+            loading={!executionFunnel}
           />
 
           <SendMetricsPanel
-            emailsSent={observability?.send_metrics?.emails_sent ?? metrics?.emails_sent}
-            emailsOpened={observability?.send_metrics?.emails_opened ?? metrics?.emails_opened}
-            emailsReplied={observability?.send_metrics?.emails_replied ?? metrics?.emails_replied}
-            openRate={observability?.send_metrics?.open_rate ?? metrics?.open_rate}
-            replyRate={observability?.send_metrics?.reply_rate ?? metrics?.reply_rate}
-            confidence={observability?.send_metrics?.confidence ?? 'conditional'}
-            lastUpdated={observability?.last_observed_at ?? metrics?.last_updated}
+            emailsSent={metrics?.emails_sent}
+            emailsOpened={metrics?.emails_opened}
+            emailsReplied={metrics?.emails_replied}
+            openRate={metrics?.open_rate}
+            replyRate={metrics?.reply_rate}
+            confidence={'conditional'}
+            lastUpdated={metrics?.last_updated}
             hasReachedSendStage={
-              pipelineStages.some(s => s.stage === 'emails_sent' && s.count > 0) ||
-              (observability?.send_metrics?.emails_sent ?? 0) > 0
+              pipelineStages.some(s => s.stage === 'emails_sent' && s.count > 0)
             }
           />
         </div>
       </div>
 
-      {/* View Run History Button */}
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <button
-          onClick={scrollToRunHistory}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 20px',
-            fontSize: '14px',
-            fontWeight: 500,
-            color: NSD_COLORS.secondary,
-            backgroundColor: 'transparent',
-            border: `1px solid ${NSD_COLORS.secondary}`,
-            borderRadius: NSD_RADIUS.md,
-            cursor: 'pointer',
-          }}
-        >
-          <Icon name="runs" size={16} color={NSD_COLORS.secondary} />
-          View Run History
-        </button>
-      </div>
-
-      {/* Run History */}
-      <CampaignRunHistoryTable
-        runs={runsDetailed.length > 0 ? runsDetailed : runs as CampaignRunDetailed[]}
-        id="run-history"
-      />
+      {/* Run History - Option A: Disabled with honest message */}
+      <SectionCard 
+        title="Run History" 
+        icon="runs" 
+        iconColor={NSD_COLORS.text.muted}
+      >
+        <div style={{
+          padding: '24px',
+          textAlign: 'center',
+          color: NSD_COLORS.text.muted,
+          fontSize: '14px',
+        }}>
+          {executionRun ? (
+            <div>
+              <p style={{ margin: 0, marginBottom: '8px' }}>
+                Run history shows only the current execution.
+              </p>
+              <p style={{ margin: 0, fontSize: '12px', color: NSD_COLORS.text.muted }}>
+                Historical run data will be available in a future update.
+              </p>
+            </div>
+          ) : (
+            <p style={{ margin: 0 }}>
+              Run history will appear after execution begins.
+            </p>
+          )}
+        </div>
+      </SectionCard>
 
       {/* Execution Timeline / Activity Feed */}
       <ExecutionTimelineFeed

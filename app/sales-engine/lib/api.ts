@@ -946,13 +946,59 @@ export async function duplicateCampaign(
 }
 
 // =============================================================================
-// REAL-TIME EXECUTION STATUS
-// Queries actual database tables instead of stale ODS events.
+// EXECUTION STATE (CANONICAL - SOLE AUTHORITY)
+// GET /api/v1/campaigns/:id/execution-state
+// 
+// THIS IS THE ONLY SOURCE FOR EXECUTION-RELATED DATA.
+// NO fallbacks to legacy endpoints. NO inference. NO silent failures.
 // =============================================================================
 
 /**
- * Real-time execution status response from actual database tables.
- * This is the DATA AUTHORITY for pipeline counts.
+ * Canonical execution state response.
+ * 
+ * THIS IS THE SOLE EXECUTION AUTHORITY.
+ * All execution-related UI must derive from this type.
+ * 
+ * Source: GET /api/v1/campaigns/:id/execution-state
+ */
+export interface ExecutionState {
+  campaignId: string;
+  run: {
+    id: string;
+    status: string;
+    stage?: string;
+    startedAt?: string;
+    endedAt?: string;
+    terminationReason?: string;
+    errorMessage?: string;
+  } | null;
+  funnel: {
+    organizations: {
+      total: number;
+      qualified: number;
+      review: number;
+      disqualified: number;
+    };
+    contacts: {
+      total: number;
+      sourced: number;
+      ready: number;
+      withEmail: number;
+    };
+    leads: {
+      total: number;
+      pending: number;
+      approved: number;
+    };
+  };
+  lastUpdatedAt: string;
+}
+
+/**
+ * Legacy type alias for migration compatibility.
+ * Maps ExecutionState to the old RealTimeExecutionStatus shape.
+ * 
+ * @deprecated Use ExecutionState directly. This will be removed.
  */
 export interface RealTimeExecutionStatus {
   campaignId: string;
@@ -979,10 +1025,8 @@ export interface RealTimeExecutionStatus {
       sourced: number;
       ready: number;
       withEmail: number;
-      /** Contacts that have been scored for ICP fit */
-      scored: number;
-      /** Contacts with verified email addresses (enriched) */
-      enriched: number;
+      scored?: number;
+      enriched?: number;
     };
     leads: {
       total: number;
@@ -990,14 +1034,14 @@ export interface RealTimeExecutionStatus {
       approved: number;
     };
   };
-  stages: Array<{
+  stages?: Array<{
     stage: string;
     status: 'pending' | 'running' | 'success' | 'error' | 'skipped';
     message: string;
     details?: Record<string, unknown>;
     completedAt?: string;
   }>;
-  alerts: Array<{
+  alerts?: Array<{
     type: 'info' | 'warning' | 'error';
     message: string;
   }>;
@@ -1008,166 +1052,102 @@ export interface RealTimeExecutionStatus {
 }
 
 /**
- * Get real-time campaign execution status.
+ * Get canonical execution state.
  * 
- * This queries the observability funnel endpoint and transforms it into
- * a consistent RealTimeExecutionStatus format. The data comes from actual
- * database tables (organizations, campaign_contacts, leads) via the backend.
+ * THIS IS THE SOLE EXECUTION AUTHORITY.
  * 
- * Use this instead of raw getCampaignObservabilityFunnel when you need
- * structured real-time pipeline counts with alerts.
+ * Calls: GET /api/v1/campaigns/:id/execution-state
+ * 
+ * NO fallbacks to legacy endpoints.
+ * NO inference from events.
+ * If this fails, the UI must show an error state.
  */
-export async function getRealTimeExecutionStatus(id: string): Promise<RealTimeExecutionStatus> {
+export async function getExecutionState(id: string): Promise<ExecutionState> {
+  const endpoint = `/api/v1/campaigns/${id}/execution-state`;
+  
   if (isApiDisabled) {
     return {
       campaignId: id,
-      latestRun: null,
+      run: null,
       funnel: {
         organizations: { total: 0, qualified: 0, review: 0, disqualified: 0 },
-        contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0, scored: 0, enriched: 0 },
+        contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0 },
         leads: { total: 0, pending: 0, approved: 0 },
       },
-      stages: [],
-      alerts: [{ type: 'info', message: 'API disabled for this deployment' }],
+      lastUpdatedAt: new Date().toISOString(),
     };
   }
 
+  console.log('[execution-state] Fetching canonical state:', { campaignId: id });
+
+  const response = await fetch(endpoint, { headers: buildHeaders() });
+
+  // Check for compatibility deprecation warnings
+  const data = await response.json();
+  if (data._compatibility?.deprecated) {
+    console.warn(
+      '[execution-state] Deprecated compatibility endpoint used. Migrate to:',
+      data._compatibility.canonical || endpoint
+    );
+  }
+
+  if (!response.ok) {
+    console.error('[execution-state] Fetch failed:', { campaignId: id, status: response.status });
+    throw new Error(`Execution state unavailable: ${response.status}`);
+  }
+
+  console.log('[execution-state] Canonical state received:', {
+    campaignId: id,
+    runId: data.run?.id ?? 'none',
+    runStatus: data.run?.status ?? 'no_runs',
+  });
+
+  return data as ExecutionState;
+}
+
+/**
+ * Get real-time campaign execution status.
+ * 
+ * @deprecated Use getExecutionState() instead.
+ * This function maps ExecutionState to the legacy RealTimeExecutionStatus shape
+ * for backward compatibility during migration.
+ */
+export async function getRealTimeExecutionStatus(id: string): Promise<RealTimeExecutionStatus> {
   try {
-    // Fetch from observability endpoints (which query actual DB tables)
-    const [funnelResponse, statusResponse, latestRunResponse] = await Promise.allSettled([
-      fetch(`/api/v1/campaigns/${id}/observability/funnel`, { headers: buildHeaders() }),
-      fetch(`/api/v1/campaigns/${id}/observability/status`, { headers: buildHeaders() }),
-      fetch(`/api/v1/campaigns/${id}/runs/latest`, { headers: buildHeaders() }),
-    ]);
-
-    // Parse funnel data
-    let funnel = {
-      organizations: { total: 0, qualified: 0, review: 0, disqualified: 0 },
-      contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0, scored: 0, enriched: 0 },
-      leads: { total: 0, pending: 0, approved: 0 },
-    };
-
-    if (funnelResponse.status === 'fulfilled' && funnelResponse.value.ok) {
-      const funnelData = await funnelResponse.value.json();
-      const stages = funnelData.stages || [];
-      
-      // Map funnel stages to structured counts
-      const stageMap = new Map<string, number>();
-      stages.forEach((s: { stage: string; count: number }) => {
-        stageMap.set(s.stage, s.count);
-      });
-
-      funnel = {
-        organizations: {
-          total: stageMap.get('orgs_sourced') || 0,
-          qualified: stageMap.get('orgs_qualified') || 0,
-          review: stageMap.get('orgs_review') || 0,
-          disqualified: stageMap.get('orgs_disqualified') || 0,
-        },
-        contacts: {
-          total: stageMap.get('contacts_discovered') || 0,
-          sourced: stageMap.get('contacts_sourced') || 0,
-          ready: stageMap.get('contacts_ready') || 0,
-          withEmail: stageMap.get('contacts_with_email') || 0,
-          // NEW: First-class pipeline stages for scoring and enrichment
-          scored: stageMap.get('contacts_scored') || 0,
-          enriched: stageMap.get('contacts_enriched') || 0,
-        },
-        leads: {
-          total: stageMap.get('leads_promoted') || stageMap.get('leads_created') || 0,
-          pending: stageMap.get('leads_pending') || stageMap.get('leads_awaiting_approval') || 0,
-          approved: stageMap.get('leads_approved') || 0,
-        },
-      };
-    }
-
-    // Parse latest run
-    let latestRun: RealTimeExecutionStatus['latestRun'] = null;
-    if (latestRunResponse.status === 'fulfilled' && latestRunResponse.value.ok) {
-      const runData = await latestRunResponse.value.json();
-      if (runData.run_id) {
-        latestRun = {
-          id: runData.run_id,
-          status: runData.status || 'unknown',
-          phase: runData.phase,
-          stage: runData.current_stage,
-          startedAt: runData.created_at,
-          completedAt: runData.updated_at,
-          errorMessage: runData.error_message,
-          terminationReason: runData.failure_reason || runData.reason,
-        };
-      }
-    }
-
-    // Parse status for stages
-    let stages: RealTimeExecutionStatus['stages'] = [];
-    if (statusResponse.status === 'fulfilled' && statusResponse.value.ok) {
-      const statusData = await statusResponse.value.json();
-      if (statusData.stages) {
-        stages = statusData.stages;
-      }
-    }
-
-    // Generate alerts based on state
-    const alerts: RealTimeExecutionStatus['alerts'] = [];
+    const state = await getExecutionState(id);
     
-    // Alert: Contacts exist but no leads - provide stage-aware messaging
-    if (funnel.contacts.total > 0 && funnel.leads.total === 0) {
-      // SEMANTIC ALIGNMENT: Zero leads ≠ zero progress if scoring has occurred
-      if (funnel.contacts.scored > 0) {
-        // Scoring has happened, blocked at enrichment or promotion
-        if (funnel.contacts.enriched === 0) {
-          alerts.push({
-            type: 'info',
-            message: `Contact scoring in progress. ${funnel.contacts.scored.toLocaleString()} of ${funnel.contacts.total.toLocaleString()} contacts scored. Email enrichment pending before leads can be created.`,
-          });
-        } else {
-          alerts.push({
-            type: 'info',
-            message: `Email enrichment in progress. ${funnel.contacts.enriched.toLocaleString()} contacts enriched. Lead promotion pending.`,
-          });
-        }
-      } else {
-        alerts.push({
-          type: 'info',
-          message: 'Contacts sourced. Scoring in progress before leads can be created.',
-        });
-      }
-    }
-
-    // Alert: No organizations yet
-    if (funnel.organizations.total === 0 && latestRun?.status === 'running') {
-      alerts.push({
-        type: 'info',
-        message: 'Organization sourcing in progress.',
-      });
-    }
-
+    // Map canonical ExecutionState to legacy RealTimeExecutionStatus shape
     return {
-      campaignId: id,
-      latestRun,
-      funnel,
-      stages,
-      alerts,
+      campaignId: state.campaignId,
+      latestRun: state.run ? {
+        id: state.run.id,
+        status: state.run.status,
+        stage: state.run.stage,
+        startedAt: state.run.startedAt,
+        completedAt: state.run.endedAt,
+        errorMessage: state.run.errorMessage,
+        terminationReason: state.run.terminationReason,
+      } : null,
+      funnel: {
+        organizations: state.funnel.organizations,
+        contacts: {
+          ...state.funnel.contacts,
+          scored: 0, // Not available in canonical shape
+          enriched: 0, // Not available in canonical shape
+        },
+        leads: state.funnel.leads,
+      },
+      stages: [],
+      alerts: [],
       _meta: {
-        fetchedAt: new Date().toISOString(),
-        source: 'observability-endpoints',
+        fetchedAt: state.lastUpdatedAt,
+        source: 'execution-state-canonical',
       },
     };
   } catch (error) {
     console.error('[API] getRealTimeExecutionStatus error:', error);
-    // Return safe defaults on error
-    return {
-      campaignId: id,
-      latestRun: null,
-      funnel: {
-        organizations: { total: 0, qualified: 0, review: 0, disqualified: 0 },
-        contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0, scored: 0, enriched: 0 },
-        leads: { total: 0, pending: 0, approved: 0 },
-      },
-      stages: [],
-      alerts: [{ type: 'error', message: 'Failed to fetch execution status' }],
-    };
+    // NO FALLBACK - throw the error to surface in UI
+    throw error;
   }
 }
 
