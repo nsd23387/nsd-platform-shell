@@ -9,6 +9,10 @@
  * - ExecutionTimeline: Outcome-oriented timeline of events
  * - NextStepCard: Single advisory recommendation (when applicable)
  * 
+ * CANONICAL DATA SOURCE:
+ * Data should be passed via `run` prop from useRealTimeStatus
+ * which calls GET /api/v1/campaigns/:id/execution-state
+ * 
  * USER EXPERIENCE GOAL:
  * A user can determine in under 10 seconds:
  * - Whether execution happened
@@ -34,16 +38,15 @@ import { NextStepCard } from './NextStepCard';
 /**
  * Props for ExecutionExplainabilityPanel.
  * 
- * DATA SOURCE PRIORITY:
- * 1. If `run` is provided, use it directly (execution-state driven)
- * 2. If `run` is undefined but `campaignId` is provided, fetch via useLatestRunStatus (legacy)
- * 
- * For P1.5 compliance, always pass `run` from executionStatus to avoid legacy endpoint calls.
+ * CANONICAL DATA SOURCE:
+ * - Always pass `run` from useRealTimeStatus/executionStatus to avoid legacy endpoint calls
+ * - If `run` is provided, uses it directly (execution-state driven)
+ * - If `run` is undefined, falls back to useLatestRunStatus (deprecated - will throw)
  */
 interface ExecutionExplainabilityPanelProps {
   campaignId: string;
   compact?: boolean;
-  /** Optional pre-fetched run data from execution-state. If provided, skips internal fetch. */
+  /** Pre-fetched run data from execution-state. REQUIRED for canonical flow. */
   run?: {
     id: string;
     status?: string | null;
@@ -268,11 +271,10 @@ function convertExecutionRunForState(run: NonNullable<ExecutionExplainabilityPan
  * ExecutionExplainabilityPanel - Main component.
  * 
  * DATA SOURCE:
- * - If `run` prop is provided, uses it directly (P1.5 compliant - execution-state driven)
- * - Otherwise falls back to useLatestRunStatus hook (legacy - makes /runs/latest call)
+ * - If `run` prop is provided, uses it directly (canonical - execution-state driven)
+ * - Otherwise falls back to useLatestRunStatus hook (deprecated - will throw error)
  * 
- * For single-source-of-truth compliance, parent components should always pass
- * `run` data from useRealTimeStatus/executionStatus.
+ * For canonical flow, parent components must pass `run` data from useRealTimeStatus.
  */
 export function ExecutionExplainabilityPanel({
   campaignId,
@@ -281,7 +283,8 @@ export function ExecutionExplainabilityPanel({
   noRuns: propNoRuns,
   loading: propLoading,
 }: ExecutionExplainabilityPanelProps) {
-  // Only fetch if run data not provided via props
+  // Only call hook if run data not provided via props
+  // Hook will throw error if called with actual campaignId (see lockdown in useLatestRunStatus)
   const shouldFetch = propRun === undefined && propNoRuns === undefined;
   const hookResult = useLatestRunStatus(shouldFetch ? campaignId : null);
   

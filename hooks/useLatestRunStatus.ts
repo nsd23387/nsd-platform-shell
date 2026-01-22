@@ -211,119 +211,43 @@ export interface LatestRunStatus {
 }
 
 /**
- * Hook to fetch the latest run status for a campaign.
- *
- * This hook:
- * - Fetches /api/v1/campaigns/:id/runs/latest once on mount
- * - Does NOT poll (single fetch per page load)
- * - Handles 200, 204, 404, and 5xx responses
- * - Never throws
- *
- * @param campaignId - The campaign ID to fetch runs for
- * @returns LatestRunStatus object
- *
- * @example
- * ```tsx
- * const { run, noRuns, loading, serviceUnavailable } = useLatestRunStatus(campaignId);
- *
- * if (loading) return <Spinner />;
- * if (serviceUnavailable) return <div>Execution service unavailable</div>;
- * if (noRuns) return <div>This campaign has not been executed yet</div>;
- * if (run) return <RunStatus run={run} />;
- * ```
+ * @deprecated LEGACY HOOK - DO NOT USE
+ * 
+ * This hook called /api/v1/campaigns/:id/runs/latest which is a LEGACY endpoint.
+ * 
+ * USE INSTEAD: useRealTimeStatus from app/sales-engine/hooks/useRealTimeStatus
+ * which calls the canonical /api/v1/campaigns/:id/execution-state endpoint.
+ * 
+ * MIGRATION: Pass `run` data as props from useRealTimeStatus to components
+ * instead of letting components fetch their own execution data.
+ * 
+ * LOCKDOWN: If campaignId is null, returns safe empty state (for compatibility
+ * with components that conditionally skip the fetch). If campaignId is provided,
+ * throws an error to prevent legacy endpoint usage.
  */
 export function useLatestRunStatus(campaignId: string | null): LatestRunStatus {
-  const [run, setRun] = useState<LatestRun | null>(null);
-  const [noRuns, setNoRuns] = useState(false);
-  const [notFound, setNotFound] = useState(false);
-  const [serviceUnavailable, setServiceUnavailable] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | undefined>(undefined);
-
-  const fetchLatestRun = useCallback(async () => {
-    if (!campaignId) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(undefined);
-    setNoRuns(false);
-    setNotFound(false);
-    setServiceUnavailable(false);
-
-    try {
-      // Prefer versioned `/api/v1/*` for governed architecture; fallback to legacy `/api/campaigns/*`
-      // to support safe staged migration if v1 is temporarily unavailable or not deployed everywhere yet.
-      let response: Response;
-      try {
-        response = await fetch(`/api/v1/campaigns/${campaignId}/runs/latest`);
-        if (response.status === 404) {
-          response = await fetch(`/api/campaigns/${campaignId}/runs/latest`);
-        }
-      } catch {
-        response = await fetch(`/api/campaigns/${campaignId}/runs/latest`);
-      }
-
-      // Backwards compatibility: older implementation returned 204 for no runs.
-      if (response.status === 204) {
-        setRun(null);
-        setNoRuns(true);
-        setLoading(false);
-        return;
-      }
-
-      // Handle 404 (campaign not found)
-      if (response.status === 404) {
-        setRun(null);
-        setNotFound(true);
-        setLoading(false);
-        return;
-      }
-
-      // Handle 5xx (service unavailable)
-      if (response.status >= 500) {
-        setRun(null);
-        setServiceUnavailable(true);
-        setError('Execution service unavailable');
-        setLoading(false);
-        return;
-      }
-
-      // Handle non-OK responses
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setError(data.message || `HTTP ${response.status}`);
-        setLoading(false);
-        return;
-      }
-
-      // Parse successful response (supports both legacy and new contract shapes).
-      const data: unknown = await response.json().catch(() => null);
-      const normalized = normalizeLatestRunResponse(data);
-      setNoRuns(normalized.noRuns);
-      setRun(normalized.run);
-      setLoading(false);
-    } catch (err) {
-      console.warn('[useLatestRunStatus] Fetch error:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      setServiceUnavailable(true);
-      setLoading(false);
-    }
-  }, [campaignId]);
-
-  // Fetch on mount (single fetch - no polling)
-  useEffect(() => {
-    fetchLatestRun();
-  }, [fetchLatestRun]);
-
-  return {
-    run,
-    noRuns,
-    notFound,
-    serviceUnavailable,
-    loading,
-    error,
-    refetch: fetchLatestRun,
-  };
+  // Allow null campaignId for conditional skipping (component has prop data)
+  if (campaignId === null) {
+    // Return safe empty state without fetching - component has prop data
+    return {
+      run: null,
+      noRuns: false,
+      notFound: false,
+      serviceUnavailable: false,
+      loading: false,
+      error: undefined,
+      refetch: () => {
+        console.error('[useLatestRunStatus] Legacy hook is deprecated. Use useRealTimeStatus and pass data via props.');
+      },
+    };
+  }
+  
+  // LOCKDOWN: Throw error if called with actual campaignId
+  // This ensures no legacy /runs/latest calls are made
+  throw new Error(
+    `[useLatestRunStatus] DEPRECATED: Legacy execution hook is deprecated and makes calls to /runs/latest. ` +
+    `Use useRealTimeStatus from app/sales-engine/hooks/useRealTimeStatus instead, ` +
+    `which calls the canonical /api/v1/campaigns/:id/execution-state endpoint. ` +
+    `Campaign ID: ${campaignId}`
+  );
 }

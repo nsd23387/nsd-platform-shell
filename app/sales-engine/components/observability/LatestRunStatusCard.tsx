@@ -7,8 +7,11 @@
  * This component displays the latest campaign run status
  * using Sales Engine's canonical read model.
  *
+ * CANONICAL DATA SOURCE:
+ * Data should be passed via `run` prop from useRealTimeStatus
+ * which calls GET /api/v1/campaigns/:id/execution-state
+ *
  * NO inference. NO aggregation. NO execution logic.
- * Only renders exact data from GET /api/v1/campaigns/:id/runs/latest
  *
  * UX Copy (Canonical Messaging Matrix):
  * - Queued: "Execution queued"
@@ -25,20 +28,19 @@ import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import { useLatestRunStatus, type LatestRun, isIncompleteRun, isTimeoutRun, isInvariantViolation } from '../../../../hooks/useLatestRunStatus';
-import { isRunStale, RUN_STALE_THRESHOLD_MS, type ResolvableRun } from '../../lib/resolveActiveRun';
+import { isRunStale, type ResolvableRun } from '../../lib/resolveActiveRun';
 
 /**
  * Props for LatestRunStatusCard.
  * 
- * DATA SOURCE PRIORITY:
- * 1. If `run` is provided, use it directly (execution-state driven)
- * 2. If `run` is undefined but `campaignId` is provided, fetch via useLatestRunStatus (legacy)
- * 
- * For P1.5 compliance, always pass `run` from executionStatus to avoid legacy endpoint calls.
+ * CANONICAL DATA SOURCE:
+ * - Always pass `run` from useRealTimeStatus/executionStatus to avoid legacy endpoint calls
+ * - If `run` is provided, uses it directly (execution-state driven)
+ * - If `run` is undefined, falls back to useLatestRunStatus (deprecated - will throw)
  */
 interface LatestRunStatusCardProps {
   campaignId: string;
-  /** Optional pre-fetched run data from execution-state. If provided, skips internal fetch. */
+  /** Pre-fetched run data from execution-state. REQUIRED for canonical flow. */
   run?: {
     id: string;
     status?: string | null;
@@ -48,7 +50,6 @@ interface LatestRunStatusCardProps {
     errorMessage?: string | null;
     terminationReason?: string | null;
     phase?: string | null;
-    executionMode?: string | null;
   } | null;
   /** True if we know there are no runs (from execution-state) */
   noRuns?: boolean;
@@ -605,7 +606,6 @@ function convertExecutionRunToLatestRun(run: NonNullable<LatestRunStatusCardProp
     failure_reason: run.terminationReason || undefined,
     termination_reason: run.terminationReason || undefined,
     reason: run.terminationReason || undefined,
-    execution_mode: run.executionMode || undefined,
   };
 }
 
@@ -615,11 +615,10 @@ function convertExecutionRunToLatestRun(run: NonNullable<LatestRunStatusCardProp
  * Displays the latest campaign run state using Sales Engine's canonical read model.
  * 
  * DATA SOURCE:
- * - If `run` prop is provided, uses it directly (P1.5 compliant - execution-state driven)
- * - Otherwise falls back to useLatestRunStatus hook (legacy - makes /runs/latest call)
+ * - If `run` prop is provided, uses it directly (canonical - execution-state driven)
+ * - Otherwise falls back to useLatestRunStatus hook (deprecated - will throw error)
  * 
- * For single-source-of-truth compliance, parent components should always pass
- * `run` data from useRealTimeStatus/executionStatus.
+ * For canonical flow, parent components must pass `run` data from useRealTimeStatus.
  */
 export function LatestRunStatusCard({ 
   campaignId, 
@@ -627,7 +626,8 @@ export function LatestRunStatusCard({
   noRuns: propNoRuns,
   loading: propLoading,
 }: LatestRunStatusCardProps) {
-  // Only fetch if run data not provided via props
+  // Only call hook if run data not provided via props
+  // Hook will throw error if called with actual campaignId (see lockdown in useLatestRunStatus)
   const shouldFetch = propRun === undefined && propNoRuns === undefined;
   const hookResult = useLatestRunStatus(shouldFetch ? campaignId : null);
   
@@ -662,8 +662,6 @@ export function LatestRunStatusCard({
   }
 
   // No runs yet
-  // Runtime safety: backend now returns 200 { status: "no_runs" } (no run payload),
-  // and older hook versions may map that into a `run` object with missing fields.
   if (noRuns || run?.status?.toLowerCase?.() === 'no_runs') {
     return <NoRunsCard />;
   }

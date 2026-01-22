@@ -56,13 +56,13 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
     };
   }
 
-  const { latestRun, funnel, alerts, stages } = status;
+  const { latestRun, funnel, alerts = [], stages = [] } = status;
   const runStatus = latestRun?.status?.toLowerCase() || 'idle';
 
   // RUNNING STATE
   if (runStatus === 'running' || runStatus === 'in_progress' || runStatus === 'queued') {
     const totalProcessed = funnel.organizations.total + funnel.contacts.total + funnel.leads.total;
-    const currentStage = latestRun?.stage || stages.find(s => s.status === 'running')?.stage;
+    const currentStage = latestRun?.stage || stages?.find(s => s.status === 'running')?.stage;
     
     return {
       type: 'info',

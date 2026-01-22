@@ -3,26 +3,106 @@
 /**
  * useRealTimeStatus Hook
  * 
- * Provides real-time execution status with lightweight caching and TTL.
- * This hook is the primary interface for the DATA AUTHORITY pattern.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EXECUTION AUTHORITY CONTRACT
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * INVARIANT: Execution truth comes ONLY from sales-engine.
+ * 
+ * Platform-shell is a PURE CONSUMER of execution data.
+ * This hook must NEVER:
+ * - Infer execution state from events
+ * - Query legacy endpoints (/runs, /observability/*)
+ * - Compute status transitions locally
+ * - Reconstruct run history from activity
+ * 
+ * ALLOWED:
+ * - GET /api/v1/campaigns/:id/execution-state (via proxy)
+ * - GET /api/v1/campaigns/:id/run-history (via proxy)
+ * 
+ * FORBIDDEN:
+ * - GET /api/v1/campaigns/:id/runs
+ * - GET /api/v1/campaigns/:id/runs/latest  
+ * - GET /api/v1/campaigns/:id/observability/*
+ * - Any local database queries for execution data
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * DATA SOURCE: 
+ * - Proxy: GET /api/proxy/execution-state?campaignId=xxx
+ * - Target: GET ${SALES_ENGINE_URL}/api/v1/campaigns/:id/execution-state
  * 
  * CACHING STRATEGY:
  * - In-memory cache per campaign with TTL (default: 7 seconds)
- * - Automatic invalidation when:
- *   - Run completes or fails
- *   - Campaign ID changes
- *   - TTL expires
- * - Only caches while run is in active state
- * 
- * PERFORMANCE:
- * - Prevents excessive polling
- * - Maintains data freshness
- * - No backend caching (client-side only)
+ * - Automatic invalidation on terminal states
  * - No stale UI risks (TTL ensures refresh)
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getRealTimeExecutionStatus, type RealTimeExecutionStatus } from '../lib/api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { getExecutionState, type ExecutionState, type RealTimeExecutionStatus } from '../lib/api';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXECUTION AUTHORITY GUARDRAILS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Dev-only warning for legacy endpoint detection.
+ * This helps catch architecture violations during development.
+ */
+function warnIfLegacyEndpoint(url: string): void {
+  if (process.env.NODE_ENV !== 'production') {
+    const legacyPatterns = [
+      '/runs/latest',
+      '/observability/status',
+      '/observability/funnel',
+      '/campaign-runs',
+    ];
+    
+    for (const pattern of legacyPatterns) {
+      if (url.includes(pattern)) {
+        console.error(
+          `[EXECUTION AUTHORITY VIOLATION] Legacy endpoint detected: ${url}\n` +
+          `Execution truth comes ONLY from sales-engine via /execution-state.\n` +
+          `Remove this call and use getExecutionState() instead.`
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Map ExecutionState (canonical) to RealTimeExecutionStatus (UI-compatible).
+ * This maintains backward compatibility with existing UI components.
+ */
+function mapToRealTimeStatus(state: ExecutionState): RealTimeExecutionStatus {
+  return {
+    campaignId: state.campaignId,
+    latestRun: state.run ? {
+      id: state.run.id,
+      status: state.run.status,
+      stage: state.run.stage,
+      startedAt: state.run.startedAt,
+      completedAt: state.run.endedAt,
+      errorMessage: state.run.errorMessage,
+      terminationReason: state.run.terminationReason,
+    } : null,
+    funnel: {
+      organizations: state.funnel.organizations,
+      contacts: {
+        ...state.funnel.contacts,
+        scored: 0,
+        enriched: 0,
+      },
+      leads: state.funnel.leads,
+    },
+    stages: [],
+    alerts: [],
+    _meta: {
+      fetchedAt: state.lastUpdatedAt,
+      source: 'sales-engine-canonical',
+    },
+  };
+}
 
 interface CacheEntry {
   data: RealTimeExecutionStatus;
@@ -112,7 +192,7 @@ export function useRealTimeStatus({
   const lastCampaignIdRef = useRef<string>(campaignId);
 
   /**
-   * Fetch fresh data, optionally bypassing cache.
+   * Fetch fresh data from sales-engine, optionally bypassing cache.
    */
   const fetchStatus = useCallback(async (bypassCache = false): Promise<RealTimeExecutionStatus | null> => {
     // Check cache first (unless bypassing)
@@ -124,9 +204,10 @@ export function useRealTimeStatus({
       }
     }
 
-    // Fetch fresh data
+    // Fetch fresh data from sales-engine via proxy
     try {
-      const data = await getRealTimeExecutionStatus(campaignId);
+      const executionState = await getExecutionState(campaignId);
+      const data = mapToRealTimeStatus(executionState);
       
       // Update cache
       statusCache.set(campaignId, {
