@@ -96,3 +96,8 @@ export type { ThroughputIndicatorProps, ThroughputStats } from './ThroughputIndi
 // Stage Display (P1 Incremental)
 export { CurrentStageIndicator } from './CurrentStageIndicator';
 export type { default as CurrentStageIndicatorDefault } from './CurrentStageIndicator';
+
+// Run History v2 (Canonical - from sales-engine)
+// EXECUTION AUTHORITY: Sales-engine is the sole source of run history
+export { RunHistoryPanel } from './RunHistoryPanel';
+export type { default as RunHistoryPanelDefault } from './RunHistoryPanel';

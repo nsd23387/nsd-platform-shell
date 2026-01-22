@@ -3,14 +3,33 @@
 /**
  * Campaign Detail Page
  * 
- * Displays campaign details, metrics, and action buttons.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EXECUTION AUTHORITY CONTRACT
+ * ═══════════════════════════════════════════════════════════════════════════
  * 
- * EXECUTION DATA AUTHORITY (CANONICAL):
- * All execution-related data flows through useRealTimeStatus,
- * which calls /execution-state (the SOLE source of execution truth).
+ * INVARIANT: Execution truth comes ONLY from sales-engine.
  * 
- * NO legacy endpoints: /observability/*, /runs/latest, /runs
- * NO fallback logic. If execution-state fails, show error state.
+ * This page is a PURE CONSUMER of execution data.
+ * 
+ * ALLOWED EXECUTION ENDPOINTS:
+ * - GET /api/v1/campaigns/:id/execution-state (current run + funnel)
+ * - GET /api/v1/campaigns/:id/run-history (historical runs)
+ * 
+ * FORBIDDEN (DO NOT ADD):
+ * - GET /api/v1/campaigns/:id/runs
+ * - GET /api/v1/campaigns/:id/runs/latest  
+ * - GET /api/v1/campaigns/:id/observability/*
+ * - Any local database queries for execution data
+ * - Inference or reconstruction of execution state
+ * 
+ * DATA FLOW:
+ * sales-engine → proxy → useRealTimeStatus → UI components
+ * 
+ * ERROR HANDLING:
+ * If sales-engine is unreachable, show explicit error state.
+ * Do NOT fallback to legacy endpoints.
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -68,6 +87,7 @@ import {
   ExecutionHealthBanner,
   ExecutionDataSourceBadge,
   CurrentStageIndicator,
+  RunHistoryPanel,
   type ExecutionEvent,
   type ApprovalAwarenessState,
 } from '../../components/observability';
@@ -857,34 +877,9 @@ function MonitoringTab({
         </div>
       </div>
 
-      {/* Run History - Option A: Disabled with honest message */}
-      <SectionCard 
-        title="Run History" 
-        icon="runs" 
-        iconColor={NSD_COLORS.text.muted}
-      >
-        <div style={{
-          padding: '24px',
-          textAlign: 'center',
-          color: NSD_COLORS.text.muted,
-          fontSize: '14px',
-        }}>
-          {executionRun ? (
-            <div>
-              <p style={{ margin: 0, marginBottom: '8px' }}>
-                Run history shows only the current execution.
-              </p>
-              <p style={{ margin: 0, fontSize: '12px', color: NSD_COLORS.text.muted }}>
-                Historical run data will be available in a future update.
-              </p>
-            </div>
-          ) : (
-            <p style={{ margin: 0 }}>
-              Run history will appear after execution begins.
-            </p>
-          )}
-        </div>
-      </SectionCard>
+      {/* Run History v2 - From sales-engine (canonical source) */}
+      {/* EXECUTION AUTHORITY: Sales-engine is the sole source of run history */}
+      <RunHistoryPanel campaignId={campaign.id} />
 
       {/* Execution Timeline / Activity Feed */}
       <ExecutionTimelineFeed

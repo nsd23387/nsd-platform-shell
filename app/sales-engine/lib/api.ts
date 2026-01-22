@@ -1,17 +1,34 @@
 /**
  * Sales Engine API Client - Target-State Architecture
  * 
- * This module provides a READ-ONLY API client for the Sales Engine UI.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EXECUTION AUTHORITY CONTRACT
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * INVARIANT: Execution truth comes ONLY from sales-engine.
+ * 
+ * Platform-shell is a PURE CONSUMER of execution data.
+ * 
+ * ALLOWED EXECUTION ENDPOINTS:
+ * - getExecutionState()  → GET /api/v1/campaigns/:id/execution-state
+ * - getRunHistory()      → GET /api/v1/campaigns/:id/run-history
+ * 
+ * FORBIDDEN (DO NOT ADD):
+ * - GET /api/v1/campaigns/:id/runs
+ * - GET /api/v1/campaigns/:id/runs/latest  
+ * - GET /api/v1/campaigns/:id/observability/*
+ * - Any local database queries for execution data
+ * - Inference or reconstruction of execution state
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
  * 
  * Non-negotiable constraints:
- * - Only GET requests are allowed from the UI layer
- * - All mutation functions have been removed or replaced with read-only alternatives
- * - Execution is observed, not initiated
- * - Canonical ODS is the source of truth
+ * - Only GET requests for read-only display
+ * - Execution is observed from sales-engine, not computed locally
+ * - If sales-engine is unreachable, show error (no fallback)
  * 
  * M67.9-01 Vercel Hosting:
  * - When NEXT_PUBLIC_API_MODE=disabled, all API calls return empty/mock data
- * - No network calls are made when API mode is disabled
  */
 
 import type {
@@ -994,6 +1011,53 @@ export interface ExecutionState {
   lastUpdatedAt: string;
 }
 
+// =============================================================================
+// RUN HISTORY (CANONICAL - FROM SALES-ENGINE)
+// GET /api/v1/campaigns/:id/run-history
+// 
+// EXECUTION AUTHORITY CONTRACT:
+// - Sales-engine is the SOLE source of run history
+// - Platform-shell displays what sales-engine provides
+// - NO inference, grouping, or reconstruction
+// - NO fallback to legacy endpoints
+// =============================================================================
+
+/**
+ * A single historical run from sales-engine.
+ * 
+ * EXECUTION AUTHORITY: Sales-engine is the sole source.
+ * Display only what the backend provides.
+ */
+export interface HistoricalRun {
+  id: string;
+  status: string;
+  startedAt: string;
+  endedAt?: string;
+  terminationReason?: string;
+  errorMessage?: string;
+  /** Summary counts at time of run completion */
+  summary?: {
+    organizationsSourced?: number;
+    contactsDiscovered?: number;
+    leadsPromoted?: number;
+  };
+}
+
+/**
+ * Run history response from sales-engine.
+ * 
+ * EXECUTION AUTHORITY CONTRACT:
+ * - If available=false, show "Run history not available yet"
+ * - Do NOT fallback to legacy endpoints
+ * - Do NOT reconstruct runs from events
+ */
+export interface RunHistoryResponse {
+  campaignId: string;
+  runs: HistoricalRun[];
+  available: boolean;
+  lastUpdatedAt?: string;
+}
+
 /**
  * Legacy type alias for migration compatibility.
  * Maps ExecutionState to the old RealTimeExecutionStatus shape.
@@ -1103,6 +1167,74 @@ export async function getExecutionState(id: string): Promise<ExecutionState> {
   });
 
   return data as ExecutionState;
+}
+
+/**
+ * Get run history from sales-engine.
+ * 
+ * EXECUTION AUTHORITY CONTRACT:
+ * - Sales-engine is the SOLE source of run history
+ * - Platform-shell displays what sales-engine provides
+ * - NO inference, grouping, or reconstruction
+ * - NO fallback to legacy endpoints (/runs, /campaign-runs, etc.)
+ * 
+ * Proxy: GET /api/proxy/run-history?campaignId=xxx
+ * Target: GET ${SALES_ENGINE_URL}/api/v1/campaigns/:id/run-history
+ * 
+ * If endpoint is unavailable:
+ * - Returns { available: false, runs: [] }
+ * - UI should show "Run history not available yet"
+ * - Do NOT attempt fallback or reconstruction
+ */
+export async function getRunHistory(id: string): Promise<RunHistoryResponse> {
+  const endpoint = `/api/proxy/run-history?campaignId=${encodeURIComponent(id)}`;
+  
+  if (isApiDisabled) {
+    return {
+      campaignId: id,
+      runs: [],
+      available: false,
+    };
+  }
+
+  console.log('[getRunHistory] Fetching from sales-engine:', { campaignId: id });
+
+  try {
+    const response = await fetch(endpoint, { headers: buildHeaders() });
+    const data = await response.json();
+
+    // Handle graceful unavailability (endpoint not implemented yet)
+    if (!data.available) {
+      console.log('[getRunHistory] Not available yet:', { campaignId: id });
+      return {
+        campaignId: id,
+        runs: [],
+        available: false,
+      };
+    }
+
+    console.log('[getRunHistory] Received from sales-engine:', {
+      campaignId: id,
+      runCount: data.runs?.length ?? 0,
+      available: data.available,
+    });
+
+    return {
+      campaignId: id,
+      runs: data.runs || [],
+      available: true,
+      lastUpdatedAt: data.lastUpdatedAt,
+    };
+  } catch (error) {
+    console.error('[getRunHistory] Fetch failed:', { campaignId: id, error });
+    // Return unavailable state - do NOT throw
+    // UI should handle gracefully, not show error
+    return {
+      campaignId: id,
+      runs: [],
+      available: false,
+    };
+  }
 }
 
 // =============================================================================

@@ -3,15 +3,30 @@
 /**
  * useRealTimeStatus Hook
  * 
- * CANONICAL EXECUTION STATE HOOK
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EXECUTION AUTHORITY CONTRACT
+ * ═══════════════════════════════════════════════════════════════════════════
  * 
- * Provides execution status from sales-engine with lightweight caching and TTL.
- * This hook is the primary interface for the DATA AUTHORITY pattern.
+ * INVARIANT: Execution truth comes ONLY from sales-engine.
  * 
- * ARCHITECTURAL CONSTRAINT:
- * - Sales-engine is the SOLE execution authority
- * - Platform-shell does NOT implement execution logic
- * - Data flows: sales-engine → proxy → this hook → UI components
+ * Platform-shell is a PURE CONSUMER of execution data.
+ * This hook must NEVER:
+ * - Infer execution state from events
+ * - Query legacy endpoints (/runs, /observability/*)
+ * - Compute status transitions locally
+ * - Reconstruct run history from activity
+ * 
+ * ALLOWED:
+ * - GET /api/v1/campaigns/:id/execution-state (via proxy)
+ * - GET /api/v1/campaigns/:id/run-history (via proxy)
+ * 
+ * FORBIDDEN:
+ * - GET /api/v1/campaigns/:id/runs
+ * - GET /api/v1/campaigns/:id/runs/latest  
+ * - GET /api/v1/campaigns/:id/observability/*
+ * - Any local database queries for execution data
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
  * 
  * DATA SOURCE: 
  * - Proxy: GET /api/proxy/execution-state?campaignId=xxx
@@ -19,21 +34,41 @@
  * 
  * CACHING STRATEGY:
  * - In-memory cache per campaign with TTL (default: 7 seconds)
- * - Automatic invalidation when:
- *   - Run completes or fails
- *   - Campaign ID changes
- *   - TTL expires
- * - Only caches while run is in active state
- * 
- * PERFORMANCE:
- * - Prevents excessive polling
- * - Maintains data freshness
- * - No backend caching (client-side only)
+ * - Automatic invalidation on terminal states
  * - No stale UI risks (TTL ensures refresh)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getExecutionState, type ExecutionState, type RealTimeExecutionStatus } from '../lib/api';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXECUTION AUTHORITY GUARDRAILS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Dev-only warning for legacy endpoint detection.
+ * This helps catch architecture violations during development.
+ */
+function warnIfLegacyEndpoint(url: string): void {
+  if (process.env.NODE_ENV !== 'production') {
+    const legacyPatterns = [
+      '/runs/latest',
+      '/observability/status',
+      '/observability/funnel',
+      '/campaign-runs',
+    ];
+    
+    for (const pattern of legacyPatterns) {
+      if (url.includes(pattern)) {
+        console.error(
+          `[EXECUTION AUTHORITY VIOLATION] Legacy endpoint detected: ${url}\n` +
+          `Execution truth comes ONLY from sales-engine via /execution-state.\n` +
+          `Remove this call and use getExecutionState() instead.`
+        );
+      }
+    }
+  }
+}
 
 /**
  * Map ExecutionState (canonical) to RealTimeExecutionStatus (UI-compatible).
