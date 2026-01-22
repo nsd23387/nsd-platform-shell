@@ -75,6 +75,7 @@ import {
   ExecutionDataSourceBadge,
   CampaignProgressCard,
   LastRunImpactSummary,
+  CurrentStageIndicator,
   type ExecutionEvent,
   type ApprovalAwarenessState,
 } from '../../components/observability';
@@ -763,6 +764,15 @@ function OverviewTab({
             lastUpdatedAt={lastUpdatedAt}
             pollingInterval={7000}
             onRefresh={onRefresh}
+          />
+
+          {/* Current Stage Indicator (P1) - Simple stage name and elapsed time
+              Data source: execution-state.run.stage (via realTimeStatus.latestRun.stage)
+              Hidden when stage is null */}
+          <CurrentStageIndicator
+            stage={realTimeStatus?.latestRun?.stage}
+            runStartedAt={realTimeStatus?.latestRun?.startedAt || latestRun?.started_at}
+            isRunning={runStatus === 'running' || runStatus === 'in_progress' || runStatus === 'queued'}
           />
 
           {/* Active Stage Focus Panel - What is the system doing right now? */}

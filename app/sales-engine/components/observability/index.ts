@@ -92,3 +92,7 @@ export type { WhyPausedExplainerProps } from './WhyPausedExplainer';
 
 export { ThroughputIndicator } from './ThroughputIndicator';
 export type { ThroughputIndicatorProps, ThroughputStats } from './ThroughputIndicator';
+
+// Stage Display (P1 Incremental)
+export { CurrentStageIndicator } from './CurrentStageIndicator';
+export type { default as CurrentStageIndicatorDefault } from './CurrentStageIndicator';
