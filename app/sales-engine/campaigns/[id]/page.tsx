@@ -79,12 +79,14 @@ export default function CampaignDetailPage() {
   // ============================================
   // CANONICAL EXECUTION STATE
   // This is the ONLY source of execution truth
+  // Uses PROXY endpoint: /api/proxy/execution-state
   // ============================================
   const { 
     state: executionState, 
     loading: executionLoading, 
     refreshing: executionRefreshing,
     error: executionError,
+    isTerminalError: executionTerminalError,
     refresh: refreshExecution,
     lastFetchedAt,
   } = useExecutionState({
@@ -241,6 +243,49 @@ export default function CampaignDetailPage() {
           backHref="/sales-engine"
           backLabel="Back to Campaigns"
         />
+
+        {/* Execution Service Warning Banner */}
+        {executionTerminalError && (
+          <div style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            backgroundColor: NSD_COLORS.semantic.attention.bg,
+            borderRadius: NSD_RADIUS.md,
+            border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Icon name="warning" size={18} color={NSD_COLORS.semantic.attention.text} />
+              <div>
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: 500, color: NSD_COLORS.semantic.attention.text }}>
+                  Execution service unavailable
+                </p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: NSD_COLORS.semantic.attention.text, opacity: 0.8 }}>
+                  {executionError || 'Unable to fetch real-time execution status. Showing cached or default state.'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={refreshExecution}
+              disabled={executionRefreshing}
+              style={{
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: 500,
+                backgroundColor: 'transparent',
+                color: NSD_COLORS.semantic.attention.text,
+                border: `1px solid ${NSD_COLORS.semantic.attention.text}`,
+                borderRadius: NSD_RADIUS.sm,
+                cursor: executionRefreshing ? 'not-allowed' : 'pointer',
+                opacity: executionRefreshing ? 0.6 : 1,
+              }}
+            >
+              {executionRefreshing ? 'Retrying...' : 'Retry'}
+            </button>
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: `1px solid ${NSD_COLORS.border.light}` }}>

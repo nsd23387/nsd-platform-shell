@@ -5,12 +5,22 @@
  * 
  * This hook is the ONLY way the UI should access execution state.
  * 
+ * ARCHITECTURE:
+ * - Uses PROXY endpoint: /api/proxy/execution-state?campaignId=...
+ * - Proxy forwards to Sales Engine (the sole execution authority)
+ * - NO direct calls to /api/v1/* execution routes
+ * 
  * CONTRACT (NON-NEGOTIABLE):
- * - Single fetch to /api/v1/campaigns/:id/execution-state
+ * - Single fetch via proxy to sales-engine
  * - No fallbacks to other endpoints
  * - No reconstruction of state from events
  * - No reconciliation with other data sources
  * - If execution-state returns empty, UI shows empty
+ * 
+ * ERROR HANDLING:
+ * - 404/non-retryable errors → stop polling, show clear message
+ * - Exponential backoff on transient errors
+ * - Terminal error state prevents infinite loops
  * 
  * UI RENDERING RULES (based on executionState.run):
  * - run === null → "Ready for execution"
@@ -23,6 +33,18 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+
+/**
+ * Error types for execution state fetching.
+ * Used to determine retry behavior.
+ */
+type FetchErrorType = 'not_found' | 'server_error' | 'network_error' | 'unknown';
+
+interface FetchError {
+  type: FetchErrorType;
+  message: string;
+  retryable: boolean;
+}
 
 /**
  * Canonical run status values.
@@ -106,6 +128,8 @@ export interface UseExecutionStateResult {
   refreshing: boolean;
   /** Error message if fetch failed */
   error: string | null;
+  /** Whether the error is terminal (no retries) */
+  isTerminalError: boolean;
   /** Force refresh the execution state */
   refresh: () => Promise<void>;
   /** Last successful fetch timestamp */
@@ -132,17 +156,77 @@ interface UseExecutionStateOptions {
 }
 
 /**
- * Fetch execution state from the canonical endpoint.
- * NO FALLBACKS. NO RECONSTRUCTION. SINGLE SOURCE OF TRUTH.
+ * Classify fetch errors for retry behavior.
  */
-async function fetchExecutionState(campaignId: string): Promise<ExecutionState> {
-  const response = await fetch(`/api/v1/campaigns/${campaignId}/execution-state`);
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch execution state: ${response.status}`);
+function classifyError(status: number, message: string): FetchError {
+  if (status === 404) {
+    return {
+      type: 'not_found',
+      message: 'Execution state endpoint not available',
+      retryable: false, // 404 = endpoint doesn't exist, don't retry
+    };
   }
-  
-  return response.json();
+  if (status >= 500) {
+    return {
+      type: 'server_error',
+      message: `Server error: ${status}`,
+      retryable: true, // Server errors may be transient
+    };
+  }
+  if (status === 0 || message.includes('fetch')) {
+    return {
+      type: 'network_error',
+      message: 'Network error - check connection',
+      retryable: true,
+    };
+  }
+  return {
+    type: 'unknown',
+    message: message || 'Unknown error',
+    retryable: false,
+  };
+}
+
+/**
+ * Fetch execution state from the PROXY endpoint.
+ * 
+ * ARCHITECTURE:
+ * - Uses /api/proxy/execution-state (NOT /api/v1/campaigns/:id/execution-state)
+ * - Proxy forwards to Sales Engine which is the sole execution authority
+ * - NO direct calls to execution routes
+ */
+async function fetchExecutionState(campaignId: string): Promise<{ data: ExecutionState | null; error: FetchError | null }> {
+  try {
+    // USE PROXY ENDPOINT - not direct /api/v1/* routes
+    const response = await fetch(`/api/proxy/execution-state?campaignId=${encodeURIComponent(campaignId)}`);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = classifyError(response.status, errorData.message || errorData.error || '');
+      return { data: null, error };
+    }
+    
+    const data = await response.json();
+    
+    // Normalize the response to match ExecutionState interface
+    const normalizedState: ExecutionState = {
+      campaignId: data.campaignId || campaignId,
+      run: data.run || null,
+      funnel: data.funnel || EMPTY_FUNNEL,
+      _meta: {
+        fetchedAt: new Date().toISOString(),
+        source: 'execution-state',
+      },
+    };
+    
+    return { data: normalizedState, error: null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return { 
+      data: null, 
+      error: classifyError(0, message),
+    };
+  }
 }
 
 /**
@@ -150,10 +234,11 @@ async function fetchExecutionState(campaignId: string): Promise<ExecutionState> 
  * 
  * USAGE:
  * ```tsx
- * const { state, loading, error, refresh } = useExecutionState({ campaignId });
+ * const { state, loading, error, isTerminalError, refresh } = useExecutionState({ campaignId });
  * 
  * if (loading) return <Loading />;
- * if (error) return <Error message={error} />;
+ * if (isTerminalError) return <EndpointNotAvailable />;
+ * if (error) return <Error message={error} onRetry={refresh} />;
  * 
  * // state.run === null means "Ready for execution"
  * // state.run.status === "running" means show stage
@@ -169,62 +254,97 @@ export function useExecutionState({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isTerminalError, setIsTerminalError] = useState(false);
   const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null);
   
   const mountedRef = useRef(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
 
   /**
-   * Fetch execution state.
+   * Clear polling interval safely.
+   */
+  const clearPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Fetch execution state with error handling.
    * This is the ONLY data fetching this hook does.
    */
   const doFetch = useCallback(async (isRefresh = false) => {
     if (!campaignId || !enabled) return;
     
+    // Don't fetch if we've hit a terminal error
+    if (isTerminalError && !isRefresh) return;
+    
     if (isRefresh) {
       setRefreshing(true);
+      // Manual refresh resets terminal error state
+      setIsTerminalError(false);
+      retryCountRef.current = 0;
     } else {
       setLoading(true);
     }
-    setError(null);
 
-    try {
-      const data = await fetchExecutionState(campaignId);
+    const { data, error: fetchError } = await fetchExecutionState(campaignId);
+    
+    if (!mountedRef.current) return;
+
+    if (fetchError) {
+      console.error('[useExecutionState] Fetch error:', fetchError);
+      setError(fetchError.message);
       
-      if (mountedRef.current) {
-        setState(data);
-        setLastFetchedAt(new Date().toISOString());
+      if (!fetchError.retryable) {
+        // Terminal error - stop all polling, don't retry
+        setIsTerminalError(true);
+        clearPolling();
+        console.warn('[useExecutionState] Terminal error - polling stopped:', fetchError.message);
+      } else {
+        // Retryable error - increment counter
+        retryCountRef.current += 1;
+        if (retryCountRef.current >= maxRetries) {
+          setIsTerminalError(true);
+          clearPolling();
+          console.warn('[useExecutionState] Max retries reached - polling stopped');
+        }
       }
-    } catch (err) {
-      if (mountedRef.current) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        setError(message);
-        console.error('[useExecutionState] Fetch error:', err);
-        
-        // On error, set default state instead of null
-        // This ensures UI can render "Ready for execution" state
-        setState({
-          campaignId,
-          run: null,
-          funnel: EMPTY_FUNNEL,
-          _meta: {
-            fetchedAt: new Date().toISOString(),
-            source: 'execution-state',
-          },
-        });
-      }
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-        setRefreshing(false);
-      }
+      
+      // On error, set default state so UI can render
+      setState({
+        campaignId,
+        run: null,
+        funnel: EMPTY_FUNNEL,
+        _meta: {
+          fetchedAt: new Date().toISOString(),
+          source: 'execution-state',
+        },
+      });
+    } else if (data) {
+      // Success - reset error state and retry counter
+      setState(data);
+      setLastFetchedAt(new Date().toISOString());
+      setError(null);
+      setIsTerminalError(false);
+      retryCountRef.current = 0;
     }
-  }, [campaignId, enabled]);
+
+    setLoading(false);
+    setRefreshing(false);
+  }, [campaignId, enabled, isTerminalError, clearPolling]);
 
   /**
    * Manual refresh function.
+   * Resets error state and retries.
    */
   const refresh = useCallback(async () => {
+    retryCountRef.current = 0;
+    setIsTerminalError(false);
+    setError(null);
     await doFetch(true);
   }, [doFetch]);
 
@@ -233,27 +353,28 @@ export function useExecutionState({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      clearPolling();
     };
-  }, []);
+  }, [clearPolling]);
 
   // Initial fetch
   useEffect(() => {
-    if (enabled && campaignId) {
+    if (enabled && campaignId && !isTerminalError) {
       doFetch(false);
     }
-  }, [enabled, campaignId, doFetch]);
+  }, [enabled, campaignId, doFetch, isTerminalError]);
 
-  // Optional polling (only for running state)
+  // Optional polling (only for running state, and only if no terminal error)
   useEffect(() => {
     // Clear existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+    clearPolling();
+
+    // Don't poll if terminal error
+    if (isTerminalError) return;
 
     // Only poll if enabled, interval is set, and run is active
     const isRunning = state?.run?.status === 'running' || state?.run?.status === 'queued';
-    const shouldPoll = enabled && pollingIntervalMs > 0 && isRunning;
+    const shouldPoll = enabled && pollingIntervalMs > 0 && isRunning && !error;
 
     if (shouldPoll) {
       intervalRef.current = setInterval(() => {
@@ -261,19 +382,15 @@ export function useExecutionState({
       }, pollingIntervalMs);
     }
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [enabled, pollingIntervalMs, state?.run?.status, doFetch]);
+    return clearPolling;
+  }, [enabled, pollingIntervalMs, state?.run?.status, error, isTerminalError, doFetch, clearPolling]);
 
   return {
     state,
     loading,
     refreshing,
     error,
+    isTerminalError,
     refresh,
     lastFetchedAt,
   };
