@@ -41,6 +41,15 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 23, 2026: Campaign Details UX Enhancement Pass (Post-M68)
+  - Enhanced PrimaryCampaignStatusBanner: Increased padding (28px 32px), larger headline (26px/700 weight), left border accent, phase-aware shadows, pulse animation for running state
+  - Polished DecisionSummaryPanel: Distinct card with gradient header, overflow hidden, dominant primary CTA with shadow (12px 28px padding, 15px font)
+  - Improved ExecutionTimeline: Better vertical rhythm (28px connectors), compressed completed stages in retrospective view, emphasized terminal stage with outer ring shadow (44px circle), styled duration badges as pills
+  - Enhanced CampaignOutcomeSummary: Run report framing with "Execution Outcome" label, duration badge in header, larger metrics (28px, -0.02em letter-spacing)
+  - Added Campaign Thesis callout styling: Decorative quotation mark, surface background, left border accent, italic text (16px)
+  - Refined empty states: Pre-execution timeline with dashed border and clock icon, CampaignIntentScope with centered icon and calm messaging
+  - Added interaction polish: Subtle 0.2s transitions on interactive elements, hover states without complex animations
+
 - January 20, 2026: Comprehensive UX/UI Redesign (Minimalist Neon-Focused)
   - Added NSD_GLOW, NSD_GRADIENTS, NSD_TRANSITIONS design tokens for neon-inspired effects
   - Added gradient accent bar at top of all major pages (magenta → violet brand gradient)
