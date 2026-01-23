@@ -6,6 +6,8 @@ import { Icon } from '../../../../design/components/Icon';
 
 interface SectionCardProps {
   title?: string;
+  /** Optional subtitle shown below title in smaller text */
+  subtitle?: string;
   icon?: string;
   iconColor?: string;
   headerAction?: ReactNode;
@@ -13,7 +15,7 @@ interface SectionCardProps {
   padding?: 'sm' | 'md' | 'lg';
 }
 
-export function SectionCard({ title, icon, iconColor, headerAction, children, padding = 'lg' }: SectionCardProps) {
+export function SectionCard({ title, subtitle, icon, iconColor, headerAction, children, padding = 'lg' }: SectionCardProps) {
   const paddingMap = { sm: '16px', md: '20px', lg: '24px' };
   
   return (
@@ -37,16 +39,23 @@ export function SectionCard({ title, icon, iconColor, headerAction, children, pa
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             {icon && <Icon name={icon as any} size={20} color={iconColor || NSD_COLORS.secondary} />}
-            <h3
-              style={{
-                margin: 0,
-                ...NSD_TYPOGRAPHY.heading4,
-                color: NSD_COLORS.text.primary,
-                fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-              }}
-            >
-              {title}
-            </h3>
+            <div>
+              <h3
+                style={{
+                  margin: 0,
+                  ...NSD_TYPOGRAPHY.heading4,
+                  color: NSD_COLORS.text.primary,
+                  fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+                }}
+              >
+                {title}
+              </h3>
+              {subtitle && (
+                <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: NSD_COLORS.text.muted }}>
+                  {subtitle}
+                </p>
+              )}
+            </div>
           </div>
           {headerAction}
         </div>

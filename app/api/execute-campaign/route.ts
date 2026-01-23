@@ -11,6 +11,11 @@
  * - The canonical execution endpoint lives in nsd-sales-engine
  * - platform-shell emits NO execution events, generates NO run IDs
  *
+ * OBSERVATIONS-FIRST ARCHITECTURE:
+ * - runIntent is passed through to control execution behavior
+ * - HARVEST_ONLY = observe market, collect data, NO emails
+ * - ACTIVATE = full execution with email dispatch
+ *
  * CONFIGURATION:
  * - SALES_ENGINE_URL (required): Base URL of nsd-sales-engine
  *   Example: https://nsd-sales-engine.vercel.app
@@ -76,7 +81,7 @@ export async function POST(req: Request) {
   try {
     // Parse request body
     const body = await req.json().catch(() => ({}));
-    const { campaignId } = body;
+    const { campaignId, runIntent } = body;
 
     // Validate campaignId
     if (!campaignId) {
@@ -93,6 +98,16 @@ export async function POST(req: Request) {
       console.error('[execute-campaign proxy] Invalid campaignId format:', campaignId);
       return NextResponse.json(
         { error: 'INVALID_CAMPAIGN_ID', message: 'campaignId must be a valid UUID' },
+        { status: 400 }
+      );
+    }
+
+    // Validate runIntent if provided
+    const validIntents = ['HARVEST_ONLY', 'ACTIVATE'];
+    if (runIntent && !validIntents.includes(runIntent)) {
+      console.error('[execute-campaign proxy] Invalid runIntent:', runIntent);
+      return NextResponse.json(
+        { error: 'INVALID_RUN_INTENT', message: 'runIntent must be HARVEST_ONLY or ACTIVATE' },
         { status: 400 }
       );
     }
@@ -126,7 +141,10 @@ export async function POST(req: Request) {
 
     // Build primary target URL
     const primaryUrl = buildUrl(SALES_ENGINE_URL, SALES_ENGINE_API_BASE_URL, campaignId);
-    console.log('[execute-campaign proxy] Primary target:', primaryUrl);
+    console.log('[execute-campaign proxy] Primary target:', primaryUrl, 'runIntent:', runIntent || 'ACTIVATE (default)');
+
+    // Build request body with runIntent
+    const requestBody = runIntent ? JSON.stringify({ runIntent }) : undefined;
 
     // Attempt primary request with timeout
     let response: Response;
@@ -134,6 +152,7 @@ export async function POST(req: Request) {
       response = await fetchWithTimeout(primaryUrl, {
         method: 'POST',
         headers,
+        body: requestBody,
       }, 15000);
       
       console.log('[execute-campaign proxy] Primary response status:', response.status);
@@ -160,6 +179,7 @@ export async function POST(req: Request) {
           response = await fetchWithTimeout(fallbackUrl, {
             method: 'POST',
             headers,
+            body: requestBody,
           }, 15000);
           
           console.log('[execute-campaign proxy] Fallback response status:', response.status);
