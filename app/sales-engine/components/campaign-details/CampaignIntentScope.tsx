@@ -10,6 +10,10 @@
  * - Easy to scan at a glance
  * - No backend jargon
  * 
+ * CAMPAIGN THESIS (optional):
+ * One-line statement of campaign purpose for recall, comparison, and auditability.
+ * Example: "Identify and qualify engineering leaders at mid-market technology firms for outbound outreach."
+ * 
  * REQUIRED FIELDS:
  * - Target industries
  * - Target roles
@@ -40,6 +44,8 @@ interface CampaignIntentScopeProps {
   regions?: string[];
   /** Optional: Total addressable market size */
   marketSize?: number;
+  /** Optional: One-line campaign thesis statement */
+  thesis?: string;
 }
 
 function TagList({ items, maxDisplay = 5 }: { items: string[]; maxDisplay?: number }) {
@@ -116,6 +122,7 @@ export function CampaignIntentScope({
   companySizes,
   regions,
   marketSize,
+  thesis,
 }: CampaignIntentScopeProps) {
   // Map objective to friendly display
   const objectiveDisplay: Record<string, string> = {
@@ -149,6 +156,49 @@ export function CampaignIntentScope({
       marginBottom: '24px',
       boxShadow: NSD_SHADOWS.sm,
     }}>
+      {/* Campaign Thesis (if provided) */}
+      {thesis && (
+        <div style={{
+          padding: '16px 20px',
+          marginBottom: '20px',
+          backgroundColor: NSD_COLORS.semantic.info.bg,
+          borderRadius: NSD_RADIUS.md,
+          borderLeft: `4px solid ${NSD_COLORS.semantic.info.border}`,
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+          }}>
+            <div style={{ marginTop: '2px', flexShrink: 0 }}>
+              <Icon name="lightbulb" size={18} color={NSD_COLORS.semantic.info.text} />
+            </div>
+            <div>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                color: NSD_COLORS.semantic.info.text,
+                opacity: 0.8,
+              }}>
+                Campaign Thesis
+              </span>
+              <p style={{
+                margin: '6px 0 0 0',
+                fontSize: '15px',
+                fontWeight: 500,
+                color: NSD_COLORS.semantic.info.text,
+                lineHeight: 1.5,
+                fontStyle: 'italic',
+              }}>
+                &ldquo;{thesis}&rdquo;
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{
         display: 'flex',

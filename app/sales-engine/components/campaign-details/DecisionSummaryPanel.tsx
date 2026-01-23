@@ -9,6 +9,7 @@
  * - Secondary actions are visually de-emphasized
  * - If no action is possible, the UI feels "complete", not blocked
  * - No backend jargon exposed to operators
+ * - Blocked states include subtle "Why?" explanations
  * 
  * REQUIRED FIELDS:
  * - Governance approval status
@@ -19,15 +20,19 @@
 
 'use client';
 
+import { useState } from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, NSD_SHADOWS } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import type { CampaignPhase } from './PrimaryCampaignStatusBanner';
 import type { RunIntent } from '../../lib/api';
+import { getDecisionContext, type CampaignStatusKey } from '../../lib/status-copy';
 
 interface DecisionCheck {
   label: string;
   status: 'pass' | 'pending' | 'fail' | 'not_applicable';
   detail?: string;
+  /** Plain-English explanation for blocked/pending states */
+  explanation?: string;
 }
 
 interface DecisionSummaryPanelProps {
@@ -43,8 +48,12 @@ interface DecisionSummaryPanelProps {
   isPlanningOnly: boolean;
   /** Whether a run is currently in progress */
   isRunning: boolean;
+  /** Whether a run has already occurred */
+  hasRun?: boolean;
   /** Optional: Current run intent */
   runIntent?: RunIntent;
+  /** Optional: Outcome type from completed run */
+  outcomeType?: string;
   /** Handler for run campaign action */
   onRunCampaign?: () => void;
   /** Handler for edit action */
@@ -60,6 +69,8 @@ interface DecisionSummaryPanelProps {
 }
 
 function CheckItem({ check }: { check: DecisionCheck }) {
+  const [showExplanation, setShowExplanation] = useState(false);
+  
   const getStatusConfig = (status: DecisionCheck['status']) => {
     switch (status) {
       case 'pass':
@@ -74,37 +85,99 @@ function CheckItem({ check }: { check: DecisionCheck }) {
   };
 
   const config = getStatusConfig(check.status);
+  const hasExplanation = check.explanation && (check.status === 'pending' || check.status === 'fail');
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '12px 16px',
-      backgroundColor: config.bg,
-      borderRadius: NSD_RADIUS.md,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <Icon name={config.icon as any} size={16} color={config.color} />
-        <span style={{
-          fontSize: '14px',
-          fontWeight: 500,
-          color: NSD_COLORS.text.primary,
-        }}>
-          {check.label}
-        </span>
+    <div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
+        backgroundColor: config.bg,
+        borderRadius: showExplanation ? `${NSD_RADIUS.md} ${NSD_RADIUS.md} 0 0` : NSD_RADIUS.md,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Icon name={config.icon as any} size={16} color={config.color} />
+          <span style={{
+            fontSize: '14px',
+            fontWeight: 500,
+            color: NSD_COLORS.text.primary,
+          }}>
+            {check.label}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {check.detail && (
+            <span style={{
+              fontSize: '12px',
+              color: config.color,
+              fontWeight: 500,
+            }}>
+              {check.detail}
+            </span>
+          )}
+          {/* Why? affordance for blocked/pending states */}
+          {hasExplanation && (
+            <button
+              onClick={() => setShowExplanation(!showExplanation)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 6px',
+                fontSize: '11px',
+                fontWeight: 500,
+                backgroundColor: 'rgba(255,255,255,0.5)',
+                color: config.color,
+                border: 'none',
+                borderRadius: NSD_RADIUS.sm,
+                cursor: 'pointer',
+              }}
+              title="Why is this blocked?"
+            >
+              <Icon name="info" size={12} color={config.color} />
+              {showExplanation ? 'Hide' : 'Why?'}
+            </button>
+          )}
+        </div>
       </div>
-      {check.detail && (
-        <span style={{
-          fontSize: '12px',
-          color: config.color,
-          fontWeight: 500,
+      {/* Explanation panel */}
+      {showExplanation && check.explanation && (
+        <div style={{
+          padding: '10px 16px',
+          backgroundColor: 'rgba(255,255,255,0.3)',
+          borderRadius: `0 0 ${NSD_RADIUS.md} ${NSD_RADIUS.md}`,
+          borderTop: `1px solid ${config.color}20`,
         }}>
-          {check.detail}
-        </span>
+          <p style={{
+            margin: 0,
+            fontSize: '12px',
+            color: config.color,
+            lineHeight: 1.4,
+          }}>
+            {check.explanation}
+          </p>
+        </div>
       )}
     </div>
   );
+}
+
+/**
+ * Map CampaignPhase to CampaignStatusKey for context lookup.
+ */
+function phaseToStatusKey(phase: CampaignPhase): CampaignStatusKey {
+  const mapping: Record<CampaignPhase, CampaignStatusKey> = {
+    draft: 'DRAFT',
+    pending_approval: 'PENDING_REVIEW',
+    approved: 'RUNNABLE',
+    running: 'RUNNING',
+    completed: 'COMPLETED',
+    stopped: 'STOPPED',
+    failed: 'FAILED',
+  };
+  return mapping[phase] || 'DRAFT';
 }
 
 export function DecisionSummaryPanel({
@@ -114,7 +187,9 @@ export function DecisionSummaryPanel({
   safetyChecksPassed,
   isPlanningOnly,
   isRunning,
+  hasRun = false,
   runIntent,
+  outcomeType,
   onRunCampaign,
   onEdit,
   onDuplicate,
@@ -122,34 +197,53 @@ export function DecisionSummaryPanel({
   isDuplicating = false,
   runRequestMessage,
 }: DecisionSummaryPanelProps) {
-  // Determine checks
+  // Get decision context for explanations
+  const statusKey = phaseToStatusKey(phase);
+  const decisionContext = getDecisionContext(statusKey, {
+    isPlanningOnly,
+    isApproved,
+    hasRun,
+    outcomeType,
+  });
+
+  // Determine checks with explanations
   const checks: DecisionCheck[] = [
     {
       label: 'Governance Approval',
       status: isApproved ? 'pass' : 'pending',
       detail: isApproved ? 'Approved' : 'Pending',
+      explanation: !isApproved ? 'Campaign requires governance approval before execution can proceed. Contact your admin if approval is delayed.' : undefined,
     },
     {
       label: 'Execution Readiness',
       status: isRunning ? 'pass' : (isExecutionReady ? 'pass' : 'fail'),
       detail: isRunning ? 'In Progress' : (isExecutionReady ? 'Ready' : 'Blocked'),
+      explanation: !isExecutionReady && !isRunning 
+        ? 'Campaign configuration may be incomplete or requires review before execution.' 
+        : undefined,
     },
     {
       label: 'Safety Checks',
       status: safetyChecksPassed ? 'pass' : (phase === 'draft' ? 'not_applicable' : 'fail'),
       detail: safetyChecksPassed ? 'Pass' : (phase === 'draft' ? 'N/A' : 'Review Required'),
+      explanation: !safetyChecksPassed && phase !== 'draft' 
+        ? 'Safety checks help ensure campaign quality. Review flagged items before proceeding.' 
+        : undefined,
     },
     {
       label: 'Execution Mode',
       status: isPlanningOnly ? 'pending' : 'pass',
       detail: isPlanningOnly ? 'Planning Only' : 'Executable',
+      explanation: isPlanningOnly 
+        ? 'Campaign is in planning-only mode. This is useful for testing configuration without sending emails. Disable planning mode to enable full execution.' 
+        : undefined,
     },
   ];
 
   // Determine primary action
-  const canRunCampaign = isApproved && isExecutionReady && !isRunning && !isPlanningOnly && onRunCampaign;
-  const needsApproval = !isApproved && phase !== 'draft';
+  const canRunCampaign = isApproved && isExecutionReady && !isRunning && !isPlanningOnly && !hasRun && onRunCampaign;
   const isComplete = phase === 'completed';
+  const isStopped = phase === 'stopped';
   const isFailed = phase === 'failed';
 
   // Action button configuration
@@ -165,19 +259,9 @@ export function DecisionSummaryPanel({
     primaryActionDisabled = true;
   }
 
-  // Status message for no-action states
-  let statusMessage: string | null = null;
-  if (isComplete) {
-    statusMessage = 'This campaign has completed. Review results below.';
-  } else if (isRunning) {
-    statusMessage = 'Execution is in progress. Results will appear as stages complete.';
-  } else if (needsApproval) {
-    statusMessage = 'Awaiting governance approval before execution can proceed.';
-  } else if (isPlanningOnly) {
-    statusMessage = 'Campaign is in planning mode. Disable planning-only mode to enable execution.';
-  } else if (isFailed) {
-    statusMessage = 'Execution encountered an issue. Review the results and consider re-running.';
-  }
+  // Use decision context for status message
+  const statusMessage = decisionContext.reason;
+  const nextStep = decisionContext.nextStep;
 
   return (
     <div style={{
@@ -238,21 +322,37 @@ export function DecisionSummaryPanel({
         ))}
       </div>
 
-      {/* Status Message */}
+      {/* Status Message with Next Step */}
       {statusMessage && (
         <div style={{
           padding: '12px 16px',
-          backgroundColor: NSD_COLORS.semantic.muted.bg,
+          backgroundColor: decisionContext.isBlocked 
+            ? NSD_COLORS.semantic.attention.bg 
+            : NSD_COLORS.semantic.muted.bg,
           borderRadius: NSD_RADIUS.md,
           marginBottom: '16px',
         }}>
           <p style={{
             margin: 0,
             fontSize: '13px',
-            color: NSD_COLORS.text.secondary,
+            color: decisionContext.isBlocked 
+              ? NSD_COLORS.semantic.attention.text 
+              : NSD_COLORS.text.secondary,
           }}>
             {statusMessage}
           </p>
+          {nextStep && (
+            <p style={{
+              margin: '6px 0 0 0',
+              fontSize: '12px',
+              color: decisionContext.isBlocked 
+                ? NSD_COLORS.semantic.attention.text 
+                : NSD_COLORS.text.muted,
+              fontStyle: 'italic',
+            }}>
+              Next step: {nextStep}
+            </p>
+          )}
         </div>
       )}
 

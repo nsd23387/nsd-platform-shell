@@ -11,6 +11,12 @@
  * - Communicates sequence, not metrics
  * - No backend jargon
  * 
+ * POST-EXECUTION ENHANCEMENTS:
+ * - Visually compress completed stages
+ * - Highlight terminal stage (Completed / Stopped / Failed)
+ * - Show per-stage duration if available
+ * - Maintain neutral tone; no red styling unless truly exceptional
+ * 
  * STAGES:
  * 1. Approval
  * 2. Organization Sourcing
@@ -25,7 +31,7 @@
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, NSD_SHADOWS } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 
-export type ExecutionStageStatus = 'not_started' | 'in_progress' | 'completed' | 'skipped';
+export type ExecutionStageStatus = 'not_started' | 'in_progress' | 'completed' | 'skipped' | 'terminal';
 
 export interface ExecutionStage {
   id: string;
@@ -37,11 +43,19 @@ export interface ExecutionStage {
   count?: number;
   /** Optional: Timestamp when stage completed */
   completedAt?: string;
+  /** Optional: Duration in seconds */
+  durationSeconds?: number;
 }
 
 interface ExecutionTimelineProps {
   /** Current campaign phase - controls what is shown */
   hasStartedExecution: boolean;
+  /** Is execution complete (allows retrospective view) */
+  isExecutionComplete?: boolean;
+  /** Terminal outcome: 'completed' | 'stopped' | 'failed' */
+  terminalOutcome?: 'completed' | 'stopped' | 'failed';
+  /** Terminal reason (for stopped/failed) */
+  terminalReason?: string;
   /** Custom stages override (optional) */
   stages?: ExecutionStage[];
   /** Current active stage ID (optional) */
@@ -90,7 +104,7 @@ const DEFAULT_STAGES: Omit<ExecutionStage, 'status'>[] = [
   },
 ];
 
-function getStatusConfig(status: ExecutionStageStatus) {
+function getStatusConfig(status: ExecutionStageStatus, terminalOutcome?: string) {
   switch (status) {
     case 'completed':
       return {
@@ -116,6 +130,32 @@ function getStatusConfig(status: ExecutionStageStatus) {
         textColor: NSD_COLORS.text.muted,
         statusLabel: 'Skipped',
       };
+    case 'terminal':
+      // Terminal stage styling based on outcome
+      if (terminalOutcome === 'stopped') {
+        return {
+          bgColor: NSD_COLORS.semantic.attention.bg,
+          borderColor: NSD_COLORS.semantic.attention.border,
+          iconColor: NSD_COLORS.semantic.attention.text,
+          textColor: NSD_COLORS.semantic.attention.text,
+          statusLabel: 'Stopped',
+        };
+      } else if (terminalOutcome === 'failed') {
+        return {
+          bgColor: NSD_COLORS.semantic.critical.bg,
+          borderColor: NSD_COLORS.semantic.critical.border,
+          iconColor: NSD_COLORS.semantic.critical.text,
+          textColor: NSD_COLORS.semantic.critical.text,
+          statusLabel: 'Failed',
+        };
+      }
+      return {
+        bgColor: NSD_COLORS.semantic.positive.bg,
+        borderColor: NSD_COLORS.semantic.positive.border,
+        iconColor: NSD_COLORS.semantic.positive.text,
+        textColor: NSD_COLORS.semantic.positive.text,
+        statusLabel: 'Completed',
+      };
     case 'not_started':
     default:
       return {
@@ -128,16 +168,37 @@ function getStatusConfig(status: ExecutionStageStatus) {
   }
 }
 
+/**
+ * Format duration for display
+ */
+function formatDuration(seconds?: number): string | null {
+  if (!seconds || seconds <= 0) return null;
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  return `${hours}h ${mins}m`;
+}
+
 function TimelineStage({ 
   stage, 
   isLast, 
-  compact 
+  compact,
+  isRetrospective,
+  terminalOutcome,
 }: { 
   stage: ExecutionStage; 
   isLast: boolean;
   compact: boolean;
+  isRetrospective: boolean;
+  terminalOutcome?: string;
 }) {
-  const config = getStatusConfig(stage.status);
+  const config = getStatusConfig(stage.status, terminalOutcome);
+  const duration = formatDuration(stage.durationSeconds);
+  
+  // In retrospective view, compress completed stages
+  const isCompressed = isRetrospective && stage.status === 'completed' && !isLast;
+  const effectiveCompact = compact || isCompressed;
 
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start' }}>
@@ -150,8 +211,8 @@ function TimelineStage({
       }}>
         {/* Stage Icon Circle */}
         <div style={{
-          width: compact ? '32px' : '40px',
-          height: compact ? '32px' : '40px',
+          width: effectiveCompact ? '32px' : '40px',
+          height: effectiveCompact ? '32px' : '40px',
           borderRadius: '50%',
           backgroundColor: config.bgColor,
           border: `2px solid ${config.borderColor}`,
@@ -159,10 +220,16 @@ function TimelineStage({
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
+          // Highlight terminal stage
+          boxShadow: stage.status === 'terminal' ? `0 0 0 3px ${config.borderColor}40` : undefined,
         }}>
           <Icon 
-            name={stage.status === 'completed' ? 'check' : (stage.icon as any)} 
-            size={compact ? 14 : 18} 
+            name={stage.status === 'completed' ? 'check' : 
+                  stage.status === 'terminal' && terminalOutcome === 'stopped' ? 'warning' :
+                  stage.status === 'terminal' && terminalOutcome === 'failed' ? 'warning' :
+                  stage.status === 'terminal' ? 'check' :
+                  (stage.icon as any)} 
+            size={effectiveCompact ? 14 : 18} 
             color={config.iconColor} 
           />
         </div>
@@ -170,8 +237,8 @@ function TimelineStage({
         {!isLast && (
           <div style={{
             width: '2px',
-            height: compact ? '24px' : '32px',
-            backgroundColor: stage.status === 'completed' 
+            height: effectiveCompact ? '16px' : '32px',
+            backgroundColor: stage.status === 'completed' || stage.status === 'terminal'
               ? NSD_COLORS.semantic.positive.border 
               : NSD_COLORS.border.light,
           }} />
@@ -181,18 +248,18 @@ function TimelineStage({
       {/* Stage Content */}
       <div style={{ 
         flex: 1, 
-        paddingBottom: isLast ? 0 : (compact ? '16px' : '24px'),
+        paddingBottom: isLast ? 0 : (effectiveCompact ? '8px' : '24px'),
       }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: '4px',
+          marginBottom: effectiveCompact ? '0' : '4px',
         }}>
           <h4 style={{
             margin: 0,
-            fontSize: compact ? '13px' : '14px',
-            fontWeight: 600,
+            fontSize: effectiveCompact ? '13px' : '14px',
+            fontWeight: stage.status === 'terminal' ? 700 : 600,
             color: config.textColor,
           }}>
             {stage.label}
@@ -202,6 +269,15 @@ function TimelineStage({
             alignItems: 'center',
             gap: '8px',
           }}>
+            {/* Duration (retrospective) */}
+            {duration && isRetrospective && (
+              <span style={{
+                fontSize: '11px',
+                color: NSD_COLORS.text.muted,
+              }}>
+                {duration}
+              </span>
+            )}
             {stage.count !== undefined && stage.count > 0 && (
               <span style={{
                 fontSize: '12px',
@@ -223,7 +299,7 @@ function TimelineStage({
             </span>
           </div>
         </div>
-        {!compact && (
+        {!effectiveCompact && (
           <p style={{
             margin: 0,
             fontSize: '13px',
@@ -239,10 +315,16 @@ function TimelineStage({
 
 export function ExecutionTimeline({
   hasStartedExecution,
+  isExecutionComplete = false,
+  terminalOutcome,
+  terminalReason,
   stages,
   currentStageId,
   compact = false,
 }: ExecutionTimelineProps) {
+  // Determine if we're in retrospective view (execution complete)
+  const isRetrospective = isExecutionComplete;
+
   // Use provided stages or generate defaults
   const displayStages: ExecutionStage[] = stages || DEFAULT_STAGES.map((s, index) => {
     let status: ExecutionStageStatus = 'not_started';
@@ -251,6 +333,14 @@ export function ExecutionTimeline({
       // If execution has started, mark approval as completed
       if (s.id === 'approval') {
         status = 'completed';
+      } else if (isExecutionComplete) {
+        // In retrospective view, mark all stages as completed
+        // except the last one which is terminal
+        if (index === DEFAULT_STAGES.length - 1) {
+          status = 'terminal';
+        } else {
+          status = 'completed';
+        }
       } else if (currentStageId) {
         const currentIndex = DEFAULT_STAGES.findIndex(ds => ds.id === currentStageId);
         const stageIndex = index;
@@ -264,6 +354,41 @@ export function ExecutionTimeline({
     
     return { ...s, status };
   });
+
+  // Get header styling based on outcome
+  const getHeaderConfig = () => {
+    if (!isExecutionComplete) {
+      return {
+        bg: NSD_COLORS.semantic.info.bg,
+        text: NSD_COLORS.semantic.info.text,
+        subtitle: hasStartedExecution 
+          ? 'Campaign execution progress' 
+          : 'Stages that will execute when campaign runs',
+      };
+    }
+    switch (terminalOutcome) {
+      case 'stopped':
+        return {
+          bg: NSD_COLORS.semantic.attention.bg,
+          text: NSD_COLORS.semantic.attention.text,
+          subtitle: 'Execution was stopped before completion',
+        };
+      case 'failed':
+        return {
+          bg: NSD_COLORS.semantic.critical.bg,
+          text: NSD_COLORS.semantic.critical.text,
+          subtitle: 'Execution encountered an error',
+        };
+      default:
+        return {
+          bg: NSD_COLORS.semantic.positive.bg,
+          text: NSD_COLORS.semantic.positive.text,
+          subtitle: 'Execution completed successfully',
+        };
+    }
+  };
+
+  const headerConfig = getHeaderConfig();
 
   return (
     <div style={{
@@ -292,12 +417,12 @@ export function ExecutionTimeline({
             width: '36px',
             height: '36px',
             borderRadius: NSD_RADIUS.md,
-            backgroundColor: NSD_COLORS.semantic.info.bg,
+            backgroundColor: headerConfig.bg,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <Icon name="timeline" size={18} color={NSD_COLORS.semantic.info.text} />
+            <Icon name="timeline" size={18} color={headerConfig.text} />
           </div>
           <div>
             <h3 style={{
@@ -314,12 +439,24 @@ export function ExecutionTimeline({
               fontSize: '13px',
               color: NSD_COLORS.text.secondary,
             }}>
-              {hasStartedExecution 
-                ? 'Campaign execution progress' 
-                : 'Stages that will execute when campaign runs'}
+              {headerConfig.subtitle}
             </p>
           </div>
         </div>
+        {/* Retrospective badge */}
+        {isRetrospective && (
+          <span style={{
+            padding: '4px 10px',
+            fontSize: '11px',
+            fontWeight: 500,
+            backgroundColor: headerConfig.bg,
+            color: headerConfig.text,
+            borderRadius: NSD_RADIUS.full,
+          }}>
+            {terminalOutcome === 'stopped' ? 'Stopped' : 
+             terminalOutcome === 'failed' ? 'Failed' : 'Completed'}
+          </span>
+        )}
       </div>
 
       {/* Timeline */}
@@ -330,9 +467,33 @@ export function ExecutionTimeline({
             stage={stage}
             isLast={index === displayStages.length - 1}
             compact={compact}
+            isRetrospective={isRetrospective}
+            terminalOutcome={terminalOutcome}
           />
         ))}
       </div>
+
+      {/* Terminal reason (if stopped/failed) */}
+      {isRetrospective && terminalReason && (terminalOutcome === 'stopped' || terminalOutcome === 'failed') && (
+        <div style={{
+          marginTop: '16px',
+          padding: '12px 16px',
+          backgroundColor: terminalOutcome === 'failed' 
+            ? NSD_COLORS.semantic.critical.bg 
+            : NSD_COLORS.semantic.attention.bg,
+          borderRadius: NSD_RADIUS.md,
+        }}>
+          <p style={{
+            margin: 0,
+            fontSize: '13px',
+            color: terminalOutcome === 'failed' 
+              ? NSD_COLORS.semantic.critical.text 
+              : NSD_COLORS.semantic.attention.text,
+          }}>
+            <strong>Reason:</strong> {terminalReason}
+          </p>
+        </div>
+      )}
 
       {/* Pre-execution message */}
       {!hasStartedExecution && (

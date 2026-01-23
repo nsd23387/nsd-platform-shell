@@ -10,6 +10,13 @@
  * - Progressive disclosure
  * - No backend jargon exposed to operators
  * - Phase-aware rendering
+ * 
+ * POST-M68 ENHANCEMENTS:
+ * - Canonical status copy map
+ * - "Why?" explanations for blocked states
+ * - Retrospective timeline clarity
+ * - Outcome summary for post-execution
+ * - Campaign thesis support
  */
 
 export { 
@@ -39,3 +46,7 @@ export {
 export { 
   CollapsibleLearningSignals,
 } from './CollapsibleLearningSignals';
+
+export {
+  CampaignOutcomeSummary,
+} from './CampaignOutcomeSummary';
