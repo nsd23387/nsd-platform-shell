@@ -4,18 +4,15 @@ import Link from 'next/link';
 import { Icon } from '../../../../design/components/Icon';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 
-type NavItem = 'dashboard' | 'campaigns' | 'approvals' | 'runs' | 'monitoring';
+type NavItem = 'campaigns' | 'executive';
 
 interface NavBarProps {
   active: NavItem;
 }
 
 const NAV_ITEMS: { id: NavItem; href: string; icon: string; label: string }[] = [
-  { id: 'dashboard', href: '/sales-engine/home', icon: 'chart', label: 'Dashboard' },
   { id: 'campaigns', href: '/sales-engine', icon: 'campaigns', label: 'Campaigns' },
-  { id: 'approvals', href: '/sales-engine/approvals', icon: 'review', label: 'Approvals' },
-  { id: 'runs', href: '/sales-engine/runs', icon: 'runs', label: 'Runs' },
-  { id: 'monitoring', href: '/sales-engine/monitoring', icon: 'check', label: 'Monitoring' },
+  { id: 'executive', href: '/sales-engine/executive', icon: 'chart', label: 'Executive View' },
 ];
 
 export function NavBar({ active }: NavBarProps) {

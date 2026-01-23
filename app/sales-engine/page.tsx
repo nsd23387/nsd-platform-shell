@@ -245,11 +245,6 @@ export default function SalesEnginePage() {
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: NSD_SPACING.md }}>
-              <Link href="/sales-engine/home" style={{ textDecoration: 'none' }}>
-                <Button variant="secondary" icon="chart">
-                  Dashboard
-                </Button>
-              </Link>
               <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
                 <Button variant="cta" icon="plus">
                   New Campaign

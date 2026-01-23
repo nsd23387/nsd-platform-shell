@@ -41,6 +41,14 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 23, 2026: UX/UI Cleanup & Minimalist Redesign
+  - **Executive Dashboard Restoration**: Restored simple 4-section layout (System Health, Market Reality, Operational Yield, Campaign Distribution) with clean white backgrounds and violet/magenta accents
+  - **Redundant Pages Deleted**: Removed /approvals, /runs, /monitoring (were just redirects), /home (duplicate functionality)
+  - **Magenta Background Removal**: Updated design tokens to use WHITE backgrounds with colored borders/text as accents - magenta is now CTA/accent only, not background fill
+  - **Dashboard Button Removed**: Campaigns page is now the single unified view (removed Dashboard button from header)
+  - **NavBar Cleanup**: Updated to only include campaigns and executive view links (removed dead links to deleted pages)
+  - **Status/Semantic Token Update**: All status and semantic colors now use white (#FFFFFF) backgrounds with accent property for left-border styling
+
 - January 23, 2026: Campaign Details UX Enhancement Pass (Post-M68)
   - Enhanced PrimaryCampaignStatusBanner: Increased padding (28px 32px), larger headline (26px/700 weight), left border accent, phase-aware shadows, pulse animation for running state
   - Polished DecisionSummaryPanel: Distinct card with gradient header, overflow hidden, dominant primary CTA with shadow (12px 28px padding, 15px font)
