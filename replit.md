@@ -39,6 +39,20 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 23, 2026: UX Enhancement Phase (Clarity, Trust, Self-Explanatory UI)
+  - Created SectionHeader component with section labels and info tooltips
+  - Created InfoTooltip component for inline contextual help
+  - Created HelperText component for explanatory messaging under data sections
+  - Campaign Detail Page: Added section headers (Administrative State, Last Execution Outcome, Market Reality, Operational Yield)
+  - Created Executive Dashboard route (/sales-engine/executive) with read-only executive-focused layout
+  - Executive Dashboard sections: System Health (top), Market Reality (left), Operational Yield (right), Campaign Distribution (bottom)
+  - Clear data annotations: "Observed, not processed" for Market Reality, "Processed subset of observed" for Operational Yield
+  - Helper text explains gaps represent untapped opportunity, not system failure
+  - Updated ExecutionHealthIndicator: Zero-count completions use 'info' level (not warnings)
+  - Softened empty state messaging: "No execution yet — campaign ready for first run"
+  - Added "Executive View" button to campaigns list header
+  - All new components use NSD-approved semantic colors (magenta/indigo/violet only)
+
 - January 20, 2026: Comprehensive UX/UI Redesign (Minimalist Neon-Focused)
   - Added NSD_GLOW, NSD_GRADIENTS, NSD_TRANSITIONS design tokens for neon-inspired effects
   - Added gradient accent bar at top of all major pages (magenta → violet brand gradient)
