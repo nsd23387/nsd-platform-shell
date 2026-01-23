@@ -59,3 +59,69 @@ export { PollingStatusIndicator } from './PollingStatusIndicator';
 
 export { ExecutionNarrativeCard } from './ExecutionNarrativeCard';
 export type { ExecutionNarrativeCardProps } from './ExecutionNarrativeCard';
+
+// Execution Health & Trust UX Components
+export { ExecutionHealthBanner } from './ExecutionHealthBanner';
+export type { ExecutionHealthBannerProps } from './ExecutionHealthBanner';
+
+export { ExecutionDataSourceBadge } from './ExecutionDataSourceBadge';
+export type { ExecutionDataSourceBadgeProps } from './ExecutionDataSourceBadge';
+
+// Contact Pipeline Components (4-State Model)
+export { ContactFunnelCard } from './ContactFunnelCard';
+export type { ContactFunnelCardProps } from './ContactFunnelCard';
+
+export { ContactProgressBar } from './ContactProgressBar';
+export type { ContactProgressBarProps } from './ContactProgressBar';
+
+export { BlockedContactsBreakdown } from './BlockedContactsBreakdown';
+export type { BlockedContactsBreakdownProps } from './BlockedContactsBreakdown';
+
+// Campaign Progress Components (Near-Real-Time Visibility)
+export { CampaignProgressCard } from './CampaignProgressCard';
+export type { CampaignProgressCardProps } from './CampaignProgressCard';
+
+export { StageProgressBar } from './StageProgressBar';
+export type { StageProgressBarProps } from './StageProgressBar';
+
+export { LastRunImpactSummary } from './LastRunImpactSummary';
+export type { LastRunImpactSummaryProps } from './LastRunImpactSummary';
+
+export { WhyPausedExplainer } from './WhyPausedExplainer';
+export type { WhyPausedExplainerProps } from './WhyPausedExplainer';
+
+export { ThroughputIndicator } from './ThroughputIndicator';
+export type { ThroughputIndicatorProps, ThroughputStats } from './ThroughputIndicator';
+
+// Stage Display (P1 Incremental)
+export { CurrentStageIndicator } from './CurrentStageIndicator';
+export type { default as CurrentStageIndicatorDefault } from './CurrentStageIndicator';
+
+// Run History v2 (Canonical - from sales-engine)
+// EXECUTION AUTHORITY: Sales-engine is the sole source of run history
+export { RunHistoryPanel } from './RunHistoryPanel';
+export type { default as RunHistoryPanelDefault } from './RunHistoryPanel';
+
+// Dual-Layer Funnel (Business-First)
+// INVARIANT: Scope represents business value, independent of execution
+export { DualLayerFunnelCard } from './DualLayerFunnelCard';
+export type { DualLayerFunnelCardProps } from './DualLayerFunnelCard';
+
+// ============================================
+// OBSERVATIONS-FIRST ARCHITECTURE COMPONENTS
+// ============================================
+
+// Campaign Health Summary
+// Unified view: Governance + Outcome + Market Reality + Operational Yield
+export { CampaignHealthSummary } from './CampaignHealthSummary';
+export type { default as CampaignHealthSummaryDefault } from './CampaignHealthSummary';
+
+// Dual Funnel Visualization
+// CRITICAL: Shows Market Funnel (observed) vs Execution Funnel (processed)
+export { DualFunnelVisualization } from './DualFunnelVisualization';
+export type { default as DualFunnelVisualizationDefault } from './DualFunnelVisualization';
+
+// Run Intent Selector
+// HARVEST_ONLY vs ACTIVATE with explicit consequences
+export { RunIntentSelector, type RunIntent } from './RunIntentSelector';
+export type { default as RunIntentSelectorDefault } from './RunIntentSelector';

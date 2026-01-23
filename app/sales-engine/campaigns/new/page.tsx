@@ -30,12 +30,11 @@ import { isApiDisabled, featureFlags } from '../../../../config/appConfig';
  * M67-14 CampaignCreate Wizard Steps
  * 
  * GOVERNANCE: Lead Qualification step removed (minimumSignals is forbidden)
- * Organization Sourcing is read-only (derived from ICP)
+ * Organization Sourcing removed (derived from ICP, no user input needed)
  */
 const WIZARD_STEPS = [
   { id: 'identity', label: 'Campaign Identity' },
   { id: 'icp', label: 'ICP Definition' },
-  { id: 'sourcing', label: 'Organization Sourcing' },
   { id: 'targeting', label: 'Contact Targeting' },
   { id: 'outreach', label: 'Outreach Context' },
   { id: 'targets', label: 'Targets (Optional)' },
@@ -52,6 +51,10 @@ const WIZARD_STEPS = [
  * - targetOrganizations (forbidden)
  * - targetContacts (forbidden)
  * 
+ * CONSOLIDATED FIELDS:
+ * - jobTitles: Used for both ICP job_titles and contact_targeting roles
+ * - seniorityLevels: Used for both ICP seniority_levels and contact_targeting seniority
+ * 
  * REQUIRED FIELDS:
  * - name
  * - keywords[] (non-empty)
@@ -62,15 +65,15 @@ type FormData = {
   description: string;
   industries: string[];
   geographies: string[];
-  jobTitles: string[];
-  seniorityLevels: string[];
   keywords: string[];
   companySizeMin: number;
   companySizeMax: number;
-  roles: string[];
-  seniority: string[];
+  // Consolidated contact targeting fields (shown in Contact Targeting step)
+  jobTitles: string[];      // Maps to both icp.job_titles AND contact_targeting.roles
+  seniorityLevels: string[]; // Maps to both icp.seniority_levels AND contact_targeting.seniority
   maxContactsPerOrg: number;
   requireVerifiedEmail: boolean;
+  // Outreach context
   tone: string;
   valuePropositions: string[];
   painPoints: string[];
@@ -88,15 +91,15 @@ const initialFormData: FormData = {
   description: '',
   industries: [],
   geographies: [],
-  jobTitles: [],
-  seniorityLevels: [],
   keywords: [],
   companySizeMin: 0,
   companySizeMax: 10000,
-  roles: [],
-  seniority: [],
+  // Consolidated contact targeting
+  jobTitles: [],
+  seniorityLevels: [],
   maxContactsPerOrg: 3,
   requireVerifiedEmail: true,
+  // Outreach context
   tone: 'professional',
   valuePropositions: [],
   painPoints: [],
@@ -227,6 +230,11 @@ export default function NewCampaignPage() {
    * - campaign_targets.target_contacts
    * - campaign_targets.target_replies
    * 
+   * CONSOLIDATED FIELDS (for backward compatibility):
+   * - jobTitles maps to BOTH icp.job_titles AND contact_targeting.roles
+   * - seniorityLevels maps to BOTH icp.seniority_levels AND contact_targeting.seniority
+   * This ensures the sales engine can read from either location.
+   * 
    * REQUIRED:
    * - name, keywords[], geographies[]
    * 
@@ -244,13 +252,15 @@ export default function NewCampaignPage() {
       },
       industries: formData.industries,
       geographies: formData.geographies,
+      // Consolidated: jobTitles stored in ICP for organization matching
       job_titles: formData.jobTitles,
       seniority_levels: formData.seniorityLevels,
       keywords: formData.keywords,
     },
     contact_targeting: {
-      roles: formData.roles.length > 0 ? formData.roles : formData.jobTitles,
-      seniority: formData.seniority.length > 0 ? formData.seniority : formData.seniorityLevels,
+      // Consolidated: jobTitles also stored as roles for contact targeting
+      roles: formData.jobTitles,
+      seniority: formData.seniorityLevels,
       max_contacts_per_org: formData.maxContactsPerOrg,
       email_requirements: {
         require_verified: formData.requireVerifiedEmail,
@@ -833,83 +843,26 @@ export default function NewCampaignPage() {
               onChange={(v) => updateField('companySizeMax', Number(v))}
             />
           </div>
-          <TagInput
-            label="Job Titles"
-            name="jobTitles"
-            values={formData.jobTitles}
-            onChange={(v) => updateField('jobTitles', v)}
-            placeholder="e.g., VP of Sales, CRO"
-          />
-        </WizardStep>
 
-        {/* 
-          M67-14 GOVERNANCE: Organization Sourcing is READ-ONLY
-          - No inputs, toggles, selectors, counts, or limits
-          - Derived automatically from ICP
-        */}
-        <WizardStep
-          title="Organization Sourcing"
-          description="How organizations will be sourced for this campaign"
-          isActive={currentStep === 2}
-          stepNumber={3}
-          totalSteps={WIZARD_STEPS.length}
-        >
+          {/* Organization Sourcing Info Callout */}
           <div
             style={{
-              backgroundColor: '#F3F4F6',
+              backgroundColor: '#F0F4FF',
               borderRadius: NSD_RADIUS.md,
-              padding: '24px',
-              border: `1px solid ${NSD_COLORS.border.light}`,
+              padding: '16px',
+              marginTop: '24px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                marginBottom: '16px',
-              }}
-            >
-              <Icon name="info" size={20} color={NSD_COLORS.text.secondary} />
-              <span
-                style={{
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  color: NSD_COLORS.text.primary,
-                }}
-              >
-                Derived automatically from ICP
-              </span>
-            </div>
-            <p
-              style={{
-                margin: 0,
-                fontSize: '13px',
-                color: NSD_COLORS.text.secondary,
-                lineHeight: 1.6,
-              }}
-            >
-              Organization sourcing is determined by your ICP definition. 
-              Organizations matching your keywords, geographies, and other criteria 
-              will be automatically identified during campaign execution.
-            </p>
-            <div
-              style={{
-                marginTop: '16px',
-                padding: '12px',
-                backgroundColor: NSD_COLORS.background,
-                borderRadius: NSD_RADIUS.sm,
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '12px',
-                  color: NSD_COLORS.text.muted,
-                  fontStyle: 'italic',
-                }}
-              >
-                No configuration required. This step is for your awareness only.
+            <Icon name="info" size={20} color={NSD_COLORS.text.secondary} />
+            <div>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
+                Organization Sourcing
+              </p>
+              <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: NSD_COLORS.text.secondary }}>
+                Organizations will be automatically identified based on your ICP criteria above.
               </p>
             </div>
           </div>
@@ -918,8 +871,8 @@ export default function NewCampaignPage() {
         <WizardStep
           title="Contact Targeting"
           description="Define how contacts are selected within organizations"
-          isActive={currentStep === 3}
-          stepNumber={4}
+          isActive={currentStep === 2}
+          stepNumber={3}
           totalSteps={WIZARD_STEPS.length}
         >
           {/* Show inheritance notice when ICP values exist */}
@@ -942,20 +895,20 @@ export default function NewCampaignPage() {
             </div>
           )}
           <TagInput
-            label="Target Roles"
-            name="roles"
-            values={formData.roles.length > 0 ? formData.roles : formData.jobTitles}
-            onChange={(v) => updateField('roles', v)}
-            placeholder="e.g., Sales, Marketing"
-            helpText={formData.roles.length === 0 && formData.jobTitles.length > 0 ? "Using Job Titles from ICP Definition" : undefined}
+            label="Job Titles / Roles"
+            name="jobTitles"
+            values={formData.jobTitles}
+            onChange={(v) => updateField('jobTitles', v)}
+            placeholder="e.g., VP of Sales, Marketing Director, CRO"
+            helpText="Specific job titles or functional roles to target"
           />
           <TagInput
             label="Seniority Levels"
-            name="seniority"
-            values={formData.seniority.length > 0 ? formData.seniority : formData.seniorityLevels}
-            onChange={(v) => updateField('seniority', v)}
+            name="seniorityLevels"
+            values={formData.seniorityLevels}
+            onChange={(v) => updateField('seniorityLevels', v)}
             placeholder="e.g., Director, VP, C-Level"
-            helpText={formData.seniority.length === 0 && formData.seniorityLevels.length > 0 ? "Using Seniority Levels from ICP Definition" : undefined}
+            helpText="Decision-making level within organizations"
           />
           <FormField
             label="Max Contacts per Organization"
@@ -964,6 +917,17 @@ export default function NewCampaignPage() {
             value={formData.maxContactsPerOrg}
             onChange={(v) => updateField('maxContactsPerOrg', Number(v))}
           />
+          <div style={{ marginTop: '16px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={formData.requireVerifiedEmail}
+                onChange={(e) => updateField('requireVerifiedEmail', e.target.checked)}
+                style={{ accentColor: NSD_COLORS.cta }}
+              />
+              <span style={{ fontSize: '14px', color: NSD_COLORS.text.primary }}>Require verified email</span>
+            </label>
+          </div>
         </WizardStep>
 
         {/* M67-14: Lead Qualification step REMOVED - minimumSignals is forbidden */}
@@ -971,8 +935,8 @@ export default function NewCampaignPage() {
         <WizardStep
           title="Outreach Context"
           description="Messaging and positioning for outreach"
-          isActive={currentStep === 4}
-          stepNumber={5}
+          isActive={currentStep === 3}
+          stepNumber={4}
           totalSteps={WIZARD_STEPS.length}
         >
           <FormField
@@ -1021,8 +985,8 @@ export default function NewCampaignPage() {
         <WizardStep
           title="Campaign Targets (Optional)"
           description="Benchmarks only — do not affect campaign execution"
-          isActive={currentStep === 5}
-          stepNumber={6}
+          isActive={currentStep === 4}
+          stepNumber={5}
           totalSteps={WIZARD_STEPS.length}
         >
           <div

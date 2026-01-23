@@ -25,6 +25,10 @@ export interface ResolvableRun {
   created_at?: string;
   updated_at?: string;
   completed_at?: string | null;
+  // Terminal metadata for invariant violation detection
+  failure_reason?: string | null;
+  termination_reason?: string | null;
+  reason?: string | null;
 }
 
 /**
@@ -248,13 +252,42 @@ export function getStalenessInfo(run: ResolvableRun | null): {
  * No component may compute execution state independently.
  */
 export type CanonicalRunState = 
-  | 'idle'       // No runs exist
-  | 'queued'     // status = 'queued' | 'run_requested' | 'pending'
-  | 'running'    // status = 'running' | 'in_progress' AND not stale
-  | 'stalled'    // status = 'running' | 'in_progress' AND stale (>30 min)
-  | 'failed'     // status = 'failed' | 'error'
-  | 'completed'  // status = 'completed' | 'success' | 'succeeded'
-  | 'skipped';   // status = 'skipped' | 'partial'
+  | 'idle'                  // No runs exist
+  | 'queued'                // status = 'queued' | 'run_requested' | 'pending'
+  | 'running'               // status = 'running' | 'in_progress' AND not stale
+  | 'stalled'               // status = 'running' | 'in_progress' AND stale (>30 min)
+  | 'failed'                // status = 'failed' | 'error'
+  | 'invariant_violation'   // status = 'failed' AND reason = 'invariant_violation'
+  | 'completed'             // status = 'completed' | 'success' | 'succeeded'
+  | 'skipped';              // status = 'skipped' | 'partial'
+
+/**
+ * Check if a run failed due to an invariant violation.
+ * 
+ * INVARIANT VIOLATION SEMANTICS:
+ * When status = "failed" AND reason = "invariant_violation", this indicates
+ * a critical system invariant was violated during execution. This is NOT
+ * an intentional pause - it's a hard failure that must be surfaced explicitly.
+ * The UI must NOT present this as completed or show results as valid.
+ */
+export function isInvariantViolation(run: ResolvableRun | null): boolean {
+  if (!run) return false;
+  const status = normalizeStatus(run.status);
+  if (status !== 'failed' && status !== 'error') return false;
+  
+  const reason = (run.reason || '').toLowerCase();
+  const failureReason = (run.failure_reason || '').toLowerCase();
+  const terminationReason = (run.termination_reason || '').toLowerCase();
+  
+  return (
+    reason === 'invariant_violation' ||
+    failureReason === 'invariant_violation' ||
+    terminationReason === 'invariant_violation' ||
+    reason.includes('invariant') ||
+    failureReason.includes('invariant') ||
+    terminationReason.includes('invariant')
+  );
+}
 
 export interface CanonicalRunStateResult {
   /** The canonical state derived from campaign_runs.status */
@@ -274,13 +307,14 @@ export interface CanonicalRunStateResult {
  * 
  * Canonical Status → UI Message (STRICTLY ENFORCED)
  * 
- * failed      → "Last execution failed"
- * completed   → "Last execution completed successfully"
- * skipped     → "Execution skipped (planning only)"
- * none/idle   → "No execution has run yet"
- * queued      → "Execution queued"
- * running     → "Execution in progress"
- * stalled     → "Execution stalled — system will mark failed"
+ * failed               → "Last execution failed"
+ * invariant_violation  → "Execution failed — invariant violation"
+ * completed            → "Last execution completed successfully"
+ * skipped              → "Execution skipped (planning only)"
+ * none/idle            → "No execution has run yet"
+ * queued               → "Execution queued"
+ * running              → "Execution in progress"
+ * stalled              → "Execution stalled — system will mark failed"
  * 
  * NO OTHER COMBINATIONS ARE ALLOWED.
  */
@@ -290,6 +324,7 @@ const CANONICAL_MESSAGES: Record<CanonicalRunState, string> = {
   running: 'Execution in progress',
   stalled: 'Execution stalled — system will mark failed',
   failed: 'Last execution failed',
+  invariant_violation: 'Execution failed — invariant violation',
   completed: 'Last execution completed successfully',
   skipped: 'Execution skipped (planning only)',
 };
@@ -357,8 +392,19 @@ export function resolveCanonicalRunState(
     };
   }
 
-  // Case 4: Failed
+  // Case 4: Failed - check for invariant violation first
   if (status === 'failed' || status === 'error') {
+    // Check for invariant violation (critical failure - must surface explicitly)
+    if (isInvariantViolation(run)) {
+      return {
+        state: 'invariant_violation',
+        rawStatus: run.status,
+        timestamp,
+        isActive: false,
+        message: CANONICAL_MESSAGES.invariant_violation,
+      };
+    }
+    
     return {
       state: 'failed',
       rawStatus: run.status,

@@ -1,17 +1,34 @@
 /**
  * Sales Engine API Client - Target-State Architecture
  * 
- * This module provides a READ-ONLY API client for the Sales Engine UI.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EXECUTION AUTHORITY CONTRACT
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * INVARIANT: Execution truth comes ONLY from sales-engine.
+ * 
+ * Platform-shell is a PURE CONSUMER of execution data.
+ * 
+ * ALLOWED EXECUTION ENDPOINTS:
+ * - getExecutionState()  → GET /api/v1/campaigns/:id/execution-state
+ * - getRunHistory()      → GET /api/v1/campaigns/:id/run-history
+ * 
+ * FORBIDDEN (DO NOT ADD):
+ * - GET /api/v1/campaigns/:id/runs
+ * - GET /api/v1/campaigns/:id/runs/latest  
+ * - GET /api/v1/campaigns/:id/observability/*
+ * - Any local database queries for execution data
+ * - Inference or reconstruction of execution state
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
  * 
  * Non-negotiable constraints:
- * - Only GET requests are allowed from the UI layer
- * - All mutation functions have been removed or replaced with read-only alternatives
- * - Execution is observed, not initiated
- * - Canonical ODS is the source of truth
+ * - Only GET requests for read-only display
+ * - Execution is observed from sales-engine, not computed locally
+ * - If sales-engine is unreachable, show error (no fallback)
  * 
  * M67.9-01 Vercel Hosting:
  * - When NEXT_PUBLIC_API_MODE=disabled, all API calls return empty/mock data
- * - No network calls are made when API mode is disabled
  */
 
 import type {
@@ -33,6 +50,9 @@ import type {
   RunRequestResponse,
   ObservabilityStatus,
   ObservabilityFunnel,
+  FunnelScope,
+  FunnelExecution,
+  DualLayerFunnel,
 } from '../types/campaign';
 import {
   assertReadOnly,
@@ -392,13 +412,131 @@ export async function getCampaignMetricsHistory(id: string): Promise<MetricsHist
 }
 
 /**
+ * Get campaign scope (business-first funnel).
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * INVARIANT:
+ * Funnel scope represents business value and MUST NOT depend on execution.
+ * Campaign value exists independently of execution.
+ * Execution unlocks value — it does not define it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Returns eligibility counts that:
+ * - MUST populate even if execution has never run
+ * - MUST populate even if execution produces zero new writes
+ * - MUST NOT depend on run status
+ * 
+ * @param id - Campaign ID
+ * @returns FunnelScope with eligibility counts
+ */
+export async function getCampaignScope(id: string): Promise<FunnelScope> {
+  // M67.9-01: Return empty scope when API is disabled
+  if (isApiDisabled) {
+    return {
+      eligibleOrganizations: 0,
+      eligibleContacts: 0,
+      eligibleLeads: 0,
+      scopeAvailable: false,
+      scopeComputedAt: new Date().toISOString(),
+    };
+  }
+
+  try {
+    // Fetch from scope endpoint (separate from execution-state)
+    const response = await fetch(`/api/campaigns/${encodeURIComponent(id)}/scope`, {
+      headers: buildHeaders(),
+    });
+
+    if (!response.ok) {
+      console.warn(`[getCampaignScope] Non-OK response: ${response.status}`);
+      return {
+        eligibleOrganizations: 0,
+        eligibleContacts: 0,
+        eligibleLeads: 0,
+        scopeAvailable: false,
+        scopeComputedAt: new Date().toISOString(),
+      };
+    }
+
+    const data = await response.json();
+    
+    return {
+      eligibleOrganizations: data.eligibleOrganizations ?? 0,
+      eligibleContacts: data.eligibleContacts ?? 0,
+      eligibleLeads: data.eligibleLeads ?? 0,
+      scopeAvailable: data.scopeAvailable ?? true,
+      scopeComputedAt: data.scopeComputedAt ?? new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('[getCampaignScope] Error:', error);
+    return {
+      eligibleOrganizations: 0,
+      eligibleContacts: 0,
+      eligibleLeads: 0,
+      scopeAvailable: false,
+      scopeComputedAt: new Date().toISOString(),
+    };
+  }
+}
+
+/**
+ * Get dual-layer funnel data (scope + execution).
+ * 
+ * Combines:
+ * - Business scope (from getCampaignScope)
+ * - Execution progress (from getExecutionState)
+ * 
+ * INVARIANT:
+ * Scope is primary and independent of execution.
+ * Execution metrics are observational and secondary.
+ * 
+ * @param id - Campaign ID
+ * @returns DualLayerFunnel with both scope and execution data
+ */
+export async function getDualLayerFunnel(id: string): Promise<DualLayerFunnel> {
+  // Fetch both in parallel
+  const [scope, executionState] = await Promise.all([
+    getCampaignScope(id),
+    getExecutionState(id).catch(() => null),
+  ]);
+
+  // Extract execution metrics from execution state
+  const execution: FunnelExecution = {
+    processedOrganizations: executionState?.funnel?.organizations?.total ?? 0,
+    processedContacts: executionState?.funnel?.contacts?.total ?? 0,
+    promotedLeads: executionState?.funnel?.leads?.total ?? 0,
+    sentMessages: 0, // Not yet available in execution-state
+    executionAvailable: executionState !== null,
+    runId: executionState?.run?.id,
+    runStatus: executionState?.run?.status,
+  };
+
+  return {
+    campaignId: id,
+    scope,
+    execution,
+    lastUpdatedAt: new Date().toISOString(),
+  };
+}
+
+/**
  * Get campaign runs (read-only observability).
+ * 
+ * @deprecated OBSERVATIONS-FIRST MIGRATION:
+ * This function queries legacy run endpoints that may not reflect
+ * the canonical execution state. Use useExecutionState() hook instead.
+ * 
+ * Canonical endpoints:
+ * - execution-state: Single source of truth for execution
+ * - run-history: When canonical run history endpoint is available
+ * - market-scope / harvest-metrics: For scope data
  * 
  * DEFENSIVE NORMALIZATION:
  * If endpoint returns { runs: [...] } instead of [...], normalize to array.
  * This handles potential backend/frontend shape mismatches gracefully.
  */
 export async function getCampaignRuns(id: string): Promise<CampaignRun[]> {
+  console.warn(`[DEPRECATED] getCampaignRuns(${id}) - Use useExecutionState() hook instead`);
   // M67.9-01: Return empty array when API is disabled
   if (isApiDisabled) {
     return [];
@@ -409,8 +547,16 @@ export async function getCampaignRuns(id: string): Promise<CampaignRun[]> {
 
 /**
  * Get latest campaign run (read-only observability).
+ * 
+ * @deprecated OBSERVATIONS-FIRST MIGRATION:
+ * This function queries legacy run endpoints. Use useExecutionState() hook instead.
+ * The execution-state endpoint is the single source of truth for execution state.
+ * 
+ * Canonical endpoints:
+ * - /api/v1/campaigns/:id/execution-state
  */
 export async function getLatestRun(id: string): Promise<CampaignRun | null> {
+  console.warn(`[DEPRECATED] getLatestRun(${id}) - Use useExecutionState() hook instead`);
   // M67.9-01: Return null when API is disabled
   if (isApiDisabled) {
     return null;
@@ -560,6 +706,16 @@ export async function getCampaignObservability(id: string): Promise<CampaignObse
 /**
  * Get detailed campaign runs with full pipeline visibility (read-only).
  * 
+ * @deprecated OBSERVATIONS-FIRST MIGRATION:
+ * This function queries legacy run endpoints. Use useExecutionState() hook instead.
+ * 
+ * When run history is needed:
+ * - Use the canonical run-history endpoint when available
+ * - Do NOT reconstruct run history from events
+ * 
+ * Canonical endpoints:
+ * - /api/v1/campaigns/:id/execution-state - Single source of execution truth
+ * 
  * Data source: GET /api/v1/campaigns/{id}/runs
  * 
  * Extended from getCampaignRuns to include per-run pipeline counts.
@@ -571,6 +727,7 @@ export async function getCampaignObservability(id: string): Promise<CampaignObse
  * If endpoint returns { runs: [...] } instead of [...], normalize to array.
  */
 export async function getCampaignRunsDetailed(id: string): Promise<CampaignRunDetailed[]> {
+  console.warn(`[DEPRECATED] getCampaignRunsDetailed(${id}) - Use useExecutionState() hook instead`);
   // M67.9-01: Return empty array when API is disabled
   if (isApiDisabled) {
     return [];
@@ -661,6 +818,17 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
 // =============================================================================
 
 /**
+ * Run intent determines execution behavior.
+ * 
+ * HARVEST_ONLY: Observe and collect market data without sending emails.
+ *   Use this to validate market scope without activating outreach.
+ * 
+ * ACTIVATE: Full execution including email dispatch.
+ *   Use this when ready to engage contacts.
+ */
+export type RunIntent = 'HARVEST_ONLY' | 'ACTIVATE';
+
+/**
  * Request campaign execution via server-side proxy.
  * 
  * Execution is handled exclusively by nsd-sales-engine.
@@ -672,6 +840,11 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
  * 
  * The proxy uses SALES_ENGINE_URL + SALES_ENGINE_API_BASE_URL to construct
  * the target URL. If the primary path returns 404, it tries a fallback.
+ * 
+ * OBSERVATIONS-FIRST ARCHITECTURE:
+ * - runIntent controls what the execution does
+ * - HARVEST_ONLY = observe market, collect data, NO emails
+ * - ACTIVATE = full execution with email dispatch
  * 
  * On 202 Accepted:
  * - A campaign_run is created in nsd-ods
@@ -686,17 +859,22 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
  * - 504: "Execution service timed out."
  * - 5xx: "Execution service unavailable. Please try again."
  * 
+ * @param id - Campaign ID
+ * @param runIntent - Optional intent (defaults to ACTIVATE for backward compatibility)
  * @returns RunRequestResponse with status and run_id
  * @throws Error if request fails or campaign cannot be started
  */
-export async function requestCampaignRun(id: string): Promise<RunRequestResponse> {
+export async function requestCampaignRun(
+  id: string, 
+  runIntent: RunIntent = 'ACTIVATE'
+): Promise<RunRequestResponse> {
   // When API is disabled, return a mock response indicating the action would occur
   if (isApiDisabled) {
-    console.log(`[API] API mode disabled - mock run request for campaign ${id}`);
+    console.log(`[API] API mode disabled - mock run request for campaign ${id} (intent: ${runIntent})`);
     return {
       status: 'queued',
       campaign_id: id,
-      message: 'Execution request accepted (API disabled - mock response)',
+      message: `Execution request accepted (API disabled - mock response, intent: ${runIntent})`,
       delegated_to: null,
     };
   }
@@ -708,7 +886,7 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
     const response = await fetch('/api/execute-campaign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId: id }),
+      body: JSON.stringify({ campaignId: id, runIntent }),
     });
 
     // 202 Accepted = success (execution intent accepted by Sales Engine)
@@ -941,6 +1119,281 @@ export async function duplicateCampaign(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+// =============================================================================
+// EXECUTION STATE (CANONICAL - SOLE AUTHORITY)
+// GET /api/v1/campaigns/:id/execution-state
+// 
+// THIS IS THE ONLY SOURCE FOR EXECUTION-RELATED DATA.
+// NO fallbacks to legacy endpoints. NO inference. NO silent failures.
+// =============================================================================
+
+/**
+ * Canonical execution state response.
+ * 
+ * THIS IS THE SOLE EXECUTION AUTHORITY.
+ * All execution-related UI must derive from this type.
+ * 
+ * Source: GET /api/v1/campaigns/:id/execution-state
+ */
+export interface ExecutionState {
+  campaignId: string;
+  run: {
+    id: string;
+    status: string;
+    stage?: string;
+    startedAt?: string;
+    endedAt?: string;
+    terminationReason?: string;
+    errorMessage?: string;
+  } | null;
+  funnel: {
+    organizations: {
+      total: number;
+      qualified: number;
+      review: number;
+      disqualified: number;
+    };
+    contacts: {
+      total: number;
+      sourced: number;
+      ready: number;
+      withEmail: number;
+    };
+    leads: {
+      total: number;
+      pending: number;
+      approved: number;
+    };
+  };
+  lastUpdatedAt: string;
+}
+
+// =============================================================================
+// RUN HISTORY (CANONICAL - FROM SALES-ENGINE)
+// GET /api/v1/campaigns/:id/run-history
+// 
+// EXECUTION AUTHORITY CONTRACT:
+// - Sales-engine is the SOLE source of run history
+// - Platform-shell displays what sales-engine provides
+// - NO inference, grouping, or reconstruction
+// - NO fallback to legacy endpoints
+// =============================================================================
+
+/**
+ * A single historical run from sales-engine.
+ * 
+ * EXECUTION AUTHORITY: Sales-engine is the sole source.
+ * Display only what the backend provides.
+ */
+export interface HistoricalRun {
+  id: string;
+  status: string;
+  startedAt: string;
+  endedAt?: string;
+  terminationReason?: string;
+  errorMessage?: string;
+  /** Summary counts at time of run completion */
+  summary?: {
+    organizationsSourced?: number;
+    contactsDiscovered?: number;
+    leadsPromoted?: number;
+  };
+}
+
+/**
+ * Run history response from sales-engine.
+ * 
+ * EXECUTION AUTHORITY CONTRACT:
+ * - If available=false, show "Run history not available yet"
+ * - Do NOT fallback to legacy endpoints
+ * - Do NOT reconstruct runs from events
+ */
+export interface RunHistoryResponse {
+  campaignId: string;
+  runs: HistoricalRun[];
+  available: boolean;
+  lastUpdatedAt?: string;
+}
+
+/**
+ * Legacy type alias for migration compatibility.
+ * Maps ExecutionState to the old RealTimeExecutionStatus shape.
+ * 
+ * @deprecated Use ExecutionState directly. This will be removed.
+ */
+export interface RealTimeExecutionStatus {
+  campaignId: string;
+  latestRun: {
+    id: string;
+    status: string;
+    phase?: string;
+    stage?: string;
+    startedAt?: string;
+    completedAt?: string;
+    durationSeconds?: number;
+    errorMessage?: string;
+    terminationReason?: string;
+  } | null;
+  funnel: {
+    organizations: {
+      total: number;
+      qualified: number;
+      review: number;
+      disqualified: number;
+    };
+    contacts: {
+      total: number;
+      sourced: number;
+      ready: number;
+      withEmail: number;
+      scored?: number;
+      enriched?: number;
+    };
+    leads: {
+      total: number;
+      pending: number;
+      approved: number;
+    };
+  };
+  stages?: Array<{
+    stage: string;
+    status: 'pending' | 'running' | 'success' | 'error' | 'skipped';
+    message: string;
+    details?: Record<string, unknown>;
+    completedAt?: string;
+  }>;
+  alerts?: Array<{
+    type: 'info' | 'warning' | 'error';
+    message: string;
+  }>;
+  _meta?: {
+    fetchedAt: string;
+    source: string;
+  };
+}
+
+/**
+ * Get canonical execution state from sales-engine.
+ * 
+ * ARCHITECTURAL CONSTRAINT:
+ * - Sales-engine is the SOLE execution authority
+ * - Platform-shell does NOT implement execution logic
+ * - This function calls a proxy that forwards to sales-engine
+ * 
+ * Proxy: GET /api/proxy/execution-state?campaignId=xxx
+ * Target: GET ${SALES_ENGINE_URL}/api/v1/campaigns/:id/execution-state
+ * 
+ * NO fallbacks. NO inference. NO local database queries.
+ * If this fails, the UI must show an error state.
+ */
+export async function getExecutionState(id: string): Promise<ExecutionState> {
+  // Use proxy endpoint to avoid CORS and keep SALES_ENGINE_URL server-side
+  const endpoint = `/api/proxy/execution-state?campaignId=${encodeURIComponent(id)}`;
+  
+  if (isApiDisabled) {
+    return {
+      campaignId: id,
+      run: null,
+      funnel: {
+        organizations: { total: 0, qualified: 0, review: 0, disqualified: 0 },
+        contacts: { total: 0, sourced: 0, ready: 0, withEmail: 0 },
+        leads: { total: 0, pending: 0, approved: 0 },
+      },
+      lastUpdatedAt: new Date().toISOString(),
+    };
+  }
+
+  console.log('[getExecutionState] Fetching from sales-engine:', { campaignId: id });
+
+  const response = await fetch(endpoint, { headers: buildHeaders() });
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error('[getExecutionState] Fetch failed:', { 
+      campaignId: id, 
+      status: response.status,
+      error: data.error,
+    });
+    throw new Error(data.message || `Execution state unavailable: ${response.status}`);
+  }
+
+  console.log('[getExecutionState] Received from sales-engine:', {
+    campaignId: id,
+    runId: data.run?.id ?? 'none',
+    runStatus: data.run?.status ?? 'no_runs',
+  });
+
+  return data as ExecutionState;
+}
+
+/**
+ * Get run history from sales-engine.
+ * 
+ * EXECUTION AUTHORITY CONTRACT:
+ * - Sales-engine is the SOLE source of run history
+ * - Platform-shell displays what sales-engine provides
+ * - NO inference, grouping, or reconstruction
+ * - NO fallback to legacy endpoints (/runs, /campaign-runs, etc.)
+ * 
+ * Proxy: GET /api/proxy/run-history?campaignId=xxx
+ * Target: GET ${SALES_ENGINE_URL}/api/v1/campaigns/:id/run-history
+ * 
+ * If endpoint is unavailable:
+ * - Returns { available: false, runs: [] }
+ * - UI should show "Run history not available yet"
+ * - Do NOT attempt fallback or reconstruction
+ */
+export async function getRunHistory(id: string): Promise<RunHistoryResponse> {
+  const endpoint = `/api/proxy/run-history?campaignId=${encodeURIComponent(id)}`;
+  
+  if (isApiDisabled) {
+    return {
+      campaignId: id,
+      runs: [],
+      available: false,
+    };
+  }
+
+  console.log('[getRunHistory] Fetching from sales-engine:', { campaignId: id });
+
+  try {
+    const response = await fetch(endpoint, { headers: buildHeaders() });
+    const data = await response.json();
+
+    // Handle graceful unavailability (endpoint not implemented yet)
+    if (!data.available) {
+      console.log('[getRunHistory] Not available yet:', { campaignId: id });
+      return {
+        campaignId: id,
+        runs: [],
+        available: false,
+      };
+    }
+
+    console.log('[getRunHistory] Received from sales-engine:', {
+      campaignId: id,
+      runCount: data.runs?.length ?? 0,
+      available: data.available,
+    });
+
+    return {
+      campaignId: id,
+      runs: data.runs || [],
+      available: true,
+      lastUpdatedAt: data.lastUpdatedAt,
+    };
+  } catch (error) {
+    console.error('[getRunHistory] Fetch failed:', { campaignId: id, error });
+    // Return unavailable state - do NOT throw
+    // UI should handle gracefully, not show error
+    return {
+      campaignId: id,
+      runs: [],
+      available: false,
     };
   }
 }

@@ -1,9 +1,17 @@
 /**
  * PipelineFunnelTable Component
  * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * INVARIANT:
+ * Funnel scope represents business value and MUST NOT depend on execution.
+ * Execution metrics are observational only.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
  * Displays the campaign pipeline funnel with stage counts and confidence.
  * 
- * Data source: GET /campaigns/{id}/observability
+ * DUAL-LAYER DISPLAY:
+ * 1. SCOPE (Primary): "X eligible" - who the campaign CAN reach
+ * 2. EXECUTION (Secondary): "Y processed this run" - execution progress
  * 
  * OBSERVABILITY GOVERNANCE:
  * - Read-only display
@@ -11,16 +19,17 @@
  * - Confidence badge required for each stage
  * - Tooltips explain each stage
  * - No execution control, retries, or overrides
+ * - Scope MUST populate even if execution has never run
  * 
- * Pipeline stages:
- * - Organizations sourced
- * - Contacts discovered
- * - Contacts evaluated
- * - Leads promoted
- * - Leads awaiting approval
- * - Leads approved
- * - Emails sent
- * - Replies
+ * ❌ FORBIDDEN MESSAGING:
+ * - "No activity observed yet"
+ * - "No data available"  
+ * - "Nothing processed"
+ * 
+ * ✅ REQUIRED MESSAGING:
+ * - "X organizations match this campaign"
+ * - "Execution has not processed them yet"
+ * - "0 processed in this run"
  */
 
 'use client';
@@ -411,7 +420,7 @@ export function PipelineFunnelTable({
         </div>
       )}
 
-      {/* Empty state - No activity observed yet */}
+      {/* Empty state - Scope available but no execution yet */}
       {stages.length === 0 ? (
         <div style={{ padding: '40px', textAlign: 'center' }}>
           <div
@@ -436,7 +445,7 @@ export function PipelineFunnelTable({
               color: NSD_COLORS.primary,
             }}
           >
-            No activity observed yet
+            Execution has not processed entities yet
           </h5>
           <p
             style={{
@@ -445,7 +454,7 @@ export function PipelineFunnelTable({
               color: NSD_COLORS.text.secondary,
             }}
           >
-            Pipeline activity will appear here after campaign execution begins.
+            This campaign has eligible entities. Execution progress will appear here once processing begins.
           </p>
         </div>
       ) : (
@@ -596,7 +605,7 @@ export function PipelineFunnelTable({
         </div>
       )}
 
-      {/* Governance note */}
+      {/* Governance note - INVARIANT explanation */}
       <div
         style={{
           padding: '12px 20px',
@@ -612,7 +621,8 @@ export function PipelineFunnelTable({
             fontStyle: 'italic',
           }}
         >
-          Counts are backend-authoritative. Read-only projection from activity events.
+          {/* INVARIANT: Scope is business value, execution is observational */}
+          Counts show execution progress. Business scope shown separately above.
         </p>
       </div>
     </div>

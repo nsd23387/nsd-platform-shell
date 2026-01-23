@@ -1,39 +1,46 @@
 'use client';
 
 import type { CampaignStatus } from '../../types/campaign';
-import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, EXECUTION_STATUS_LABELS } from '../../lib/design-tokens';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { STATUS_COPY, getStatusCopy, type CampaignStatusKey } from '../../lib/status-copy';
 
 /**
  * Status configuration for campaign states.
  * 
- * EXECUTION STATUS MAPPING (queued → cron model):
- * - queued/run_requested: "Queued – execution will start shortly"
- * - running: "Running – sourcing organizations" (or current stage)
- * - completed: "Completed – results available"
- * - failed: "Failed – see timeline for details"
- * - blocked: "Blocked – see reason"
+ * USES CANONICAL STATUS COPY from lib/status-copy.ts
+ * 
+ * GOVERNANCE STATUS LABELS (campaign.status):
+ * - DRAFT: "Draft"
+ * - PENDING_REVIEW: "Pending Approval"
+ * - RUNNABLE: "Approved"
+ * - RUNNING: "Running" (governance state, not execution)
+ * - COMPLETED: "Completed"
+ * - STOPPED: "Stopped" (human/safety halt)
+ * - FAILED: "Failed" (system error)
+ * - ARCHIVED: "Archived"
  */
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; pulse?: boolean }> = {
-  // Campaign lifecycle states
-  DRAFT: { label: 'Draft', ...NSD_COLORS.status.draft },
-  PENDING_REVIEW: { label: 'Pending Approval', ...NSD_COLORS.status.pendingReview },
-  RUNNABLE: { label: 'Approved', ...NSD_COLORS.status.approvedReady },
-  RUNNING: { label: 'Running', ...NSD_COLORS.status.running },
-  COMPLETED: { label: 'Completed', ...NSD_COLORS.status.completed },
-  FAILED: { label: 'Failed', ...NSD_COLORS.status.failed },
-  ARCHIVED: { label: 'Archived', ...NSD_COLORS.status.archived },
+  // Campaign governance states - using canonical copy
+  DRAFT: { label: STATUS_COPY.DRAFT.label, ...STATUS_COPY.DRAFT.color },
+  PENDING_REVIEW: { label: STATUS_COPY.PENDING_REVIEW.label, ...STATUS_COPY.PENDING_REVIEW.color },
+  RUNNABLE: { label: STATUS_COPY.RUNNABLE.label, ...STATUS_COPY.RUNNABLE.color },
+  RUNNING: { label: STATUS_COPY.RUNNING.label, ...STATUS_COPY.RUNNING.color, pulse: true },
+  COMPLETED: { label: STATUS_COPY.COMPLETED.label, ...STATUS_COPY.COMPLETED.color },
+  STOPPED: { label: STATUS_COPY.STOPPED.label, ...STATUS_COPY.STOPPED.color },
+  FAILED: { label: STATUS_COPY.FAILED.label, ...STATUS_COPY.FAILED.color },
+  ARCHIVED: { label: STATUS_COPY.ARCHIVED.label, ...STATUS_COPY.ARCHIVED.color },
   
-  // Run status labels
+  // Run status labels (legacy compatibility)
   PARTIAL: { label: 'Partial', ...NSD_COLORS.semantic.attention },
   
-  // Execution status labels (queued → cron model)
+  // Execution status labels (for run status, not governance)
   queued: { 
-    label: 'Queued – starting shortly', 
+    label: 'Queued', 
     ...NSD_COLORS.semantic.info,
-    pulse: true,  // Indicates this status should show pulse animation
+    pulse: true,
   },
   run_requested: { 
-    label: 'Queued – starting shortly', 
+    label: 'Queued', 
     ...NSD_COLORS.semantic.info,
     pulse: true,
   },
@@ -43,15 +50,23 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; b
     pulse: true,
   },
   completed: { 
-    label: 'Completed – results available', 
+    label: 'Completed', 
     ...NSD_COLORS.semantic.positive,
   },
+  stopped: {
+    label: 'Stopped',
+    ...NSD_COLORS.semantic.attention,
+  },
   failed: { 
-    label: 'Failed – see timeline', 
+    label: 'Failed', 
+    ...NSD_COLORS.semantic.critical,
+  },
+  invariant_violation: {
+    label: 'Error',
     ...NSD_COLORS.semantic.critical,
   },
   blocked: { 
-    label: 'Blocked – see reason', 
+    label: 'Blocked', 
     ...NSD_COLORS.semantic.critical,
   },
   awaiting_approvals: { 

@@ -564,9 +564,91 @@ export function mapExecutionNarrative(
   
   // =====================================================================
   // CASE 4: FAILED - status = failed
+  // 
+  // TARGET-STATE EXECUTION SEMANTICS:
+  // When termination_reason indicates an intentional pause, this is NOT an error.
+  // Intentional pauses include: unprocessed_work_remaining, execution_timeout, batch_limit_reached
+  // Display as "Incomplete" or "Timeout" with info severity, not as a failure.
+  // 
+  // INVARIANT VIOLATION SEMANTICS:
+  // When reason = "invariant_violation", this is a HARD FAILURE that must be
+  // surfaced explicitly. The UI must NOT present this as completed or show results.
   // =====================================================================
   if (status === 'failed' || status === 'error') {
     const failureContext = getFailureContext(runEvents);
+    const terminationReason = latestRun.termination_reason?.toLowerCase() || '';
+    const failureReasonRaw = latestRun.failure_reason?.toLowerCase() || '';
+    
+    // INVARIANT VIOLATION: Critical failure - must display explicit failure banner
+    // DO NOT present as completed, DO NOT show results as valid
+    const isInvariantViolation = (
+      terminationReason === 'invariant_violation' ||
+      failureReasonRaw === 'invariant_violation' ||
+      terminationReason.includes('invariant') ||
+      failureReasonRaw.includes('invariant')
+    );
+    
+    if (isInvariantViolation) {
+      return {
+        mode: 'terminal',
+        headline: 'Execution failed — invariant violation',
+        subheadline: 'A critical system invariant was violated during execution. Results from this run are invalid.',
+        lastEventAt: mostRecentEvent?.occurred_at,
+        terminal: {
+          status: 'failed',
+          reason: 'Invariant violation: execution stopped due to data integrity failure. Results are not valid.',
+          completedAt: latestRun.completed_at || latestRun.updated_at || mostRecentEvent?.occurred_at || '',
+        },
+        trustNote: 'This run failed validation. Do NOT treat results as complete or accurate.',
+        _rawStatus: latestRun.status,
+      };
+    }
+    
+    // Check for intentional pause reasons (NOT invariant violation)
+    const isIntentionalPause = (
+      terminationReason === 'unprocessed_work_remaining' ||
+      terminationReason === 'execution_timeout' ||
+      terminationReason === 'batch_limit_reached' ||
+      terminationReason === 'rate_limit_exceeded' ||
+      terminationReason.includes('timeout') ||
+      terminationReason.includes('limit')
+    );
+    
+    // TIMEOUT: execution time limit reached, partial progress preserved
+    if (terminationReason === 'execution_timeout' || terminationReason.includes('timeout')) {
+      return {
+        mode: 'terminal',
+        headline: 'Processing paused — execution timeout',
+        subheadline: 'Execution reached time limit. Partial progress has been preserved and will continue on next run.',
+        lastEventAt: mostRecentEvent?.occurred_at,
+        terminal: {
+          status: 'skipped', // Use 'skipped' to get info-style badge, not error
+          reason: 'Execution timeout: partial progress preserved. Remaining work will continue on next run.',
+          completedAt: latestRun.completed_at || latestRun.updated_at || mostRecentEvent?.occurred_at || '',
+        },
+        trustNote: 'This is normal for large campaigns. Progress shown is accurate.',
+        _rawStatus: latestRun.status,
+      };
+    }
+    
+    // INCOMPLETE RUN: other intentional halts (batch limit, remaining work, etc.)
+    if (isIntentionalPause) {
+      return {
+        mode: 'terminal',
+        headline: 'Run incomplete — pending work remaining',
+        subheadline: 'Execution halted to prevent incomplete processing. Some contacts still require processing.',
+        lastEventAt: mostRecentEvent?.occurred_at,
+        terminal: {
+          status: 'skipped', // Use 'skipped' to get info-style badge, not error
+          reason: 'Intentional halt: execution stopped with remaining processable contacts to ensure correctness.',
+          completedAt: latestRun.completed_at || latestRun.updated_at || mostRecentEvent?.occurred_at || '',
+        },
+        trustNote: 'This is not an error. The system stopped intentionally to maintain data integrity.',
+        _rawStatus: latestRun.status,
+      };
+    }
+    
+    // ACTUAL FAILURE: system error or unexpected termination
     const failureReason = latestRun.failure_reason || latestRun.termination_reason || failureContext;
     
     return {
@@ -664,6 +746,10 @@ function isTerminalStatus(status: string): boolean {
 
 /**
  * Get the narrative badge style based on mode.
+ * 
+ * TARGET-STATE EXECUTION SEMANTICS:
+ * - terminal.status === 'skipped' with invariant reason = info/warning style (not error)
+ * - terminal.status === 'failed' = error style (actual failures only)
  */
 export function getNarrativeBadgeStyle(narrative: ExecutionNarrative): {
   bg: string;
@@ -687,6 +773,11 @@ export function getNarrativeBadgeStyle(narrative: ExecutionNarrative): {
       }
       if (narrative.terminal?.status === 'completed') {
         return { bg: '#D4EDDA', text: '#155724', border: '#C3E6CB' };
+      }
+      // INCOMPLETE/SKIPPED: Use warning/attention style (yellow/amber)
+      // This includes invariant-enforced stops which are NOT errors
+      if (narrative.terminal?.status === 'skipped') {
+        return { bg: '#FFF3CD', text: '#856404', border: '#FFEEBA' };
       }
       return { bg: '#FFF3CD', text: '#856404', border: '#FFEEBA' };
     default:

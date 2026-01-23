@@ -14,12 +14,18 @@
  * 
  * RUNTIME:
  * - Must run in Node runtime for Supabase service role access
+ * 
+ * SCHEMA BINDING:
+ * - Uses 'core' schema (campaigns table is in core.campaigns)
  */
 
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { 
+  createServerClient, 
+  isSupabaseConfigured,
+} from '../../../lib/supabase-server';
 
 interface UpdateCampaignPayload {
   campaign_id: string;
@@ -60,17 +66,17 @@ interface UpdateCampaignPayload {
 }
 
 export async function PATCH(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  console.log('[campaign-update] Received PATCH request');
 
-  if (!supabaseUrl || !supabaseKey) {
+  if (!isSupabaseConfigured()) {
+    console.error('[campaign-update] Supabase not configured');
     return NextResponse.json(
       { success: false, error: 'Database not configured. Please set SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_URL.' },
-      { status: 500 }
+      { status: 503 }
     );
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = createServerClient();
 
   try {
     const body: UpdateCampaignPayload = await request.json();
@@ -82,18 +88,37 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    console.log('[campaign-update] Fetching campaign:', body.campaign_id);
+
     const { data: existingCampaign, error: fetchError } = await supabase
       .from('campaigns')
       .select('id, name, status, icp, sourcing_config, lead_qualification_config')
       .eq('id', body.campaign_id)
       .single();
 
-    if (fetchError || !existingCampaign) {
+    if (fetchError) {
+      console.error('[campaign-update] Fetch error:', fetchError);
+      if (fetchError.code === 'PGRST116') {
+        return NextResponse.json(
+          { success: false, error: 'Campaign not found' },
+          { status: 404 }
+        );
+      }
+      return NextResponse.json(
+        { success: false, error: `Database error: ${fetchError.message}` },
+        { status: 500 }
+      );
+    }
+
+    if (!existingCampaign) {
+      console.error('[campaign-update] Campaign not found:', body.campaign_id);
       return NextResponse.json(
         { success: false, error: 'Campaign not found' },
         { status: 404 }
       );
     }
+
+    console.log('[campaign-update] Found campaign:', existingCampaign.name, 'status:', existingCampaign.status);
 
     // GOVERNANCE: Only DRAFT campaigns can be edited
     const campaignStatus = existingCampaign.status?.toLowerCase();
@@ -199,6 +224,8 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    console.log('[campaign-update] Campaign updated successfully:', body.campaign_id);
+
     return NextResponse.json({
       success: true,
       data: {
@@ -209,10 +236,21 @@ export async function PATCH(request: NextRequest) {
       },
     });
   } catch (err) {
-    console.error('[campaign-update] Error:', err);
+    console.error('[campaign-update] Unexpected error:', err);
     return NextResponse.json(
       { success: false, error: err instanceof Error ? err.message : 'Unknown error' },
       { status: 500 }
     );
   }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'PATCH, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
 }

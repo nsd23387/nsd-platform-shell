@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Campaign, CampaignStatus, DashboardThroughput, NeedsAttentionItem } from './types/campaign';
 import { listCampaigns, getDashboardThroughput, getNeedsAttention } from './lib/api';
-import { PageHeader, StatusChip, Button, DataTable, CampaignListHeader, MiniPipelineIndicator, ExecutionStatusBadge, SkeletonTable, EmptyState } from './components/ui';
-import type { ExecutionState } from './components/ui/ExecutionStatusBadge';
+import { PageHeader, StatusChip, Button, DataTable, CampaignListHeader, MiniPipelineIndicator, SkeletonTable, EmptyState } from './components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, NSD_SHADOWS, NSD_GRADIENTS, NSD_TRANSITIONS, NSD_SPACING, NSD_GLOW } from './lib/design-tokens';
 import { Icon } from '../../design/components/Icon';
 import { getTestCampaigns, shouldShowTestCampaigns, isTestCampaign } from './lib/test-campaign';
@@ -38,16 +37,15 @@ function getRelativeTime(dateString: string): string {
   return date.toLocaleDateString();
 }
 
-function deriveExecutionState(campaign: Campaign): ExecutionState {
-  const status = campaign.status?.toLowerCase() || '';
-  if (status === 'running' || status === 'in_progress') return 'running';
-  if (status === 'completed' || status === 'done') return 'completed';
-  if (status === 'failed' || status === 'error') return 'failed';
-  if (status === 'blocked') return 'blocked';
-  if (status === 'queued' || status === 'run_requested') return 'queued';
-  if (status === 'stalled') return 'stalled';
-  return 'idle';
-}
+/**
+ * OBSERVATIONS-FIRST ARCHITECTURE NOTE:
+ * 
+ * campaign.status is GOVERNANCE state, NOT execution state.
+ * Execution state must come from execution-state endpoint.
+ * 
+ * DO NOT derive execution state from campaign.status.
+ * The campaign list shows governance status only.
+ */
 
 export default function SalesEnginePage() {
   const router = useRouter();
@@ -151,17 +149,9 @@ export default function SalesEnginePage() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: 'Governance',
       width: '140px',
       render: (campaign: Campaign) => <StatusChip status={campaign.status} size="sm" />,
-    },
-    {
-      key: 'execution',
-      header: 'Execution',
-      width: '120px',
-      render: (campaign: Campaign) => (
-        <ExecutionStatusBadge state={deriveExecutionState(campaign)} size="sm" />
-      ),
     },
     {
       key: 'pipeline',
@@ -255,9 +245,9 @@ export default function SalesEnginePage() {
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: NSD_SPACING.md }}>
-              <Link href="/sales-engine/executive" style={{ textDecoration: 'none' }}>
+              <Link href="/sales-engine/home" style={{ textDecoration: 'none' }}>
                 <Button variant="secondary" icon="chart">
-                  Executive View
+                  Dashboard
                 </Button>
               </Link>
               <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>

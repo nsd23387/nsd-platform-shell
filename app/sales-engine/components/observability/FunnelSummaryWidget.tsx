@@ -3,30 +3,50 @@
 /**
  * FunnelSummaryWidget Component
  * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * INVARIANT:
+ * Funnel scope represents business value and MUST NOT depend on execution.
+ * Execution metrics are observational only.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
  * Compact pipeline funnel snapshot for the Overview tab.
  * Shows key counts so users understand "Where in the funnel is this campaign?"
  * without navigating to the Observability tab.
  * 
+ * DUAL-LAYER DISPLAY:
+ * 1. SCOPE (Primary): "X organizations match this campaign" - business value
+ * 2. EXECUTION (Secondary): "Y processed this run" - execution progress
+ * 
  * GOVERNANCE CONSTRAINTS:
  * - Read-only display
  * - Counts are backend-authoritative (no local math)
- * - Empty funnel presented as valid state, not broken
+ * - Scope MUST populate even if execution has never run
+ * - Empty execution is valid state, not broken
  * 
- * Displays:
- * - Organizations sourced
- * - Contacts discovered
- * - Leads promoted
- * - Messages sent
+ * ❌ FORBIDDEN MESSAGING:
+ * - "No activity observed yet"
+ * - "No data available"
+ * - "Nothing processed"
+ * 
+ * ✅ REQUIRED MESSAGING:
+ * - "X organizations match this campaign"
+ * - "Execution has not processed them yet"
+ * - "0 processed in this run"
  */
 
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import { formatEt } from '../../lib/time';
-import type { ObservabilityFunnel, PipelineStage } from '../../types/campaign';
+import type { ObservabilityFunnel, PipelineStage, FunnelScope, FunnelExecution } from '../../types/campaign';
 
 interface FunnelSummaryWidgetProps {
+  /** Legacy: Execution funnel data (for backward compatibility) */
   funnel: ObservabilityFunnel | null;
+  /** NEW: Business scope data (primary display) */
+  scope?: FunnelScope | null;
+  /** NEW: Execution progress data (secondary display) */
+  execution?: FunnelExecution | null;
   loading?: boolean;
 }
 
@@ -34,31 +54,94 @@ interface FunnelMetric {
   stage: string;
   label: string;
   icon: string;
-  count: number;
+  scopeValue: number;
+  executionValue: number;
+  scopeLabel: string;
+  executionLabel: string;
 }
 
-function extractFunnelMetrics(funnel: ObservabilityFunnel | null): FunnelMetric[] {
+/**
+ * Extract funnel metrics with dual-layer support.
+ * Prioritizes scope data when available, falls back to execution funnel.
+ */
+function extractFunnelMetrics(
+  funnel: ObservabilityFunnel | null,
+  scope?: FunnelScope | null,
+  execution?: FunnelExecution | null
+): FunnelMetric[] {
+  // AUTHORITATIVE PIPELINE ORDER with dual-layer values
   const metrics: FunnelMetric[] = [
-    { stage: 'orgs_sourced', label: 'Organizations sourced', icon: 'briefcase', count: 0 },
-    { stage: 'contacts_discovered', label: 'Contacts discovered', icon: 'users', count: 0 },
-    { stage: 'leads_promoted', label: 'Leads promoted', icon: 'star', count: 0 },
-    { stage: 'emails_sent', label: 'Messages sent', icon: 'mail', count: 0 },
+    { 
+      stage: 'orgs_sourced', 
+      label: 'Organizations', 
+      icon: 'briefcase',
+      scopeValue: scope?.eligibleOrganizations ?? 0,
+      executionValue: execution?.processedOrganizations ?? 0,
+      scopeLabel: 'eligible',
+      executionLabel: 'processed',
+    },
+    { 
+      stage: 'contacts_discovered', 
+      label: 'Contacts', 
+      icon: 'users',
+      scopeValue: scope?.eligibleContacts ?? 0,
+      executionValue: execution?.processedContacts ?? 0,
+      scopeLabel: 'eligible',
+      executionLabel: 'discovered',
+    },
+    { 
+      stage: 'leads_promoted', 
+      label: 'Leads', 
+      icon: 'star',
+      scopeValue: scope?.eligibleLeads ?? 0,
+      executionValue: execution?.promotedLeads ?? 0,
+      scopeLabel: 'promoted',
+      executionLabel: 'this run',
+    },
+    { 
+      stage: 'emails_sent', 
+      label: 'Sent', 
+      icon: 'mail',
+      scopeValue: 0, // Messages don't have scope
+      executionValue: execution?.sentMessages ?? 0,
+      scopeLabel: '',
+      executionLabel: 'sent',
+    },
   ];
 
-  if (!funnel || !funnel.stages) return metrics;
+  // If no scope data, try to use execution funnel for backward compatibility
+  if (!scope?.scopeAvailable && funnel?.stages) {
+    const stageMap = new Map<string, number>();
+    funnel.stages.forEach((stage) => {
+      stageMap.set(stage.stage, stage.count);
+    });
 
-  const stageMap = new Map<string, number>();
-  funnel.stages.forEach((stage) => {
-    stageMap.set(stage.stage, stage.count);
-  });
+    return metrics.map((m) => ({
+      ...m,
+      // Use funnel value as scope (legacy behavior)
+      scopeValue: m.scopeValue || (stageMap.get(m.stage) ?? 0),
+      executionValue: m.executionValue || (stageMap.get(m.stage) ?? 0),
+    }));
+  }
 
-  return metrics.map((m) => ({
-    ...m,
-    count: stageMap.get(m.stage) ?? 0,
-  }));
+  return metrics;
 }
 
-function MetricCard({ metric }: { metric: FunnelMetric }) {
+/**
+ * Dual-layer metric card showing scope (primary) and execution (secondary).
+ */
+function MetricCard({ 
+  metric, 
+  showScope = true,
+  scopeAvailable = false,
+}: { 
+  metric: FunnelMetric; 
+  showScope?: boolean;
+  scopeAvailable?: boolean;
+}) {
+  const hasScopeValue = metric.scopeValue > 0 || (metric.stage !== 'emails_sent' && scopeAvailable);
+  const hasExecutionValue = metric.executionValue > 0;
+  
   return (
     <div
       style={{
@@ -92,21 +175,66 @@ function MetricCard({ metric }: { metric: FunnelMetric }) {
           {metric.label}
         </span>
       </div>
-      <div
-        style={{
-          fontSize: '24px',
-          fontWeight: 600,
-          fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-          color: NSD_COLORS.primary,
-        }}
-      >
-        {metric.count.toLocaleString()}
-      </div>
+      
+      {/* PRIMARY: Scope value (when available) */}
+      {showScope && metric.scopeLabel && (
+        <div>
+          <div
+            style={{
+              fontSize: '24px',
+              fontWeight: 600,
+              fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+              color: NSD_COLORS.primary,
+            }}
+          >
+            {metric.scopeValue.toLocaleString()}
+          </div>
+          <div
+            style={{
+              fontSize: '10px',
+              color: NSD_COLORS.text.muted,
+              marginTop: '2px',
+            }}
+          >
+            {metric.scopeLabel}
+          </div>
+        </div>
+      )}
+      
+      {/* SECONDARY: Execution value (smaller, subtle) */}
+      {(!showScope || !metric.scopeLabel) ? (
+        <div
+          style={{
+            fontSize: '24px',
+            fontWeight: 600,
+            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+            color: NSD_COLORS.primary,
+          }}
+        >
+          {metric.executionValue.toLocaleString()}
+        </div>
+      ) : (
+        <div
+          style={{
+            fontSize: '11px',
+            color: hasExecutionValue ? NSD_COLORS.semantic.positive.text : NSD_COLORS.text.muted,
+            marginTop: '4px',
+            borderTop: `1px dashed ${NSD_COLORS.border.light}`,
+            paddingTop: '4px',
+          }}
+        >
+          {metric.executionValue.toLocaleString()} {metric.executionLabel}
+        </div>
+      )}
     </div>
   );
 }
 
-function EmptyFunnelState() {
+/**
+ * Empty state when scope is not yet computed.
+ * NOTE: This is NOT "no activity" - scope should exist even without execution.
+ */
+function ScopeNotComputedState() {
   return (
     <div
       style={{
@@ -125,7 +253,7 @@ function EmptyFunnelState() {
           color: NSD_COLORS.text.secondary,
         }}
       >
-        No funnel activity yet
+        Campaign scope not yet computed
       </p>
       <p
         style={{
@@ -134,15 +262,23 @@ function EmptyFunnelState() {
           color: NSD_COLORS.text.muted,
         }}
       >
-        Pipeline counts will appear here after execution begins.
+        Business scope will show who this campaign can reach, regardless of execution.
       </p>
     </div>
   );
 }
 
-export function FunnelSummaryWidget({ funnel, loading = false }: FunnelSummaryWidgetProps) {
-  const metrics = extractFunnelMetrics(funnel);
-  const hasAnyActivity = metrics.some((m) => m.count > 0);
+export function FunnelSummaryWidget({ 
+  funnel, 
+  scope, 
+  execution,
+  loading = false,
+}: FunnelSummaryWidgetProps) {
+  const metrics = extractFunnelMetrics(funnel, scope, execution);
+  const scopeAvailable = scope?.scopeAvailable ?? false;
+  const hasAnyScope = metrics.some((m) => m.scopeValue > 0);
+  const hasAnyExecution = metrics.some((m) => m.executionValue > 0);
+  const hasAnyData = hasAnyScope || hasAnyExecution || funnel?.stages?.some(s => s.count > 0);
 
   return (
     <div
@@ -195,8 +331,8 @@ export function FunnelSummaryWidget({ funnel, loading = false }: FunnelSummaryWi
               Loading funnel data...
             </p>
           </div>
-        ) : !hasAnyActivity && !funnel ? (
-          <EmptyFunnelState />
+        ) : !hasAnyData && !scopeAvailable ? (
+          <ScopeNotComputedState />
         ) : (
           <div
             style={{
@@ -206,7 +342,12 @@ export function FunnelSummaryWidget({ funnel, loading = false }: FunnelSummaryWi
             }}
           >
             {metrics.map((metric) => (
-              <MetricCard key={metric.stage} metric={metric} />
+              <MetricCard 
+                key={metric.stage} 
+                metric={metric}
+                showScope={scopeAvailable || hasAnyScope}
+                scopeAvailable={scopeAvailable}
+              />
             ))}
           </div>
         )}
@@ -230,9 +371,11 @@ export function FunnelSummaryWidget({ funnel, loading = false }: FunnelSummaryWi
             fontStyle: 'italic',
           }}
         >
-          Counts are backend-authoritative. View Observability tab for details.
+          {scopeAvailable 
+            ? 'Eligible shows reach. Processed shows execution progress.'
+            : 'Counts are backend-authoritative. View Observability tab for details.'}
         </p>
-        {funnel?.last_updated_at && (
+        {(funnel?.last_updated_at || scope?.scopeComputedAt) && (
           <p
             style={{
               margin: 0,
@@ -240,7 +383,7 @@ export function FunnelSummaryWidget({ funnel, loading = false }: FunnelSummaryWi
               color: NSD_COLORS.text.muted,
             }}
           >
-            Updated: {formatEt(funnel.last_updated_at)}
+            Updated: {formatEt(funnel?.last_updated_at || scope?.scopeComputedAt || '')}
           </p>
         )}
       </div>

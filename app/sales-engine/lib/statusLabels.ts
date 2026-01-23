@@ -53,6 +53,13 @@ export const STATUS_FILTER_OPTIONS: { value: CampaignStatus | 'ALL'; label: stri
 
 /**
  * Get status description.
+ * 
+ * TARGET-STATE EXECUTION SEMANTICS:
+ * FAILED status may represent either:
+ * - An actual system error
+ * - An intentional halt (incomplete run with pending work)
+ * The description is intentionally neutral to avoid misclassifying
+ * intentional halts as errors.
  */
 export function getStatusDescription(status: CampaignStatus): string {
   const descriptions: Record<CampaignStatus, string> = {
@@ -61,7 +68,7 @@ export function getStatusDescription(status: CampaignStatus): string {
     RUNNABLE: 'Campaign is approved and ready for execution.',
     RUNNING: 'Campaign execution is in progress.',
     COMPLETED: 'Campaign execution completed successfully.',
-    FAILED: 'Campaign execution encountered errors.',
+    FAILED: 'Campaign execution stopped. See run details for more information.',
     ARCHIVED: 'Campaign is archived.',
   };
   return descriptions[status] || 'Unknown status';

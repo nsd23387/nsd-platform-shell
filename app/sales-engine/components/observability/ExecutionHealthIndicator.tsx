@@ -104,7 +104,7 @@ function deriveHealthStatement(
 ): { statement: string; level: HealthLevel } {
   if (noRuns || !runStatus) {
     return {
-      statement: 'No execution yet — campaign ready for first run',
+      statement: 'Ready for execution',
       level: 'neutral',
     };
   }
@@ -165,20 +165,20 @@ function deriveHealthStatement(
     }
     if (contactsCount > 0 && leadsCount === 0) {
       return {
-        statement: 'Execution completed — contacts discovered, none met promotion criteria',
-        level: 'info',
+        statement: 'Execution completed — contacts discovered, no promotable leads',
+        level: 'warning',
       };
     }
     if (orgsCount > 0 && contactsCount === 0) {
       return {
-        statement: 'Execution completed — organizations sourced, contact search returned empty',
-        level: 'info',
+        statement: 'Execution completed — organizations sourced, no contacts found',
+        level: 'warning',
       };
     }
     if (orgsCount === 0) {
       return {
-        statement: 'Execution completed — no organizations matched current criteria',
-        level: 'info',
+        statement: 'Execution completed — no matching organizations found',
+        level: 'warning',
       };
     }
     return {

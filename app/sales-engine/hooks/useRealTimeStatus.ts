@@ -1,0 +1,381 @@
+'use client';
+
+/**
+ * useRealTimeStatus Hook
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EXECUTION AUTHORITY CONTRACT
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * INVARIANT: Execution truth comes ONLY from sales-engine.
+ * 
+ * Platform-shell is a PURE CONSUMER of execution data.
+ * This hook must NEVER:
+ * - Infer execution state from events
+ * - Query legacy endpoints (/runs, /observability/*)
+ * - Compute status transitions locally
+ * - Reconstruct run history from activity
+ * 
+ * ALLOWED:
+ * - GET /api/v1/campaigns/:id/execution-state (via proxy)
+ * - GET /api/v1/campaigns/:id/run-history (via proxy)
+ * 
+ * FORBIDDEN:
+ * - GET /api/v1/campaigns/:id/runs
+ * - GET /api/v1/campaigns/:id/runs/latest  
+ * - GET /api/v1/campaigns/:id/observability/*
+ * - Any local database queries for execution data
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * DATA SOURCE: 
+ * - Proxy: GET /api/proxy/execution-state?campaignId=xxx
+ * - Target: GET ${SALES_ENGINE_URL}/api/v1/campaigns/:id/execution-state
+ * 
+ * CACHING STRATEGY:
+ * - In-memory cache per campaign with TTL (default: 7 seconds)
+ * - Automatic invalidation on terminal states
+ * - No stale UI risks (TTL ensures refresh)
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { getExecutionState, type ExecutionState, type RealTimeExecutionStatus } from '../lib/api';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXECUTION AUTHORITY GUARDRAILS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Dev-only warning for legacy endpoint detection.
+ * This helps catch architecture violations during development.
+ */
+function warnIfLegacyEndpoint(url: string): void {
+  if (process.env.NODE_ENV !== 'production') {
+    const legacyPatterns = [
+      '/runs/latest',
+      '/observability/status',
+      '/observability/funnel',
+      '/campaign-runs',
+    ];
+    
+    for (const pattern of legacyPatterns) {
+      if (url.includes(pattern)) {
+        console.error(
+          `[EXECUTION AUTHORITY VIOLATION] Legacy endpoint detected: ${url}\n` +
+          `Execution truth comes ONLY from sales-engine via /execution-state.\n` +
+          `Remove this call and use getExecutionState() instead.`
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Map ExecutionState (canonical) to RealTimeExecutionStatus (UI-compatible).
+ * This maintains backward compatibility with existing UI components.
+ * 
+ * DEFENSIVE CODING: Always provide default values to prevent crashes
+ * when sales-engine returns incomplete or unexpected data structures.
+ */
+function mapToRealTimeStatus(state: ExecutionState): RealTimeExecutionStatus {
+  // Provide safe defaults for all funnel properties
+  const defaultOrgs = { total: 0, qualified: 0, review: 0, disqualified: 0 };
+  const defaultContacts = { total: 0, sourced: 0, ready: 0, withEmail: 0 };
+  const defaultLeads = { total: 0, pending: 0, approved: 0 };
+
+  // Safely extract funnel data with fallbacks
+  // Use 'any' to handle dynamic properties that may exist on sales-engine response
+  const funnel = (state?.funnel || {}) as Record<string, any>;
+  const organizations = funnel.organizations || defaultOrgs;
+  const contacts = funnel.contacts || defaultContacts;
+  const leads = funnel.leads || defaultLeads;
+
+  return {
+    campaignId: state?.campaignId || '',
+    latestRun: state?.run ? {
+      id: state.run.id,
+      status: state.run.status,
+      stage: state.run.stage,
+      startedAt: state.run.startedAt,
+      completedAt: state.run.endedAt,
+      errorMessage: state.run.errorMessage,
+      terminationReason: state.run.terminationReason,
+    } : null,
+    funnel: {
+      organizations: {
+        total: organizations.total ?? 0,
+        qualified: organizations.qualified ?? 0,
+        review: organizations.review ?? 0,
+        disqualified: organizations.disqualified ?? 0,
+      },
+      contacts: {
+        total: contacts.total ?? 0,
+        sourced: contacts.sourced ?? 0,
+        ready: contacts.ready ?? 0,
+        withEmail: contacts.withEmail ?? 0,
+        // These may not exist in ExecutionState but RealTimeExecutionStatus expects them
+        scored: contacts.scored ?? 0,
+        enriched: contacts.enriched ?? 0,
+      },
+      leads: {
+        total: leads.total ?? 0,
+        pending: leads.pending ?? 0,
+        approved: leads.approved ?? 0,
+      },
+    },
+    stages: [],
+    alerts: [],
+    _meta: {
+      fetchedAt: state?.lastUpdatedAt || new Date().toISOString(),
+      source: 'sales-engine-canonical',
+    },
+  };
+}
+
+interface CacheEntry {
+  data: RealTimeExecutionStatus;
+  timestamp: number;
+  campaignId: string;
+}
+
+interface UseRealTimeStatusOptions {
+  campaignId: string;
+  /** Whether polling is enabled */
+  enabled?: boolean;
+  /** TTL for cached data in milliseconds (default: 7000 = 7 seconds) */
+  cacheTtlMs?: number;
+  /** Polling interval in milliseconds (default: 7000 = 7 seconds) */
+  pollingIntervalMs?: number;
+}
+
+interface UseRealTimeStatusResult {
+  /** Current real-time execution status (DATA AUTHORITY) */
+  realTimeStatus: RealTimeExecutionStatus | null;
+  /** Whether data is currently loading */
+  isLoading: boolean;
+  /** Whether polling is active */
+  isPolling: boolean;
+  /** Whether a refresh is in progress */
+  isRefreshing: boolean;
+  /** Last successful update timestamp */
+  lastUpdatedAt: string | null;
+  /** Any error that occurred */
+  error: string | null;
+  /** Force refresh (bypasses cache) */
+  refreshNow: () => Promise<void>;
+  /** Whether current data is from cache */
+  isCached: boolean;
+}
+
+// Module-level cache (persists across hook instances)
+const statusCache = new Map<string, CacheEntry>();
+
+const ACTIVE_STATUSES = ['queued', 'running', 'run_requested', 'in_progress'];
+const DEFAULT_CACHE_TTL = 7000; // 7 seconds
+const DEFAULT_POLLING_INTERVAL = 7000; // 7 seconds
+
+/**
+ * Check if a run status is considered active (should poll).
+ */
+function isActiveRunStatus(status: string | undefined | null): boolean {
+  if (!status) return false;
+  return ACTIVE_STATUSES.includes(status.toLowerCase());
+}
+
+/**
+ * Check if cache entry is valid (not expired and same campaign).
+ */
+function isCacheValid(entry: CacheEntry | undefined, campaignId: string, ttlMs: number): boolean {
+  if (!entry) return false;
+  if (entry.campaignId !== campaignId) return false;
+  const age = Date.now() - entry.timestamp;
+  return age < ttlMs;
+}
+
+/**
+ * Check if data should trigger cache invalidation (terminal state).
+ */
+function shouldInvalidateCache(status: RealTimeExecutionStatus): boolean {
+  const runStatus = status.latestRun?.status?.toLowerCase();
+  if (!runStatus) return false;
+  return ['completed', 'failed'].includes(runStatus);
+}
+
+export function useRealTimeStatus({
+  campaignId,
+  enabled = true,
+  cacheTtlMs = DEFAULT_CACHE_TTL,
+  pollingIntervalMs = DEFAULT_POLLING_INTERVAL,
+}: UseRealTimeStatusOptions): UseRealTimeStatusResult {
+  const [realTimeStatus, setRealTimeStatus] = useState<RealTimeExecutionStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPolling, setIsPolling] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isCached, setIsCached] = useState(false);
+
+  const mountedRef = useRef(true);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastCampaignIdRef = useRef<string>(campaignId);
+
+  /**
+   * Fetch fresh data from sales-engine, optionally bypassing cache.
+   */
+  const fetchStatus = useCallback(async (bypassCache = false): Promise<RealTimeExecutionStatus | null> => {
+    // Check cache first (unless bypassing)
+    if (!bypassCache) {
+      const cached = statusCache.get(campaignId);
+      if (isCacheValid(cached, campaignId, cacheTtlMs)) {
+        setIsCached(true);
+        return cached!.data;
+      }
+    }
+
+    // Fetch fresh data from sales-engine via proxy
+    try {
+      const executionState = await getExecutionState(campaignId);
+      const data = mapToRealTimeStatus(executionState);
+      
+      // Update cache
+      statusCache.set(campaignId, {
+        data,
+        timestamp: Date.now(),
+        campaignId,
+      });
+
+      // Invalidate cache if terminal state
+      if (shouldInvalidateCache(data)) {
+        statusCache.delete(campaignId);
+      }
+
+      setIsCached(false);
+      return data;
+    } catch (err) {
+      console.error('[useRealTimeStatus] Fetch error:', err);
+      throw err;
+    }
+  }, [campaignId, cacheTtlMs]);
+
+  /**
+   * Refresh data (for polling and manual refresh).
+   */
+  const refresh = useCallback(async (bypassCache = false) => {
+    if (!mountedRef.current) return;
+
+    setIsRefreshing(true);
+    setError(null);
+
+    try {
+      const data = await fetchStatus(bypassCache);
+      
+      if (mountedRef.current && data) {
+        setRealTimeStatus(data);
+        setLastUpdatedAt(new Date().toISOString());
+        setIsLoading(false);
+      }
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch status');
+        setIsLoading(false);
+      }
+    } finally {
+      if (mountedRef.current) {
+        setIsRefreshing(false);
+      }
+    }
+  }, [fetchStatus]);
+
+  /**
+   * Force refresh (bypasses cache).
+   */
+  const refreshNow = useCallback(async () => {
+    await refresh(true);
+  }, [refresh]);
+
+  // Mount/unmount tracking
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Clear cache and reset state when campaign changes
+  useEffect(() => {
+    if (lastCampaignIdRef.current !== campaignId) {
+      lastCampaignIdRef.current = campaignId;
+      setRealTimeStatus(null);
+      setIsLoading(true);
+      setError(null);
+      setIsCached(false);
+      // Clear old campaign cache
+      statusCache.delete(lastCampaignIdRef.current);
+    }
+  }, [campaignId]);
+
+  // Initial fetch
+  useEffect(() => {
+    if (enabled) {
+      refresh(false);
+    }
+  }, [enabled, campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Polling logic
+  useEffect(() => {
+    // Clear existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    // Determine if we should poll
+    const runStatus = realTimeStatus?.latestRun?.status;
+    const shouldPoll = enabled && isActiveRunStatus(runStatus);
+
+    if (shouldPoll) {
+      setIsPolling(true);
+      
+      intervalRef.current = setInterval(() => {
+        refresh(false); // Use cache-aware refresh
+      }, pollingIntervalMs);
+    } else {
+      setIsPolling(false);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [enabled, realTimeStatus?.latestRun?.status, pollingIntervalMs, refresh]);
+
+  return {
+    realTimeStatus,
+    isLoading,
+    isPolling,
+    isRefreshing,
+    lastUpdatedAt,
+    error,
+    refreshNow,
+    isCached,
+  };
+}
+
+/**
+ * Clear all cached status entries.
+ * Useful for testing or forced global refresh.
+ */
+export function clearStatusCache(): void {
+  statusCache.clear();
+}
+
+/**
+ * Clear cached status for a specific campaign.
+ */
+export function clearCampaignStatusCache(campaignId: string): void {
+  statusCache.delete(campaignId);
+}
+
+export default useRealTimeStatus;

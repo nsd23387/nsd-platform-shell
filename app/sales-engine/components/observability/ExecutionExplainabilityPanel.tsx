@@ -9,6 +9,10 @@
  * - ExecutionTimeline: Outcome-oriented timeline of events
  * - NextStepCard: Single advisory recommendation (when applicable)
  * 
+ * CANONICAL DATA SOURCE:
+ * Data should be passed via `run` prop from useRealTimeStatus
+ * which calls GET /api/v1/campaigns/:id/execution-state
+ * 
  * USER EXPERIENCE GOAL:
  * A user can determine in under 10 seconds:
  * - Whether execution happened
@@ -31,9 +35,32 @@ import { ExecutionConfidenceBadge } from './ExecutionConfidenceBadge';
 import { ExecutionTimeline } from './ExecutionTimeline';
 import { NextStepCard } from './NextStepCard';
 
+/**
+ * Props for ExecutionExplainabilityPanel.
+ * 
+ * CANONICAL DATA SOURCE:
+ * - Always pass `run` from useRealTimeStatus/executionStatus to avoid legacy endpoint calls
+ * - If `run` is provided, uses it directly (execution-state driven)
+ * - If `run` is undefined, falls back to useLatestRunStatus (deprecated - will throw)
+ */
 interface ExecutionExplainabilityPanelProps {
   campaignId: string;
   compact?: boolean;
+  /** Pre-fetched run data from execution-state. REQUIRED for canonical flow. */
+  run?: {
+    id: string;
+    status?: string | null;
+    stage?: string | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    errorMessage?: string | null;
+    terminationReason?: string | null;
+    phase?: string | null;
+  } | null;
+  /** True if we know there are no runs (from execution-state) */
+  noRuns?: boolean;
+  /** True if data is still loading */
+  loading?: boolean;
 }
 
 function LoadingState() {
@@ -224,19 +251,61 @@ function ExplainabilityContent({
   );
 }
 
+/**
+ * Convert execution-state run format to the format expected by deriveExecutionState.
+ */
+function convertExecutionRunForState(run: NonNullable<ExecutionExplainabilityPanelProps['run']>) {
+  return {
+    run_id: run.id,
+    status: run.status?.toLowerCase() || undefined,
+    created_at: run.startedAt || undefined,
+    updated_at: run.completedAt || run.startedAt || undefined,
+    error_message: run.errorMessage || undefined,
+    failure_reason: run.terminationReason || undefined,
+    termination_reason: run.terminationReason || undefined,
+    reason: run.terminationReason || undefined,
+  };
+}
+
+/**
+ * ExecutionExplainabilityPanel - Main component.
+ * 
+ * DATA SOURCE:
+ * - If `run` prop is provided, uses it directly (canonical - execution-state driven)
+ * - Otherwise falls back to useLatestRunStatus hook (deprecated - will throw error)
+ * 
+ * For canonical flow, parent components must pass `run` data from useRealTimeStatus.
+ */
 export function ExecutionExplainabilityPanel({
   campaignId,
   compact = false,
+  run: propRun,
+  noRuns: propNoRuns,
+  loading: propLoading,
 }: ExecutionExplainabilityPanelProps) {
-  const { run, noRuns, notFound, serviceUnavailable, loading, error } =
-    useLatestRunStatus(campaignId);
+  // Only call hook if run data not provided via props
+  // Hook will throw error if called with actual campaignId (see lockdown in useLatestRunStatus)
+  const shouldFetch = propRun === undefined && propNoRuns === undefined;
+  const hookResult = useLatestRunStatus(shouldFetch ? campaignId : null);
+  
+  // Use prop data if provided, otherwise use hook data
+  const loading = propLoading ?? (shouldFetch ? hookResult.loading : false);
+  const noRuns = propNoRuns ?? hookResult.noRuns;
+  const notFound = shouldFetch ? hookResult.notFound : false;
+  const serviceUnavailable = shouldFetch ? hookResult.serviceUnavailable : false;
+  const error = shouldFetch ? hookResult.error : null;
+  
+  // Convert prop run format for deriveExecutionState
+  const runForState = propRun 
+    ? convertExecutionRunForState(propRun)
+    : hookResult.run;
 
   // Loading state
   if (loading) {
     return <LoadingState />;
   }
 
-  // Error states
+  // Error states (only from hook, prop-based usage won't have these)
   if (notFound) {
     return <ErrorState message="Campaign not found" />;
   }
@@ -245,12 +314,12 @@ export function ExecutionExplainabilityPanel({
     return <ErrorState message="Execution service unavailable" />;
   }
 
-  if (error && !run && !noRuns) {
+  if (error && !runForState && !noRuns) {
     return <ErrorState message={error} />;
   }
 
   // Derive execution state from backend signals
-  const executionState = deriveExecutionState(run, noRuns);
+  const executionState = deriveExecutionState(runForState, noRuns);
 
   return (
     <div

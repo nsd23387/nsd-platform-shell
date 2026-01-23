@@ -8,14 +8,21 @@
  *
  * IMPORTANT:
  * Run state must never cause a 404 — campaign existence and execution state are orthogonal.
+ * 
+ * DATA SOURCE CONSISTENCY:
+ * This endpoint now queries BOTH campaign_runs table AND activity.events to ensure
+ * consistency with other observability components. The run history table uses
+ * activity.events, so this endpoint must also check there to avoid showing
+ * "no runs" when runs actually exist in the activity spine.
  */
 
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { createServerClient, isSupabaseConfigured } from '../../../../../../lib/supabase-server';
+import { getLatestRunEvent, isActivityDbConfigured } from '../../../../../../lib/activity-db';
 
-type CampaignRunStatus = 'queued' | 'running' | 'failed' | 'succeeded' | 'skipped';
+type CampaignRunStatus = 'queued' | 'running' | 'failed' | 'succeeded' | 'skipped' | 'completed';
 
 type LatestRunPayload =
   | { status: 'no_runs' }
@@ -88,23 +95,71 @@ export async function GET(
 
     if (runsError) {
       console.error('[runs/latest] Runs fetch error:', runsError);
-      return NextResponse.json(
-        {
-          error: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch latest run',
-        },
-        { status: 500 }
-      );
+      // Don't fail yet - try activity.events fallback
     }
 
-    if (!runs || runs.length === 0) {
-      const payload: LatestRunPayload = { status: 'no_runs' };
+    if (runs && runs.length > 0) {
+      const run = runs[0] as Record<string, unknown>;
+      const status = run.status as LatestRunPayload['status'];
+      const payload: LatestRunPayload = { status, run };
       return NextResponse.json(payload, { status: 200 });
     }
 
-    const run = runs[0] as Record<string, unknown>;
-    const status = run.status as LatestRunPayload['status'];
-    const payload: LatestRunPayload = { status, run };
+    // CONSISTENCY FIX: Fallback to activity.events if campaign_runs is empty
+    // This ensures we show runs that exist in the activity spine but may not
+    // have been synced to campaign_runs yet.
+    if (isActivityDbConfigured()) {
+      try {
+        const latestEvent = await getLatestRunEvent(
+          campaignId,
+          ['run.started', 'run.running', 'run.completed', 'run.failed']
+        );
+
+        if (latestEvent) {
+          const eventPayload = latestEvent.payload || {};
+          const runId = latestEvent.entity_id;
+          
+          // Determine status from event type
+          let status: CampaignRunStatus | string = 'unknown';
+          switch (latestEvent.event_type) {
+            case 'run.started':
+              status = 'queued';
+              break;
+            case 'run.running':
+              status = 'running';
+              break;
+            case 'run.completed':
+              status = 'completed';
+              break;
+            case 'run.failed':
+              status = 'failed';
+              break;
+          }
+
+          // Build run object from event data
+          const run: Record<string, unknown> = {
+            run_id: runId,
+            id: runId,
+            campaign_id: campaignId,
+            status,
+            created_at: latestEvent.created_at,
+            updated_at: latestEvent.created_at,
+            // Include any payload data
+            stage: (eventPayload.stage as string) || (eventPayload.stageName as string) || undefined,
+            error_message: (eventPayload.error as string) || undefined,
+            termination_reason: (eventPayload.terminationReason as string) || (eventPayload.reason as string) || undefined,
+          };
+
+          const payload: LatestRunPayload = { status, run };
+          return NextResponse.json(payload, { status: 200 });
+        }
+      } catch (activityError) {
+        console.error('[runs/latest] activity.events fallback error:', activityError);
+        // Continue to return no_runs if fallback also fails
+      }
+    }
+
+    const payload: LatestRunPayload = { status: 'no_runs' };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error(`[runs/latest] Unhandled error for campaign ${campaignId}:`, error);

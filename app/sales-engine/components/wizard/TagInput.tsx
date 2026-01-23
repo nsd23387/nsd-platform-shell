@@ -24,28 +24,70 @@ export function TagInput({
 }: TagInputProps) {
   const [inputValue, setInputValue] = useState('');
 
+  /**
+   * Process input string and split by commas into individual tags.
+   * Handles trimming, deduplication, and filtering empty values.
+   */
+  const processInput = (input: string): string[] => {
+    return input
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .filter((s) => !values.includes(s)); // Remove duplicates
+  };
+
+  /**
+   * Add tags from the current input value.
+   * Used by Enter key, blur, and when comma is detected.
+   */
+  const addTagsFromInput = (input: string) => {
+    const newTags = processInput(input);
+    if (newTags.length > 0) {
+      onChange([...values, ...newTags]);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === 'Enter') {
       e.preventDefault();
-      const trimmed = inputValue.trim();
-      if (trimmed && !values.includes(trimmed)) {
-        onChange([...values, trimmed]);
-      }
+      addTagsFromInput(inputValue);
       setInputValue('');
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent) => {
+  /**
+   * Handle input changes - detect commas and process immediately.
+   */
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // If the input contains a comma, process it immediately
+    if (value.includes(',')) {
+      addTagsFromInput(value);
+      setInputValue('');
+    } else {
+      setInputValue(value);
+    }
+  };
+
+  /**
+   * Handle paste events - split pasted text by commas.
+   */
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const pastedText = e.clipboardData.getData('text');
     if (pastedText.includes(',')) {
       e.preventDefault();
-      const newTags = pastedText
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter((tag) => tag && !values.includes(tag));
-      if (newTags.length > 0) {
-        onChange([...values, ...newTags]);
-      }
+      addTagsFromInput(pastedText);
+      setInputValue('');
+    }
+    // If no comma, let default paste behavior happen
+  };
+
+  /**
+   * Handle blur - add any remaining input as tag(s).
+   */
+  const handleBlur = () => {
+    if (inputValue.trim()) {
+      addTagsFromInput(inputValue);
       setInputValue('');
     }
   };
@@ -124,9 +166,10 @@ export function TagInput({
           id={name}
           type="text"
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
+          onBlur={handleBlur}
           placeholder={values.length === 0 ? placeholder : ''}
           style={{
             flex: 1,
@@ -151,7 +194,19 @@ export function TagInput({
             fontFamily: NSD_TYPOGRAPHY.fontBody,
           }}
         >
-          {helpText}
+          {helpText} <span style={{ opacity: 0.7 }}>• Separate multiple values with commas</span>
+        </p>
+      )}
+      {!helpText && !error && (
+        <p
+          style={{
+            margin: '6px 0 0 0',
+            fontSize: '12px',
+            color: NSD_COLORS.text.muted,
+            fontFamily: NSD_TYPOGRAPHY.fontBody,
+          }}
+        >
+          Press Enter or use commas to separate values
         </p>
       )}
 

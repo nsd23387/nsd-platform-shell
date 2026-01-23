@@ -7,8 +7,11 @@
  * This component displays the latest campaign run status
  * using Sales Engine's canonical read model.
  *
+ * CANONICAL DATA SOURCE:
+ * Data should be passed via `run` prop from useRealTimeStatus
+ * which calls GET /api/v1/campaigns/:id/execution-state
+ *
  * NO inference. NO aggregation. NO execution logic.
- * Only renders exact data from GET /api/v1/campaigns/:id/runs/latest
  *
  * UX Copy (Canonical Messaging Matrix):
  * - Queued: "Execution queued"
@@ -24,11 +27,34 @@
 import React from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
-import { useLatestRunStatus, type LatestRun } from '../../../../hooks/useLatestRunStatus';
-import { isRunStale, RUN_STALE_THRESHOLD_MS, type ResolvableRun } from '../../lib/resolveActiveRun';
+import { useLatestRunStatus, type LatestRun, isIncompleteRun, isTimeoutRun, isInvariantViolation } from '../../../../hooks/useLatestRunStatus';
+import { isRunStale, type ResolvableRun } from '../../lib/resolveActiveRun';
 
+/**
+ * Props for LatestRunStatusCard.
+ * 
+ * CANONICAL DATA SOURCE:
+ * - Always pass `run` from useRealTimeStatus/executionStatus to avoid legacy endpoint calls
+ * - If `run` is provided, uses it directly (execution-state driven)
+ * - If `run` is undefined, falls back to useLatestRunStatus (deprecated - will throw)
+ */
 interface LatestRunStatusCardProps {
   campaignId: string;
+  /** Pre-fetched run data from execution-state. REQUIRED for canonical flow. */
+  run?: {
+    id: string;
+    status?: string | null;
+    stage?: string | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    errorMessage?: string | null;
+    terminationReason?: string | null;
+    phase?: string | null;
+  } | null;
+  /** True if we know there are no runs (from execution-state) */
+  noRuns?: boolean;
+  /** True if data is still loading */
+  loading?: boolean;
 }
 
 /**
@@ -50,8 +76,18 @@ interface StatusDisplay {
  * STALENESS HANDLING:
  * When isStale=true and status is 'running', display a warning state
  * instead of misleading "Running" indicator.
+ * 
+ * INCOMPLETE/TIMEOUT RUN HANDLING (Target-State Execution Semantics):
+ * When isIncomplete=true or isTimeout=true (status=failed AND termination_reason indicates intentional pause),
+ * display as "Incomplete" or "Timeout" with info severity, NOT as an error.
+ * This is intentional behavior - the system stopped to prevent incomplete processing.
+ * 
+ * INVARIANT VIOLATION HANDLING:
+ * When isInvariantViolation=true (status=failed AND reason=invariant_violation),
+ * display explicit failure banner. Do NOT show as completed. Do NOT show results.
+ * This is a critical failure that must be surfaced.
  */
-function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
+function getStatusDisplay(status?: string, isStale?: boolean, isIncomplete?: boolean, isTimeout?: boolean, isInvariantViolationFlag?: boolean): StatusDisplay {
   const normalized = typeof status === 'string' ? status.toLowerCase() : 'unknown';
 
   // STALE RUN HANDLING: Running runs older than 30 min are displayed as stalled
@@ -61,6 +97,39 @@ function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
       icon: 'warning',
       label: 'Stalled',
       copy: 'Execution stalled — system will mark failed',
+      ...NSD_COLORS.semantic.attention,
+    };
+  }
+
+  // INVARIANT VIOLATION HANDLING: Critical failure - must surface explicitly
+  // Do NOT present as completed. Do NOT show results as valid.
+  if (isInvariantViolationFlag) {
+    return {
+      icon: 'warning',
+      label: 'Invariant Violation',
+      copy: 'Execution failed — invariant violation. Results are not valid.',
+      ...NSD_COLORS.semantic.critical,
+    };
+  }
+
+  // TIMEOUT HANDLING: execution time limit reached, partial progress preserved
+  // This is NOT an error - progress is preserved
+  if (isTimeout) {
+    return {
+      icon: 'info',
+      label: 'Timeout',
+      copy: 'Execution paused — timeout reached. Progress preserved.',
+      ...NSD_COLORS.semantic.attention,
+    };
+  }
+
+  // INCOMPLETE RUN HANDLING: failed + intentional pause = Incomplete (not error)
+  // This is intentional execution halt, not a system failure
+  if (isIncomplete) {
+    return {
+      icon: 'info',
+      label: 'Incomplete',
+      copy: 'Run incomplete — pending work remaining',
       ...NSD_COLORS.semantic.attention,
     };
   }
@@ -107,6 +176,13 @@ function getStatusDisplay(status?: string, isStale?: boolean): StatusDisplay {
         icon: 'warning',
         label: 'Partial',
         copy: 'Last execution partially completed',
+        ...NSD_COLORS.semantic.attention,
+      };
+    case 'incomplete':
+      return {
+        icon: 'info',
+        label: 'Incomplete',
+        copy: 'Run incomplete — pending work remaining',
         ...NSD_COLORS.semantic.attention,
       };
     case 'no_runs':
@@ -158,11 +234,22 @@ function toResolvableRun(run: LatestRun): ResolvableRun {
  * STALENESS HANDLING:
  * Checks if the run is stale (running > 30 min) and displays
  * appropriate warning messaging instead of "Running" indicator.
+ * 
+ * INCOMPLETE RUN HANDLING (Target-State Execution Semantics):
+ * Checks if run is incomplete (failed + unprocessed_work_remaining)
+ * and displays as "Incomplete" with info severity, not error.
+ * 
+ * INVARIANT VIOLATION HANDLING:
+ * Checks if run failed due to invariant violation and displays
+ * explicit failure banner. Results are NOT shown for these runs.
  */
 function RunDetailsCard({ run }: { run: LatestRun }) {
   const resolvable = toResolvableRun(run);
   const stale = isRunStale(resolvable);
-  const display = getStatusDisplay(run?.status, stale);
+  const incomplete = isIncompleteRun(run);
+  const timeout = isTimeoutRun(run);
+  const invariantViolation = isInvariantViolation(run);
+  const display = getStatusDisplay(run?.status, stale, incomplete, timeout, invariantViolation);
   // Runtime safety: `run` payload may be missing fields (or be absent) depending on API response.
   // Guard all string slicing to prevent client-side exceptions.
   const rawRunId = (run as unknown as { run_id?: unknown; id?: unknown })?.run_id ?? (run as unknown as { id?: unknown })?.id;
@@ -507,24 +594,61 @@ function LoadingCard() {
 }
 
 /**
+ * Convert execution-state run format to LatestRun format for internal components.
+ */
+function convertExecutionRunToLatestRun(run: NonNullable<LatestRunStatusCardProps['run']>): LatestRun {
+  return {
+    run_id: run.id,
+    status: run.status || undefined,
+    created_at: run.startedAt || undefined,
+    updated_at: run.completedAt || run.startedAt || undefined,
+    error_message: run.errorMessage || undefined,
+    failure_reason: run.terminationReason || undefined,
+    termination_reason: run.terminationReason || undefined,
+    reason: run.terminationReason || undefined,
+  };
+}
+
+/**
  * LatestRunStatusCard - Main component.
  *
  * Displays the latest campaign run state using Sales Engine's canonical read model.
- * - 200: Show run status
- * - 204: "No runs yet"
- * - 404: "Campaign not found"
- * - 5xx: "Execution service unavailable"
+ * 
+ * DATA SOURCE:
+ * - If `run` prop is provided, uses it directly (canonical - execution-state driven)
+ * - Otherwise falls back to useLatestRunStatus hook (deprecated - will throw error)
+ * 
+ * For canonical flow, parent components must pass `run` data from useRealTimeStatus.
  */
-export function LatestRunStatusCard({ campaignId }: LatestRunStatusCardProps) {
-  const { run, noRuns, notFound, serviceUnavailable, loading, error } =
-    useLatestRunStatus(campaignId);
+export function LatestRunStatusCard({ 
+  campaignId, 
+  run: propRun, 
+  noRuns: propNoRuns,
+  loading: propLoading,
+}: LatestRunStatusCardProps) {
+  // Only call hook if run data not provided via props
+  // Hook will throw error if called with actual campaignId (see lockdown in useLatestRunStatus)
+  const shouldFetch = propRun === undefined && propNoRuns === undefined;
+  const hookResult = useLatestRunStatus(shouldFetch ? campaignId : null);
+  
+  // Use prop data if provided, otherwise use hook data
+  const loading = propLoading ?? (shouldFetch ? hookResult.loading : false);
+  const noRuns = propNoRuns ?? hookResult.noRuns;
+  const notFound = shouldFetch ? hookResult.notFound : false;
+  const serviceUnavailable = shouldFetch ? hookResult.serviceUnavailable : false;
+  const error = shouldFetch ? hookResult.error : null;
+  
+  // Convert prop run to LatestRun format if provided
+  const run: LatestRun | null = propRun 
+    ? convertExecutionRunToLatestRun(propRun)
+    : hookResult.run;
 
   // Loading state
   if (loading) {
     return <LoadingCard />;
   }
 
-  // Error states
+  // Error states (only from hook, prop-based usage won't have these)
   if (notFound) {
     return <ErrorCard message="Campaign not found" />;
   }
@@ -538,8 +662,6 @@ export function LatestRunStatusCard({ campaignId }: LatestRunStatusCardProps) {
   }
 
   // No runs yet
-  // Runtime safety: backend now returns 200 { status: "no_runs" } (no run payload),
-  // and older hook versions may map that into a `run` object with missing fields.
   if (noRuns || run?.status?.toLowerCase?.() === 'no_runs') {
     return <NoRunsCard />;
   }

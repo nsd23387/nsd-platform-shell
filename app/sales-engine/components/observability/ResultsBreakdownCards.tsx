@@ -29,6 +29,11 @@ import type { ObservabilityFunnel, PipelineStage } from '../../types/campaign';
 interface ResultsBreakdownCardsProps {
   funnel: ObservabilityFunnel | null;
   runStatus: string | null;
+  /** 
+   * Failure reason from the run - used to detect invariant violations.
+   * When reason = 'invariant_violation', results should NOT be displayed.
+   */
+  failureReason?: string | null;
 }
 
 interface BreakdownItem {
@@ -322,16 +327,52 @@ function buildBreakdownCards(
   return cards;
 }
 
+/**
+ * Check if a run has an invariant violation.
+ * 
+ * INVARIANT VIOLATION SEMANTICS:
+ * When status = "failed" AND reason = "invariant_violation", this indicates
+ * a critical system invariant was violated during execution.
+ * - Do NOT show results breakdown cards for these runs
+ * - Results are not valid and should not be displayed
+ */
+function hasInvariantViolation(runStatus: string | null, failureReason?: string | null): boolean {
+  const status = runStatus?.toLowerCase() || '';
+  const reason = (failureReason || '').toLowerCase();
+  
+  if (status !== 'failed') return false;
+  
+  return (
+    reason === 'invariant_violation' ||
+    reason.includes('invariant')
+  );
+}
+
 export function ResultsBreakdownCards({
   funnel,
   runStatus,
+  failureReason,
 }: ResultsBreakdownCardsProps) {
+  // DEFENSIVE GUARD: Do NOT show breakdown cards for invariant violations
+  // Results from these runs are not valid and should not be displayed
+  if (hasInvariantViolation(runStatus, failureReason)) {
+    return null;
+  }
+
+  // DEFENSIVE GUARD: Do NOT show breakdown cards without funnel data
+  // Never fabricate or infer counts - all data must come from APIs
+  if (!funnel || !funnel.stages || funnel.stages.length === 0) {
+    return null;
+  }
+
   const isCompleted = runStatus?.toLowerCase() === 'completed' || 
                       runStatus?.toLowerCase() === 'success' ||
                       runStatus?.toLowerCase() === 'succeeded';
   const isRunning = runStatus?.toLowerCase() === 'running' || 
                     runStatus?.toLowerCase() === 'in_progress';
 
+  // DEFENSIVE GUARD: Do NOT infer completion from funnel counts alone
+  // Only show completion status if explicitly provided by backend
   const cards = buildBreakdownCards(funnel, isCompleted, isRunning);
 
   if (cards.length === 0) {

@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.SALES_ENGINE_API_BASE_URL || process.env.NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL;
 
+/**
+ * Returns empty metrics history for campaigns that haven't reached the send stage.
+ * 
+ * IMPORTANT: Existing campaigns have not yet reached post-approval email sending,
+ * so metrics history should be empty. History data will be populated from
+ * backend-observed events once emails are actually dispatched.
+ */
 function getMockHistory() {
-  const now = Date.now();
-  const day = 24 * 60 * 60 * 1000;
-
-  return Array.from({ length: 7 }, (_, i) => ({
-    timestamp: new Date(now - (6 - i) * day).toISOString(),
-    emails_sent: Math.floor(Math.random() * 150) + 50,
-    emails_opened: Math.floor(Math.random() * 80) + 20,
-    emails_replied: Math.floor(Math.random() * 15) + 5,
-  }));
+  // Return empty array - no send activity has occurred yet
+  return [];
 }
 
 export async function GET(

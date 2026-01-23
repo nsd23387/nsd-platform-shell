@@ -1,5 +1,7 @@
 # M67 Sales Engine UI
 
+> **M68-01: Preview runtime flag validation branch.**
+
 ## Overview
 The Sales Engine UI is a governed, read-only interface for campaign observability and approval. Its core purpose is to provide situational awareness regarding campaign lifecycles, readiness, and outcomes by observing M60 Campaign Management APIs. The UI focuses on displaying information and explicitly does not initiate execution, approval, sourcing, or governance transitions, as all state changes occur in backend systems. A single exception is campaign creation (POST /campaign-create), where campaigns are initialized in a `DRAFT` governance state without execution or sourcing capabilities from this UI. The project prioritizes a governance-first architecture, emphasizing truthfulness, explicit handling of `UNKNOWN` states, and avoiding implied autonomy or UI-initiated mutations. The project aims to provide clear, outcome-oriented execution transparency to users.
 
@@ -39,20 +41,6 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
-- January 23, 2026: UX Enhancement Phase (Clarity, Trust, Self-Explanatory UI)
-  - Created SectionHeader component with section labels and info tooltips
-  - Created InfoTooltip component for inline contextual help
-  - Created HelperText component for explanatory messaging under data sections
-  - Campaign Detail Page: Added section headers (Administrative State, Last Execution Outcome, Market Reality, Operational Yield)
-  - Created Executive Dashboard route (/sales-engine/executive) with read-only executive-focused layout
-  - Executive Dashboard sections: System Health (top), Market Reality (left), Operational Yield (right), Campaign Distribution (bottom)
-  - Clear data annotations: "Observed, not processed" for Market Reality, "Processed subset of observed" for Operational Yield
-  - Helper text explains gaps represent untapped opportunity, not system failure
-  - Updated ExecutionHealthIndicator: Zero-count completions use 'info' level (not warnings)
-  - Softened empty state messaging: "No execution yet — campaign ready for first run"
-  - Added "Executive View" button to campaigns list header
-  - All new components use NSD-approved semantic colors (magenta/indigo/violet only)
-
 - January 20, 2026: Comprehensive UX/UI Redesign (Minimalist Neon-Focused)
   - Added NSD_GLOW, NSD_GRADIENTS, NSD_TRANSITIONS design tokens for neon-inspired effects
   - Added gradient accent bar at top of all major pages (magenta → violet brand gradient)
