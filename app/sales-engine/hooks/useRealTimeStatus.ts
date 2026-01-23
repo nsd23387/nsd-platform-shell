@@ -73,11 +73,26 @@ function warnIfLegacyEndpoint(url: string): void {
 /**
  * Map ExecutionState (canonical) to RealTimeExecutionStatus (UI-compatible).
  * This maintains backward compatibility with existing UI components.
+ * 
+ * DEFENSIVE CODING: Always provide default values to prevent crashes
+ * when sales-engine returns incomplete or unexpected data structures.
  */
 function mapToRealTimeStatus(state: ExecutionState): RealTimeExecutionStatus {
+  // Provide safe defaults for all funnel properties
+  const defaultOrgs = { total: 0, qualified: 0, review: 0, disqualified: 0 };
+  const defaultContacts = { total: 0, sourced: 0, ready: 0, withEmail: 0 };
+  const defaultLeads = { total: 0, pending: 0, approved: 0 };
+
+  // Safely extract funnel data with fallbacks
+  // Use 'any' to handle dynamic properties that may exist on sales-engine response
+  const funnel = (state?.funnel || {}) as Record<string, any>;
+  const organizations = funnel.organizations || defaultOrgs;
+  const contacts = funnel.contacts || defaultContacts;
+  const leads = funnel.leads || defaultLeads;
+
   return {
-    campaignId: state.campaignId,
-    latestRun: state.run ? {
+    campaignId: state?.campaignId || '',
+    latestRun: state?.run ? {
       id: state.run.id,
       status: state.run.status,
       stage: state.run.stage,
@@ -87,18 +102,31 @@ function mapToRealTimeStatus(state: ExecutionState): RealTimeExecutionStatus {
       terminationReason: state.run.terminationReason,
     } : null,
     funnel: {
-      organizations: state.funnel.organizations,
-      contacts: {
-        ...state.funnel.contacts,
-        scored: 0,
-        enriched: 0,
+      organizations: {
+        total: organizations.total ?? 0,
+        qualified: organizations.qualified ?? 0,
+        review: organizations.review ?? 0,
+        disqualified: organizations.disqualified ?? 0,
       },
-      leads: state.funnel.leads,
+      contacts: {
+        total: contacts.total ?? 0,
+        sourced: contacts.sourced ?? 0,
+        ready: contacts.ready ?? 0,
+        withEmail: contacts.withEmail ?? 0,
+        // These may not exist in ExecutionState but RealTimeExecutionStatus expects them
+        scored: contacts.scored ?? 0,
+        enriched: contacts.enriched ?? 0,
+      },
+      leads: {
+        total: leads.total ?? 0,
+        pending: leads.pending ?? 0,
+        approved: leads.approved ?? 0,
+      },
     },
     stages: [],
     alerts: [],
     _meta: {
-      fetchedAt: state.lastUpdatedAt,
+      fetchedAt: state?.lastUpdatedAt || new Date().toISOString(),
       source: 'sales-engine-canonical',
     },
   };

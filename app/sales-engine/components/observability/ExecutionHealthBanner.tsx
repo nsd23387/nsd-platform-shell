@@ -43,8 +43,18 @@ interface BannerState {
 }
 
 /**
+ * Safely get a number from potentially undefined value.
+ */
+function safeNumber(value: number | undefined | null): number {
+  return typeof value === 'number' ? value : 0;
+}
+
+/**
  * Derive banner state from real-time execution status.
  * This is the SINGLE SOURCE OF TRUTH for execution health display.
+ * 
+ * DEFENSIVE CODING: All funnel values are accessed via safeNumber()
+ * to prevent crashes when sales-engine returns unexpected data.
  */
 function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState {
   if (!status) {
@@ -59,9 +69,16 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
   const { latestRun, funnel, alerts = [], stages = [] } = status;
   const runStatus = latestRun?.status?.toLowerCase() || 'idle';
 
+  // Safely extract funnel counts with defaults
+  const orgsTotal = safeNumber(funnel?.organizations?.total);
+  const contactsTotal = safeNumber(funnel?.contacts?.total);
+  const leadsTotal = safeNumber(funnel?.leads?.total);
+  const scoredCount = safeNumber(funnel?.contacts?.scored);
+  const enrichedCount = safeNumber(funnel?.contacts?.enriched);
+
   // RUNNING STATE
   if (runStatus === 'running' || runStatus === 'in_progress' || runStatus === 'queued') {
-    const totalProcessed = funnel.organizations.total + funnel.contacts.total + funnel.leads.total;
+    const totalProcessed = orgsTotal + contactsTotal + leadsTotal;
     const currentStage = latestRun?.stage || stages?.find(s => s.status === 'running')?.stage;
     
     return {
@@ -93,7 +110,7 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
       type: 'success',
       icon: 'check',
       message: 'Campaign completed successfully.',
-      subMessage: `${funnel.organizations.total.toLocaleString()} orgs, ${funnel.contacts.total.toLocaleString()} contacts, ${funnel.leads.total.toLocaleString()} leads.`,
+      subMessage: `${orgsTotal.toLocaleString()} orgs, ${contactsTotal.toLocaleString()} contacts, ${leadsTotal.toLocaleString()} leads.`,
     };
   }
 
@@ -139,7 +156,7 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
     
     // TIMEOUT: execution time limit reached, partial progress valid
     if (reasonLower === 'execution_timeout' || reasonLower.includes('timeout')) {
-      const totalProcessed = funnel.organizations.total + funnel.contacts.total + funnel.leads.total;
+      const totalProcessed = orgsTotal + contactsTotal + leadsTotal;
       return {
         type: 'warning',
         icon: 'info',
@@ -173,10 +190,7 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
 
   // CONTACTS WITHOUT LEADS - Stage-aware messaging
   // SEMANTIC ALIGNMENT: Zero leads ≠ zero progress if scoring has occurred
-  if (funnel.contacts.total > 0 && funnel.leads.total === 0) {
-    const scoredCount = funnel.contacts.scored || 0;
-    const enrichedCount = funnel.contacts.enriched || 0;
-    
+  if (contactsTotal > 0 && leadsTotal === 0) {
     // Check what stage we're at
     if (scoredCount > 0) {
       // Progress made in scoring - not stalled!
@@ -186,7 +200,7 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
           type: 'info', // Info, not warning - this is progress
           icon: 'info',
           message: 'Processing paused — contact scoring in progress',
-          subMessage: `${scoredCount.toLocaleString()} of ${funnel.contacts.total.toLocaleString()} contacts scored. Email enrichment pending before leads can be created.`,
+          subMessage: `${scoredCount.toLocaleString()} of ${contactsTotal.toLocaleString()} contacts scored. Email enrichment pending before leads can be created.`,
         };
       } else {
         // Enriched but no leads yet
@@ -201,9 +215,9 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
     
     // No scoring yet - waiting for scoring to start
     const hasRelevantAlert = alerts.some(a => 
-      a.message.toLowerCase().includes('email') || 
-      a.message.toLowerCase().includes('contact') ||
-      a.message.toLowerCase().includes('scoring')
+      a.message?.toLowerCase().includes('email') || 
+      a.message?.toLowerCase().includes('contact') ||
+      a.message?.toLowerCase().includes('scoring')
     );
     
     if (hasRelevantAlert || runStatus === 'running') {
@@ -211,7 +225,7 @@ function deriveBannerState(status: RealTimeExecutionStatus | null): BannerState 
         type: 'info',
         icon: 'info',
         message: 'Contacts sourced — scoring in progress',
-        subMessage: `${funnel.contacts.total.toLocaleString()} contacts discovered. Processing will continue through scoring and enrichment.`,
+        subMessage: `${contactsTotal.toLocaleString()} contacts discovered. Processing will continue through scoring and enrichment.`,
       };
     }
   }
