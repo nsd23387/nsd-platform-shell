@@ -46,6 +46,8 @@ import type {
   ThroughputConfig,
   ObservabilityFunnel,
   CampaignExecutionStatus,
+  FunnelScope,
+  FunnelExecution,
 } from '../../types/campaign';
 import {
   getCampaign,
@@ -55,6 +57,7 @@ import {
   getCampaignThroughput,
   requestCampaignRun,
   duplicateCampaign,
+  getCampaignScope,
   type RealTimeExecutionStatus,
 } from '../../lib/api';
 import {
@@ -69,6 +72,7 @@ import { MetricsDisplay } from '../../components/MetricsDisplay';
 import {
   CampaignExecutionStatusCard,
   PipelineFunnelTable,
+  DualLayerFunnelCard,
   SendMetricsPanel,
   ExecutionTimelineFeed,
   ApprovalAwarenessPanel,
@@ -130,6 +134,13 @@ export default function CampaignDetailPage() {
   // Duplicate campaign state
   const [isDuplicating, setIsDuplicating] = useState(false);
   const router = useRouter();
+
+  // ============================================
+  // BUSINESS SCOPE (Primary Funnel Layer)
+  // INVARIANT: Scope represents business value,
+  // independent of execution state.
+  // ============================================
+  const [campaignScope, setCampaignScope] = useState<FunnelScope | null>(null);
 
   // Derive governance state from backend data
   const governanceState: CampaignGovernanceState = campaign
@@ -201,6 +212,26 @@ export default function CampaignDetailPage() {
     };
   }, [executionStatus]);
 
+  // ============================================
+  // EXECUTION PROGRESS (Secondary Funnel Layer)
+  // Derived from execution state - resets per run
+  // ============================================
+  const executionProgress: FunnelExecution | null = useMemo(() => {
+    if (!executionStatus?.funnel) return null;
+    
+    const { organizations, contacts, leads } = executionStatus.funnel;
+    
+    return {
+      processedOrganizations: organizations?.total ?? 0,
+      processedContacts: contacts?.total ?? 0,
+      promotedLeads: leads?.total ?? 0,
+      sentMessages: 0, // Not yet available
+      executionAvailable: true,
+      runId: executionRun?.id,
+      runStatus: executionRun?.status,
+    };
+  }, [executionStatus, executionRun]);
+
   // Derive run status from execution state
   const runStatus = executionRun?.status?.toLowerCase() || null;
   const runPhase = executionRun?.phase?.toLowerCase() || null;
@@ -243,22 +274,28 @@ export default function CampaignDetailPage() {
         // Load non-execution data in parallel
         // CANONICAL: Execution data comes ONLY from useRealTimeStatus -> /execution-state
         // NO legacy endpoints: /runs, /observability
+        // 
+        // BUSINESS SCOPE: Fetch scope data (eligibility) separately from execution
+        // INVARIANT: Scope represents business value, independent of execution state
         const [
           metricsData,
           historyData,
           variantsData,
           throughputData,
+          scopeData,
         ] = await Promise.allSettled([
           getCampaignMetrics(campaignId),
           getCampaignMetricsHistory(campaignId),
           getCampaignVariants(campaignId),
           getCampaignThroughput(campaignId),
+          getCampaignScope(campaignId),
         ]);
 
         if (metricsData.status === 'fulfilled') setMetrics(metricsData.value);
         if (historyData.status === 'fulfilled') setMetricsHistory(historyData.value);
         if (variantsData.status === 'fulfilled') setVariants(variantsData.value);
         if (throughputData.status === 'fulfilled') setThroughput(throughputData.value);
+        if (scopeData.status === 'fulfilled') setCampaignScope(scopeData.value);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load campaign');
       } finally {
@@ -409,6 +446,8 @@ export default function CampaignDetailPage() {
             executionStatus={executionStatus}
             executionFunnel={executionFunnel}
             executionRun={executionRun}
+            campaignScope={campaignScope}
+            executionProgress={executionProgress}
             runStatus={runStatus}
             runPhase={runPhase}
             isStale={isStale}
@@ -442,6 +481,8 @@ export default function CampaignDetailPage() {
             executionStatus={executionStatus}
             executionFunnel={executionFunnel}
             executionRun={executionRun}
+            campaignScope={campaignScope}
+            executionProgress={executionProgress}
             onRunCampaign={handleRunCampaign}
             isRunRequesting={isRunRequesting}
             runRequestMessage={runRequestMessage}
@@ -468,6 +509,8 @@ function OverviewTab({
   executionStatus,
   executionFunnel,
   executionRun,
+  campaignScope,
+  executionProgress,
   runStatus,
   runPhase,
   isStale,
@@ -485,6 +528,8 @@ function OverviewTab({
   executionStatus: RealTimeExecutionStatus | null;
   executionFunnel: ObservabilityFunnel | null;
   executionRun: RealTimeExecutionStatus['latestRun'] | null;
+  campaignScope: FunnelScope | null;
+  executionProgress: FunnelExecution | null;
   runStatus: string | null;
   runPhase: string | null;
   isStale: boolean;
@@ -535,8 +580,13 @@ function OverviewTab({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <CampaignScopeSummary icp={campaign.icp} />
           
+          {/* DUAL-LAYER FUNNEL: Scope (primary) + Execution (secondary) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <FunnelSummaryWidget funnel={executionFunnel} />
+            <FunnelSummaryWidget 
+              funnel={executionFunnel}
+              scope={campaignScope}
+              execution={executionProgress}
+            />
             <ExecutionDataSourceBadge
               lastUpdatedAt={lastUpdatedAt}
               isRealTime={!!executionStatus?.funnel}
@@ -699,6 +749,8 @@ function MonitoringTab({
   executionStatus,
   executionFunnel,
   executionRun,
+  campaignScope,
+  executionProgress,
   onRunCampaign,
   isRunRequesting,
   runRequestMessage,
@@ -708,6 +760,8 @@ function MonitoringTab({
   executionStatus: RealTimeExecutionStatus | null;
   executionFunnel: ObservabilityFunnel | null;
   executionRun: RealTimeExecutionStatus['latestRun'] | null;
+  campaignScope: FunnelScope | null;
+  executionProgress: FunnelExecution | null;
   onRunCampaign: () => void;
   isRunRequesting: boolean;
   runRequestMessage: string | null;
@@ -857,6 +911,30 @@ function MonitoringTab({
             isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
           />
 
+          {/* DUAL-LAYER FUNNEL: Scope (primary) + Execution (secondary) */}
+          {/* INVARIANT: Scope represents business value, independent of execution */}
+          <DualLayerFunnelCard
+            funnel={{
+              campaignId: campaign.id,
+              scope: campaignScope || {
+                eligibleOrganizations: 0,
+                eligibleContacts: 0,
+                eligibleLeads: 0,
+                scopeAvailable: false,
+              },
+              execution: executionProgress || {
+                processedOrganizations: 0,
+                processedContacts: 0,
+                promotedLeads: 0,
+                sentMessages: 0,
+                executionAvailable: false,
+              },
+              lastUpdatedAt: new Date().toISOString(),
+            }}
+            loading={!campaignScope && !executionFunnel}
+          />
+
+          {/* Legacy Pipeline Funnel (execution detail) */}
           <PipelineFunnelTable
             stages={pipelineStages}
             loading={!executionFunnel}

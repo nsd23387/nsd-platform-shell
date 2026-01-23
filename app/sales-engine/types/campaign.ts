@@ -405,6 +405,79 @@ export interface LeadApprovalCounts {
 }
 
 // ============================================
+// Business Scope Types (Business-First Funnel)
+// ============================================
+
+/**
+ * INVARIANT:
+ * Funnel scope represents business value and MUST NOT depend on execution.
+ * Campaign value exists independently of execution.
+ * Execution unlocks value — it does not define it.
+ * 
+ * Scope values:
+ * - MUST populate even if execution has never run
+ * - MUST populate even if execution produces zero new writes
+ * - MUST NOT depend on run status
+ */
+export interface FunnelScope {
+  /** Total organizations matching this campaign's targeting criteria */
+  eligibleOrganizations: number;
+  /** Total contacts matching this campaign's targeting criteria */
+  eligibleContacts: number;
+  /** Total leads eligible for this campaign (contacts promoted to leads) */
+  eligibleLeads: number;
+  /** Whether scope data is available (false = "Campaign scope not yet computed") */
+  scopeAvailable: boolean;
+  /** When scope was last computed */
+  scopeComputedAt?: string;
+}
+
+/**
+ * Execution progress metrics for a specific run.
+ * 
+ * These values:
+ * - Reset per run
+ * - May legitimately be zero
+ * - Are secondary to business scope
+ * 
+ * Execution metrics are observational only.
+ */
+export interface FunnelExecution {
+  /** Organizations processed in this run */
+  processedOrganizations: number;
+  /** Contacts discovered/processed in this run */
+  processedContacts: number;
+  /** Leads promoted in this run */
+  promotedLeads: number;
+  /** Emails sent in this run */
+  sentMessages: number;
+  /** Whether execution data is available */
+  executionAvailable: boolean;
+  /** Current run ID (if any) */
+  runId?: string;
+  /** Run status */
+  runStatus?: string;
+}
+
+/**
+ * Combined funnel data with both scope and execution layers.
+ * 
+ * UI MUST display both layers:
+ * - Primary: Business scope (eligibility)
+ * - Secondary: Execution progress (processed this run)
+ */
+export interface DualLayerFunnel {
+  /** Campaign ID */
+  campaignId: string;
+  /** Business scope - who the campaign CAN reach */
+  scope: FunnelScope;
+  /** Execution progress - what has been processed */
+  execution: FunnelExecution;
+  /** Last updated timestamp */
+  lastUpdatedAt: string;
+}
+
+// ============================================
 // Pipeline Observability Types
 // ============================================
 

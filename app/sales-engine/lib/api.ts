@@ -50,6 +50,9 @@ import type {
   RunRequestResponse,
   ObservabilityStatus,
   ObservabilityFunnel,
+  FunnelScope,
+  FunnelExecution,
+  DualLayerFunnel,
 } from '../types/campaign';
 import {
   assertReadOnly,
@@ -406,6 +409,114 @@ export async function getCampaignMetricsHistory(id: string): Promise<MetricsHist
     return [];
   }
   return apiRequest<MetricsHistoryEntry[]>(`/${id}/metrics/history`);
+}
+
+/**
+ * Get campaign scope (business-first funnel).
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * INVARIANT:
+ * Funnel scope represents business value and MUST NOT depend on execution.
+ * Campaign value exists independently of execution.
+ * Execution unlocks value — it does not define it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Returns eligibility counts that:
+ * - MUST populate even if execution has never run
+ * - MUST populate even if execution produces zero new writes
+ * - MUST NOT depend on run status
+ * 
+ * @param id - Campaign ID
+ * @returns FunnelScope with eligibility counts
+ */
+export async function getCampaignScope(id: string): Promise<FunnelScope> {
+  // M67.9-01: Return empty scope when API is disabled
+  if (isApiDisabled) {
+    return {
+      eligibleOrganizations: 0,
+      eligibleContacts: 0,
+      eligibleLeads: 0,
+      scopeAvailable: false,
+      scopeComputedAt: new Date().toISOString(),
+    };
+  }
+
+  try {
+    // Fetch from scope endpoint (separate from execution-state)
+    const response = await fetch(`/api/campaigns/${encodeURIComponent(id)}/scope`, {
+      headers: buildHeaders(),
+    });
+
+    if (!response.ok) {
+      console.warn(`[getCampaignScope] Non-OK response: ${response.status}`);
+      return {
+        eligibleOrganizations: 0,
+        eligibleContacts: 0,
+        eligibleLeads: 0,
+        scopeAvailable: false,
+        scopeComputedAt: new Date().toISOString(),
+      };
+    }
+
+    const data = await response.json();
+    
+    return {
+      eligibleOrganizations: data.eligibleOrganizations ?? 0,
+      eligibleContacts: data.eligibleContacts ?? 0,
+      eligibleLeads: data.eligibleLeads ?? 0,
+      scopeAvailable: data.scopeAvailable ?? true,
+      scopeComputedAt: data.scopeComputedAt ?? new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('[getCampaignScope] Error:', error);
+    return {
+      eligibleOrganizations: 0,
+      eligibleContacts: 0,
+      eligibleLeads: 0,
+      scopeAvailable: false,
+      scopeComputedAt: new Date().toISOString(),
+    };
+  }
+}
+
+/**
+ * Get dual-layer funnel data (scope + execution).
+ * 
+ * Combines:
+ * - Business scope (from getCampaignScope)
+ * - Execution progress (from getExecutionState)
+ * 
+ * INVARIANT:
+ * Scope is primary and independent of execution.
+ * Execution metrics are observational and secondary.
+ * 
+ * @param id - Campaign ID
+ * @returns DualLayerFunnel with both scope and execution data
+ */
+export async function getDualLayerFunnel(id: string): Promise<DualLayerFunnel> {
+  // Fetch both in parallel
+  const [scope, executionState] = await Promise.all([
+    getCampaignScope(id),
+    getExecutionState(id).catch(() => null),
+  ]);
+
+  // Extract execution metrics from execution state
+  const execution: FunnelExecution = {
+    processedOrganizations: executionState?.funnel?.organizations?.total ?? 0,
+    processedContacts: executionState?.funnel?.contacts?.total ?? 0,
+    promotedLeads: executionState?.funnel?.leads?.total ?? 0,
+    sentMessages: 0, // Not yet available in execution-state
+    executionAvailable: executionState !== null,
+    runId: executionState?.run?.id,
+    runStatus: executionState?.run?.status,
+  };
+
+  return {
+    campaignId: id,
+    scope,
+    execution,
+    lastUpdatedAt: new Date().toISOString(),
+  };
 }
 
 /**

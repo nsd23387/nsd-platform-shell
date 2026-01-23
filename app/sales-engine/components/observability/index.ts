@@ -101,3 +101,8 @@ export type { default as CurrentStageIndicatorDefault } from './CurrentStageIndi
 // EXECUTION AUTHORITY: Sales-engine is the sole source of run history
 export { RunHistoryPanel } from './RunHistoryPanel';
 export type { default as RunHistoryPanelDefault } from './RunHistoryPanel';
+
+// Dual-Layer Funnel (Business-First)
+// INVARIANT: Scope represents business value, independent of execution
+export { DualLayerFunnelCard } from './DualLayerFunnelCard';
+export type { DualLayerFunnelCardProps } from './DualLayerFunnelCard';
