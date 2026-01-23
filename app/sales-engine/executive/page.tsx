@@ -276,7 +276,7 @@ function HealthIndicator({ status, errorRate, lastSuccess }: {
   errorRate: number;
   lastSuccess: string | null;
 }) {
-  const statusConfig: Record<string, { label: string; color: typeof NSD_COLORS.semantic.positive }> = {
+  const statusConfig: Record<string, { label: string; color: { bg: string; text: string; border: string } }> = {
     healthy: { label: 'Healthy', color: NSD_COLORS.semantic.positive },
     degraded: { label: 'Degraded', color: NSD_COLORS.semantic.attention },
     down: { label: 'Down', color: NSD_COLORS.semantic.critical },

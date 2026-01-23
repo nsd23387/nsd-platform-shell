@@ -30,7 +30,21 @@ type IconName =
   | 'send'
   | 'archive'
   | 'star'
-  | 'draft';
+  | 'draft'
+  | 'eye'
+  | 'trending'
+  | 'building'
+  | 'globe'
+  | 'lightbulb'
+  | 'play'
+  | 'minus'
+  | 'chevron-up'
+  | 'chevron-down'
+  | 'search'
+  | 'code'
+  | 'duplicate'
+  | 'timeline'
+  | 'chat';
 
 interface IconProps {
   name: IconName;
@@ -294,6 +308,146 @@ const icons: Record<IconName, React.ReactNode> = {
   draft: (
     <path
       d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M16 13H8m8 4H8m2-8H8"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  eye: (
+    <>
+      <path
+        d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" fill="none" />
+    </>
+  ),
+  trending: (
+    <path
+      d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  building: (
+    <path
+      d="M6 22V4a2 2 0 012-2h8a2 2 0 012 2v18M2 22h20M10 6h4m-4 4h4m-4 4h4"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+      <path
+        d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        fill="none"
+      />
+    </>
+  ),
+  lightbulb: (
+    <path
+      d="M9 18h6M10 22h4M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 01-2 2h-4a2 2 0 01-2-2v-2.26C8.19 13.47 7 11.38 7 9a7 7 0 017-7z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  play: (
+    <path
+      d="M5 3l14 9-14 9V3z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  minus: (
+    <path
+      d="M5 12h14"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      fill="none"
+    />
+  ),
+  'chevron-up': (
+    <path
+      d="M18 15l-6-6-6 6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  'chevron-down': (
+    <path
+      d="M6 9l6 6 6-6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" fill="none" />
+      <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </>
+  ),
+  code: (
+    <path
+      d="M16 18l6-6-6-6M8 6l-6 6 6 6"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  duplicate: (
+    <path
+      d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2M9 2h6v4H9V2z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  timeline: (
+    <path
+      d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  ),
+  chat: (
+    <path
+      d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"

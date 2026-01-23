@@ -67,8 +67,8 @@ interface CampaignHealthSummaryProps {
  * Map governance status to display configuration.
  * Governance is administrative state, NOT execution state.
  */
-function getGovernanceDisplay(status: string): { label: string; color: typeof NSD_COLORS.semantic.muted } {
-  const statusMap: Record<string, { label: string; color: typeof NSD_COLORS.semantic.muted }> = {
+function getGovernanceDisplay(status: string): { label: string; color: { bg: string; text: string; border: string } } {
+  const statusMap: Record<string, { label: string; color: { bg: string; text: string; border: string } }> = {
     'DRAFT': { label: 'Draft', color: NSD_COLORS.semantic.muted },
     'PENDING_REVIEW': { label: 'Pending Review', color: NSD_COLORS.semantic.attention },
     'RUNNABLE': { label: 'Ready', color: NSD_COLORS.semantic.info },
