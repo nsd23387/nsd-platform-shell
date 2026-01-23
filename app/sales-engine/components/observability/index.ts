@@ -106,3 +106,22 @@ export type { default as RunHistoryPanelDefault } from './RunHistoryPanel';
 // INVARIANT: Scope represents business value, independent of execution
 export { DualLayerFunnelCard } from './DualLayerFunnelCard';
 export type { DualLayerFunnelCardProps } from './DualLayerFunnelCard';
+
+// ============================================
+// OBSERVATIONS-FIRST ARCHITECTURE COMPONENTS
+// ============================================
+
+// Campaign Health Summary
+// Unified view: Governance + Outcome + Market Reality + Operational Yield
+export { CampaignHealthSummary } from './CampaignHealthSummary';
+export type { default as CampaignHealthSummaryDefault } from './CampaignHealthSummary';
+
+// Dual Funnel Visualization
+// CRITICAL: Shows Market Funnel (observed) vs Execution Funnel (processed)
+export { DualFunnelVisualization } from './DualFunnelVisualization';
+export type { default as DualFunnelVisualizationDefault } from './DualFunnelVisualization';
+
+// Run Intent Selector
+// HARVEST_ONLY vs ACTIVATE with explicit consequences
+export { RunIntentSelector, type RunIntent } from './RunIntentSelector';
+export type { default as RunIntentSelectorDefault } from './RunIntentSelector';
