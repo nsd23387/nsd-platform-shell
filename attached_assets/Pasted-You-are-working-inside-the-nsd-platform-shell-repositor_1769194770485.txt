@@ -1,0 +1,209 @@
+You are working inside the **nsd-platform-shell** repository.
+
+This is a **UX/UI enhancement phase**, not a backend or architecture phase.
+
+All Observations-First plumbing, proxy routes, execution semantics, and invariants are already implemented.
+**DO NOT introduce new APIs, execution paths, or data sources.**
+
+Your task is to **polish, align, and elevate the UX/UI** so the system clearly tells the correct business story and is usable by both operators and executives.
+
+---
+
+## CONTEXT (DO NOT CHANGE)
+
+The system is built on these **non-negotiable principles**:
+
+1. **Governance ≠ Execution**
+
+   * `campaign.status` is administrative only
+   * Execution state comes from execution-state APIs
+
+2. **Market Reality ≠ Operational Yield**
+
+   * `observations.*` = market reality
+   * `public.*` = what we processed
+   * Gaps are opportunities, NOT failures
+
+3. **Zero Is Valid**
+
+   * `VALID_EMPTY_OBSERVATION` is informational, not an error
+
+4. **Run Intent Is Explicit**
+
+   * `HARVEST_ONLY` = safe, validation, no outreach
+   * `ACTIVATE` = full execution
+
+5. **UI is READ-ONLY by default**
+
+   * Dashboards do not execute campaigns
+   * Execution controls are scoped and explicit
+
+All of this already exists in code.
+You are improving **how it looks, reads, and feels**.
+
+---
+
+## PRIMARY UX GOALS
+
+1. **Make the system self-explanatory**
+
+   * A first-time executive should understand:
+
+     * Is the system healthy?
+     * Are campaigns working?
+     * Is the market big enough?
+     * Are we converting opportunity into yield?
+
+2. **Eliminate ambiguity**
+
+   * No confusing “failure” states
+   * No hidden assumptions
+   * Every number should explain *what it represents*
+
+3. **Increase trust**
+
+   * Clear labels
+   * Consistent terminology
+   * Explicit source attribution (Market vs Operational)
+
+---
+
+## SCOPE OF WORK
+
+### 1. Campaign Detail Page UX Polish
+
+**Build on existing components:**
+
+* `CampaignHealthSummary`
+* `DualFunnelVisualization`
+* `ExecutionStatusBanner`
+* `RunIntentSelector`
+
+Enhancements:
+
+* Improve spacing, hierarchy, and typography
+* Add subtle section headers:
+
+  * “Administrative State”
+  * “Last Execution Outcome”
+  * “Market Reality”
+  * “Operational Yield”
+* Add inline helper text (ℹ️ icons) explaining:
+
+  * Why gaps are normal
+  * Why zero ≠ failure
+* Ensure outcome badges use consistent tone and color mapping
+
+NO new data. Presentation only.
+
+---
+
+### 2. Executive Dashboard UX Elevation
+
+Route: `/sales-engine/executive`
+
+Enhancements:
+
+* Improve visual grouping:
+
+  * System Health (top)
+  * Market Reality (left)
+  * Operational Yield (right)
+  * Campaign Distribution (bottom)
+* Add lightweight data annotations:
+
+  * “Observed, not processed”
+  * “Processed subset of observed”
+* Use neutral, executive-friendly language
+* Ensure all charts are:
+
+  * Read-only
+  * Clearly labeled
+  * Free of execution affordances
+
+---
+
+### 3. Terminology & Copy Consistency Pass
+
+Audit all visible UI copy and enforce:
+
+* “Governance Status” (never “Campaign Status” alone)
+* “Execution Outcome” (never “Success / Failure”)
+* “Market Reality” vs “Operational Yield”
+* “Valid Empty Observation” messaging consistency
+
+Replace vague labels like:
+
+* “Ready”
+* “Blocked”
+* “Failed”
+
+With explanatory phrasing.
+
+---
+
+### 4. Visual Hierarchy & Design System Alignment
+
+* Normalize spacing across observability components
+* Use consistent badge sizes and colors
+* Ensure warning states are:
+
+  * Rare
+  * Justified
+  * Actionable
+* Information states should feel calm and non-alarming
+
+No redesign. This is **polish**, not re-architecture.
+
+---
+
+### 5. Empty & Edge State Excellence
+
+Improve UX for:
+
+* No runs yet
+* Valid empty observation
+* Execution service temporarily unavailable
+* Campaign archived / paused
+
+Each state must:
+
+* Explain what is happening
+* Explain what is NOT happening
+* Avoid implying error when none exists
+
+---
+
+## HARD CONSTRAINTS
+
+❌ Do NOT:
+
+* Add new APIs
+* Add execution logic
+* Change backend behavior
+* Introduce new data sources
+* Reinterpret execution semantics
+
+✅ DO:
+
+* Improve clarity
+* Improve layout
+* Improve readability
+* Improve confidence
+
+---
+
+## DEFINITION OF DONE
+
+* UI tells a clear, honest story
+* No ambiguous states
+* Executives can understand outcomes in <60 seconds
+* Operators can diagnose without reading logs
+* UX reinforces Observations-First architecture
+
+Proceed incrementally.
+Start with campaign detail UX, then executive dashboard, then copy consistency.
+
+---
+
+**This is a UX refinement pass on a mature system. Treat it as such.**

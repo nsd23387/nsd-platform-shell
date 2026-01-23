@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { PageHeader, SectionCard } from '../../components/ui';
+import { PageHeader, SectionCard, SectionHeader, HelperText } from '../../components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import type {
@@ -606,7 +606,7 @@ function OverviewTab({
   const noRuns = runsCount === 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* ============================================
           ABOVE THE FOLD: Side-by-Side Layout
           Left: Campaign Scope (context)
@@ -617,18 +617,62 @@ function OverviewTab({
           Responsive: stacks to single column on screens < 900px (see globals.css) */}
       <div className="overview-two-column-grid">
         {/* LEFT COLUMN: Campaign Scope & Context (40%) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Campaign Scope Summary - Full ICP display */}
-          <CampaignScopeSummary icp={campaign.icp} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* SECTION: Market Reality - What exists in the market */}
+          <div>
+            <SectionHeader 
+              title="Market Reality" 
+              icon="chart"
+              helpText="Market Reality represents what exists in the market — the total addressable opportunity. This data comes from observations, not our processing. Gaps between Market Reality and Operational Yield are normal and represent untapped opportunity."
+            />
+            {/* Campaign Scope Summary - Full ICP display */}
+            <CampaignScopeSummary icp={campaign.icp} />
+          </div>
           
           {/* Pipeline Funnel Summary - Quick visibility */}
-          <FunnelSummaryWidget funnel={observabilityFunnel} />
+          <div>
+            <SectionHeader 
+              title="Operational Yield" 
+              icon="metrics"
+              helpText="Operational Yield represents what we have processed from the market. This is always a subset of Market Reality. A smaller yield than market size is expected — it reflects targeting precision, not failure."
+            />
+            <FunnelSummaryWidget funnel={observabilityFunnel} />
+            <HelperText>
+              Zero counts are valid observations. A zero yield means no matches were found for the current criteria — this is informational, not an error.
+            </HelperText>
+          </div>
         </div>
 
         {/* RIGHT COLUMN: Execution Status (60%) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Execution Health Indicator - Single sentence visible without scrolling */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* SECTION: Administrative State - Governance status */}
+          <div>
+            <SectionHeader 
+              title="Administrative State" 
+              icon="settings"
+              helpText="Administrative State reflects the governance lifecycle of this campaign (Draft, Pending Review, Approved, etc.). This is separate from execution state — a campaign can be Approved but not yet executed."
+            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+              <CampaignStatusHeader
+                campaignName={campaign.name}
+                governanceState={governanceState}
+                executionConfidence={executionState.confidence}
+                isPlanningOnly={isPlanningOnly}
+                lastUpdatedAt={lastUpdatedAt}
+                isPolling={isPolling}
+              />
+            </div>
+          </div>
+
+          {/* SECTION: Last Execution Outcome - What happened in the last run */}
+          <div>
+            <SectionHeader 
+              title="Last Execution Outcome" 
+              icon="runs"
+              helpText="Execution Outcome shows what happened during the last run. The system is read-only — you are observing historical results, not controlling execution. Execution is managed by backend systems."
+            />
+            
+            {/* Execution Health Indicator - Single sentence visible without scrolling */}
             <ExecutionHealthIndicator
               runStatus={runStatus}
               runPhase={runPhase}
@@ -636,60 +680,60 @@ function OverviewTab({
               noRuns={noRuns}
               isStale={isRunStale}
             />
-            <CampaignStatusHeader
-              campaignName={campaign.name}
-              governanceState={governanceState}
-              executionConfidence={executionState.confidence}
-              isPlanningOnly={isPlanningOnly}
-              lastUpdatedAt={lastUpdatedAt}
-              isPolling={isPolling}
-            />
+
+            {/* Polling Status - Shows "Auto-refreshing every 7s" or "Execution idle" */}
+            <div style={{ marginTop: '12px' }}>
+              <PollingStatusIndicator
+                isPolling={isPolling}
+                isRefreshing={isRefreshing}
+                lastUpdatedAt={lastUpdatedAt}
+                pollingInterval={7000}
+                onRefresh={onRefresh}
+              />
+            </div>
+
+            {/* Active Stage Focus Panel - What is the system doing right now? */}
+            <div style={{ marginTop: '12px' }}>
+              <ActiveStageFocusPanel
+                runStatus={runStatus}
+                runPhase={runPhase}
+                funnel={observabilityFunnel}
+                noRuns={noRuns}
+                isPolling={isPolling}
+                isStale={isRunStale}
+              />
+            </div>
+
+            {/* Execution Stage Tracker - Vertical stage tracker */}
+            <div style={{ marginTop: '12px' }}>
+              <ExecutionStageTracker
+                runStatus={runStatus}
+                runPhase={runPhase}
+                funnel={observabilityFunnel}
+                noRuns={noRuns}
+                isStale={isRunStale}
+              />
+            </div>
+
+            {/* Last Execution Summary - Shows when system is idle (completed/failed)
+                UX Trust Accelerator: Reinforces "The system is idle. You are looking at history." */}
+            <div style={{ marginTop: '12px' }}>
+              <LastExecutionSummaryCard
+                campaignId={campaign.id}
+                run={latestRun ? {
+                  run_id: latestRun.id,
+                  status: latestRun.status?.toLowerCase(),
+                  created_at: latestRun.started_at,
+                  updated_at: latestRun.completed_at,
+                  error_message: latestRun.error_message ?? null,
+                  failure_reason: latestRun.failure_reason ?? null,
+                  reason: latestRun.reason ?? null,
+                } : null}
+                funnel={observabilityFunnel}
+                noRuns={noRuns}
+              />
+            </div>
           </div>
-
-          {/* Polling Status - Shows "Auto-refreshing every 7s" or "Execution idle" */}
-          <PollingStatusIndicator
-            isPolling={isPolling}
-            isRefreshing={isRefreshing}
-            lastUpdatedAt={lastUpdatedAt}
-            pollingInterval={7000}
-            onRefresh={onRefresh}
-          />
-
-          {/* Active Stage Focus Panel - What is the system doing right now? */}
-          <ActiveStageFocusPanel
-            runStatus={runStatus}
-            runPhase={runPhase}
-            funnel={observabilityFunnel}
-            noRuns={noRuns}
-            isPolling={isPolling}
-            isStale={isRunStale}
-          />
-
-          {/* Execution Stage Tracker - Vertical stage tracker */}
-          <ExecutionStageTracker
-            runStatus={runStatus}
-            runPhase={runPhase}
-            funnel={observabilityFunnel}
-            noRuns={noRuns}
-            isStale={isRunStale}
-          />
-
-          {/* Last Execution Summary - Shows when system is idle (completed/failed)
-              UX Trust Accelerator: Reinforces "The system is idle. You are looking at history." */}
-          <LastExecutionSummaryCard
-            campaignId={campaign.id}
-            run={latestRun ? {
-              run_id: latestRun.id,
-              status: latestRun.status?.toLowerCase(),
-              created_at: latestRun.started_at,
-              updated_at: latestRun.completed_at,
-              error_message: latestRun.error_message ?? null,
-              failure_reason: latestRun.failure_reason ?? null,
-              reason: latestRun.reason ?? null,
-            } : null}
-            funnel={observabilityFunnel}
-            noRuns={noRuns}
-          />
         </div>
       </div>
 
