@@ -255,9 +255,9 @@ export default function SalesEnginePage() {
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: NSD_SPACING.md }}>
-              <Link href="/sales-engine/home" style={{ textDecoration: 'none' }}>
+              <Link href="/sales-engine/executive" style={{ textDecoration: 'none' }}>
                 <Button variant="secondary" icon="chart">
-                  Dashboard
+                  Executive View
                 </Button>
               </Link>
               <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>

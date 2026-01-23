@@ -10,3 +10,4 @@ export { MiniPipelineIndicator } from './MiniPipelineIndicator';
 export { ExecutionStatusBadge } from './ExecutionStatusBadge';
 export { SkeletonLoader, SkeletonRow, SkeletonTable } from './SkeletonLoader';
 export { EmptyState } from './EmptyState';
+export { SectionHeader, InfoTooltip, HelperText } from './SectionHeader';
