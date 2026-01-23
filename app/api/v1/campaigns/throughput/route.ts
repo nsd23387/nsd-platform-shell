@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.SALES_ENGINE_API_BASE_URL || process.env.NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL;
 
+/**
+ * Returns default throughput config with zero usage.
+ * 
+ * IMPORTANT: Existing campaigns have not yet been executed, so throughput
+ * usage should be zero. Showing placeholder usage would create an
+ * inconsistency with other observability components.
+ * 
+ * Throughput data will be populated from backend-observed events once
+ * campaigns are actually executed.
+ */
 function getMockThroughput() {
   return {
     dailyLimit: 500,
-    usedToday: 127,
-    activeCampaigns: 1,
+    usedToday: 0,
+    activeCampaigns: 0,
     blockedByThroughput: 0,
   };
 }

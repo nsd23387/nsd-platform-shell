@@ -145,9 +145,14 @@ export function SendMetricsPanel({
 }: SendMetricsPanelProps) {
   const confidenceStyle = getConfidenceBadgeStyle(confidence);
   
-  // Determine if we have any send data to display
-  const hasData = emailsSent !== undefined && emailsSent > 0;
-  const showNotObservedState = !hasData && !hasReachedSendStage;
+  // CONSISTENCY FIX: Pipeline funnel is the source of truth for whether emails have been sent.
+  // Only show send metrics if the pipeline confirms emails_sent stage has been reached.
+  // This prevents showing stale/incorrect metrics data that conflicts with pipeline state.
+  //
+  // Previously: const hasData = emailsSent !== undefined && emailsSent > 0;
+  // Now: Require BOTH pipeline confirmation AND metric data
+  const hasData = hasReachedSendStage && emailsSent !== undefined && emailsSent > 0;
+  const showNotObservedState = !hasReachedSendStage;
 
   if (loading) {
     return (

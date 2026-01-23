@@ -3,108 +3,43 @@
 /**
  * Campaign Detail Page
  * 
- * ═══════════════════════════════════════════════════════════════════════════
- * EXECUTION AUTHORITY CONTRACT
- * ═══════════════════════════════════════════════════════════════════════════
+ * EXECUTION-STATE DRIVEN UI CONTRACT
  * 
- * INVARIANT: Execution truth comes ONLY from sales-engine.
+ * This page is execution-state driven.
+ * If execution-state is empty, the UI must be empty.
+ * Consistency follows truth, not the other way around.
  * 
- * This page is a PURE CONSUMER of execution data.
- * 
- * ALLOWED EXECUTION ENDPOINTS:
- * - GET /api/v1/campaigns/:id/execution-state (current run + funnel)
- * - GET /api/v1/campaigns/:id/run-history (historical runs)
- * 
- * FORBIDDEN (DO NOT ADD):
- * - GET /api/v1/campaigns/:id/runs
- * - GET /api/v1/campaigns/:id/runs/latest  
- * - GET /api/v1/campaigns/:id/observability/*
- * - Any local database queries for execution data
- * - Inference or reconstruction of execution state
- * 
- * DATA FLOW:
- * sales-engine → proxy → useRealTimeStatus → UI components
- * 
- * ERROR HANDLING:
- * If sales-engine is unreachable, show explicit error state.
- * Do NOT fallback to legacy endpoints.
- * 
- * ═══════════════════════════════════════════════════════════════════════════
+ * CANONICAL RULE (NON-NEGOTIABLE):
+ * /api/v1/campaigns/:id/execution-state is the ONLY source of execution truth.
+ * If execution-state does not explicitly provide something:
+ * - the UI must not infer it
+ * - the UI must not reconstruct it
+ * - the UI must not show it
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader, SectionCard } from '../../components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
-import type {
-  CampaignDetail,
-  CampaignMetrics,
-  MetricsHistoryEntry,
-  CampaignVariant,
-  ThroughputConfig,
-  ObservabilityFunnel,
-  CampaignExecutionStatus,
-  FunnelScope,
-  FunnelExecution,
-} from '../../types/campaign';
-import {
-  getCampaign,
-  getCampaignMetrics,
-  getCampaignMetricsHistory,
-  getCampaignVariants,
-  getCampaignThroughput,
-  requestCampaignRun,
-  duplicateCampaign,
-  getCampaignScope,
-  type RealTimeExecutionStatus,
-} from '../../lib/api';
-import {
-  mapToGovernanceState,
-  type CampaignGovernanceState,
-} from '../../lib/campaign-state';
-import {
-  LearningSignalsPanel,
-  GovernanceActionsPanel,
-} from '../../components/governance';
-import { MetricsDisplay } from '../../components/MetricsDisplay';
-import {
-  CampaignExecutionStatusCard,
-  PipelineFunnelTable,
-  DualLayerFunnelCard,
-  SendMetricsPanel,
-  ExecutionTimelineFeed,
-  ApprovalAwarenessPanel,
-  LatestRunStatusCard,
-  ExecutionExplainabilityPanel,
-  CampaignScopeSummary,
-  CampaignStatusHeader,
-  FunnelSummaryWidget,
-  ExecutionStageTracker,
-  ActiveStageFocusPanel,
-  ExecutionHealthIndicator,
-  ResultsBreakdownCards,
-  AdvisoryCallout,
-  PollingStatusIndicator,
-  LastExecutionSummaryCard,
-  ExecutionHealthBanner,
-  ExecutionDataSourceBadge,
-  CurrentStageIndicator,
-  RunHistoryPanel,
-  type ExecutionEvent,
-  type ApprovalAwarenessState,
-} from '../../components/observability';
-import { deriveExecutionState } from '../../lib/execution-state-mapping';
-import { isRunStale } from '../../lib/resolveActiveRun';
+import type { CampaignDetail, MarketScope, OperationalWorkingSet } from '../../types/campaign';
+import { getCampaign, requestCampaignRun, duplicateCampaign, type RunIntent } from '../../lib/api';
+import { mapToGovernanceState, type CampaignGovernanceState } from '../../lib/campaign-state';
+import { LearningSignalsPanel, GovernanceActionsPanel } from '../../components/governance';
+import { CampaignScopeSummary } from '../../components/observability';
 import { formatEt, formatEtDate } from '../../lib/time';
-import { 
-  isTestCampaign, 
-  getTestCampaignDetail, 
-  getTestCampaignThroughput,
-} from '../../lib/test-campaign';
+import { isTestCampaign, getTestCampaignDetail } from '../../lib/test-campaign';
 import { PlanningOnlyToggle } from '../../components/PlanningOnlyToggle';
-import { useRealTimeStatus } from '../../hooks/useRealTimeStatus';
+import { 
+  useExecutionState, 
+  getExecutionStatusText, 
+  shouldShowSendMetrics,
+  hasFunnelActivity,
+  type ExecutionState,
+  type ExecutionRun,
+  type ExecutionFunnel,
+} from '../../hooks/useExecutionState';
 
 type TabType = 'overview' | 'monitoring' | 'learning';
 
@@ -117,152 +52,64 @@ const TAB_CONFIG: { id: TabType; label: string; icon: string }[] = [
 export default function CampaignDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const campaignId = params.id as string;
   const initialTab = (searchParams.get('tab') as TabType) || 'overview';
 
+  // Campaign metadata (non-execution)
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
-  const [metrics, setMetrics] = useState<CampaignMetrics | null>(null);
-  const [metricsHistory, setMetricsHistory] = useState<MetricsHistoryEntry[]>([]);
-  const [variants, setVariants] = useState<CampaignVariant[]>([]);
-  const [throughput, setThroughput] = useState<ThroughputConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
-  // Run request state
+  
+  // Action states
   const [isRunRequesting, setIsRunRequesting] = useState(false);
   const [runRequestMessage, setRunRequestMessage] = useState<string | null>(null);
-  // Duplicate campaign state
   const [isDuplicating, setIsDuplicating] = useState(false);
-  const router = useRouter();
+  
+  // OBSERVATIONS-FIRST: Run intent selector
+  const [runIntent, setRunIntent] = useState<RunIntent>('HARVEST_ONLY');
+  
+  // Market scope and operational data (separate from execution state)
+  const [marketScope, setMarketScope] = useState<MarketScope | null>(null);
+  const [operationalSet, setOperationalSet] = useState<OperationalWorkingSet | null>(null);
+
+  const isTest = isTestCampaign(campaignId);
 
   // ============================================
-  // BUSINESS SCOPE (Primary Funnel Layer)
-  // INVARIANT: Scope represents business value,
-  // independent of execution state.
+  // CANONICAL EXECUTION STATE
+  // This is the ONLY source of execution truth
   // ============================================
-  const [campaignScope, setCampaignScope] = useState<FunnelScope | null>(null);
+  const { 
+    state: executionState, 
+    loading: executionLoading, 
+    refreshing: executionRefreshing,
+    error: executionError,
+    refresh: refreshExecution,
+    lastFetchedAt,
+  } = useExecutionState({
+    campaignId,
+    enabled: !loading && !isTest,
+    pollingIntervalMs: 7000, // Poll only when running
+  });
 
-  // Derive governance state from backend data
+  // Derive governance state
   const governanceState: CampaignGovernanceState = campaign
     ? mapToGovernanceState(campaign.status, campaign.isRunnable)
     : 'BLOCKED';
 
-  // Check if this is a test campaign
-  const isTest = isTestCampaign(campaignId);
-
-  // ============================================
-  // SINGLE EXECUTION DATA SOURCE
-  // useRealTimeStatus polls /execution-status
-  // This is the ONLY source for execution state
-  // ============================================
-  const {
-    realTimeStatus: executionStatus,
-    isPolling,
-    isRefreshing,
-    lastUpdatedAt,
-    refreshNow,
-    isLoading: isExecutionLoading,
-  } = useRealTimeStatus({
-    campaignId,
-    enabled: !loading && !isTest,
-    cacheTtlMs: 7000,
-    pollingIntervalMs: 7000,
-  });
-
-  // Derive execution run from the single source
-  const executionRun = executionStatus?.latestRun ?? null;
-
-  // Convert execution status funnel to ObservabilityFunnel format for component compatibility
-  const executionFunnel: ObservabilityFunnel | null = useMemo(() => {
-    if (!executionStatus || !executionStatus.funnel) return null;
-    
-    const { organizations, contacts, leads } = executionStatus.funnel;
-    const stages: Array<{ stage: string; label: string; count: number; confidence: 'observed' | 'conditional' }> = [];
-    
-    // Only include stages with actual data (count > 0)
-    if (organizations.total > 0) {
-      stages.push({
-        stage: 'orgs_sourced',
-        label: 'Organizations sourced',
-        count: organizations.total,
-        confidence: 'observed',
-      });
-    }
-    if (contacts.total > 0) {
-      stages.push({
-        stage: 'contacts_discovered',
-        label: 'Contacts discovered',
-        count: contacts.total,
-        confidence: 'observed',
-      });
-    }
-    if (leads.total > 0) {
-      stages.push({
-        stage: 'leads_promoted',
-        label: 'Leads promoted',
-        count: leads.total,
-        confidence: 'observed',
-      });
-    }
-    
-    return {
-      campaign_id: executionStatus.campaignId,
-      stages,
-      last_updated_at: executionStatus._meta?.fetchedAt || new Date().toISOString(),
-    };
-  }, [executionStatus]);
-
-  // ============================================
-  // EXECUTION PROGRESS (Secondary Funnel Layer)
-  // Derived from execution state - resets per run
-  // ============================================
-  const executionProgress: FunnelExecution | null = useMemo(() => {
-    if (!executionStatus?.funnel) return null;
-    
-    const { organizations, contacts, leads } = executionStatus.funnel;
-    
-    return {
-      processedOrganizations: organizations?.total ?? 0,
-      processedContacts: contacts?.total ?? 0,
-      promotedLeads: leads?.total ?? 0,
-      sentMessages: 0, // Not yet available
-      executionAvailable: true,
-      runId: executionRun?.id,
-      runStatus: executionRun?.status,
-    };
-  }, [executionStatus, executionRun]);
-
-  // Derive run status from execution state
-  const runStatus = executionRun?.status?.toLowerCase() || null;
-  const runPhase = executionRun?.phase?.toLowerCase() || null;
-
-  // Check if run is stale (>30 min with no progress)
-  const isStale = useMemo(() => {
-    if (!executionRun) return false;
-    return isRunStale({
-      id: executionRun.id,
-      status: executionRun.status,
-      started_at: executionRun.startedAt,
-      created_at: executionRun.startedAt,
-    });
-  }, [executionRun]);
-
+  // Load campaign metadata only (NOT execution data)
   useEffect(() => {
-    async function loadData() {
+    async function loadCampaign() {
       setLoading(true);
       setError(null);
       try {
-        // Handle test campaigns separately - no API calls
         if (isTestCampaign(campaignId)) {
           const testCampaign = getTestCampaignDetail(campaignId);
           if (testCampaign) {
             setCampaign(testCampaign);
-            setThroughput(getTestCampaignThroughput(campaignId));
-            setMetrics(null);
-            setMetricsHistory([]);
-            setVariants([]);
           } else {
-            setError('Test campaign not found or not available in this environment');
+            setError('Test campaign not found');
           }
           setLoading(false);
           return;
@@ -270,104 +117,91 @@ export default function CampaignDetailPage() {
 
         const campaignData = await getCampaign(campaignId);
         setCampaign(campaignData);
-
-        // Load non-execution data in parallel
-        // CANONICAL: Execution data comes ONLY from useRealTimeStatus -> /execution-state
-        // NO legacy endpoints: /runs, /observability
-        // 
-        // BUSINESS SCOPE: Fetch scope data (eligibility) separately from execution
-        // INVARIANT: Scope represents business value, independent of execution state
-        const [
-          metricsData,
-          historyData,
-          variantsData,
-          throughputData,
-          scopeData,
-        ] = await Promise.allSettled([
-          getCampaignMetrics(campaignId),
-          getCampaignMetricsHistory(campaignId),
-          getCampaignVariants(campaignId),
-          getCampaignThroughput(campaignId),
-          getCampaignScope(campaignId),
-        ]);
-
-        if (metricsData.status === 'fulfilled') setMetrics(metricsData.value);
-        if (historyData.status === 'fulfilled') setMetricsHistory(historyData.value);
-        if (variantsData.status === 'fulfilled') setVariants(variantsData.value);
-        if (throughputData.status === 'fulfilled') setThroughput(throughputData.value);
-        if (scopeData.status === 'fulfilled') setCampaignScope(scopeData.value);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load campaign');
       } finally {
         setLoading(false);
       }
     }
-    loadData();
+    loadCampaign();
   }, [campaignId]);
 
-  /**
-   * Handle Run Campaign button click.
-   * 
-   * NOTE:
-   * Campaign execution is owned by nsd-sales-engine.
-   * platform-shell must never execute or simulate runs.
-   * This call submits execution intent only.
-   */
+  // OBSERVATIONS-FIRST: Load market scope and operational data separately
+  useEffect(() => {
+    async function loadScopeData() {
+      if (isTest || !campaignId) return;
+      
+      try {
+        // Fetch market scope (from observations.*)
+        const marketResponse = await fetch(`/api/proxy/market-scope?campaignId=${campaignId}`);
+        if (marketResponse.ok) {
+          const data = await marketResponse.json();
+          setMarketScope({
+            observedOrganizations: data.observedOrganizations || 0,
+            observedContacts: data.observedContacts || 0,
+            estimatedReachable: data.estimatedReachable || 0,
+            observedAt: data.observedAt || new Date().toISOString(),
+          });
+        }
+        
+        // Fetch operational working set (from public.*)
+        const harvestResponse = await fetch(`/api/proxy/harvest-metrics?campaignId=${campaignId}`);
+        if (harvestResponse.ok) {
+          const data = await harvestResponse.json();
+          setOperationalSet(data.operationalSet || {
+            organizations: 0,
+            contacts: 0,
+            leads: 0,
+            emailsSent: 0,
+          });
+        }
+      } catch (err) {
+        console.warn('[CampaignDetail] Failed to load scope data:', err);
+        // Non-fatal - continue without scope data
+      }
+    }
+    loadScopeData();
+  }, [campaignId, isTest]);
+
+  // Handle Run Campaign with runIntent
   const handleRunCampaign = useCallback(async () => {
     if (isRunRequesting) return;
-
     setIsRunRequesting(true);
     setRunRequestMessage(null);
 
     try {
-      const response = await requestCampaignRun(campaignId);
-      
+      const response = await requestCampaignRun(campaignId, runIntent);
       if (response.status === 'run_requested' || response.status === 'queued') {
-        setRunRequestMessage('Execution requested — Awaiting events from backend');
-        // Trigger immediate refresh via useRealTimeStatus
-        await refreshNow();
+        const intentLabel = runIntent === 'HARVEST_ONLY' ? 'Harvest' : 'Activation';
+        setRunRequestMessage(`${intentLabel} requested`);
+        await refreshExecution();
       } else {
-        setRunRequestMessage('Execution request failed — See console for details');
+        setRunRequestMessage('Execution request failed');
       }
     } catch (err) {
-      console.error('[CampaignDetail] Run request failed:', err);
-      setRunRequestMessage(
-        `Execution request failed: ${err instanceof Error ? err.message : 'Unknown error'}`
-      );
+      setRunRequestMessage(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsRunRequesting(false);
     }
-  }, [campaignId, isRunRequesting, refreshNow]);
+  }, [campaignId, isRunRequesting, refreshExecution, runIntent]);
 
-  /**
-   * Handle Duplicate Campaign button click.
-   */
+  // Handle Duplicate
   const handleDuplicateCampaign = useCallback(async () => {
     if (isDuplicating) return;
-
     setIsDuplicating(true);
-
     try {
       const result = await duplicateCampaign(campaignId);
-
       if (result.success && result.data) {
-        await new Promise(resolve => setTimeout(resolve, 500));
         router.push(`/sales-engine/campaigns/${result.data.campaign.id}/edit`);
-      } else {
-        console.error('[CampaignDetail] Duplicate failed:', result.error);
-        alert(`Failed to duplicate campaign: ${result.error || 'Unknown error'}`);
       }
     } catch (err) {
-      console.error('[CampaignDetail] Duplicate request failed:', err);
-      alert(`Failed to duplicate campaign: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      alert(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsDuplicating(false);
     }
   }, [campaignId, isDuplicating, router]);
 
-  /**
-   * Handle Edit Campaign button click.
-   */
+  // Handle Edit
   const handleEditCampaign = useCallback(() => {
     router.push(`/sales-engine/campaigns/${campaignId}/edit`);
   }, [campaignId, router]);
@@ -395,10 +229,12 @@ export default function CampaignDetailPage() {
     );
   }
 
+  const isPlanningOnly = campaign.sourcing_config?.benchmarks_only === true;
+  const canRun = campaign.isRunnable && campaign.status === 'RUNNABLE' && !isPlanningOnly;
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
-        {/* Header */}
         <PageHeader
           title={campaign.name}
           description={campaign.description}
@@ -406,86 +242,78 @@ export default function CampaignDetailPage() {
           backLabel="Back to Campaigns"
         />
 
-        {/* Navigation tabs */}
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: `1px solid ${NSD_COLORS.border.light}`, paddingBottom: '0' }}>
-          {TAB_CONFIG.map((tab) => {
-            const isActive = activeTab === tab.id;
-            
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '12px 20px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  fontFamily: NSD_TYPOGRAPHY.fontBody,
-                  backgroundColor: 'transparent',
-                  color: isActive ? NSD_COLORS.primary : NSD_COLORS.text.secondary,
-                  border: 'none',
-                  borderBottom: isActive ? `2px solid ${NSD_COLORS.primary}` : '2px solid transparent',
-                  cursor: 'pointer',
-                  marginBottom: '-1px',
-                }}
-              >
-                <Icon name={tab.icon as any} size={16} color={isActive ? NSD_COLORS.primary : NSD_COLORS.text.secondary} />
-                {tab.label}
-              </button>
-            );
-          })}
+        {/* Tab Navigation */}
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: `1px solid ${NSD_COLORS.border.light}` }}>
+          {TAB_CONFIG.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 20px',
+                fontSize: '14px',
+                fontWeight: 500,
+                backgroundColor: 'transparent',
+                color: activeTab === tab.id ? NSD_COLORS.primary : NSD_COLORS.text.secondary,
+                border: 'none',
+                borderBottom: activeTab === tab.id ? `2px solid ${NSD_COLORS.primary}` : '2px solid transparent',
+                cursor: 'pointer',
+                marginBottom: '-1px',
+              }}
+            >
+              <Icon name={tab.icon as any} size={16} color={activeTab === tab.id ? NSD_COLORS.primary : NSD_COLORS.text.secondary} />
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Tab content */}
+        {/* Tab Content */}
         {activeTab === 'overview' && (
           <OverviewTab
             campaign={campaign}
             governanceState={governanceState}
-            executionStatus={executionStatus}
-            executionFunnel={executionFunnel}
-            executionRun={executionRun}
-            campaignScope={campaignScope}
-            executionProgress={executionProgress}
-            runStatus={runStatus}
-            runPhase={runPhase}
-            isStale={isStale}
-            lastUpdatedAt={lastUpdatedAt}
-            isPolling={isPolling}
-            isRefreshing={isRefreshing}
-            onRefresh={refreshNow}
-            onPlanningOnlyChange={(newState) => {
-              setCampaign((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      sourcing_config: {
-                        ...prev.sourcing_config,
-                        benchmarks_only: newState,
-                      },
-                    }
-                  : prev
-              );
-            }}
+            executionState={executionState}
+            executionLoading={executionLoading}
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={refreshExecution}
+            onRunCampaign={handleRunCampaign}
+            canRun={canRun && executionState?.run === null}
+            isRunRequesting={isRunRequesting}
+            runRequestMessage={runRequestMessage}
+            isPlanningOnly={isPlanningOnly}
             onDuplicate={handleDuplicateCampaign}
             isDuplicating={isDuplicating}
             onEdit={handleEditCampaign}
+            onPlanningOnlyChange={(newState) => {
+              setCampaign((prev) => prev ? {
+                ...prev,
+                sourcing_config: { ...prev.sourcing_config, benchmarks_only: newState },
+              } : prev);
+            }}
+            runIntent={runIntent}
+            onRunIntentChange={setRunIntent}
+            marketScope={marketScope}
+            operationalSet={operationalSet}
           />
         )}
 
         {activeTab === 'monitoring' && (
           <MonitoringTab
             campaign={campaign}
-            metrics={metrics}
-            executionStatus={executionStatus}
-            executionFunnel={executionFunnel}
-            executionRun={executionRun}
-            campaignScope={campaignScope}
-            executionProgress={executionProgress}
+            executionState={executionState}
+            executionLoading={executionLoading}
+            lastFetchedAt={lastFetchedAt}
+            onRefresh={refreshExecution}
             onRunCampaign={handleRunCampaign}
+            canRun={canRun && executionState?.run === null}
             isRunRequesting={isRunRequesting}
             runRequestMessage={runRequestMessage}
+            runIntent={runIntent}
+            onRunIntentChange={setRunIntent}
+            marketScope={marketScope}
+            operationalSet={operationalSet}
           />
         )}
 
@@ -497,227 +325,135 @@ export default function CampaignDetailPage() {
   );
 }
 
-/**
- * OverviewTab
- * 
- * CANONICAL: All execution data flows from executionStatus (via useRealTimeStatus).
- * No secondary polling. No fallback logic. No legacy endpoints.
- */
+// ============================================
+// OVERVIEW TAB
+// ============================================
 function OverviewTab({
   campaign,
   governanceState,
-  executionStatus,
-  executionFunnel,
-  executionRun,
-  campaignScope,
-  executionProgress,
-  runStatus,
-  runPhase,
-  isStale,
-  lastUpdatedAt,
-  isPolling,
-  isRefreshing,
+  executionState,
+  executionLoading,
+  lastFetchedAt,
   onRefresh,
-  onPlanningOnlyChange,
+  onRunCampaign,
+  canRun,
+  isRunRequesting,
+  runRequestMessage,
+  isPlanningOnly,
   onDuplicate,
   isDuplicating,
   onEdit,
+  onPlanningOnlyChange,
+  runIntent,
+  onRunIntentChange,
+  marketScope,
+  operationalSet,
 }: {
   campaign: CampaignDetail;
   governanceState: CampaignGovernanceState;
-  executionStatus: RealTimeExecutionStatus | null;
-  executionFunnel: ObservabilityFunnel | null;
-  executionRun: RealTimeExecutionStatus['latestRun'] | null;
-  campaignScope: FunnelScope | null;
-  executionProgress: FunnelExecution | null;
-  runStatus: string | null;
-  runPhase: string | null;
-  isStale: boolean;
-  lastUpdatedAt: string | null;
-  isPolling: boolean;
-  isRefreshing: boolean;
+  executionState: ExecutionState | null;
+  executionLoading: boolean;
+  lastFetchedAt: string | null;
   onRefresh: () => void;
-  onPlanningOnlyChange?: (newState: boolean) => void;
-  onDuplicate?: () => void;
-  isDuplicating?: boolean;
-  onEdit?: () => void;
+  onRunCampaign: () => void;
+  canRun: boolean;
+  isRunRequesting: boolean;
+  runRequestMessage: string | null;
+  isPlanningOnly: boolean;
+  onDuplicate: () => void;
+  isDuplicating: boolean;
+  onEdit: () => void;
+  onPlanningOnlyChange: (newState: boolean) => void;
+  runIntent: RunIntent;
+  onRunIntentChange: (intent: RunIntent) => void;
+  marketScope: MarketScope | null;
+  operationalSet: OperationalWorkingSet | null;
 }) {
-  // Derive run count from execution state only (no legacy /runs endpoint)
-  const hasExecutionHistory = !!executionRun;
-  
-  const canModifyConfig =
-    campaign.canEdit !== false &&
-    campaign.status !== 'COMPLETED' &&
-    campaign.status !== 'ARCHIVED' &&
-    governanceState !== 'EXECUTED' &&
-    !hasExecutionHistory;
-
-  // Derive execution state from execution run
-  const executionState = deriveExecutionState(
-    executionRun ? {
-      run_id: executionRun.id,
-      status: executionRun.status?.toLowerCase(),
-      created_at: executionRun.startedAt,
-      updated_at: executionRun.completedAt,
-    } : null,
-    !hasExecutionHistory
-  );
-
-  const isPlanningOnly = campaign.sourcing_config?.benchmarks_only === true;
-  const noRuns = !executionRun;
+  const canModifyConfig = campaign.canEdit !== false && campaign.status !== 'COMPLETED' && campaign.status !== 'ARCHIVED';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* EXECUTION HEALTH BANNER (Primary Status) */}
-      <ExecutionHealthBanner
-        realTimeStatus={executionStatus}
-        isPolling={isPolling}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Execution Status Banner */}
+      <ExecutionStatusBanner
+        run={executionState?.run ?? null}
+        loading={executionLoading}
+        onRunCampaign={onRunCampaign}
+        canRun={canRun}
+        isRunRequesting={isRunRequesting}
+        isPlanningOnly={isPlanningOnly}
       />
 
-      {/* Two-column layout: Scope + Execution Status */}
-      <div className="overview-two-column-grid">
-        {/* LEFT COLUMN: Campaign Scope & Context (40%) */}
+      {runRequestMessage && (
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: NSD_COLORS.semantic.info.bg,
+          borderRadius: NSD_RADIUS.md,
+          border: `1px solid ${NSD_COLORS.semantic.info.border}`,
+        }}>
+          <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.semantic.info.text }}>
+            {runRequestMessage}
+          </p>
+        </div>
+      )}
+
+      {/* OBSERVATIONS-FIRST: Market Scope vs Operational Working Set */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        <MarketScopeCard marketScope={marketScope} />
+        <OperationalSetCard operationalSet={operationalSet} />
+      </div>
+
+      {/* Two Column Layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        {/* Left: Campaign Scope */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <CampaignScopeSummary icp={campaign.icp} />
           
-          {/* DUAL-LAYER FUNNEL: Scope (primary) + Execution (secondary) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <FunnelSummaryWidget 
-              funnel={executionFunnel}
-              scope={campaignScope}
-              execution={executionProgress}
-            />
-            <ExecutionDataSourceBadge
-              lastUpdatedAt={lastUpdatedAt}
-              isRealTime={!!executionStatus?.funnel}
-              compact={true}
-            />
-          </div>
+          {/* Pipeline Funnel Summary */}
+          <PipelineFunnelCard
+            run={executionState?.run ?? null}
+            funnel={executionState?.funnel ?? null}
+            loading={executionLoading}
+          />
         </div>
 
-        {/* RIGHT COLUMN: Execution Status (60%) */}
+        {/* Right: Execution & Actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-            <ExecutionHealthIndicator
-              runStatus={runStatus}
-              runPhase={runPhase}
-              funnel={executionFunnel}
-              noRuns={noRuns}
-              isStale={isStale}
-            />
-            <CampaignStatusHeader
-              campaignName={campaign.name}
-              governanceState={governanceState}
-              executionConfidence={executionState.confidence}
-              isPlanningOnly={isPlanningOnly}
-              lastUpdatedAt={lastUpdatedAt}
-              isPolling={isPolling}
-            />
-          </div>
-
-          <PollingStatusIndicator
-            isPolling={isPolling}
-            isRefreshing={isRefreshing}
-            lastUpdatedAt={lastUpdatedAt}
-            pollingInterval={7000}
-            onRefresh={onRefresh}
+          {/* Run Intent Selector */}
+          <RunIntentSelector
+            runIntent={runIntent}
+            onChange={onRunIntentChange}
+            disabled={executionState?.run !== null}
           />
 
-          {/* Current Stage Indicator - Execution-state driven */}
-          <CurrentStageIndicator
-            stage={executionRun?.stage}
-            startedAt={executionRun?.startedAt}
-            isRunning={runStatus === 'running' || runStatus === 'in_progress' || runStatus === 'queued'}
-          />
+          {/* Current Stage (only if running) */}
+          <CurrentStageCard run={executionState?.run ?? null} />
 
-          <ActiveStageFocusPanel
-            runStatus={runStatus}
-            runPhase={runPhase}
-            funnel={executionFunnel}
-            noRuns={noRuns}
-            isPolling={isPolling}
-            isStale={isStale}
-          />
-
-          <ExecutionStageTracker
-            runStatus={runStatus}
-            runPhase={runPhase}
-            funnel={executionFunnel}
-            noRuns={noRuns}
-            isStale={isStale}
-          />
-
-          <LastExecutionSummaryCard
-            campaignId={campaign.id}
-            run={executionRun ? {
-              run_id: executionRun.id,
-              status: executionRun.status?.toLowerCase(),
-              created_at: executionRun.startedAt,
-              updated_at: executionRun.completedAt,
-              error_message: executionRun.errorMessage ?? null,
-              failure_reason: executionRun.terminationReason ?? null,
-              reason: executionRun.terminationReason ?? null,
-            } : null}
-            funnel={executionFunnel}
-            noRuns={noRuns}
-            realTimeStatus={executionStatus}
-          />
-        </div>
-      </div>
-
-      {/* Results Breakdown Cards */}
-      <ResultsBreakdownCards
-        funnel={executionFunnel}
-        runStatus={runStatus}
-        failureReason={executionRun?.terminationReason}
-      />
-
-      {/* Advisory Callout */}
-      <AdvisoryCallout
-        runStatus={runStatus}
-        funnel={executionFunnel}
-        noRuns={noRuns}
-      />
-
-      {/* Campaign Details & Actions */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', marginTop: '8px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Campaign Details */}
           <SectionCard title="Campaign Details" icon="campaigns" iconColor={NSD_COLORS.primary}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</label>
+                <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>Description</label>
                 <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{campaign.description || 'No description'}</p>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Created</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>Created</label>
                   <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{formatEtDate(campaign.created_at)}</p>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Updated</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>Updated</label>
                   <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>{formatEtDate(campaign.updated_at)}</p>
                 </div>
               </div>
-              {campaign.approved_at && (
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Approved</label>
-                  <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.primary }}>
-                    {formatEt(campaign.approved_at)}
-                    {campaign.approved_by && ` by ${campaign.approved_by}`}
-                  </p>
-                </div>
-              )}
             </div>
           </SectionCard>
-        </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <GovernanceActionsPanel
             campaignId={campaign.id}
             governanceState={governanceState}
             canSubmit={campaign.canSubmit}
             canApprove={campaign.canApprove}
-            runsCount={hasExecutionHistory ? 1 : 0}
+            runsCount={executionState?.run ? 1 : 0}
             isPlanningOnly={isPlanningOnly}
             onDuplicate={onDuplicate}
             duplicating={isDuplicating}
@@ -732,282 +468,915 @@ function OverviewTab({
           />
         </div>
       </div>
+
+      {/* Last Fetched */}
+      {lastFetchedAt && (
+        <div style={{ textAlign: 'center' }}>
+          <button
+            onClick={onRefresh}
+            style={{
+              fontSize: '12px',
+              color: NSD_COLORS.text.muted,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+          >
+            Last updated: {formatEt(lastFetchedAt)} · Refresh
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-/**
- * MonitoringTab
- * 
- * CANONICAL: All execution data flows from executionStatus (via useRealTimeStatus).
- * Source: /execution-state ONLY
- * No legacy endpoints: /observability/*, /runs/*, /runs/latest
- */
+// ============================================
+// MONITORING TAB
+// ============================================
 function MonitoringTab({
   campaign,
-  metrics,
-  executionStatus,
-  executionFunnel,
-  executionRun,
-  campaignScope,
-  executionProgress,
+  executionState,
+  executionLoading,
+  lastFetchedAt,
+  onRefresh,
   onRunCampaign,
+  canRun,
   isRunRequesting,
   runRequestMessage,
+  runIntent,
+  onRunIntentChange,
+  marketScope,
+  operationalSet,
 }: {
   campaign: CampaignDetail;
-  metrics: CampaignMetrics | null;
-  executionStatus: RealTimeExecutionStatus | null;
-  executionFunnel: ObservabilityFunnel | null;
-  executionRun: RealTimeExecutionStatus['latestRun'] | null;
-  campaignScope: FunnelScope | null;
-  executionProgress: FunnelExecution | null;
+  executionState: ExecutionState | null;
+  executionLoading: boolean;
+  lastFetchedAt: string | null;
+  onRefresh: () => void;
   onRunCampaign: () => void;
+  canRun: boolean;
   isRunRequesting: boolean;
   runRequestMessage: string | null;
+  runIntent: RunIntent;
+  onRunIntentChange: (intent: RunIntent) => void;
+  marketScope: MarketScope | null;
+  operationalSet: OperationalWorkingSet | null;
 }) {
-  // Derive execution status from executionRun (single source - /execution-state)
-  const currentStatus: CampaignExecutionStatus = 
-    (executionRun?.status?.toLowerCase() as CampaignExecutionStatus) || 'idle';
-  
-  const activeRunId = executionRun?.id;
-  const currentStage = executionRun?.stage;
-  const lastObservedAt = executionStatus?._meta?.fetchedAt || new Date().toISOString();
-
-  // Pipeline stages from execution funnel (single source)
-  const pipelineStages = executionFunnel?.stages || [];
-
-  // Get leads awaiting approval count from pipeline
-  const leadsAwaitingApproval = pipelineStages.find(
-    (s) => s.stage === 'leads_awaiting_approval'
-  )?.count;
-
-  // Determine if campaign can be run
-  const canRun = campaign.isRunnable && 
-    campaign.status === 'RUNNABLE' && 
-    currentStatus === 'idle';
-
-  // Derive approval awareness state (from execution-state only)
-  const approvalState: ApprovalAwarenessState = {
-    isApproved: !!(campaign.approved_at || campaign.status === 'RUNNABLE' || campaign.status === 'RUNNING' || campaign.status === 'COMPLETED'),
-    approvedAt: campaign.approved_at,
-    approvedBy: campaign.approved_by,
-    status: campaign.status,
-    hasRuns: !!executionRun,
-    blockingReason: executionRun?.errorMessage,
-  };
-  
-  // Build minimal execution events from current run only
-  // NOTE: Run history is disabled (Option A) - no legacy /runs endpoint calls
-  const executionEvents: ExecutionEvent[] = [];
-  
-  if (executionRun) {
-    // Add current run events
-    executionEvents.push({
-      id: `${executionRun.id}-started`,
-      event_type: 'campaign.run.started',
-      run_id: executionRun.id,
-      campaign_id: campaign.id,
-      occurred_at: executionRun.startedAt || new Date().toISOString(),
-      outcome: 'success',
-    });
-    
-    if (executionRun.completedAt) {
-      const isFailed = executionRun.status?.toLowerCase() === 'failed';
-      const isPartial = executionRun.status?.toLowerCase() === 'partial';
-      executionEvents.push({
-        id: `${executionRun.id}-completed`,
-        event_type: isFailed ? 'campaign.run.failed' : 
-                    isPartial ? 'campaign.run.partial' : 'campaign.run.completed',
-        run_id: executionRun.id,
-        campaign_id: campaign.id,
-        occurred_at: executionRun.completedAt,
-        outcome: isFailed ? 'failed' : isPartial ? 'partial' : 'success',
-        reason: executionRun.terminationReason,
-      });
-    }
-  }
-  
-  if (isRunRequesting || currentStatus === 'run_requested') {
-    executionEvents.unshift({
-      id: 'pending-queued',
-      event_type: 'run.queued',
-      run_id: activeRunId,
-      campaign_id: campaign.id,
-      occurred_at: lastObservedAt,
-      outcome: 'success',
-    });
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Run request message */}
       {runRequestMessage && (
-        <div
-          style={{
-            padding: '12px 16px',
-            backgroundColor: '#DBEAFE',
-            borderRadius: NSD_RADIUS.md,
-            border: '1px solid #93C5FD',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-          }}
-        >
-          <Icon name="info" size={16} color="#1E40AF" />
-          <span style={{ fontSize: '14px', color: '#1E40AF' }}>
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: NSD_COLORS.semantic.info.bg,
+          borderRadius: NSD_RADIUS.md,
+          border: `1px solid ${NSD_COLORS.semantic.info.border}`,
+        }}>
+          <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.semantic.info.text }}>
             {runRequestMessage}
-          </span>
+          </p>
         </div>
       )}
 
-      {/* Two-column layout: Status/Context (left) + Metrics/Data (right) */}
-      <div className="overview-two-column-grid">
-        {/* LEFT COLUMN: Status & Context (40%) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <ApprovalAwarenessPanel approvalState={approvalState} />
-          <LatestRunStatusCard 
-            campaignId={campaign.id}
-            run={executionRun ? {
-              id: executionRun.id,
-              status: executionRun.status,
-              stage: executionRun.stage,
-              startedAt: executionRun.startedAt,
-              completedAt: executionRun.completedAt,
-              errorMessage: executionRun.errorMessage,
-              terminationReason: executionRun.terminationReason,
-              phase: executionRun.phase,
-            } : null}
-            noRuns={!executionRun}
-          />
-          <ExecutionExplainabilityPanel 
-            campaignId={campaign.id}
-            run={executionRun ? {
-              id: executionRun.id,
-              status: executionRun.status,
-              stage: executionRun.stage,
-              startedAt: executionRun.startedAt,
-              completedAt: executionRun.completedAt,
-              errorMessage: executionRun.errorMessage,
-              terminationReason: executionRun.terminationReason,
-              phase: executionRun.phase,
-            } : null}
-            noRuns={!executionRun}
-          />
-        </div>
+      {/* OBSERVATIONS-FIRST: Market Scope vs Operational Working Set */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+        <MarketScopeCard marketScope={marketScope} />
+        <OperationalSetCard operationalSet={operationalSet} />
+      </div>
 
-        {/* RIGHT COLUMN: Metrics & Data (60%) */}
+      {/* Two Column Layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        {/* Left Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <CampaignExecutionStatusCard
-            status={currentStatus}
-            activeRunId={activeRunId}
-            currentStage={currentStage}
-            lastObservedAt={lastObservedAt}
-            leadsAwaitingApproval={leadsAwaitingApproval}
+          {/* Run Intent Selector */}
+          <RunIntentSelector
+            runIntent={runIntent}
+            onChange={onRunIntentChange}
+            disabled={executionState?.run !== null}
+          />
+
+          {/* Execution Status */}
+          <ExecutionStatusBanner
+            run={executionState?.run ?? null}
+            loading={executionLoading}
             onRunCampaign={onRunCampaign}
             canRun={canRun}
-            isRunning={isRunRequesting}
-            blockingReason={executionRun?.errorMessage}
+            isRunRequesting={isRunRequesting}
             isPlanningOnly={campaign.sourcing_config?.benchmarks_only === true}
           />
 
-          {/* DUAL-LAYER FUNNEL: Scope (primary) + Execution (secondary) */}
-          {/* INVARIANT: Scope represents business value, independent of execution */}
-          <DualLayerFunnelCard
-            funnel={{
-              campaignId: campaign.id,
-              scope: campaignScope || {
-                eligibleOrganizations: 0,
-                eligibleContacts: 0,
-                eligibleLeads: 0,
-                scopeAvailable: false,
-              },
-              execution: executionProgress || {
-                processedOrganizations: 0,
-                processedContacts: 0,
-                promotedLeads: 0,
-                sentMessages: 0,
-                executionAvailable: false,
-              },
-              lastUpdatedAt: new Date().toISOString(),
-            }}
-            loading={!campaignScope && !executionFunnel}
+          {/* Current Stage */}
+          <CurrentStageCard run={executionState?.run ?? null} />
+        </div>
+
+        {/* Right Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Pipeline Funnel */}
+          <PipelineFunnelCard
+            run={executionState?.run ?? null}
+            funnel={executionState?.funnel ?? null}
+            loading={executionLoading}
           />
 
-          {/* Legacy Pipeline Funnel (execution detail) */}
-          <PipelineFunnelTable
-            stages={pipelineStages}
-            loading={!executionFunnel}
-          />
-
-          <SendMetricsPanel
-            emailsSent={metrics?.emails_sent}
-            emailsOpened={metrics?.emails_opened}
-            emailsReplied={metrics?.emails_replied}
-            openRate={metrics?.open_rate}
-            replyRate={metrics?.reply_rate}
-            confidence={'conditional'}
-            lastUpdated={metrics?.last_updated}
-            hasReachedSendStage={
-              pipelineStages.some(s => s.stage === 'emails_sent' && s.count > 0)
-            }
+          {/* Send Metrics */}
+          <SendMetricsCard
+            executionState={executionState}
+            loading={executionLoading}
           />
         </div>
       </div>
 
-      {/* Run History v2 - From sales-engine (canonical source) */}
-      {/* EXECUTION AUTHORITY: Sales-engine is the sole source of run history */}
-      <RunHistoryPanel campaignId={campaign.id} />
+      {/* Run History - ALWAYS shows empty per contract */}
+      <RunHistoryCard />
 
-      {/* Execution Timeline / Activity Feed */}
-      <ExecutionTimelineFeed
-        events={executionEvents}
-        loading={false}
-      />
+      {/* Execution Timeline - Hidden if run === null */}
+      <ExecutionTimelineCard run={executionState?.run ?? null} />
+
+      {/* Last Fetched */}
+      {lastFetchedAt && (
+        <div style={{ textAlign: 'center' }}>
+          <button
+            onClick={onRefresh}
+            style={{
+              fontSize: '12px',
+              color: NSD_COLORS.text.muted,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+          >
+            Last updated: {formatEt(lastFetchedAt)} · Refresh
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
+// ============================================
+// LEARNING TAB
+// ============================================
 function LearningTab({ campaignId }: { campaignId: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div className="overview-two-column-grid">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <SectionCard title="About Learning Signals" icon="chart" iconColor={NSD_COLORS.secondary}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px', color: NSD_COLORS.text.secondary }}>
-              <p style={{ margin: 0 }}>
-                Learning signals capture patterns and insights from campaign execution to improve future performance.
-              </p>
-              <p style={{ margin: 0 }}>
-                Signals are generated automatically based on execution outcomes and require no manual configuration.
-              </p>
-              <div style={{ 
-                padding: '12px', 
-                backgroundColor: NSD_COLORS.surface, 
-                borderRadius: NSD_RADIUS.sm,
-                border: `1px solid ${NSD_COLORS.border.light}`,
-              }}>
-                <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Autonomy Level
-                </div>
-                <div style={{ fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
-                  L1 — Human-in-the-loop
-                </div>
-                <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginTop: '4px' }}>
-                  All decisions require operator approval
-                </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        <SectionCard title="About Learning Signals" icon="chart" iconColor={NSD_COLORS.secondary}>
+          <div style={{ fontSize: '14px', color: NSD_COLORS.text.secondary }}>
+            <p style={{ margin: '0 0 12px 0' }}>
+              Learning signals capture patterns from campaign execution to improve future performance.
+            </p>
+            <div style={{ padding: '12px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.sm }}>
+              <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>
+                Autonomy Level
+              </div>
+              <div style={{ fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.primary }}>
+                L1 — Human-in-the-loop
               </div>
             </div>
-          </SectionCard>
+          </div>
+        </SectionCard>
+        <LearningSignalsPanel signals={undefined} autonomyLevel="L1" campaignId={campaignId} />
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// EXECUTION STATUS BANNER
+// Contract: Section 1️⃣
+// OBSERVATIONS-FIRST: Show outcomeType for semantic meaning
+// ============================================
+function ExecutionStatusBanner({
+  run,
+  loading,
+  onRunCampaign,
+  canRun,
+  isRunRequesting,
+  isPlanningOnly,
+}: {
+  run: ExecutionRun | null;
+  loading: boolean;
+  onRunCampaign: () => void;
+  canRun: boolean;
+  isRunRequesting: boolean;
+  isPlanningOnly: boolean;
+}) {
+  const statusText = getExecutionStatusText(run);
+  
+  // OBSERVATIONS-FIRST: Get outcomeType styling and messaging
+  // outcomeType provides semantic meaning - do not collapse to boolean
+  const outcomeType = run?.outcomeType;
+  const outcomeReason = run?.outcomeReason;
+  
+  // Determine styling based on status AND outcomeType
+  let style = NSD_COLORS.semantic.muted;
+  let icon: 'clock' | 'refresh' | 'check' | 'warning' | 'target' = 'clock';
+  let outcomeMessage = '';
+  
+  if (run) {
+    switch (run.status) {
+      case 'queued':
+        style = NSD_COLORS.semantic.info;
+        icon = 'clock';
+        break;
+      case 'running':
+        style = NSD_COLORS.semantic.active;
+        icon = 'refresh';
+        break;
+      case 'completed':
+        // OBSERVATIONS-FIRST: Check outcomeType for semantic styling
+        if (outcomeType === 'VALID_EMPTY_OBSERVATION') {
+          // Valid empty observation is NOT a failure - neutral/informational
+          style = NSD_COLORS.semantic.info;
+          icon = 'target';
+          outcomeMessage = 'Market observed successfully. Zero qualifying results is a valid outcome.';
+        } else {
+          style = NSD_COLORS.semantic.positive;
+          icon = 'check';
+        }
+        break;
+      case 'failed':
+        // OBSERVATIONS-FIRST: Distinguish failure types
+        if (outcomeType === 'CONFIG_INCOMPLETE') {
+          // User-fixable - show as warning, not critical
+          style = NSD_COLORS.semantic.warning;
+          icon = 'warning';
+          outcomeMessage = 'Configuration incomplete. Please review campaign settings.';
+        } else if (outcomeType === 'INFRA_ERROR') {
+          // Infrastructure error - critical
+          style = NSD_COLORS.semantic.critical;
+          icon = 'warning';
+          outcomeMessage = 'Infrastructure error occurred. Engineering team has been notified.';
+        } else if (outcomeType === 'EXECUTION_ERROR') {
+          // Execution error - critical
+          style = NSD_COLORS.semantic.critical;
+          icon = 'warning';
+          outcomeMessage = 'Execution error. Please review the details below.';
+        } else {
+          style = NSD_COLORS.semantic.critical;
+          icon = 'warning';
+        }
+        break;
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{
+        padding: '20px 24px',
+        backgroundColor: NSD_COLORS.surface,
+        borderRadius: NSD_RADIUS.lg,
+        border: `1px solid ${NSD_COLORS.border.light}`,
+      }}>
+        <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.muted }}>
+          Loading execution state...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      padding: '20px 24px',
+      backgroundColor: style.bg,
+      borderRadius: NSD_RADIUS.lg,
+      border: `1px solid ${style.border}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Icon name={icon} size={20} color={style.text} />
+          <div>
+            <h3 style={{
+              margin: 0,
+              fontSize: '16px',
+              fontWeight: 600,
+              fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+              color: style.text,
+            }}>
+              Execution Status
+            </h3>
+            <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: style.text }}>
+              {statusText}
+            </p>
+            {/* OBSERVATIONS-FIRST: Show outcomeType badge */}
+            {outcomeType && (
+              <span style={{
+                display: 'inline-block',
+                marginTop: '8px',
+                padding: '2px 8px',
+                fontSize: '11px',
+                fontWeight: 500,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                backgroundColor: style.bg,
+                color: style.text,
+                borderRadius: NSD_RADIUS.sm,
+                border: `1px solid ${style.border}`,
+              }}>
+                {outcomeType.replace(/_/g, ' ')}
+              </span>
+            )}
+            {/* OBSERVATIONS-FIRST: Show outcome message for context */}
+            {outcomeMessage && (
+              <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: style.text }}>
+                {outcomeMessage}
+              </p>
+            )}
+            {/* Show outcome reason if exists */}
+            {outcomeReason && (
+              <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: style.text, fontStyle: 'italic' }}>
+                {outcomeReason}
+              </p>
+            )}
+            {/* Show termination reason if exists (contract requirement) */}
+            {run?.terminationReason && !outcomeReason && (
+              <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: style.text, fontStyle: 'italic' }}>
+                Reason: {run.terminationReason}
+              </p>
+            )}
+          </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <LearningSignalsPanel
-            signals={undefined}
-            autonomyLevel="L1"
-            campaignId={campaignId}
-          />
+        {/* Run Campaign button - only when run === null */}
+        {run === null && (
+          <button
+            onClick={onRunCampaign}
+            disabled={!canRun || isRunRequesting}
+            style={{
+              padding: '10px 20px',
+              fontSize: '14px',
+              fontWeight: 500,
+              backgroundColor: canRun && !isRunRequesting ? NSD_COLORS.primary : NSD_COLORS.text.muted,
+              color: '#fff',
+              border: 'none',
+              borderRadius: NSD_RADIUS.md,
+              cursor: canRun && !isRunRequesting ? 'pointer' : 'not-allowed',
+              opacity: canRun && !isRunRequesting ? 1 : 0.6,
+            }}
+          >
+            {isRunRequesting ? 'Requesting...' : 'Run Campaign'}
+          </button>
+        )}
+      </div>
+
+      {isPlanningOnly && run === null && (
+        <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: style.text, fontStyle: 'italic' }}>
+          Planning-only campaign — execution disabled
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// MARKET SCOPE CARD
+// OBSERVATIONS-FIRST: Shows TRUE market scope from observations.*
+// ============================================
+function MarketScopeCard({ marketScope }: { marketScope: MarketScope | null }) {
+  return (
+    <SectionCard 
+      title="Market Scope" 
+      icon="target" 
+      iconColor={NSD_COLORS.secondary}
+      subtitle="Observed market reality (observations.*)"
+    >
+      {!marketScope ? (
+        <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.muted }}>
+          Market scope data not available yet.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>
+                Organizations
+              </label>
+              <p style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                {marketScope.observedOrganizations.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>
+                Contacts
+              </label>
+              <p style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                {marketScope.observedContacts.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>
+                Est. Reachable
+              </label>
+              <p style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                {marketScope.estimatedReachable.toLocaleString()}
+              </p>
+            </div>
+          </div>
+          <p style={{ margin: 0, fontSize: '11px', color: NSD_COLORS.text.muted }}>
+            Last observed: {new Date(marketScope.observedAt).toLocaleDateString()}
+          </p>
         </div>
+      )}
+    </SectionCard>
+  );
+}
+
+// ============================================
+// OPERATIONAL SET CARD
+// OBSERVATIONS-FIRST: Shows operational working set from public.*
+// This is NOT market scope - it's what has been processed.
+// ============================================
+function OperationalSetCard({ operationalSet }: { operationalSet: OperationalWorkingSet | null }) {
+  return (
+    <SectionCard 
+      title="Operational Working Set" 
+      icon="metrics" 
+      iconColor={NSD_COLORS.primary}
+      subtitle="Processed data (public.*)"
+    >
+      {!operationalSet ? (
+        <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.muted }}>
+          No operational data yet. Run a harvest to populate.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>
+                Orgs
+              </label>
+              <p style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                {operationalSet.organizations.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>
+                Contacts
+              </label>
+              <p style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                {operationalSet.contacts.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>
+                Leads
+              </label>
+              <p style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                {operationalSet.leads.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: NSD_COLORS.text.muted, marginBottom: '4px', textTransform: 'uppercase' }}>
+                Emails
+              </label>
+              <p style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                {operationalSet.emailsSent.toLocaleString()}
+              </p>
+            </div>
+          </div>
+          {operationalSet.lastActivityAt && (
+            <p style={{ margin: 0, fontSize: '11px', color: NSD_COLORS.text.muted }}>
+              Last activity: {new Date(operationalSet.lastActivityAt).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+// ============================================
+// RUN INTENT SELECTOR
+// OBSERVATIONS-FIRST: Select HARVEST_ONLY vs ACTIVATE
+// ============================================
+function RunIntentSelector({
+  runIntent,
+  onChange,
+  disabled,
+}: {
+  runIntent: RunIntent;
+  onChange: (intent: RunIntent) => void;
+  disabled: boolean;
+}) {
+  return (
+    <SectionCard 
+      title="Run Intent" 
+      icon="campaigns" 
+      iconColor={NSD_COLORS.magenta.base}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => onChange('HARVEST_ONLY')}
+            disabled={disabled}
+            style={{
+              flex: 1,
+              padding: '12px 16px',
+              fontSize: '14px',
+              fontWeight: 500,
+              backgroundColor: runIntent === 'HARVEST_ONLY' ? NSD_COLORS.secondary : NSD_COLORS.background,
+              color: runIntent === 'HARVEST_ONLY' ? '#fff' : NSD_COLORS.text.secondary,
+              border: `1px solid ${runIntent === 'HARVEST_ONLY' ? NSD_COLORS.secondary : NSD_COLORS.border.light}`,
+              borderRadius: NSD_RADIUS.md,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              opacity: disabled ? 0.6 : 1,
+              textAlign: 'left',
+            }}
+          >
+            <strong style={{ display: 'block', marginBottom: '4px' }}>Harvest Only</strong>
+            <span style={{ fontSize: '12px', opacity: 0.8 }}>
+              Observe market, collect data, no emails
+            </span>
+          </button>
+          <button
+            onClick={() => onChange('ACTIVATE')}
+            disabled={disabled}
+            style={{
+              flex: 1,
+              padding: '12px 16px',
+              fontSize: '14px',
+              fontWeight: 500,
+              backgroundColor: runIntent === 'ACTIVATE' ? NSD_COLORS.primary : NSD_COLORS.background,
+              color: runIntent === 'ACTIVATE' ? '#fff' : NSD_COLORS.text.secondary,
+              border: `1px solid ${runIntent === 'ACTIVATE' ? NSD_COLORS.primary : NSD_COLORS.border.light}`,
+              borderRadius: NSD_RADIUS.md,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              opacity: disabled ? 0.6 : 1,
+              textAlign: 'left',
+            }}
+          >
+            <strong style={{ display: 'block', marginBottom: '4px' }}>Activate</strong>
+            <span style={{ fontSize: '12px', opacity: 0.8 }}>
+              Full execution with email dispatch
+            </span>
+          </button>
+        </div>
+        {disabled && (
+          <p style={{ margin: 0, fontSize: '12px', color: NSD_COLORS.text.muted, fontStyle: 'italic' }}>
+            Cannot change intent while a run is active
+          </p>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
+// ============================================
+// CURRENT STAGE INDICATOR
+// Contract: Section 2️⃣
+// Show only if run.status === "running"
+// ============================================
+function CurrentStageCard({ run }: { run: ExecutionRun | null }) {
+  // Per contract: Show only if run.status === "running"
+  if (!run || run.status !== 'running') {
+    return null;
+  }
+
+  const stageName = run.stage || 'Processing';
+  const startedAt = run.startedAt;
+  
+  // Calculate relative time
+  let relativeTime = '';
+  if (startedAt) {
+    const startMs = new Date(startedAt).getTime();
+    const nowMs = Date.now();
+    const diffSeconds = Math.floor((nowMs - startMs) / 1000);
+    if (diffSeconds < 60) {
+      relativeTime = `Started ${diffSeconds}s ago`;
+    } else {
+      const diffMinutes = Math.floor(diffSeconds / 60);
+      relativeTime = `Started ${diffMinutes}m ago`;
+    }
+  }
+
+  return (
+    <div style={{
+      padding: '16px 20px',
+      backgroundColor: NSD_COLORS.semantic.active.bg,
+      borderRadius: NSD_RADIUS.lg,
+      border: `1px solid ${NSD_COLORS.semantic.active.border}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+        <div style={{
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          backgroundColor: NSD_COLORS.semantic.active.text,
+          animation: 'pulse 1.5s ease-in-out infinite',
+        }} />
+        <span style={{ fontSize: '12px', fontWeight: 500, color: NSD_COLORS.semantic.active.text, textTransform: 'uppercase' }}>
+          Current Stage
+        </span>
+      </div>
+      <p style={{
+        margin: 0,
+        fontSize: '16px',
+        fontWeight: 600,
+        color: NSD_COLORS.semantic.active.text,
+      }}>
+        {stageName}
+      </p>
+      {relativeTime && (
+        <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: NSD_COLORS.semantic.active.text, opacity: 0.8 }}>
+          {relativeTime}
+        </p>
+      )}
+      <style jsx>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================
+// PIPELINE FUNNEL CARD
+// Contract: Section 3️⃣
+// ============================================
+function PipelineFunnelCard({
+  run,
+  funnel,
+  loading,
+}: {
+  run: ExecutionRun | null;
+  funnel: ExecutionFunnel | null;
+  loading: boolean;
+}) {
+  // Per contract:
+  // - run === null → "No activity observed yet"
+  // - run.status === "failed" → show counts only if non-zero, otherwise empty state
+  
+  if (loading) {
+    return (
+      <div style={{
+        padding: '20px',
+        backgroundColor: NSD_COLORS.background,
+        borderRadius: NSD_RADIUS.lg,
+        border: `1px solid ${NSD_COLORS.border.light}`,
+      }}>
+        <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.muted }}>
+          Loading pipeline data...
+        </p>
+      </div>
+    );
+  }
+
+  // No run = no activity
+  if (run === null) {
+    return (
+      <div style={{
+        padding: '20px',
+        backgroundColor: NSD_COLORS.background,
+        borderRadius: NSD_RADIUS.lg,
+        border: `1px solid ${NSD_COLORS.border.light}`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+          <Icon name="chart" size={18} color={NSD_COLORS.secondary} />
+          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: NSD_COLORS.primary }}>
+            Pipeline Funnel
+          </h4>
+        </div>
+        <div style={{ textAlign: 'center', padding: '20px' }}>
+          <Icon name="chart" size={32} color={NSD_COLORS.text.muted} />
+          <p style={{ margin: '12px 0 0 0', fontSize: '14px', color: NSD_COLORS.text.secondary }}>
+            No activity observed yet
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const hasActivity = funnel && hasFunnelActivity(funnel);
+
+  // Failed run with no activity
+  if (run.status === 'failed' && !hasActivity) {
+    return (
+      <div style={{
+        padding: '20px',
+        backgroundColor: NSD_COLORS.background,
+        borderRadius: NSD_RADIUS.lg,
+        border: `1px solid ${NSD_COLORS.border.light}`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+          <Icon name="chart" size={18} color={NSD_COLORS.secondary} />
+          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: NSD_COLORS.primary }}>
+            Pipeline Funnel
+          </h4>
+        </div>
+        <div style={{ textAlign: 'center', padding: '20px' }}>
+          <Icon name="warning" size={32} color={NSD_COLORS.semantic.critical.text} />
+          <p style={{ margin: '12px 0 0 0', fontSize: '14px', color: NSD_COLORS.text.secondary }}>
+            Execution failed before pipeline activity
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show counts
+  return (
+    <div style={{
+      padding: '20px',
+      backgroundColor: NSD_COLORS.background,
+      borderRadius: NSD_RADIUS.lg,
+      border: `1px solid ${NSD_COLORS.border.light}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Icon name="chart" size={18} color={NSD_COLORS.secondary} />
+          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: NSD_COLORS.primary }}>
+            Pipeline Funnel
+          </h4>
+        </div>
+        <span style={{ fontSize: '11px', color: NSD_COLORS.text.muted, fontStyle: 'italic' }}>
+          {run.status === 'running' ? 'Live' : 'Final'}
+        </span>
+      </div>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+        <FunnelMetric label="Organizations" value={funnel?.organizations.total ?? 0} />
+        <FunnelMetric label="Contacts" value={funnel?.contacts.total ?? 0} />
+        <FunnelMetric label="Leads" value={funnel?.leads.total ?? 0} />
+        <FunnelMetric label="Emails Sent" value={funnel?.emailsSent ?? 0} />
+      </div>
+    </div>
+  );
+}
+
+function FunnelMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '12px', backgroundColor: NSD_COLORS.surface, borderRadius: NSD_RADIUS.md }}>
+      <span style={{ display: 'block', fontSize: '11px', color: NSD_COLORS.text.muted, textTransform: 'uppercase', marginBottom: '4px' }}>
+        {label}
+      </span>
+      <span style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.primary }}>
+        {value.toLocaleString()}
+      </span>
+    </div>
+  );
+}
+
+// ============================================
+// RUN HISTORY CARD
+// Contract: Section 4️⃣
+// ALWAYS shows empty state per contract
+// ============================================
+function RunHistoryCard() {
+  return (
+    <div style={{
+      padding: '20px',
+      backgroundColor: NSD_COLORS.background,
+      borderRadius: NSD_RADIUS.lg,
+      border: `1px solid ${NSD_COLORS.border.light}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+        <Icon name="runs" size={18} color={NSD_COLORS.info} />
+        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: NSD_COLORS.primary }}>
+          Run History
+        </h4>
+      </div>
+      <div style={{ textAlign: 'center', padding: '30px' }}>
+        <Icon name="runs" size={32} color={NSD_COLORS.text.muted} />
+        <p style={{ margin: '12px 0 4px 0', fontSize: '14px', fontWeight: 500, color: NSD_COLORS.text.secondary }}>
+          No execution runs observed
+        </p>
+        <p style={{ margin: 0, fontSize: '12px', color: NSD_COLORS.text.muted }}>
+          Run history is not available until a canonical endpoint exists.
+        </p>
+      </div>
+      <div style={{ paddingTop: '12px', borderTop: `1px solid ${NSD_COLORS.border.light}`, marginTop: '16px' }}>
+        <p style={{ margin: 0, fontSize: '11px', color: NSD_COLORS.text.muted, fontStyle: 'italic' }}>
+          Read-only. Empty is correct. Fabricated is not.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// SEND METRICS CARD
+// Contract: Section 5️⃣
+// Show only if run.status === "completed" AND emailsSent > 0
+// ============================================
+function SendMetricsCard({
+  executionState,
+  loading,
+}: {
+  executionState: ExecutionState | null;
+  loading: boolean;
+}) {
+  const showMetrics = shouldShowSendMetrics(executionState);
+
+  if (loading) {
+    return (
+      <div style={{
+        padding: '20px',
+        backgroundColor: NSD_COLORS.background,
+        borderRadius: NSD_RADIUS.lg,
+        border: `1px solid ${NSD_COLORS.border.light}`,
+      }}>
+        <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.muted }}>
+          Loading send metrics...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      padding: '20px',
+      backgroundColor: NSD_COLORS.background,
+      borderRadius: NSD_RADIUS.lg,
+      border: `1px solid ${NSD_COLORS.border.light}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+        <Icon name="send" size={18} color={NSD_COLORS.secondary} />
+        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: NSD_COLORS.primary }}>
+          Send Metrics (Post-Approval)
+        </h4>
+      </div>
+
+      {showMetrics ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+          <FunnelMetric label="Emails Sent" value={executionState?.funnel.emailsSent ?? 0} />
+          <FunnelMetric label="Approved Leads" value={executionState?.funnel.leads.approved ?? 0} />
+        </div>
+      ) : (
+        <div style={{ textAlign: 'center', padding: '20px' }}>
+          <Icon name="send" size={32} color={NSD_COLORS.text.muted} />
+          <p style={{ margin: '12px 0 0 0', fontSize: '14px', color: NSD_COLORS.text.secondary }}>
+            Send metrics will appear here after leads are approved and emails are dispatched.
+          </p>
+        </div>
+      )}
+
+      <div style={{ paddingTop: '12px', borderTop: `1px solid ${NSD_COLORS.border.light}`, marginTop: '16px' }}>
+        <p style={{ margin: 0, fontSize: '11px', color: NSD_COLORS.text.muted, fontStyle: 'italic' }}>
+          Read-only. Metrics shown only after execution completes with send activity.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// EXECUTION TIMELINE CARD
+// Contract: Section 6️⃣
+// Hidden if run === null
+// ============================================
+function ExecutionTimelineCard({ run }: { run: ExecutionRun | null }) {
+  // Per contract: Hidden if run === null
+  if (run === null) {
+    return null;
+  }
+
+  return (
+    <div style={{
+      padding: '20px',
+      backgroundColor: NSD_COLORS.background,
+      borderRadius: NSD_RADIUS.lg,
+      border: `1px solid ${NSD_COLORS.border.light}`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+        <Icon name="clock" size={18} color={NSD_COLORS.secondary} />
+        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: NSD_COLORS.primary }}>
+          Execution Timeline
+        </h4>
+        <span style={{
+          marginLeft: 'auto',
+          padding: '2px 8px',
+          fontSize: '10px',
+          backgroundColor: NSD_COLORS.semantic.attention.bg,
+          color: NSD_COLORS.semantic.attention.text,
+          borderRadius: NSD_RADIUS.sm,
+        }}>
+          Non-authoritative
+        </span>
+      </div>
+      
+      <div style={{ textAlign: 'center', padding: '20px' }}>
+        <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.text.secondary }}>
+          Timeline events are informational only and do not drive execution state.
+        </p>
+        {run.startedAt && (
+          <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: NSD_COLORS.text.muted }}>
+            Run started: {formatEt(run.startedAt)}
+          </p>
+        )}
+        {run.completedAt && (
+          <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: NSD_COLORS.text.muted }}>
+            Run ended: {formatEt(run.completedAt)}
+          </p>
+        )}
+      </div>
+
+      <div style={{ paddingTop: '12px', borderTop: `1px solid ${NSD_COLORS.border.light}`, marginTop: '16px' }}>
+        <p style={{ margin: 0, fontSize: '11px', color: NSD_COLORS.text.muted, fontStyle: 'italic' }}>
+          Events are non-authoritative. execution-state is the single source of truth.
+        </p>
       </div>
     </div>
   );

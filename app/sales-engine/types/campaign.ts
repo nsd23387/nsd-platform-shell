@@ -2,11 +2,23 @@
  * Campaign Types
  * 
  * Type definitions for the Sales Engine UI.
+ * 
+ * OBSERVATIONS-FIRST ARCHITECTURE:
+ * - observations.* = market existence (source of truth for market scope)
+ * - public.* = operational working set (NOT market scope)
+ * - outcomeType = authoritative run outcome
+ * - runIntent = HARVEST_ONLY | ACTIVATE
+ * 
+ * INVARIANTS:
+ * - INV-1: Observed reality defines existence
+ * - INV-2: public.* ≠ market scope  
+ * - INV-4: Zero data is a valid outcome, not failure
  */
 
 /**
- * Legacy campaign status from backend.
- * Note: UI should map these to CampaignGovernanceState for display.
+ * Campaign governance status from backend.
+ * NOTE: This is GOVERNANCE state, NOT execution state.
+ * Do not use this to derive execution status.
  */
 export type CampaignStatus = 'DRAFT' | 'PENDING_REVIEW' | 'RUNNABLE' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'ARCHIVED';
 
@@ -19,6 +31,99 @@ export type ProvenanceType = 'CANONICAL' | 'LEGACY_OBSERVED';
  * Confidence classification for metrics.
  */
 export type MetricConfidence = 'SAFE' | 'CONDITIONAL' | 'BLOCKED';
+
+// ============================================
+// OBSERVATIONS-FIRST TYPES
+// ============================================
+
+/**
+ * Run intent determines what actions the execution should take.
+ * 
+ * HARVEST_ONLY: Observe and collect market data without sending emails
+ * ACTIVATE: Full execution including email dispatch
+ */
+export type RunIntent = 'HARVEST_ONLY' | 'ACTIVATE';
+
+/**
+ * Outcome type provides semantic meaning to run results.
+ * 
+ * CRITICAL: Do NOT collapse these back into boolean success/failure.
+ * Each outcome type requires different UI treatment.
+ * 
+ * VALID_EMPTY_OBSERVATION: Run succeeded but found zero qualifying data.
+ *   This is NOT a failure - the market was observed correctly.
+ *   UI should show as neutral/informational state.
+ * 
+ * CONFIG_INCOMPLETE: Run could not proceed due to missing configuration.
+ *   This is a user-fixable issue, not a system error.
+ *   UI should guide user to complete configuration.
+ * 
+ * INFRA_ERROR: Infrastructure failure (network, database, etc.)
+ *   This IS a system error requiring engineering attention.
+ *   UI should show as error state.
+ * 
+ * EXECUTION_ERROR: Logic error during execution.
+ *   This IS a failure that may require investigation.
+ *   UI should show as error state with details.
+ */
+export type RunOutcomeType = 
+  | 'VALID_EMPTY_OBSERVATION'
+  | 'CONFIG_INCOMPLETE'
+  | 'INFRA_ERROR'
+  | 'EXECUTION_ERROR';
+
+/**
+ * Market scope represents observed market reality.
+ * Source: observations.* tables
+ * 
+ * This is the TRUE market scope - do not confuse with operational data.
+ */
+export interface MarketScope {
+  /** Total organizations observed matching ICP */
+  observedOrganizations: number;
+  /** Total contacts observed across organizations */
+  observedContacts: number;
+  /** Estimated reachable contacts (with valid email potential) */
+  estimatedReachable: number;
+  /** Market observation timestamp */
+  observedAt: string;
+  /** ICP criteria hash for cache invalidation */
+  icpHash?: string;
+}
+
+/**
+ * Operational working set represents data actively being processed.
+ * Source: public.* tables
+ * 
+ * This is NOT market scope - it's the operational subset.
+ */
+export interface OperationalWorkingSet {
+  /** Organizations currently in operational pipeline */
+  organizations: number;
+  /** Contacts currently in operational pipeline */
+  contacts: number;
+  /** Leads created from operational data */
+  leads: number;
+  /** Emails sent from operational data */
+  emailsSent: number;
+  /** Last operational activity */
+  lastActivityAt?: string;
+}
+
+/**
+ * Harvest metrics from a campaign run.
+ * Provides detailed breakdown of what was observed vs processed.
+ */
+export interface HarvestMetrics {
+  /** Run ID these metrics are for */
+  runId: string;
+  /** Market scope at time of harvest */
+  marketScope: MarketScope;
+  /** Operational working set after harvest */
+  operationalSet: OperationalWorkingSet;
+  /** Harvest timestamp */
+  harvestedAt: string;
+}
 
 /**
  * Sourcing configuration for campaigns.
@@ -139,6 +244,32 @@ export interface CampaignRun {
   error_message?: string | null;
   failure_reason?: string | null;
   reason?: string | null;
+  
+  // OBSERVATIONS-FIRST FIELDS
+  /** 
+   * Run intent that was requested.
+   * HARVEST_ONLY = observe market only
+   * ACTIVATE = full execution with email dispatch
+   */
+  runIntent?: RunIntent;
+  
+  /**
+   * Outcome type provides semantic meaning to the result.
+   * CRITICAL: Do not collapse this to boolean success/failure.
+   * 
+   * - VALID_EMPTY_OBSERVATION: Success, but zero qualifying data found
+   * - CONFIG_INCOMPLETE: Missing configuration (user-fixable)
+   * - INFRA_ERROR: System infrastructure failure
+   * - EXECUTION_ERROR: Logic error during execution
+   */
+  outcomeType?: RunOutcomeType;
+  
+  /**
+   * Human-readable reason for the outcome.
+   * Particularly important for VALID_EMPTY_OBSERVATION to explain
+   * why zero results is correct (e.g., "No organizations match ICP criteria")
+   */
+  outcomeReason?: string;
 }
 
 export interface CampaignVariant {

@@ -522,11 +522,21 @@ export async function getDualLayerFunnel(id: string): Promise<DualLayerFunnel> {
 /**
  * Get campaign runs (read-only observability).
  * 
+ * @deprecated OBSERVATIONS-FIRST MIGRATION:
+ * This function queries legacy run endpoints that may not reflect
+ * the canonical execution state. Use useExecutionState() hook instead.
+ * 
+ * Canonical endpoints:
+ * - execution-state: Single source of truth for execution
+ * - run-history: When canonical run history endpoint is available
+ * - market-scope / harvest-metrics: For scope data
+ * 
  * DEFENSIVE NORMALIZATION:
  * If endpoint returns { runs: [...] } instead of [...], normalize to array.
  * This handles potential backend/frontend shape mismatches gracefully.
  */
 export async function getCampaignRuns(id: string): Promise<CampaignRun[]> {
+  console.warn(`[DEPRECATED] getCampaignRuns(${id}) - Use useExecutionState() hook instead`);
   // M67.9-01: Return empty array when API is disabled
   if (isApiDisabled) {
     return [];
@@ -537,8 +547,16 @@ export async function getCampaignRuns(id: string): Promise<CampaignRun[]> {
 
 /**
  * Get latest campaign run (read-only observability).
+ * 
+ * @deprecated OBSERVATIONS-FIRST MIGRATION:
+ * This function queries legacy run endpoints. Use useExecutionState() hook instead.
+ * The execution-state endpoint is the single source of truth for execution state.
+ * 
+ * Canonical endpoints:
+ * - /api/v1/campaigns/:id/execution-state
  */
 export async function getLatestRun(id: string): Promise<CampaignRun | null> {
+  console.warn(`[DEPRECATED] getLatestRun(${id}) - Use useExecutionState() hook instead`);
   // M67.9-01: Return null when API is disabled
   if (isApiDisabled) {
     return null;
@@ -688,6 +706,16 @@ export async function getCampaignObservability(id: string): Promise<CampaignObse
 /**
  * Get detailed campaign runs with full pipeline visibility (read-only).
  * 
+ * @deprecated OBSERVATIONS-FIRST MIGRATION:
+ * This function queries legacy run endpoints. Use useExecutionState() hook instead.
+ * 
+ * When run history is needed:
+ * - Use the canonical run-history endpoint when available
+ * - Do NOT reconstruct run history from events
+ * 
+ * Canonical endpoints:
+ * - /api/v1/campaigns/:id/execution-state - Single source of execution truth
+ * 
  * Data source: GET /api/v1/campaigns/{id}/runs
  * 
  * Extended from getCampaignRuns to include per-run pipeline counts.
@@ -699,6 +727,7 @@ export async function getCampaignObservability(id: string): Promise<CampaignObse
  * If endpoint returns { runs: [...] } instead of [...], normalize to array.
  */
 export async function getCampaignRunsDetailed(id: string): Promise<CampaignRunDetailed[]> {
+  console.warn(`[DEPRECATED] getCampaignRunsDetailed(${id}) - Use useExecutionState() hook instead`);
   // M67.9-01: Return empty array when API is disabled
   if (isApiDisabled) {
     return [];
@@ -789,6 +818,17 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
 // =============================================================================
 
 /**
+ * Run intent determines execution behavior.
+ * 
+ * HARVEST_ONLY: Observe and collect market data without sending emails.
+ *   Use this to validate market scope without activating outreach.
+ * 
+ * ACTIVATE: Full execution including email dispatch.
+ *   Use this when ready to engage contacts.
+ */
+export type RunIntent = 'HARVEST_ONLY' | 'ACTIVATE';
+
+/**
  * Request campaign execution via server-side proxy.
  * 
  * Execution is handled exclusively by nsd-sales-engine.
@@ -800,6 +840,11 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
  * 
  * The proxy uses SALES_ENGINE_URL + SALES_ENGINE_API_BASE_URL to construct
  * the target URL. If the primary path returns 404, it tries a fallback.
+ * 
+ * OBSERVATIONS-FIRST ARCHITECTURE:
+ * - runIntent controls what the execution does
+ * - HARVEST_ONLY = observe market, collect data, NO emails
+ * - ACTIVATE = full execution with email dispatch
  * 
  * On 202 Accepted:
  * - A campaign_run is created in nsd-ods
@@ -814,17 +859,22 @@ export async function getCampaignObservabilityFunnel(id: string): Promise<Observ
  * - 504: "Execution service timed out."
  * - 5xx: "Execution service unavailable. Please try again."
  * 
+ * @param id - Campaign ID
+ * @param runIntent - Optional intent (defaults to ACTIVATE for backward compatibility)
  * @returns RunRequestResponse with status and run_id
  * @throws Error if request fails or campaign cannot be started
  */
-export async function requestCampaignRun(id: string): Promise<RunRequestResponse> {
+export async function requestCampaignRun(
+  id: string, 
+  runIntent: RunIntent = 'ACTIVATE'
+): Promise<RunRequestResponse> {
   // When API is disabled, return a mock response indicating the action would occur
   if (isApiDisabled) {
-    console.log(`[API] API mode disabled - mock run request for campaign ${id}`);
+    console.log(`[API] API mode disabled - mock run request for campaign ${id} (intent: ${runIntent})`);
     return {
       status: 'queued',
       campaign_id: id,
-      message: 'Execution request accepted (API disabled - mock response)',
+      message: `Execution request accepted (API disabled - mock response, intent: ${runIntent})`,
       delegated_to: null,
     };
   }
@@ -836,7 +886,7 @@ export async function requestCampaignRun(id: string): Promise<RunRequestResponse
     const response = await fetch('/api/execute-campaign', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId: id }),
+      body: JSON.stringify({ campaignId: id, runIntent }),
     });
 
     // 202 Accepted = success (execution intent accepted by Sales Engine)
