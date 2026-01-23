@@ -267,48 +267,57 @@ export function DecisionSummaryPanel({
     <div style={{
       backgroundColor: NSD_COLORS.background,
       borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${NSD_COLORS.border.light}`,
-      padding: '24px',
-      marginBottom: '24px',
-      boxShadow: NSD_SHADOWS.sm,
+      border: `1px solid ${NSD_COLORS.border.default}`,
+      padding: '0',
+      marginBottom: '28px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+      overflow: 'hidden',
     }}>
-      {/* Header */}
+      {/* Header - subtle gradient top border */}
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        marginBottom: '20px',
+        padding: '20px 24px',
+        borderBottom: `1px solid ${NSD_COLORS.border.light}`,
+        background: `linear-gradient(to bottom, ${NSD_COLORS.surface}, ${NSD_COLORS.background})`,
       }}>
         <div style={{
-          width: '36px',
-          height: '36px',
-          borderRadius: NSD_RADIUS.md,
-          backgroundColor: NSD_COLORS.semantic.info.bg,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          gap: '14px',
         }}>
-          <Icon name="campaigns" size={18} color={NSD_COLORS.semantic.info.text} />
-        </div>
-        <div>
-          <h3 style={{
-            margin: 0,
-            fontSize: '16px',
-            fontWeight: 600,
-            color: NSD_COLORS.text.primary,
-            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+          <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: NSD_RADIUS.md,
+            backgroundColor: NSD_COLORS.semantic.info.bg,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}>
-            Decision Summary
-          </h3>
-          <p style={{
-            margin: '2px 0 0 0',
-            fontSize: '13px',
-            color: NSD_COLORS.text.secondary,
-          }}>
-            Should I act right now?
-          </p>
+            <Icon name="campaigns" size={20} color={NSD_COLORS.semantic.info.text} />
+          </div>
+          <div>
+            <h3 style={{
+              margin: 0,
+              fontSize: '17px',
+              fontWeight: 600,
+              color: NSD_COLORS.text.primary,
+              fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+            }}>
+              Decision Summary
+            </h3>
+            <p style={{
+              margin: '3px 0 0 0',
+              fontSize: '13px',
+              color: NSD_COLORS.text.secondary,
+            }}>
+              Should I act right now?
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* Content area */}
+      <div style={{ padding: '24px' }}>
 
       {/* Checks Grid */}
       <div style={{
@@ -384,7 +393,7 @@ export function DecisionSummaryPanel({
         alignItems: 'center',
         gap: '12px',
       }}>
-        {/* Primary Action */}
+        {/* Primary Action - Dominant CTA */}
         {primaryActionLabel && (
           <button
             onClick={primaryActionHandler}
@@ -392,9 +401,9 @@ export function DecisionSummaryPanel({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              padding: '10px 20px',
-              fontSize: '14px',
+              gap: '10px',
+              padding: '12px 28px',
+              fontSize: '15px',
               fontWeight: 600,
               backgroundColor: primaryActionDisabled ? NSD_COLORS.text.muted : NSD_COLORS.primary,
               color: '#FFFFFF',
@@ -402,10 +411,14 @@ export function DecisionSummaryPanel({
               borderRadius: NSD_RADIUS.md,
               cursor: primaryActionDisabled ? 'not-allowed' : 'pointer',
               opacity: primaryActionDisabled ? 0.6 : 1,
-              transition: 'all 0.15s ease',
+              transition: 'all 0.2s ease',
+              boxShadow: primaryActionDisabled 
+                ? 'none' 
+                : `0 4px 12px ${NSD_COLORS.primary}40`,
+              letterSpacing: '0.01em',
             }}
           >
-            <Icon name={primaryActionDisabled ? 'clock' : 'play'} size={16} color="#FFFFFF" />
+            <Icon name={primaryActionDisabled ? 'clock' : 'play'} size={18} color="#FFFFFF" />
             {primaryActionLabel}
           </button>
         )}
@@ -457,6 +470,7 @@ export function DecisionSummaryPanel({
             </button>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

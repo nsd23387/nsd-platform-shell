@@ -154,102 +154,133 @@ export function PrimaryCampaignStatusBanner({
   const statusCopy = STATUS_COPY[statusKey];
   const icon = getPhaseIcon(phase);
 
+  // Phase-aware styling for visual weight
+  const isActivePhase = phase === 'running';
+  const isTerminalPhase = phase === 'completed' || phase === 'stopped' || phase === 'failed';
+
   return (
     <div style={{
       backgroundColor: statusCopy.color.bg,
       borderRadius: NSD_RADIUS.lg,
       border: `1px solid ${statusCopy.color.border}`,
-      padding: '20px 24px',
-      marginBottom: '24px',
+      padding: '28px 32px',
+      marginBottom: '32px',
+      // Subtle shadow for depth and prominence
+      boxShadow: isActivePhase 
+        ? `0 4px 12px ${statusCopy.color.border}40`
+        : '0 1px 3px rgba(0,0,0,0.04)',
+      // Subtle left border accent for visual hierarchy
+      borderLeft: `4px solid ${statusCopy.color.text}`,
+      transition: 'box-shadow 0.2s ease',
     }}>
       <div style={{
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
+        gap: '24px',
       }}>
         {/* Status Info */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px', flex: 1 }}>
           <div style={{
-            width: '40px',
-            height: '40px',
+            width: '48px',
+            height: '48px',
             borderRadius: NSD_RADIUS.md,
-            backgroundColor: 'rgba(255,255,255,0.5)',
+            backgroundColor: 'rgba(255,255,255,0.6)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            flexShrink: 0,
+            // Subtle pulse effect for running state
+            animation: isActivePhase ? 'pulse 2s ease-in-out infinite' : undefined,
           }}>
-            <Icon name={icon as any} size={20} color={statusCopy.color.text} />
+            <Icon name={icon as any} size={24} color={statusCopy.color.text} />
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              marginBottom: '4px',
+              gap: '10px',
+              marginBottom: '6px',
             }}>
               <span style={{
                 fontSize: '11px',
-                fontWeight: 500,
+                fontWeight: 600,
                 textTransform: 'uppercase',
-                letterSpacing: '0.5px',
+                letterSpacing: '0.75px',
                 color: statusCopy.color.text,
-                opacity: 0.8,
+                opacity: 0.7,
               }}>
-                Status
+                Campaign Status
               </span>
             </div>
             <h2 style={{
-              margin: '0 0 8px 0',
-              fontSize: '20px',
-              fontWeight: 600,
+              margin: '0 0 10px 0',
+              fontSize: '26px',
+              fontWeight: 700,
               color: statusCopy.color.text,
               fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+              letterSpacing: '-0.02em',
+              lineHeight: 1.2,
             }}>
               {statusCopy.label}
             </h2>
             <p style={{
               margin: 0,
-              fontSize: '14px',
+              fontSize: '15px',
+              lineHeight: 1.5,
               color: statusCopy.color.text,
-              opacity: 0.9,
-              maxWidth: '500px',
+              opacity: 0.85,
+              maxWidth: '560px',
             }}>
               {customDescription || statusCopy.explanation}
             </p>
             {/* Show current stage when running */}
             {phase === 'running' && currentStage && (
-              <p style={{
-                margin: '8px 0 0 0',
-                fontSize: '13px',
-                color: statusCopy.color.text,
-                fontWeight: 500,
+              <div style={{
+                marginTop: '12px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                backgroundColor: 'rgba(255,255,255,0.4)',
+                borderRadius: NSD_RADIUS.full,
               }}>
-                Current stage: {currentStage}
-              </p>
+                <Icon name="play" size={12} color={statusCopy.color.text} />
+                <span style={{
+                  fontSize: '13px',
+                  color: statusCopy.color.text,
+                  fontWeight: 500,
+                }}>
+                  {currentStage}
+                </span>
+              </div>
             )}
             {/* Show termination reason for stopped/failed */}
             {(phase === 'stopped' || phase === 'failed') && terminationReason && (
               <p style={{
-                margin: '8px 0 0 0',
+                margin: '12px 0 0 0',
                 fontSize: '13px',
                 color: statusCopy.color.text,
+                opacity: 0.8,
                 fontStyle: 'italic',
               }}>
-                Reason: {terminationReason}
+                {terminationReason}
               </p>
             )}
           </div>
         </div>
 
-        {/* Timestamps */}
+        {/* Timestamps - visually de-emphasized */}
         <div style={{
           textAlign: 'right',
           fontSize: '12px',
           color: statusCopy.color.text,
-          opacity: 0.7,
+          opacity: 0.6,
+          flexShrink: 0,
+          lineHeight: 1.6,
         }}>
-          <div>Created: {formatEtDate(createdAt)}</div>
-          <div style={{ marginTop: '4px' }}>Updated: {formatEtDate(updatedAt)}</div>
+          <div>Created {formatEtDate(createdAt)}</div>
+          <div>Updated {formatEtDate(updatedAt)}</div>
         </div>
       </div>
     </div>
