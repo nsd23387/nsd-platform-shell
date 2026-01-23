@@ -670,7 +670,8 @@ function ExecutionStatusBanner({
   const outcomeReason = run?.outcomeReason;
   
   // Determine styling based on status AND outcomeType
-  let style = NSD_COLORS.semantic.muted;
+  // Type explicitly to allow any semantic color assignment
+  let style: { bg: string; text: string; border: string } = NSD_COLORS.semantic.muted;
   let icon: 'clock' | 'refresh' | 'check' | 'warning' | 'target' = 'clock';
   let outcomeMessage = '';
   
@@ -699,8 +700,8 @@ function ExecutionStatusBanner({
       case 'failed':
         // OBSERVATIONS-FIRST: Distinguish failure types
         if (outcomeType === 'CONFIG_INCOMPLETE') {
-          // User-fixable - show as warning, not critical
-          style = NSD_COLORS.semantic.warning;
+          // User-fixable - show as attention, not critical
+          style = NSD_COLORS.semantic.attention;
           icon = 'warning';
           outcomeMessage = 'Configuration incomplete. Please review campaign settings.';
         } else if (outcomeType === 'INFRA_ERROR') {
