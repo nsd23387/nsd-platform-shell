@@ -256,18 +256,26 @@ export function DecisionSummaryPanel({
   const isStopped = phase === 'stopped';
   const isFailed = phase === 'failed';
 
-  // Action button configuration
-  let primaryActionLabel: string | null = null;
-  let primaryActionHandler: (() => void) | undefined = undefined;
-  let primaryActionDisabled = false;
+  // Determine why the button might be disabled
+  const getDisabledReason = (): string | null => {
+    if (isRunRequesting) return 'Starting campaign...';
+    if (isRunning) return 'Campaign is currently running';
+    if (hasRun) return 'Campaign has already been executed';
+    if (isComplete) return 'Campaign is complete';
+    if (isStopped) return 'Campaign has been stopped';
+    if (isFailed) return 'Campaign failed - review before re-running';
+    if (!isApproved) return 'Awaiting governance approval';
+    if (!isExecutionReady) return 'Campaign not ready for execution';
+    if (isPlanningOnly) return 'Planning-only mode - disable to execute';
+    return null;
+  };
 
-  if (canRunCampaign && !isRunRequesting) {
-    primaryActionLabel = runIntent === 'HARVEST_ONLY' ? 'Run (Harvest Only)' : 'Run Campaign';
-    primaryActionHandler = onRunCampaign;
-  } else if (isRunRequesting) {
-    primaryActionLabel = 'Starting...';
-    primaryActionDisabled = true;
-  }
+  const disabledReason = getDisabledReason();
+  const showRunButton = onRunCampaign && !isComplete && !isStopped && !isFailed && !hasRun;
+  const isRunDisabled = !canRunCampaign || isRunRequesting;
+  const runButtonLabel = isRunRequesting 
+    ? 'Starting...' 
+    : (runIntent === 'HARVEST_ONLY' ? 'Run (Harvest Only)' : 'Run Campaign');
 
   // Use decision context for status message
   const statusMessage = decisionContext.reason;
@@ -293,12 +301,13 @@ export function DecisionSummaryPanel({
           width: '36px',
           height: '36px',
           borderRadius: NSD_RADIUS.md,
-          backgroundColor: NSD_COLORS.semantic.info.bg,
+          backgroundColor: '#F9FAFB',
+          border: `1px solid ${NSD_COLORS.primary}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}>
-          <Icon name="campaigns" size={18} color={NSD_COLORS.semantic.info.text} />
+          <Icon name="campaigns" size={18} color={NSD_COLORS.primary} />
         </div>
         <div>
           <h3 style={{
@@ -393,11 +402,12 @@ export function DecisionSummaryPanel({
         gap: '12px',
         flexWrap: 'wrap',
       }}>
-        {/* Primary Action */}
-        {primaryActionLabel && (
+        {/* Primary Action - Always show Run button when applicable */}
+        {showRunButton && (
           <button
-            onClick={primaryActionHandler}
-            disabled={primaryActionDisabled}
+            onClick={canRunCampaign ? onRunCampaign : undefined}
+            disabled={isRunDisabled}
+            title={disabledReason || undefined}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -405,17 +415,17 @@ export function DecisionSummaryPanel({
               padding: '10px 20px',
               fontSize: '14px',
               fontWeight: 600,
-              backgroundColor: primaryActionDisabled ? NSD_COLORS.text.muted : NSD_COLORS.primary,
+              backgroundColor: isRunDisabled ? NSD_COLORS.border.dark : NSD_COLORS.magenta.base,
               color: '#FFFFFF',
               border: 'none',
               borderRadius: NSD_RADIUS.md,
-              cursor: primaryActionDisabled ? 'not-allowed' : 'pointer',
-              opacity: primaryActionDisabled ? 0.6 : 1,
+              cursor: isRunDisabled ? 'not-allowed' : 'pointer',
+              opacity: isRunDisabled ? 0.5 : 1,
               transition: 'all 0.15s ease',
             }}
           >
-            <Icon name={primaryActionDisabled ? 'clock' : 'play'} size={16} color="#FFFFFF" />
-            {primaryActionLabel}
+            <Icon name={isRunRequesting ? 'clock' : 'play'} size={16} color="#FFFFFF" />
+            {runButtonLabel}
           </button>
         )}
 

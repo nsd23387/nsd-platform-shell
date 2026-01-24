@@ -113,8 +113,9 @@ function IntentOption({
       style={{
         flex: 1,
         padding: '16px',
-        backgroundColor: isSelected ? config.bgColor : NSD_COLORS.background,
-        border: `2px solid ${isSelected ? config.borderColor : NSD_COLORS.border.light}`,
+        backgroundColor: '#FFFFFF',
+        border: `1px solid ${isSelected ? config.borderColor : NSD_COLORS.border.light}`,
+        borderLeft: `4px solid ${isSelected ? config.borderColor : NSD_COLORS.border.light}`,
         borderRadius: NSD_RADIUS.lg,
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.6 : 1,
@@ -133,7 +134,8 @@ function IntentOption({
           width: '32px',
           height: '32px',
           borderRadius: NSD_RADIUS.md,
-          backgroundColor: isSelected ? config.color : NSD_COLORS.surface,
+          backgroundColor: '#F9FAFB',
+          border: `1px solid ${isSelected ? config.borderColor : NSD_COLORS.border.light}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -141,7 +143,7 @@ function IntentOption({
           <Icon 
             name={config.icon as any} 
             size={18} 
-            color={isSelected ? '#fff' : NSD_COLORS.text.muted} 
+            color={isSelected ? config.color : NSD_COLORS.text.muted} 
           />
         </div>
         <div>
@@ -155,8 +157,16 @@ function IntentOption({
           <div style={{
             fontSize: '11px',
             color: NSD_COLORS.text.muted,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
           }}>
-            {config.safetyLevel === 'safe' ? '✓ Safe to test' : '⚡ Commits to outreach'}
+            <Icon 
+              name={config.safetyLevel === 'safe' ? 'check' : 'warning'} 
+              size={10} 
+              color={NSD_COLORS.text.muted} 
+            />
+            {config.safetyLevel === 'safe' ? 'Safe to test' : 'Commits to outreach'}
           </div>
         </div>
         {isSelected && (
@@ -165,12 +175,13 @@ function IntentOption({
             width: '20px',
             height: '20px',
             borderRadius: '50%',
-            backgroundColor: config.color,
+            backgroundColor: '#FFFFFF',
+            border: `2px solid ${config.color}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <Icon name="check" size={12} color="#fff" />
+            <Icon name="check" size={12} color={config.color} />
           </div>
         )}
       </div>
@@ -188,7 +199,8 @@ function IntentOption({
       {/* Consequences */}
       <div style={{
         padding: '10px',
-        backgroundColor: isSelected ? 'rgba(255,255,255,0.5)' : NSD_COLORS.surface,
+        backgroundColor: '#F9FAFB',
+        border: '1px solid #E5E7EB',
         borderRadius: NSD_RADIUS.sm,
       }}>
         <div style={{
@@ -294,20 +306,21 @@ export function RunIntentSelector({
         <div style={{
           margin: '0 16px 16px 16px',
           padding: '10px 12px',
-          backgroundColor: NSD_COLORS.semantic.attention.bg,
+          backgroundColor: '#FFFFFF',
           borderRadius: NSD_RADIUS.md,
-          border: `1px solid ${NSD_COLORS.semantic.attention.border}`,
+          border: '1px solid #E5E7EB',
+          borderLeft: `4px solid ${NSD_COLORS.magenta.base}`,
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
         }}>
-          <Icon name="warning" size={16} color={NSD_COLORS.semantic.attention.text} />
+          <Icon name="warning" size={16} color={NSD_COLORS.magenta.base} />
           <p style={{
             margin: 0,
             fontSize: '12px',
-            color: NSD_COLORS.semantic.attention.text,
+            color: NSD_COLORS.text.primary,
           }}>
-            <strong>Activate</strong> will send real emails to qualified leads. Make sure your campaign is ready.
+            <strong style={{ color: NSD_COLORS.magenta.base }}>Activate</strong> will send real emails to qualified leads. Make sure your campaign is ready.
           </p>
         </div>
       )}
