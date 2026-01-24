@@ -898,6 +898,10 @@ export async function requestCampaignRun(
         message: data.message || 'Campaign queued',
         delegated_to: 'nsd-sales-engine',
         run_id: data.run_id,
+        // Re-run support
+        is_rerun: data.is_rerun || false,
+        previous_run_id: data.previous_run_id,
+        previous_run_status: data.previous_run_status,
       };
     }
 
@@ -910,12 +914,33 @@ export async function requestCampaignRun(
     }
     
     if (response.status === 409) {
+      // Conflict - campaign already running or other state issue
+      if (errorData.code === 'RUN_ALREADY_ACTIVE') {
+        throw new Error('Campaign is already running or queued. Please wait for the current run to complete.');
+      }
       if (errorData.error === 'PLANNING_ONLY_CAMPAIGN') {
         throw new Error('Execution disabled — this campaign is planning-only.');
-      } else if (errorData.error === 'CAMPAIGN_NOT_RUNNABLE') {
+      }
+      if (errorData.error === 'CAMPAIGN_NOT_RUNNABLE') {
         throw new Error('Campaign is not in a runnable state.');
       }
       throw new Error(errorData.reason || errorData.error || 'Campaign not in correct state');
+    }
+    
+    if (response.status === 403) {
+      // Forbidden - archived or permission issue
+      if (errorData.code === 'CAMPAIGN_ARCHIVED') {
+        throw new Error('Cannot start an archived campaign.');
+      }
+      throw new Error(errorData.message || 'Campaign cannot be started. Check permissions.');
+    }
+    
+    if (response.status === 400) {
+      // Bad request - invalid configuration
+      if (errorData.code === 'INVALID_ICP') {
+        throw new Error('Campaign requires valid ICP configuration before running.');
+      }
+      throw new Error(errorData.message || 'Invalid campaign configuration.');
     }
     
     if (response.status === 504) {

@@ -49,7 +49,7 @@ interface FetchError {
 /**
  * Canonical run status values.
  */
-export type RunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'stopped';
+export type RunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'stopped' | 'cancelled';
 
 /**
  * OBSERVATIONS-FIRST: Outcome type provides semantic meaning to run results.
@@ -422,6 +422,8 @@ export function getExecutionStatusText(run: ExecutionRun | null): string {
       return 'Execution failed';
     case 'stopped':
       return 'Execution stopped';
+    case 'cancelled':
+      return 'Execution cancelled';
     default:
       // Should never happen - contract guarantees these statuses
       return 'Unknown status';

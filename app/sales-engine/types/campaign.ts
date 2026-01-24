@@ -809,6 +809,14 @@ export interface RunRequestResponse {
   run_id?: string;
   /** Error details if failed */
   error?: string;
+  
+  // Re-run support (from Sales Engine v2)
+  /** Whether this is a re-run of a previously executed campaign */
+  is_rerun?: boolean;
+  /** UUID of the previous run (if re-run) */
+  previous_run_id?: string;
+  /** Status of the previous run ("failed", "stopped", "cancelled", etc.) */
+  previous_run_status?: string;
 }
 
 /**

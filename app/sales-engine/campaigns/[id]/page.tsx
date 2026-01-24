@@ -179,15 +179,22 @@ export default function CampaignDetailPage() {
     fetchOperationalSet();
   }, [campaignId, isTest]);
 
-  // Handle run campaign
+  // Handle run campaign (supports both initial runs and re-runs)
   const handleRunCampaign = useCallback(async () => {
     if (!campaignId) return;
     setIsRunRequesting(true);
     setRunRequestMessage(null);
 
     try {
-      await requestCampaignRun(campaignId, runIntent);
-      setRunRequestMessage('Campaign run started successfully');
+      const response = await requestCampaignRun(campaignId, runIntent);
+      
+      // Show appropriate message based on whether this is a re-run
+      if (response.is_rerun) {
+        setRunRequestMessage(`Campaign re-run started (previous: ${response.previous_run_status || 'unknown'})`);
+      } else {
+        setRunRequestMessage('Campaign run started successfully');
+      }
+      
       refreshExecution();
     } catch (err) {
       setRunRequestMessage(err instanceof Error ? err.message : 'Failed to start campaign run');
@@ -340,9 +347,10 @@ export default function CampaignDetailPage() {
   const isExecutionComplete = runStatus === 'completed';
   const isFailed = runStatus === 'failed';
   const isStopped = runStatus === 'stopped';
+  const isCancelled = runStatus === 'cancelled';
   
-  // Allow re-running if previous run failed or was stopped
-  const canRerun = isFailed || isStopped;
+  // Allow re-running if previous run failed, was stopped, or was cancelled
+  const canRerun = isFailed || isStopped || isCancelled;
   const canRun = campaign.isRunnable && isApproved && !isPlanningOnly && (!hasRun || canRerun);
 
   // Extract scope data from campaign ICP
