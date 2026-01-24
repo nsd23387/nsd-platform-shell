@@ -41,6 +41,18 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 24, 2026: Campaign Detail View Zone-Based UX Architecture
+  - **Zone-based design pattern**: 4px colored left-border accents distinguish sections
+    - Action zone (magenta #CC368F): DecisionSummaryPanel, RunIntentCard
+    - Progress zone (indigo #020F5A / violet #692BAA): ExecutionTimeline, ResultsSection
+    - Context zone (neutral): CampaignIntentScope (no accent - pure information)
+  - All campaign detail components updated with white backgrounds (#FFFFFF)
+  - PrimaryCampaignStatusBanner: Dynamic left-border color based on status
+  - Added 4px gradient accent bar at top of Campaign Detail page
+  - Removed box-shadows in favor of subtle border treatment
+  - WizardNav stepper line fixed: repositioned to align with step circle centers (left: 35px)
+  - Background track line now uses neutral border color for cleaner appearance
+
 - January 24, 2026: Executive Dashboard & NSD Brand Background Compliance
   - **CRITICAL DESIGN RULE**: Magenta/purple/violet are ONLY for accents (text, borders, CTAs) - NEVER for backgrounds
   - Sales Engine Executive Dashboard is now the main dashboard (redirects from /dashboard)
