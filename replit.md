@@ -40,6 +40,7 @@ The architecture strictly adheres to a read-only principle, enforcing observatio
 
 ## Recent Changes
 - January 24, 2026: Mobile-First Responsive Design
+  - **Campaign List Table Mobile Fix**: DataTable now hides non-essential columns on mobile (< 640px) - Pipeline, Activity, and View columns hidden, showing only Campaign name and Status. Added horizontal scroll as fallback.
   - **Campaign Details Mobile Fix**: Fixed text overflow and cut-off issues on mobile - timestamps now display below status content instead of right side, responsive padding using clamp(), Decision Summary checks grid stacks to 1 column on narrow screens, PageHeader titles use word-break for long campaign names
   - **NavBar Added**: Both campaigns list and executive dashboard have NavBar for easy navigation
   - **Mobile-First Layouts**: All pages use clamp() for responsive typography, flexWrap for stacking, CSS Grid auto-fit for responsive grids
