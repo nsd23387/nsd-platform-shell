@@ -273,7 +273,7 @@ export default function SalesEnginePage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
+    <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.background }}>
       <div
         style={{
           height: '4px',
