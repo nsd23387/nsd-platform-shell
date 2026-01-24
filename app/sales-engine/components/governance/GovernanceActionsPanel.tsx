@@ -435,7 +435,7 @@ export function GovernanceActionsPanel({
                 {runsCount} recorded {runsCount === 1 ? 'run' : 'runs'}
               </p>
             </div>
-            <span style={{ fontSize: '16px', color: NSD_COLORS.secondary }}>→</span>
+            <Icon name="arrow-right" size={16} color={NSD_COLORS.secondary} />
           </Link>
         )}
 

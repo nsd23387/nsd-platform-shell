@@ -1,6 +1,7 @@
 'use client';
 
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
+import { Icon } from '../../../../design/components/Icon';
 
 interface MiniPipelineIndicatorProps {
   orgs: number | null;
@@ -56,7 +57,7 @@ export function MiniPipelineIndicator({ orgs, contacts, leads }: MiniPipelineInd
         <span style={{ fontSize: '10px', opacity: 0.7 }}>O</span>
         {formatCount(orgs)}
       </span>
-      <span style={{ color: NSD_COLORS.text.muted }}>→</span>
+      <Icon name="arrow-right" size={10} color={NSD_COLORS.text.muted} />
       <span
         style={{
           display: 'inline-flex',
@@ -72,17 +73,18 @@ export function MiniPipelineIndicator({ orgs, contacts, leads }: MiniPipelineInd
         <span style={{ fontSize: '10px', opacity: 0.7 }}>C</span>
         {formatCount(contacts)}
       </span>
-      <span style={{ color: NSD_COLORS.text.muted }}>→</span>
+      <Icon name="arrow-right" size={10} color={NSD_COLORS.text.muted} />
       <span
         style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: '3px',
           padding: '2px 6px',
-          backgroundColor: leads !== null && leads > 0 ? NSD_COLORS.semantic.positive.bg : NSD_COLORS.surface,
+          backgroundColor: '#FFFFFF',
+          border: `1px solid ${leads !== null && leads > 0 ? NSD_COLORS.violet.base : NSD_COLORS.border.light}`,
           borderRadius: NSD_RADIUS.sm,
-          color: leads !== null && leads > 0 ? NSD_COLORS.semantic.positive.text : NSD_COLORS.text.secondary,
-          fontWeight: leads !== null && leads > 0 ? 500 : 400,
+          color: leads !== null && leads > 0 ? NSD_COLORS.violet.base : NSD_COLORS.text.secondary,
+          fontWeight: leads !== null && leads > 0 ? 600 : 400,
         }}
         title="Leads"
       >
