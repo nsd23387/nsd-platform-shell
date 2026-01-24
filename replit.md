@@ -37,3 +37,9 @@ The architecture strictly adheres to a read-only principle, enforcing observatio
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.
 - **ODS API**: Used for bootstrap and identity services.
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
+
+## Recent Changes
+- January 24, 2026: Mobile-First Responsive Design
+  - **Campaign Details Mobile Fix**: Fixed text overflow and cut-off issues on mobile - timestamps now display below status content instead of right side, responsive padding using clamp(), Decision Summary checks grid stacks to 1 column on narrow screens, PageHeader titles use word-break for long campaign names
+  - **NavBar Added**: Both campaigns list and executive dashboard have NavBar for easy navigation
+  - **Mobile-First Layouts**: All pages use clamp() for responsive typography, flexWrap for stacking, CSS Grid auto-fit for responsive grids

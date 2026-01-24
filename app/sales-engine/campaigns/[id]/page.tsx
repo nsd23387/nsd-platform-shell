@@ -330,7 +330,7 @@ export default function CampaignDetailPage() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: 'clamp(16px, 4vw, 32px)' }}>
         {/* Page Header */}
         <PageHeader
           title={campaign.name}

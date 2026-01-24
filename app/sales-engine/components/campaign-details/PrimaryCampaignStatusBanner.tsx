@@ -163,8 +163,8 @@ export function PrimaryCampaignStatusBanner({
       backgroundColor: statusCopy.color.bg,
       borderRadius: NSD_RADIUS.lg,
       border: `1px solid ${statusCopy.color.border}`,
-      padding: '28px 32px',
-      marginBottom: '32px',
+      padding: 'clamp(16px, 4vw, 28px) clamp(16px, 4vw, 32px)',
+      marginBottom: 'clamp(20px, 4vw, 32px)',
       // Subtle shadow for depth and prominence
       boxShadow: isActivePhase 
         ? `0 4px 12px ${statusCopy.color.border}40`
@@ -175,15 +175,14 @@ export function PrimaryCampaignStatusBanner({
     }}>
       <div style={{
         display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        gap: '24px',
+        flexDirection: 'column',
+        gap: '16px',
       }}>
         {/* Status Info */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'clamp(12px, 3vw, 20px)', flex: 1 }}>
           <div style={{
-            width: '48px',
-            height: '48px',
+            width: 'clamp(36px, 8vw, 48px)',
+            height: 'clamp(36px, 8vw, 48px)',
             borderRadius: NSD_RADIUS.md,
             backgroundColor: 'rgba(255,255,255,0.6)',
             display: 'flex',
@@ -193,9 +192,9 @@ export function PrimaryCampaignStatusBanner({
             // Subtle pulse effect for running state
             animation: isActivePhase ? 'pulse 2s ease-in-out infinite' : undefined,
           }}>
-            <Icon name={icon as any} size={24} color={statusCopy.color.text} />
+            <Icon name={icon as any} size={20} color={statusCopy.color.text} />
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -215,22 +214,23 @@ export function PrimaryCampaignStatusBanner({
             </div>
             <h2 style={{
               margin: '0 0 10px 0',
-              fontSize: '26px',
+              fontSize: 'clamp(20px, 5vw, 26px)',
               fontWeight: 700,
               color: statusCopy.color.text,
               fontFamily: NSD_TYPOGRAPHY.fontDisplay,
               letterSpacing: '-0.02em',
               lineHeight: 1.2,
+              wordBreak: 'break-word',
             }}>
               {statusCopy.label}
             </h2>
             <p style={{
               margin: 0,
-              fontSize: '15px',
+              fontSize: 'clamp(13px, 3vw, 15px)',
               lineHeight: 1.5,
               color: statusCopy.color.text,
               opacity: 0.85,
-              maxWidth: '560px',
+              wordBreak: 'break-word',
             }}>
               {customDescription || statusCopy.explanation}
             </p>
@@ -270,17 +270,20 @@ export function PrimaryCampaignStatusBanner({
           </div>
         </div>
 
-        {/* Timestamps - visually de-emphasized */}
+        {/* Timestamps - visually de-emphasized, shown below on mobile */}
         <div style={{
-          textAlign: 'right',
-          fontSize: '12px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px 16px',
+          fontSize: '11px',
           color: statusCopy.color.text,
           opacity: 0.6,
-          flexShrink: 0,
-          lineHeight: 1.6,
+          lineHeight: 1.4,
+          paddingTop: '8px',
+          borderTop: `1px solid ${statusCopy.color.border}40`,
         }}>
-          <div>Created {formatEtDate(createdAt)}</div>
-          <div>Updated {formatEtDate(updatedAt)}</div>
+          <span>Created {formatEtDate(createdAt)}</span>
+          <span>Updated {formatEtDate(updatedAt)}</span>
         </div>
       </div>
     </div>
