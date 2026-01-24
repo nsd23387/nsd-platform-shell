@@ -66,27 +66,28 @@ export function WizardNav({ steps, currentStep, onStepClick }: WizardNavProps) {
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: NSD_SPACING.xs, position: 'relative' }}>
+        {/* Background track line - positioned at center of step circles */}
+        {/* Circle center = 16px button padding + 20px (half of 40px circle) = 36px */}
         <div
           style={{
             position: 'absolute',
-            left: '19px',
-            top: '20px',
-            bottom: '20px',
+            left: '35px',
+            top: '34px',
+            bottom: '34px',
             width: '2px',
-            background: `linear-gradient(180deg, ${NSD_COLORS.magenta.base} 0%, ${NSD_COLORS.violet.base} 100%)`,
-            opacity: 0.2,
+            backgroundColor: NSD_COLORS.border.light,
             borderRadius: '1px',
           }}
         />
         
+        {/* Progress line - fills based on current step */}
         <div
           style={{
             position: 'absolute',
-            left: '19px',
-            top: '20px',
+            left: '35px',
+            top: '34px',
             width: '2px',
-            height: `${(currentStep / (steps.length - 1)) * 100}%`,
-            maxHeight: 'calc(100% - 40px)',
+            height: steps.length > 1 ? `calc(${(currentStep / (steps.length - 1)) * 100}% - ${currentStep === steps.length - 1 ? 0 : 34}px)` : '0px',
             background: NSD_GRADIENTS.brand,
             borderRadius: '1px',
             transition: 'height 0.4s ease',

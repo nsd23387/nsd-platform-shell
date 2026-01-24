@@ -156,9 +156,10 @@ export function PrimaryCampaignStatusBanner({
 
   return (
     <div style={{
-      backgroundColor: statusCopy.color.bg,
+      backgroundColor: '#FFFFFF',
       borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${statusCopy.color.border}`,
+      border: `1px solid #E5E7EB`,
+      borderLeft: `4px solid ${statusCopy.color.text}`,
       padding: 'clamp(16px, 4vw, 24px)',
       marginBottom: '24px',
     }}>
@@ -168,7 +169,7 @@ export function PrimaryCampaignStatusBanner({
           width: 'clamp(32px, 8vw, 40px)',
           height: 'clamp(32px, 8vw, 40px)',
           borderRadius: NSD_RADIUS.md,
-          backgroundColor: 'rgba(255,255,255,0.5)',
+          backgroundColor: statusCopy.color.bg,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -188,8 +189,7 @@ export function PrimaryCampaignStatusBanner({
               fontWeight: 500,
               textTransform: 'uppercase',
               letterSpacing: '0.5px',
-              color: statusCopy.color.text,
-              opacity: 0.8,
+              color: '#6B7280',
             }}>
               Status
             </span>
@@ -207,8 +207,7 @@ export function PrimaryCampaignStatusBanner({
           <p style={{
             margin: 0,
             fontSize: 'clamp(13px, 3vw, 14px)',
-            color: statusCopy.color.text,
-            opacity: 0.9,
+            color: '#4B5563',
             maxWidth: '500px',
             wordBreak: 'break-word',
           }}>
@@ -230,7 +229,7 @@ export function PrimaryCampaignStatusBanner({
             <p style={{
               margin: '8px 0 0 0',
               fontSize: '13px',
-              color: statusCopy.color.text,
+              color: '#6B7280',
               fontStyle: 'italic',
             }}>
               Reason: {terminationReason}
@@ -246,10 +245,9 @@ export function PrimaryCampaignStatusBanner({
         gap: '12px',
         marginTop: '16px',
         paddingTop: '12px',
-        borderTop: `1px solid ${statusCopy.color.border}`,
+        borderTop: '1px solid #E5E7EB',
         fontSize: '12px',
-        color: statusCopy.color.text,
-        opacity: 0.7,
+        color: '#6B7280',
       }}>
         <span>Created: {formatEtDate(createdAt)}</span>
         <span>Updated: {formatEtDate(updatedAt)}</span>
