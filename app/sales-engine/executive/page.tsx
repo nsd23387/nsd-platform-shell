@@ -146,7 +146,8 @@ function MetricCard({
 }
 
 /**
- * Outcome distribution bar.
+ * Outcome distribution - minimalist list view.
+ * Uses white backgrounds with colored text accents only (NSD brand compliant).
  */
 function OutcomeDistribution({
   title,
@@ -164,102 +165,84 @@ function OutcomeDistribution({
 }) {
   const outcomes: OutcomeType[] = ['SUCCESS', 'VALID_EMPTY_OBSERVATION', 'CONFIG_INCOMPLETE', 'INFRA_ERROR', 'EXECUTION_ERROR'];
   
+  // Map outcome types to accent colors (text only)
+  const outcomeAccents: Record<OutcomeType, string> = {
+    SUCCESS: NSD_COLORS.secondary,           // Violet
+    VALID_EMPTY_OBSERVATION: NSD_COLORS.primary,  // Indigo
+    CONFIG_INCOMPLETE: NSD_COLORS.cta,       // Magenta
+    INFRA_ERROR: NSD_COLORS.magenta.dark,    // Dark magenta
+    EXECUTION_ERROR: NSD_COLORS.magenta.dark, // Dark magenta
+  };
+  
   return (
     <div style={{ marginBottom: '20px' }}>
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'baseline',
-        marginBottom: '8px',
+        marginBottom: '12px',
+        paddingBottom: '8px',
+        borderBottom: `1px solid ${NSD_COLORS.border.light}`,
       }}>
         <span style={{
           fontSize: '13px',
-          fontWeight: 500,
+          fontWeight: 600,
           color: NSD_COLORS.text.primary,
         }}>
           {title}
         </span>
         <span style={{
           fontSize: '14px',
-          fontWeight: 600,
-          color: NSD_COLORS.text.primary,
+          fontWeight: 700,
+          color: NSD_COLORS.primary,
         }}>
           {data.total} runs
         </span>
       </div>
       
-      {/* Stacked bar */}
-      {data.total > 0 && (
-        <div style={{
-          height: '24px',
-          borderRadius: NSD_RADIUS.sm,
-          overflow: 'hidden',
-          display: 'flex',
-          backgroundColor: NSD_COLORS.surface,
-        }}>
-          {outcomes.map((outcome) => {
-            const count = data[outcome];
-            if (count === 0) return null;
-            const percentage = (count / data.total) * 100;
-            const message = getOutcomeMessage(outcome);
-            return (
-              <div
-                key={outcome}
-                style={{
-                  width: `${percentage}%`,
-                  backgroundColor: message.colors.bg,
-                  borderRight: `1px solid ${NSD_COLORS.background}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                title={`${message.label}: ${count}`}
-              >
-                {percentage > 10 && (
-                  <span style={{
-                    fontSize: '10px',
-                    fontWeight: 600,
-                    color: message.colors.text,
-                  }}>
-                    {count}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Legend */}
-      <div style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '12px',
-        marginTop: '8px',
-      }}>
+      {/* Outcome list - minimalist */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {outcomes.map((outcome) => {
           const count = data[outcome];
           if (count === 0) return null;
           const message = getOutcomeMessage(outcome);
+          const percentage = data.total > 0 ? ((count / data.total) * 100).toFixed(0) : 0;
+          const accentColor = outcomeAccents[outcome];
+          
           return (
             <div key={outcome} style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '4px',
+              justifyContent: 'space-between',
+              padding: '8px 12px',
+              backgroundColor: NSD_COLORS.background,
+              borderRadius: NSD_RADIUS.sm,
+              border: `1px solid ${NSD_COLORS.border.light}`,
+              borderLeft: `3px solid ${accentColor}`,
             }}>
-              <div style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '2px',
-                backgroundColor: message.colors.bg,
-                border: `1px solid ${message.colors.border}`,
-              }} />
               <span style={{
-                fontSize: '11px',
-                color: NSD_COLORS.text.muted,
+                fontSize: '13px',
+                color: NSD_COLORS.text.primary,
               }}>
-                {message.label} ({count})
+                {message.label}
               </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{
+                  fontSize: '12px',
+                  color: NSD_COLORS.text.muted,
+                }}>
+                  {percentage}%
+                </span>
+                <span style={{
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: accentColor,
+                  minWidth: '24px',
+                  textAlign: 'right',
+                }}>
+                  {count}
+                </span>
+              </div>
             </div>
           );
         })}
@@ -270,27 +253,30 @@ function OutcomeDistribution({
 
 /**
  * System health indicator.
+ * Uses white background with colored left border accent (NSD brand compliant).
  */
 function HealthIndicator({ status, errorRate, lastSuccess }: {
   status: string;
   errorRate: number;
   lastSuccess: string | null;
 }) {
-  const statusConfig: Record<string, { label: string; color: { bg: string; text: string; border: string } }> = {
-    healthy: { label: 'Healthy', color: NSD_COLORS.semantic.positive },
-    degraded: { label: 'Degraded', color: NSD_COLORS.semantic.attention },
-    down: { label: 'Down', color: NSD_COLORS.semantic.critical },
-    unknown: { label: 'Unknown', color: NSD_COLORS.semantic.muted },
+  const statusConfig: Record<string, { label: string; accentColor: string }> = {
+    healthy: { label: 'Healthy', accentColor: NSD_COLORS.secondary },      // Violet accent
+    degraded: { label: 'Degraded', accentColor: NSD_COLORS.cta },          // Magenta accent
+    down: { label: 'Down', accentColor: NSD_COLORS.magenta.dark },         // Dark magenta accent
+    unknown: { label: 'Unknown', accentColor: NSD_COLORS.border.dark },    // Gray accent
   };
   
   const config = statusConfig[status] || statusConfig.unknown;
   
   return (
     <div style={{
-      padding: '16px',
-      backgroundColor: config.color.bg,
+      padding: '16px 20px',
+      backgroundColor: NSD_COLORS.background,
       borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${config.color.border}`,
+      border: `1px solid ${NSD_COLORS.border.light}`,
+      borderLeft: `4px solid ${config.accentColor}`,
+      boxShadow: NSD_SHADOWS.sm,
     }}>
       <div style={{
         display: 'flex',
@@ -299,15 +285,15 @@ function HealthIndicator({ status, errorRate, lastSuccess }: {
         marginBottom: '8px',
       }}>
         <div style={{
-          width: '12px',
-          height: '12px',
+          width: '10px',
+          height: '10px',
           borderRadius: '50%',
-          backgroundColor: config.color.text,
+          backgroundColor: config.accentColor,
         }} />
         <span style={{
           fontSize: '16px',
           fontWeight: 600,
-          color: config.color.text,
+          color: NSD_COLORS.text.primary,
         }}>
           System {config.label}
         </span>
@@ -315,15 +301,16 @@ function HealthIndicator({ status, errorRate, lastSuccess }: {
       <div style={{
         display: 'flex',
         gap: '24px',
-        fontSize: '12px',
-        color: config.color.text,
+        fontSize: '13px',
+        color: NSD_COLORS.text.secondary,
+        flexWrap: 'wrap',
       }}>
         <div>
-          <strong>Error Rate (24h):</strong> {(errorRate * 100).toFixed(1)}%
+          <strong style={{ color: NSD_COLORS.text.primary }}>Error Rate (24h):</strong> {(errorRate * 100).toFixed(1)}%
         </div>
         {lastSuccess && (
           <div>
-            <strong>Last Success:</strong> {new Date(lastSuccess).toLocaleString()}
+            <strong style={{ color: NSD_COLORS.text.primary }}>Last Success:</strong> {new Date(lastSuccess).toLocaleString()}
           </div>
         )}
       </div>
@@ -363,14 +350,14 @@ export default function ExecutiveDashboardPage() {
   }, []);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
+    <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.background }}>
       {/* Header gradient bar */}
       <div style={{
         height: '4px',
         background: NSD_GRADIENTS.accentBar,
       }} />
 
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(16px, 4vw, 32px)' }}>
         {/* Page Header */}
         <div style={{
           display: 'flex',
@@ -444,13 +431,14 @@ export default function ExecutiveDashboardPage() {
 
         {error && (
           <div style={{
-            padding: '16px',
+            padding: '16px 20px',
             marginBottom: '24px',
-            backgroundColor: NSD_COLORS.semantic.critical.bg,
+            backgroundColor: NSD_COLORS.background,
             borderRadius: NSD_RADIUS.lg,
-            border: `1px solid ${NSD_COLORS.semantic.critical.border}`,
+            border: `1px solid ${NSD_COLORS.border.light}`,
+            borderLeft: `4px solid ${NSD_COLORS.magenta.dark}`,
           }}>
-            <p style={{ margin: 0, color: NSD_COLORS.semantic.critical.text }}>
+            <p style={{ margin: 0, color: NSD_COLORS.magenta.dark, fontWeight: 500 }}>
               {error}
             </p>
           </div>
@@ -470,7 +458,7 @@ export default function ExecutiveDashboardPage() {
             {/* Key Metrics */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
               gap: '16px',
               marginBottom: '32px',
             }}>
@@ -498,10 +486,10 @@ export default function ExecutiveDashboardPage() {
               />
             </div>
 
-            {/* Two Column Layout */}
+            {/* Two Column Layout - stacks on mobile */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
               gap: '24px',
             }}>
               {/* Left: Execution Outcomes */}
@@ -549,74 +537,80 @@ export default function ExecutiveDashboardPage() {
                 
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                   gap: '16px',
                 }}>
-                  {/* Market Reality */}
+                  {/* Market Reality - White background with indigo left border */}
                   <div style={{
-                    padding: '16px',
-                    backgroundColor: NSD_COLORS.indigo.light + '40',
+                    padding: '16px 20px',
+                    backgroundColor: NSD_COLORS.background,
                     borderRadius: NSD_RADIUS.md,
+                    border: `1px solid ${NSD_COLORS.border.light}`,
+                    borderLeft: `4px solid ${NSD_COLORS.primary}`,
                   }}>
                     <div style={{
                       fontSize: '11px',
                       fontWeight: 600,
                       textTransform: 'uppercase',
-                      color: NSD_COLORS.text.muted,
+                      letterSpacing: '0.5px',
+                      color: NSD_COLORS.primary,
                       marginBottom: '12px',
                     }}>
                       Market Reality
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
+                    <div style={{ marginBottom: '10px' }}>
                       <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Organizations</div>
-                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                      <div style={{ fontSize: '22px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
                         {data.marketReality.totalObservedOrganizations.toLocaleString()}
                       </div>
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
+                    <div style={{ marginBottom: '10px' }}>
                       <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Contacts</div>
-                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                      <div style={{ fontSize: '22px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
                         {data.marketReality.totalObservedContacts.toLocaleString()}
                       </div>
                     </div>
                     <div>
                       <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Est. Reachable</div>
-                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                      <div style={{ fontSize: '22px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
                         {data.marketReality.totalEstimatedReachable.toLocaleString()}
                       </div>
                     </div>
                   </div>
 
-                  {/* Operational Yield */}
+                  {/* Operational Yield - White background with magenta left border */}
                   <div style={{
-                    padding: '16px',
-                    backgroundColor: NSD_COLORS.magenta.light + '40',
+                    padding: '16px 20px',
+                    backgroundColor: NSD_COLORS.background,
                     borderRadius: NSD_RADIUS.md,
+                    border: `1px solid ${NSD_COLORS.border.light}`,
+                    borderLeft: `4px solid ${NSD_COLORS.cta}`,
                   }}>
                     <div style={{
                       fontSize: '11px',
                       fontWeight: 600,
                       textTransform: 'uppercase',
-                      color: NSD_COLORS.text.muted,
+                      letterSpacing: '0.5px',
+                      color: NSD_COLORS.cta,
                       marginBottom: '12px',
                     }}>
                       Operational Yield
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
+                    <div style={{ marginBottom: '10px' }}>
                       <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Orgs Processed</div>
-                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                      <div style={{ fontSize: '22px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
                         {data.operationalYield.totalProcessedOrganizations.toLocaleString()}
                       </div>
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
+                    <div style={{ marginBottom: '10px' }}>
                       <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Leads</div>
-                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                      <div style={{ fontSize: '22px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
                         {data.operationalYield.totalPromotedLeads.toLocaleString()}
                       </div>
                     </div>
                     <div>
                       <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Emails Sent</div>
-                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                      <div style={{ fontSize: '22px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
                         {data.operationalYield.totalSentEmails.toLocaleString()}
                       </div>
                     </div>
@@ -652,32 +646,40 @@ export default function ExecutiveDashboardPage() {
               </h3>
               <div style={{
                 display: 'flex',
-                gap: '24px',
+                gap: '16px',
                 flexWrap: 'wrap',
               }}>
-                {Object.entries(data.campaigns.byGovernanceStatus).map(([status, count]) => (
-                  <div key={status} style={{
-                    padding: '12px 16px',
-                    backgroundColor: NSD_COLORS.surface,
-                    borderRadius: NSD_RADIUS.md,
-                    minWidth: '100px',
-                  }}>
-                    <div style={{
-                      fontSize: '24px',
-                      fontWeight: 700,
-                      color: NSD_COLORS.text.primary,
+                {Object.entries(data.campaigns.byGovernanceStatus).map(([status, count], index) => {
+                  // Cycle through accent colors for visual differentiation
+                  const accentColors = [NSD_COLORS.primary, NSD_COLORS.secondary, NSD_COLORS.cta, NSD_COLORS.magenta.dark];
+                  const accentColor = accentColors[index % accentColors.length];
+                  
+                  return (
+                    <div key={status} style={{
+                      padding: '12px 16px',
+                      backgroundColor: NSD_COLORS.background,
+                      borderRadius: NSD_RADIUS.md,
+                      border: `1px solid ${NSD_COLORS.border.light}`,
+                      borderLeft: `3px solid ${accentColor}`,
+                      minWidth: '100px',
                     }}>
-                      {count}
+                      <div style={{
+                        fontSize: '24px',
+                        fontWeight: 700,
+                        color: accentColor,
+                      }}>
+                        {count}
+                      </div>
+                      <div style={{
+                        fontSize: '12px',
+                        color: NSD_COLORS.text.muted,
+                        textTransform: 'capitalize',
+                      }}>
+                        {status.replace('_', ' ').toLowerCase()}
+                      </div>
                     </div>
-                    <div style={{
-                      fontSize: '12px',
-                      color: NSD_COLORS.text.muted,
-                      textTransform: 'capitalize',
-                    }}>
-                      {status.replace('_', ' ').toLowerCase()}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </>
