@@ -41,6 +41,25 @@ The architecture adheres to a read-only principle, enforcing observation over co
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
 
 ## Recent Changes
+- January 24, 2026: Executive Dashboard & NSD Brand Background Compliance
+  - **CRITICAL DESIGN RULE**: Magenta/purple/violet are ONLY for accents (text, borders, CTAs) - NEVER for backgrounds
+  - Sales Engine Executive Dashboard is now the main dashboard (redirects from /dashboard)
+  - All Executive Dashboard components now use white backgrounds (#FFFFFF) with colored left-border accents
+  - HealthIndicator: White background with colored left-border based on status
+  - OutcomeDistribution: Redesigned as minimalist list with white backgrounds and colored border/text accents
+  - Market Reality / Operational Yield cards: White backgrounds with indigo/magenta left-border accents
+  - Campaign status chips: White backgrounds with colored left-border and colored number text
+  - Error banners: White background with magenta left-border accent
+  - All grids responsive with auto-fit minmax patterns
+  - 4px gradient accent bar at top is the ONLY permitted non-white background element
+
+- January 24, 2026: Mobile Responsiveness Fixes
+  - DataTable component enhanced with hideOnMobile column property and mobile detection (<640px breakpoint)
+  - Campaigns list: Pipeline, Last Activity, Actions columns hidden on mobile
+  - Campaign details: Responsive padding with clamp(), grid stacking, word-break for text overflow
+  - StatusChip: Reduced padding to fit text on mobile
+  - All major components use responsive patterns: clamp(), flexWrap, auto-fit grids
+
 - January 20, 2026: Comprehensive UX/UI Redesign (Minimalist Neon-Focused)
   - Added NSD_GLOW, NSD_GRADIENTS, NSD_TRANSITIONS design tokens for neon-inspired effects
   - Added gradient accent bar at top of all major pages (magenta → violet brand gradient)
