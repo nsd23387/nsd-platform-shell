@@ -256,7 +256,7 @@ export default function CampaignDetailPage() {
     return (
       <div style={{ 
         minHeight: '100vh', 
-        backgroundColor: NSD_COLORS.surface,
+        backgroundColor: NSD_COLORS.background,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -280,7 +280,7 @@ export default function CampaignDetailPage() {
     return (
       <div style={{ 
         minHeight: '100vh', 
-        backgroundColor: NSD_COLORS.surface,
+        backgroundColor: NSD_COLORS.background,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -364,8 +364,10 @@ export default function CampaignDetailPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.background }}>
+      {/* Gradient accent bar at top */}
+      <div style={{ height: '4px', background: `linear-gradient(90deg, ${NSD_COLORS.magenta.base} 0%, ${NSD_COLORS.violet.base} 100%)` }} />
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: 'clamp(16px, 4vw, 32px)' }}>
         {/* Page Header */}
         <PageHeader
           title={campaign.name}
@@ -507,9 +509,10 @@ function RunIntentCard({
 }) {
   return (
     <div style={{
-      backgroundColor: NSD_COLORS.background,
+      backgroundColor: '#FFFFFF',
       borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${NSD_COLORS.border.light}`,
+      border: '1px solid #E5E7EB',
+      borderLeft: `4px solid ${NSD_COLORS.magenta.base}`,
       padding: '24px',
       marginBottom: '24px',
     }}>
@@ -519,7 +522,7 @@ function RunIntentCard({
         gap: '12px',
         marginBottom: '16px',
       }}>
-        <Icon name="target" size={18} color={NSD_COLORS.primary} />
+        <Icon name="target" size={18} color={NSD_COLORS.magenta.base} />
         <h3 style={{
           margin: 0,
           fontSize: '16px',

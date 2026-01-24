@@ -149,12 +149,11 @@ export function CampaignIntentScope({
 
   return (
     <div style={{
-      backgroundColor: NSD_COLORS.background,
+      backgroundColor: '#FFFFFF',
       borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${NSD_COLORS.border.light}`,
+      border: '1px solid #E5E7EB',
       padding: '24px',
       marginBottom: '24px',
-      boxShadow: NSD_SHADOWS.sm,
     }}>
       {/* Campaign Thesis (if provided) */}
       {thesis && (

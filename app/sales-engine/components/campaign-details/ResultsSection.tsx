@@ -192,12 +192,12 @@ export function ResultsSection({
 
   return (
     <div style={{
-      backgroundColor: NSD_COLORS.background,
+      backgroundColor: '#FFFFFF',
       borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${NSD_COLORS.border.light}`,
+      border: '1px solid #E5E7EB',
+      borderLeft: `4px solid ${NSD_COLORS.violet.base}`,
       padding: '24px',
       marginBottom: '24px',
-      boxShadow: NSD_SHADOWS.sm,
     }}>
       {/* Header */}
       <div style={{
