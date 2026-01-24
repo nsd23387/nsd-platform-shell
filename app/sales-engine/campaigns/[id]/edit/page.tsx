@@ -386,7 +386,7 @@ export default function EditCampaignPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface, padding: '32px' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface, padding: 'clamp(16px, 4vw, 32px)' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         <div style={{ marginBottom: '24px' }}>
           <Link href={`/sales-engine/campaigns/${campaignId}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: NSD_COLORS.secondary, textDecoration: 'none' }}>
@@ -395,10 +395,32 @@ export default function EditCampaignPage() {
           </Link>
         </div>
 
-        <h1 style={{ margin: '0 0 8px 0', fontSize: '28px', fontWeight: 600, color: NSD_COLORS.primary, fontFamily: NSD_TYPOGRAPHY.fontDisplay }}>Edit Campaign</h1>
+        <h1 style={{ margin: '0 0 8px 0', fontSize: 'clamp(22px, 5vw, 28px)', fontWeight: 600, color: NSD_COLORS.primary, fontFamily: NSD_TYPOGRAPHY.fontDisplay }}>Edit Campaign</h1>
         <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: NSD_COLORS.text.secondary }}>Update campaign configuration. Changes will be saved when you click Save Changes.</p>
 
-        <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-start' }}>
+        {/* Responsive layout: stack on mobile, side-by-side on desktop */}
+        <style>{`
+          .wizard-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+          }
+          @media (min-width: 900px) {
+            .wizard-layout {
+              flex-direction: row;
+              align-items: flex-start;
+            }
+            .wizard-layout > :first-child {
+              position: sticky;
+              top: 24px;
+            }
+          }
+          .wizard-content {
+            flex: 1;
+            min-width: 0;
+          }
+        `}</style>
+        <div className="wizard-layout">
           <WizardNav
             steps={stepsWithCompletion}
             currentStep={currentStep}
@@ -409,7 +431,7 @@ export default function EditCampaignPage() {
             }}
           />
 
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="wizard-content">
             {(submitResult?.error || Object.keys(errors).length > 0) && (
               <div style={{ backgroundColor: NSD_COLORS.semantic.critical.bg, borderRadius: NSD_RADIUS.md, padding: '16px', marginBottom: '24px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                 <Icon name="warning" size={20} color={NSD_COLORS.semantic.critical.text} />
@@ -451,7 +473,7 @@ export default function EditCampaignPage() {
               <TagInput label="Keywords" name="keywords" values={formData.keywords} onChange={(v) => updateField('keywords', v)} placeholder="Add keywords" error={errors['icp.keywords']} helpText="Keywords are required for campaign targeting" />
               <TagInput label="Geographies" name="geographies" values={formData.geographies} onChange={(v) => updateField('geographies', v)} placeholder="e.g., United States, Europe" error={errors['icp.geographies']} helpText="At least one geography is required" />
               <TagInput label="Industries" name="industries" values={formData.industries} onChange={(v) => updateField('industries', v)} placeholder="e.g., Technology, Healthcare" helpText="Target industries for this campaign" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }}>
                 <FormField label="Min Company Size" name="companySizeMin" type="number" value={formData.companySizeMin} onChange={(v) => updateField('companySizeMin', Number(v))} />
                 <FormField label="Max Company Size" name="companySizeMax" type="number" value={formData.companySizeMax} onChange={(v) => updateField('companySizeMax', Number(v))} />
               </div>

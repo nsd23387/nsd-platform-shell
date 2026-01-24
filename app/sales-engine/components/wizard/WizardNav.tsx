@@ -42,16 +42,14 @@ export function WizardNav({ steps, currentStep, onStepClick }: WizardNavProps) {
   return (
     <div
       style={{
-        width: '300px',
-        minWidth: '300px',
-        padding: NSD_SPACING.lg,
+        width: '100%',
+        maxWidth: '300px',
+        padding: 'clamp(12px, 3vw, 24px)',
         backgroundColor: NSD_COLORS.background,
         borderRadius: NSD_RADIUS.xl,
         border: `1px solid ${NSD_COLORS.border.light}`,
         boxShadow: NSD_SHADOWS.card,
         height: 'fit-content',
-        position: 'sticky',
-        top: NSD_SPACING.lg,
       }}
     >
       <h3

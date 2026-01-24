@@ -274,19 +274,40 @@ export default function SalesEnginePage() {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.background }}>
+      <style>{`
+        .campaign-list-header {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+        @media (min-width: 640px) {
+          .campaign-list-header {
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: flex-start;
+          }
+        }
+        .campaign-list-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+      `}</style>
       <div
         style={{
           height: '4px',
           background: NSD_GRADIENTS.accentBar,
         }}
       />
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: `${NSD_SPACING.xxl} ${NSD_SPACING.page}` }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: 'clamp(16px, 4vw, 48px) clamp(16px, 4vw, 32px)' }}>
         <div style={{ marginBottom: NSD_SPACING.xxl }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: NSD_SPACING.md }}>
+          <div className="campaign-list-header">
             <div>
               <h1
                 style={{
-                  ...NSD_TYPOGRAPHY.pageTitle,
+                  fontSize: 'clamp(22px, 5vw, 28px)',
+                  fontWeight: 600,
                   color: NSD_COLORS.text.primary,
                   fontFamily: NSD_TYPOGRAPHY.fontDisplay,
                   margin: 0,
@@ -305,7 +326,7 @@ export default function SalesEnginePage() {
                 Observe and manage your sales campaigns
               </p>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: NSD_SPACING.md }}>
+            <div className="campaign-list-actions">
               <Link href="/sales-engine/home" style={{ textDecoration: 'none' }}>
                 <Button variant="secondary" icon="chart">
                   Dashboard
@@ -357,8 +378,8 @@ export default function SalesEnginePage() {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: NSD_SPACING.lg, marginBottom: NSD_SPACING.lg, alignItems: 'center' }}>
-          <div style={{ flex: 1, position: 'relative', maxWidth: '400px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: NSD_SPACING.lg, alignItems: 'center' }}>
+          <div style={{ flex: '1 1 200px', position: 'relative', maxWidth: '400px', minWidth: '200px' }}>
             <div
               style={{
                 position: 'absolute',

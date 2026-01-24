@@ -561,13 +561,35 @@ export default function NewCampaignPage() {
    */
   return (
     <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
+      <style>{`
+        .wizard-layout-new {
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+        @media (min-width: 900px) {
+          .wizard-layout-new {
+            flex-direction: row;
+            gap: 32px;
+            align-items: flex-start;
+          }
+          .wizard-layout-new > :first-child {
+            position: sticky;
+            top: 24px;
+          }
+        }
+        .wizard-content-new {
+          flex: 1;
+          min-width: 0;
+        }
+      `}</style>
       <div
         style={{
           height: '4px',
           background: NSD_GRADIENTS.accentBar,
         }}
       />
-      <div style={{ padding: `${NSD_SPACING.xxl} ${NSD_SPACING.page}` }}>
+      <div style={{ padding: 'clamp(16px, 4vw, 48px) clamp(16px, 4vw, 32px)' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ marginBottom: NSD_SPACING.lg }}>
             <Link
@@ -589,7 +611,8 @@ export default function NewCampaignPage() {
 
           <h1
             style={{
-              ...NSD_TYPOGRAPHY.pageTitle,
+              fontSize: 'clamp(22px, 5vw, 28px)',
+              fontWeight: 600,
               color: NSD_COLORS.primary,
               fontFamily: NSD_TYPOGRAPHY.fontDisplay,
               margin: `0 0 ${NSD_SPACING.sm} 0`,
@@ -607,14 +630,8 @@ export default function NewCampaignPage() {
             Configure a new campaign. It will be created in Draft state.
           </p>
 
-        {/* Two-column layout: Vertical Nav (left) + Content (right) */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '32px',
-            alignItems: 'flex-start',
-          }}
-        >
+        {/* Two-column layout: Vertical Nav (left) + Content (right) - responsive */}
+        <div className="wizard-layout-new">
           {/* Left Column: Vertical Navigation (GOVERNANCE LOCK - must remain vertical) */}
           <WizardNav
             steps={stepsWithCompletion}
@@ -631,7 +648,7 @@ export default function NewCampaignPage() {
           />
 
           {/* Right Column: Form Content */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="wizard-content-new">
 
         {(submitResult?.error || Object.keys(errors).length > 0) && (
           <div
