@@ -1169,6 +1169,160 @@ export async function revertCampaignToDraft(
 }
 
 // =============================================================================
+// CAMPAIGN SUBMISSION FOR APPROVAL
+// Submits a DRAFT campaign for review, changing status to PENDING_REVIEW.
+// This is a governance state transition, not an execution action.
+// =============================================================================
+
+export interface SubmitCampaignResponse {
+  id: string;
+  name?: string;
+  status: string;
+  message: string;
+  canEdit: boolean;
+  canSubmit: boolean;
+  canApprove: boolean;
+  isRunnable: boolean;
+}
+
+/**
+ * Submit a campaign for approval.
+ * Changes status from DRAFT to PENDING_REVIEW.
+ * 
+ * @param campaignId - The ID of the campaign to submit
+ * @returns The updated campaign with new governance state
+ * @throws Error if campaign is not in DRAFT status
+ */
+export async function submitCampaignForApproval(
+  campaignId: string
+): Promise<SubmitCampaignResponse> {
+  if (isApiDisabled) {
+    console.log(`[API] API mode disabled - mock submit for campaign ${campaignId}`);
+    return {
+      id: campaignId,
+      status: 'PENDING_REVIEW',
+      message: 'Campaign submitted for approval (mock)',
+      canEdit: false,
+      canSubmit: false,
+      canApprove: true,
+      isRunnable: false,
+    };
+  }
+
+  try {
+    const response = await fetch(`/api/v1/campaigns/${campaignId}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const data = await response.json();
+
+    if (response.status === 400) {
+      throw new Error(data.error || 'Campaign cannot be submitted. It must be in DRAFT status.');
+    }
+
+    if (response.status === 404) {
+      throw new Error('Campaign not found');
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `Failed to submit campaign: ${response.status}`);
+    }
+
+    return {
+      id: data.id || campaignId,
+      name: data.name,
+      status: data.status || 'PENDING_REVIEW',
+      message: 'Campaign submitted for approval',
+      canEdit: data.canEdit ?? false,
+      canSubmit: data.canSubmit ?? false,
+      canApprove: data.canApprove ?? true,
+      isRunnable: data.isRunnable ?? false,
+    };
+  } catch (error) {
+    console.error('[API] submitCampaignForApproval error:', error);
+    throw error;
+  }
+}
+
+// =============================================================================
+// CAMPAIGN APPROVAL
+// Approves a PENDING_REVIEW campaign, changing status to RUNNABLE (active).
+// This is a governance state transition, not an execution action.
+// =============================================================================
+
+export interface ApproveCampaignResponse {
+  id: string;
+  name?: string;
+  status: string;
+  message: string;
+  canEdit: boolean;
+  canSubmit: boolean;
+  canApprove: boolean;
+  isRunnable: boolean;
+}
+
+/**
+ * Approve a campaign.
+ * Changes status from PENDING_REVIEW to RUNNABLE (active).
+ * 
+ * @param campaignId - The ID of the campaign to approve
+ * @returns The updated campaign with new governance state
+ * @throws Error if campaign is not in PENDING_REVIEW status
+ */
+export async function approveCampaignAction(
+  campaignId: string
+): Promise<ApproveCampaignResponse> {
+  if (isApiDisabled) {
+    console.log(`[API] API mode disabled - mock approve for campaign ${campaignId}`);
+    return {
+      id: campaignId,
+      status: 'RUNNABLE',
+      message: 'Campaign approved (mock)',
+      canEdit: false,
+      canSubmit: false,
+      canApprove: false,
+      isRunnable: true,
+    };
+  }
+
+  try {
+    const response = await fetch(`/api/v1/campaigns/${campaignId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const data = await response.json();
+
+    if (response.status === 400) {
+      throw new Error(data.error || 'Campaign cannot be approved. It must be in PENDING_REVIEW status.');
+    }
+
+    if (response.status === 404) {
+      throw new Error('Campaign not found');
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `Failed to approve campaign: ${response.status}`);
+    }
+
+    return {
+      id: data.id || campaignId,
+      name: data.name,
+      status: data.status || 'RUNNABLE',
+      message: 'Campaign approved and ready to run',
+      canEdit: data.canEdit ?? false,
+      canSubmit: data.canSubmit ?? false,
+      canApprove: data.canApprove ?? false,
+      isRunnable: data.isRunnable ?? true,
+    };
+  } catch (error) {
+    console.error('[API] approveCampaignAction error:', error);
+    throw error;
+  }
+}
+
+// =============================================================================
 // CAMPAIGN DUPLICATION
 // Duplicates an existing campaign with a new ID and DRAFT status.
 // This is a control-plane write similar to campaign creation.

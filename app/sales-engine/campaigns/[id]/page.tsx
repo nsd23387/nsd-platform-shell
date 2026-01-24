@@ -33,7 +33,7 @@ import { PageHeader, SectionCard } from '../../components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import type { CampaignDetail, MarketScope, OperationalWorkingSet } from '../../types/campaign';
-import { getCampaign, requestCampaignRun, duplicateCampaign, revertCampaignToDraft, type RunIntent } from '../../lib/api';
+import { getCampaign, requestCampaignRun, duplicateCampaign, revertCampaignToDraft, submitCampaignForApproval, approveCampaignAction, type RunIntent } from '../../lib/api';
 import { mapToGovernanceState, type CampaignGovernanceState } from '../../lib/campaign-state';
 import { formatEt, formatEtDate } from '../../lib/time';
 import { isTestCampaign, getTestCampaignDetail } from '../../lib/test-campaign';
@@ -78,6 +78,9 @@ export default function CampaignDetailPage() {
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [isReverting, setIsReverting] = useState(false);
   const [revertError, setRevertError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   
   // Run intent
   const [runIntent, setRunIntent] = useState<RunIntent>('HARVEST_ONLY');
@@ -258,6 +261,50 @@ export default function CampaignDetailPage() {
     }
   }, [campaign, router]);
 
+  // Handle submit for approval (DRAFT -> PENDING_REVIEW)
+  const handleSubmitForApproval = useCallback(async () => {
+    if (!campaign) return;
+    setIsSubmitting(true);
+    setActionMessage(null);
+
+    try {
+      const result = await submitCampaignForApproval(campaign.id);
+      setActionMessage(result.message || 'Campaign submitted for approval');
+      
+      // Refresh campaign data with new status
+      const updatedCampaign = await getCampaign(campaign.id);
+      setCampaign(updatedCampaign);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to submit campaign';
+      setActionMessage(message);
+      console.error('Failed to submit campaign:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [campaign]);
+
+  // Handle approve campaign (PENDING_REVIEW -> RUNNABLE)
+  const handleApproveCampaign = useCallback(async () => {
+    if (!campaign) return;
+    setIsApproving(true);
+    setActionMessage(null);
+
+    try {
+      const result = await approveCampaignAction(campaign.id);
+      setActionMessage(result.message || 'Campaign approved');
+      
+      // Refresh campaign data with new status
+      const updatedCampaign = await getCampaign(campaign.id);
+      setCampaign(updatedCampaign);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to approve campaign';
+      setActionMessage(message);
+      console.error('Failed to approve campaign:', err);
+    } finally {
+      setIsApproving(false);
+    }
+  }, [campaign]);
+
   // Loading state
   if (loading) {
     return (
@@ -413,6 +460,40 @@ export default function CampaignDetailPage() {
           </div>
         )}
 
+        {/* Action Message */}
+        {actionMessage && (
+          <div style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            backgroundColor: actionMessage.toLowerCase().includes('error') || actionMessage.toLowerCase().includes('failed') 
+              ? NSD_COLORS.semantic.critical.bg 
+              : NSD_COLORS.semantic.positive.bg,
+            borderRadius: NSD_RADIUS.md,
+            border: `1px solid ${actionMessage.toLowerCase().includes('error') || actionMessage.toLowerCase().includes('failed') 
+              ? NSD_COLORS.semantic.critical.border 
+              : NSD_COLORS.semantic.positive.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <p style={{ 
+              margin: 0, 
+              fontSize: '14px', 
+              color: actionMessage.toLowerCase().includes('error') || actionMessage.toLowerCase().includes('failed')
+                ? NSD_COLORS.semantic.critical.text 
+                : NSD_COLORS.semantic.positive.text,
+            }}>
+              {actionMessage}
+            </p>
+            <button
+              onClick={() => setActionMessage(null)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+            >
+              <Icon name="close" size={16} color={NSD_COLORS.text.muted} />
+            </button>
+          </div>
+        )}
+
         {/* 2. Decision Summary Panel - Should I act right now? */}
         <DecisionSummaryPanel
           phase={campaignPhase}
@@ -426,9 +507,13 @@ export default function CampaignDetailPage() {
           canRun={canRun}
           runIntent={runIntent}
           onRunCampaign={handleRunCampaign}
+          onSubmitForApproval={campaign.status === 'DRAFT' ? handleSubmitForApproval : undefined}
+          onApprove={campaign.status === 'PENDING_REVIEW' ? handleApproveCampaign : undefined}
           onEdit={campaign.status !== 'ARCHIVED' ? handleEditCampaign : undefined}
           onDuplicate={handleDuplicateCampaign}
           isRunRequesting={isRunRequesting}
+          isSubmitting={isSubmitting}
+          isApproving={isApproving}
           isDuplicating={isDuplicating}
           isReverting={isReverting}
           runRequestMessage={runRequestMessage}

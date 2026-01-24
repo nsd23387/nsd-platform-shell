@@ -60,12 +60,20 @@ interface DecisionSummaryPanelProps {
   outcomeType?: string;
   /** Handler for run campaign action */
   onRunCampaign?: () => void;
+  /** Handler for submit for approval action */
+  onSubmitForApproval?: () => void;
+  /** Handler for approve campaign action */
+  onApprove?: () => void;
   /** Handler for edit action */
   onEdit?: () => void;
   /** Handler for duplicate action */
   onDuplicate?: () => void;
   /** Is a run being requested */
   isRunRequesting?: boolean;
+  /** Is submit in progress */
+  isSubmitting?: boolean;
+  /** Is approval in progress */
+  isApproving?: boolean;
   /** Is duplicate in progress */
   isDuplicating?: boolean;
   /** Is revert to draft in progress */
@@ -205,9 +213,13 @@ export function DecisionSummaryPanel({
   runIntent,
   outcomeType,
   onRunCampaign,
+  onSubmitForApproval,
+  onApprove,
   onEdit,
   onDuplicate,
   isRunRequesting = false,
+  isSubmitting = false,
+  isApproving = false,
   isDuplicating = false,
   isReverting = false,
   runRequestMessage,
@@ -413,7 +425,61 @@ export function DecisionSummaryPanel({
         gap: '12px',
         flexWrap: 'wrap',
       }}>
-        {/* Primary Action - Run Campaign Button */}
+        {/* Primary Action - Submit for Approval (DRAFT campaigns) */}
+        {phase === 'draft' && onSubmitForApproval && (
+          <button
+            onClick={onSubmitForApproval}
+            disabled={isSubmitting}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 24px',
+              fontSize: '15px',
+              fontWeight: 600,
+              backgroundColor: isSubmitting ? '#9CA3AF' : NSD_COLORS.primary,
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: NSD_RADIUS.md,
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              opacity: isSubmitting ? 0.7 : 1,
+              transition: 'all 0.15s ease',
+              boxShadow: isSubmitting ? 'none' : '0 2px 8px rgba(79, 70, 229, 0.3)',
+            }}
+          >
+            <Icon name={isSubmitting ? 'clock' : 'check'} size={18} color="#FFFFFF" />
+            {isSubmitting ? 'Submitting...' : 'Submit for Approval'}
+          </button>
+        )}
+
+        {/* Primary Action - Approve Campaign (PENDING_REVIEW campaigns) */}
+        {phase === 'pending_approval' && onApprove && (
+          <button
+            onClick={onApprove}
+            disabled={isApproving}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 24px',
+              fontSize: '15px',
+              fontWeight: 600,
+              backgroundColor: isApproving ? '#9CA3AF' : NSD_COLORS.secondary,
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: NSD_RADIUS.md,
+              cursor: isApproving ? 'not-allowed' : 'pointer',
+              opacity: isApproving ? 0.7 : 1,
+              transition: 'all 0.15s ease',
+              boxShadow: isApproving ? 'none' : '0 2px 8px rgba(124, 58, 237, 0.3)',
+            }}
+          >
+            <Icon name={isApproving ? 'clock' : 'check'} size={18} color="#FFFFFF" />
+            {isApproving ? 'Approving...' : 'Approve Campaign'}
+          </button>
+        )}
+
+        {/* Primary Action - Run Campaign Button (RUNNABLE campaigns) */}
         {showRunButton && (
           <button
             onClick={canRun ? onRunCampaign : undefined}
@@ -441,7 +507,7 @@ export function DecisionSummaryPanel({
           </button>
         )}
         
-        {/* Show disabled reason inline when button is disabled */}
+        {/* Show disabled reason inline when run button is disabled */}
         {showRunButton && isRunDisabled && disabledReason && (
           <span style={{
             fontSize: '12px',
