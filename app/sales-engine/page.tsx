@@ -150,14 +150,15 @@ export default function SalesEnginePage() {
     },
     {
       key: 'status',
-      header: 'Governance',
-      width: '140px',
+      header: 'Status',
+      width: '120px',
       render: (campaign: Campaign) => <StatusChip status={campaign.status} size="sm" />,
     },
     {
       key: 'pipeline',
       header: 'Pipeline',
       width: '180px',
+      hideOnMobile: true,
       render: (campaign: Campaign) => (
         <MiniPipelineIndicator
           orgs={(campaign as any).pipeline?.orgs ?? null}
@@ -168,8 +169,9 @@ export default function SalesEnginePage() {
     },
     {
       key: 'updated_at',
-      header: 'Last Activity',
-      width: '100px',
+      header: 'Activity',
+      width: '80px',
+      hideOnMobile: true,
       render: (campaign: Campaign) => (
         <span
           style={{
@@ -185,8 +187,9 @@ export default function SalesEnginePage() {
     {
       key: 'actions',
       header: '',
-      width: '80px',
+      width: '60px',
       align: 'right' as const,
+      hideOnMobile: true,
       render: (campaign: Campaign) => (
         <Link
           href={`/sales-engine/campaigns/${campaign.id}`}
