@@ -78,13 +78,13 @@ export function DataTable<T extends Record<string, any>>({
               <th
                 key={col.key}
                 style={{
-                  padding: isMobile ? '12px 10px' : '14px 16px',
+                  padding: isMobile ? '10px 8px' : '14px 16px',
                   textAlign: col.align || 'left',
                   ...NSD_TYPOGRAPHY.label,
                   color: NSD_COLORS.text.secondary,
                   fontFamily: NSD_TYPOGRAPHY.fontBody,
                   borderBottom: `1px solid ${NSD_COLORS.border.light}`,
-                  width: col.width,
+                  width: isMobile ? 'auto' : col.width,
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -108,11 +108,12 @@ export function DataTable<T extends Record<string, any>>({
                 <td
                   key={col.key}
                   style={{
-                    padding: isMobile ? '12px 10px' : '14px 16px',
+                    padding: isMobile ? '10px 8px' : '14px 16px',
                     textAlign: col.align || 'left',
                     ...NSD_TYPOGRAPHY.body,
                     color: NSD_COLORS.text.primary,
                     fontFamily: NSD_TYPOGRAPHY.fontBody,
+                    verticalAlign: 'top',
                   }}
                 >
                   {col.render ? col.render(item) : item[col.key]}

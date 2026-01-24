@@ -102,8 +102,8 @@ export function StatusChip({ status, size = 'md', label, showPulse }: StatusChip
   const shouldPulse = showPulse !== undefined ? showPulse : config.pulse;
   
   const sizeStyles = {
-    sm: { padding: '4px 10px', fontSize: '11px' },
-    md: { padding: '5px 14px', fontSize: '12px' },
+    sm: { padding: '4px 8px', fontSize: '11px' },
+    md: { padding: '5px 12px', fontSize: '12px' },
   };
   
   return (

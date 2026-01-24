@@ -151,7 +151,7 @@ export default function SalesEnginePage() {
     {
       key: 'status',
       header: 'Status',
-      width: '120px',
+      width: '150px',
       render: (campaign: Campaign) => <StatusChip status={campaign.status} size="sm" />,
     },
     {
