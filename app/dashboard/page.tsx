@@ -1,9 +1,9 @@
 /**
  * Dashboard Index Page
  * 
- * Redirects to Executive Dashboard by default.
+ * Redirects to Sales Engine Executive Dashboard by default.
  * 
- * Updated to use design system tokens.
+ * Updated: Now redirects to the unified Sales Engine Executive Dashboard.
  */
 
 'use client';
@@ -14,7 +14,7 @@ import { fontFamily, fontSize } from '../../design/tokens/typography';
 
 export default function DashboardIndex() {
   useEffect(() => {
-    window.location.href = '/dashboard/executive';
+    window.location.href = '/sales-engine/executive';
   }, []);
 
   return (
