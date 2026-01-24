@@ -78,13 +78,13 @@ function CheckItem({ check }: { check: DecisionCheck }) {
   const getStatusConfig = (status: DecisionCheck['status']) => {
     switch (status) {
       case 'pass':
-        return { icon: 'check', color: NSD_COLORS.semantic.positive.text, bg: NSD_COLORS.semantic.positive.bg };
+        return { icon: 'check', color: NSD_COLORS.semantic.positive.text, borderColor: NSD_COLORS.semantic.positive.text };
       case 'pending':
-        return { icon: 'clock', color: NSD_COLORS.semantic.attention.text, bg: NSD_COLORS.semantic.attention.bg };
+        return { icon: 'clock', color: NSD_COLORS.semantic.attention.text, borderColor: NSD_COLORS.semantic.attention.text };
       case 'fail':
-        return { icon: 'warning', color: NSD_COLORS.semantic.critical.text, bg: NSD_COLORS.semantic.critical.bg };
+        return { icon: 'warning', color: NSD_COLORS.semantic.critical.text, borderColor: NSD_COLORS.semantic.critical.text };
       case 'not_applicable':
-        return { icon: 'minus', color: NSD_COLORS.text.muted, bg: NSD_COLORS.semantic.muted.bg };
+        return { icon: 'minus', color: NSD_COLORS.text.muted, borderColor: NSD_COLORS.border.light };
     }
   };
 
@@ -98,7 +98,9 @@ function CheckItem({ check }: { check: DecisionCheck }) {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '12px 16px',
-        backgroundColor: config.bg,
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #E5E7EB',
+        borderLeft: `3px solid ${config.borderColor}`,
         borderRadius: showExplanation ? `${NSD_RADIUS.md} ${NSD_RADIUS.md} 0 0` : NSD_RADIUS.md,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -150,14 +152,16 @@ function CheckItem({ check }: { check: DecisionCheck }) {
       {showExplanation && check.explanation && (
         <div style={{
           padding: '10px 16px',
-          backgroundColor: 'rgba(255,255,255,0.3)',
+          backgroundColor: '#F9FAFB',
           borderRadius: `0 0 ${NSD_RADIUS.md} ${NSD_RADIUS.md}`,
-          borderTop: `1px solid ${config.color}20`,
+          border: '1px solid #E5E7EB',
+          borderTop: 'none',
+          borderLeft: `3px solid ${config.borderColor}`,
         }}>
           <p style={{
             margin: 0,
             fontSize: '12px',
-            color: config.color,
+            color: NSD_COLORS.text.secondary,
             lineHeight: 1.4,
           }}>
             {check.explanation}
@@ -332,18 +336,16 @@ export function DecisionSummaryPanel({
       {statusMessage && (
         <div style={{
           padding: '12px 16px',
-          backgroundColor: decisionContext.isBlocked 
-            ? NSD_COLORS.semantic.attention.bg 
-            : NSD_COLORS.semantic.muted.bg,
+          backgroundColor: '#F9FAFB',
+          border: '1px solid #E5E7EB',
+          borderLeft: `3px solid ${decisionContext.isBlocked ? NSD_COLORS.magenta.base : NSD_COLORS.border.default}`,
           borderRadius: NSD_RADIUS.md,
           marginBottom: '16px',
         }}>
           <p style={{
             margin: 0,
             fontSize: '13px',
-            color: decisionContext.isBlocked 
-              ? NSD_COLORS.semantic.attention.text 
-              : NSD_COLORS.text.secondary,
+            color: NSD_COLORS.text.primary,
           }}>
             {statusMessage}
           </p>
@@ -352,7 +354,7 @@ export function DecisionSummaryPanel({
               margin: '6px 0 0 0',
               fontSize: '12px',
               color: decisionContext.isBlocked 
-                ? NSD_COLORS.semantic.attention.text 
+                ? NSD_COLORS.magenta.base 
                 : NSD_COLORS.text.muted,
               fontStyle: 'italic',
             }}>
@@ -366,18 +368,18 @@ export function DecisionSummaryPanel({
       {runRequestMessage && (
         <div style={{
           padding: '12px 16px',
-          backgroundColor: runRequestMessage.includes('success') || runRequestMessage.includes('started') 
-            ? NSD_COLORS.semantic.positive.bg 
-            : NSD_COLORS.semantic.critical.bg,
+          backgroundColor: '#F9FAFB',
+          border: '1px solid #E5E7EB',
+          borderLeft: `3px solid ${runRequestMessage.includes('success') || runRequestMessage.includes('started') 
+            ? NSD_COLORS.violet.base 
+            : NSD_COLORS.magenta.base}`,
           borderRadius: NSD_RADIUS.md,
           marginBottom: '16px',
         }}>
           <p style={{
             margin: 0,
             fontSize: '13px',
-            color: runRequestMessage.includes('success') || runRequestMessage.includes('started')
-              ? NSD_COLORS.semantic.positive.text
-              : NSD_COLORS.semantic.critical.text,
+            color: NSD_COLORS.text.primary,
           }}>
             {runRequestMessage}
           </p>
