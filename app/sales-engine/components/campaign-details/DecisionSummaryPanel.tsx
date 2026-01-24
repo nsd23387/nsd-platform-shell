@@ -52,6 +52,8 @@ interface DecisionSummaryPanelProps {
   hasRun?: boolean;
   /** Whether the campaign can be re-run (failed/stopped state) */
   canRerun?: boolean;
+  /** Whether the campaign can be run right now */
+  canRun?: boolean;
   /** Optional: Current run intent */
   runIntent?: RunIntent;
   /** Optional: Outcome type from completed run */
@@ -199,6 +201,7 @@ export function DecisionSummaryPanel({
   isRunning,
   hasRun = false,
   canRerun = false,
+  canRun = false,
   runIntent,
   outcomeType,
   onRunCampaign,
@@ -253,9 +256,7 @@ export function DecisionSummaryPanel({
     },
   ];
 
-  // Determine primary action
-  // Allow running if: approved, ready, not running, not planning-only, AND (no run OR can re-run)
-  const canRunCampaign = isApproved && isExecutionReady && !isRunning && !isPlanningOnly && (!hasRun || canRerun) && onRunCampaign;
+  // Determine primary action state
   const isComplete = phase === 'completed';
   const isStopped = phase === 'stopped';
   const isFailed = phase === 'failed';
@@ -264,8 +265,8 @@ export function DecisionSummaryPanel({
   const getDisabledReason = (): string | null => {
     if (isRunRequesting) return 'Starting campaign...';
     if (isRunning) return 'Campaign is currently running';
-    if (isComplete) return 'Campaign completed successfully';
-    // For failed/stopped, we allow re-run so don't show as disabled reason
+    if (isComplete && !canRerun) return 'Campaign completed successfully';
+    // For failed/stopped/cancelled, we allow re-run so don't show as disabled reason
     if (hasRun && !canRerun) return 'Campaign has already been executed';
     if (!isApproved) return 'Awaiting governance approval';
     if (!isExecutionReady) return 'Campaign not ready for execution';
@@ -274,9 +275,10 @@ export function DecisionSummaryPanel({
   };
 
   const disabledReason = getDisabledReason();
-  // Show run button if: has handler AND (not complete OR can re-run)
-  const showRunButton = onRunCampaign && (!isComplete || canRerun) && (!hasRun || canRerun);
-  const isRunDisabled = !canRunCampaign || isRunRequesting;
+  
+  // Always show run button for approved campaigns (visible but may be disabled)
+  const showRunButton = isApproved && onRunCampaign;
+  const isRunDisabled = !canRun || isRunRequesting;
   
   // Update button label for re-run scenario
   const getRunButtonLabel = () => {
@@ -411,31 +413,43 @@ export function DecisionSummaryPanel({
         gap: '12px',
         flexWrap: 'wrap',
       }}>
-        {/* Primary Action - Always show Run button when applicable */}
+        {/* Primary Action - Run Campaign Button */}
         {showRunButton && (
           <button
-            onClick={canRunCampaign ? onRunCampaign : undefined}
+            onClick={canRun ? onRunCampaign : undefined}
             disabled={isRunDisabled}
-            title={disabledReason || undefined}
+            title={disabledReason || 'Click to run campaign'}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '10px 20px',
-              fontSize: '14px',
+              padding: '12px 24px',
+              fontSize: '15px',
               fontWeight: 600,
-              backgroundColor: isRunDisabled ? NSD_COLORS.border.dark : NSD_COLORS.magenta.base,
+              backgroundColor: isRunDisabled ? '#9CA3AF' : NSD_COLORS.magenta.base,
               color: '#FFFFFF',
               border: 'none',
               borderRadius: NSD_RADIUS.md,
               cursor: isRunDisabled ? 'not-allowed' : 'pointer',
-              opacity: isRunDisabled ? 0.5 : 1,
+              opacity: isRunDisabled ? 0.7 : 1,
               transition: 'all 0.15s ease',
+              boxShadow: isRunDisabled ? 'none' : '0 2px 8px rgba(190, 24, 93, 0.3)',
             }}
           >
-            <Icon name={isRunRequesting ? 'clock' : 'play'} size={16} color="#FFFFFF" />
+            <Icon name={isRunRequesting ? 'clock' : 'play'} size={18} color="#FFFFFF" />
             {runButtonLabel}
           </button>
+        )}
+        
+        {/* Show disabled reason inline when button is disabled */}
+        {showRunButton && isRunDisabled && disabledReason && (
+          <span style={{
+            fontSize: '12px',
+            color: NSD_COLORS.text.muted,
+            fontStyle: 'italic',
+          }}>
+            {disabledReason}
+          </span>
         )}
 
         {/* Secondary Actions (de-emphasized) */}

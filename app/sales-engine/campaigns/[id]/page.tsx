@@ -423,8 +423,9 @@ export default function CampaignDetailPage() {
           isRunning={isRunning}
           hasRun={hasRun}
           canRerun={canRerun}
+          canRun={canRun}
           runIntent={runIntent}
-          onRunCampaign={canRun ? handleRunCampaign : undefined}
+          onRunCampaign={handleRunCampaign}
           onEdit={campaign.status !== 'ARCHIVED' ? handleEditCampaign : undefined}
           onDuplicate={handleDuplicateCampaign}
           isRunRequesting={isRunRequesting}
