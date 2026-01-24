@@ -159,98 +159,100 @@ export function PrimaryCampaignStatusBanner({
       backgroundColor: statusCopy.color.bg,
       borderRadius: NSD_RADIUS.lg,
       border: `1px solid ${statusCopy.color.border}`,
-      padding: '20px 24px',
+      padding: 'clamp(16px, 4vw, 24px)',
       marginBottom: '24px',
     }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-      }}>
-        {/* Status Info */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+      {/* Status Info */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'clamp(12px, 3vw, 16px)', flexWrap: 'wrap' }}>
+        <div style={{
+          width: 'clamp(32px, 8vw, 40px)',
+          height: 'clamp(32px, 8vw, 40px)',
+          borderRadius: NSD_RADIUS.md,
+          backgroundColor: 'rgba(255,255,255,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          <Icon name={icon as any} size={20} color={statusCopy.color.text} />
+        </div>
+        <div style={{ flex: 1, minWidth: '200px' }}>
           <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: NSD_RADIUS.md,
-            backgroundColor: 'rgba(255,255,255,0.5)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
+            gap: '8px',
+            marginBottom: '4px',
           }}>
-            <Icon name={icon as any} size={20} color={statusCopy.color.text} />
-          </div>
-          <div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '4px',
-            }}>
-              <span style={{
-                fontSize: '11px',
-                fontWeight: 500,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                color: statusCopy.color.text,
-                opacity: 0.8,
-              }}>
-                Status
-              </span>
-            </div>
-            <h2 style={{
-              margin: '0 0 8px 0',
-              fontSize: '20px',
-              fontWeight: 600,
+            <span style={{
+              fontSize: '11px',
+              fontWeight: 500,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
               color: statusCopy.color.text,
-              fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+              opacity: 0.8,
             }}>
-              {statusCopy.label}
-            </h2>
+              Status
+            </span>
+          </div>
+          <h2 style={{
+            margin: '0 0 8px 0',
+            fontSize: 'clamp(18px, 4vw, 20px)',
+            fontWeight: 600,
+            color: statusCopy.color.text,
+            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+            wordBreak: 'break-word',
+          }}>
+            {statusCopy.label}
+          </h2>
+          <p style={{
+            margin: 0,
+            fontSize: 'clamp(13px, 3vw, 14px)',
+            color: statusCopy.color.text,
+            opacity: 0.9,
+            maxWidth: '500px',
+            wordBreak: 'break-word',
+          }}>
+            {customDescription || statusCopy.explanation}
+          </p>
+          {/* Show current stage when running */}
+          {phase === 'running' && currentStage && (
             <p style={{
-              margin: 0,
-              fontSize: '14px',
+              margin: '8px 0 0 0',
+              fontSize: '13px',
               color: statusCopy.color.text,
-              opacity: 0.9,
-              maxWidth: '500px',
+              fontWeight: 500,
             }}>
-              {customDescription || statusCopy.explanation}
+              Current stage: {currentStage}
             </p>
-            {/* Show current stage when running */}
-            {phase === 'running' && currentStage && (
-              <p style={{
-                margin: '8px 0 0 0',
-                fontSize: '13px',
-                color: statusCopy.color.text,
-                fontWeight: 500,
-              }}>
-                Current stage: {currentStage}
-              </p>
-            )}
-            {/* Show termination reason for stopped/failed */}
-            {(phase === 'stopped' || phase === 'failed') && terminationReason && (
-              <p style={{
-                margin: '8px 0 0 0',
-                fontSize: '13px',
-                color: statusCopy.color.text,
-                fontStyle: 'italic',
-              }}>
-                Reason: {terminationReason}
-              </p>
-            )}
-          </div>
+          )}
+          {/* Show termination reason for stopped/failed */}
+          {(phase === 'stopped' || phase === 'failed') && terminationReason && (
+            <p style={{
+              margin: '8px 0 0 0',
+              fontSize: '13px',
+              color: statusCopy.color.text,
+              fontStyle: 'italic',
+            }}>
+              Reason: {terminationReason}
+            </p>
+          )}
         </div>
+      </div>
 
-        {/* Timestamps */}
-        <div style={{
-          textAlign: 'right',
-          fontSize: '12px',
-          color: statusCopy.color.text,
-          opacity: 0.7,
-        }}>
-          <div>Created: {formatEtDate(createdAt)}</div>
-          <div style={{ marginTop: '4px' }}>Updated: {formatEtDate(updatedAt)}</div>
-        </div>
+      {/* Timestamps - displayed below on mobile */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '12px',
+        marginTop: '16px',
+        paddingTop: '12px',
+        borderTop: `1px solid ${statusCopy.color.border}`,
+        fontSize: '12px',
+        color: statusCopy.color.text,
+        opacity: 0.7,
+      }}>
+        <span>Created: {formatEtDate(createdAt)}</span>
+        <span>Updated: {formatEtDate(updatedAt)}</span>
       </div>
     </div>
   );

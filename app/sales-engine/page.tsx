@@ -188,13 +188,14 @@ export default function SalesEnginePage() {
     {
       key: 'status',
       header: 'Governance',
-      width: '140px',
+      width: '150px',
       render: (campaign: Campaign) => <StatusChip status={campaign.status} size="sm" />,
     },
     {
       key: 'pipeline',
       header: 'Pipeline',
       width: '180px',
+      hideOnMobile: true,
       render: (campaign: Campaign) => (
         <MiniPipelineIndicator
           orgs={(campaign as any).pipeline?.orgs ?? null}
@@ -207,6 +208,7 @@ export default function SalesEnginePage() {
       key: 'updated_at',
       header: 'Last Activity',
       width: '100px',
+      hideOnMobile: true,
       render: (campaign: Campaign) => (
         <span
           style={{
@@ -224,6 +226,7 @@ export default function SalesEnginePage() {
       header: '',
       width: '160px',
       align: 'right' as const,
+      hideOnMobile: true,
       render: (campaign: Campaign) => {
         const canEditConfig = campaign.status !== 'DRAFT' && campaign.status !== 'ARCHIVED';
         const isReverting = revertingCampaignId === campaign.id;

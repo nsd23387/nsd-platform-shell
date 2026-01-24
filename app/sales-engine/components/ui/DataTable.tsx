@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { NSD_COLORS, NSD_RADIUS, NSD_SHADOWS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 
 interface Column<T> {
@@ -9,6 +9,7 @@ interface Column<T> {
   width?: string;
   align?: 'left' | 'center' | 'right';
   render?: (item: T) => ReactNode;
+  hideOnMobile?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -19,6 +20,8 @@ interface DataTableProps<T> {
   onRowClick?: (item: T) => void;
 }
 
+const MOBILE_BREAKPOINT = 640;
+
 export function DataTable<T extends Record<string, any>>({
   columns,
   data,
@@ -26,6 +29,19 @@ export function DataTable<T extends Record<string, any>>({
   emptyMessage = 'No data available',
   onRowClick,
 }: DataTableProps<T>) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const visibleColumns = isMobile 
+    ? columns.filter(col => !col.hideOnMobile)
+    : columns;
+
   if (data.length === 0) {
     return (
       <div
@@ -51,23 +67,25 @@ export function DataTable<T extends Record<string, any>>({
         borderRadius: NSD_RADIUS.lg,
         boxShadow: NSD_SHADOWS.sm,
         border: `1px solid ${NSD_COLORS.border.light}`,
-        overflow: 'hidden',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
       }}
     >
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: isMobile ? 'auto' : '600px' }}>
         <thead>
           <tr style={{ backgroundColor: NSD_COLORS.surface }}>
-            {columns.map((col) => (
+            {visibleColumns.map((col) => (
               <th
                 key={col.key}
                 style={{
-                  padding: '14px 16px',
+                  padding: isMobile ? '10px 8px' : '14px 16px',
                   textAlign: col.align || 'left',
                   ...NSD_TYPOGRAPHY.label,
                   color: NSD_COLORS.text.secondary,
                   fontFamily: NSD_TYPOGRAPHY.fontBody,
                   borderBottom: `1px solid ${NSD_COLORS.border.light}`,
-                  width: col.width,
+                  width: isMobile ? 'auto' : col.width,
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {col.header}
@@ -86,15 +104,16 @@ export function DataTable<T extends Record<string, any>>({
                 transition: 'background-color 0.15s',
               }}
             >
-              {columns.map((col) => (
+              {visibleColumns.map((col) => (
                 <td
                   key={col.key}
                   style={{
-                    padding: '14px 16px',
+                    padding: isMobile ? '10px 8px' : '14px 16px',
                     textAlign: col.align || 'left',
                     ...NSD_TYPOGRAPHY.body,
                     color: NSD_COLORS.text.primary,
                     fontFamily: NSD_TYPOGRAPHY.fontBody,
+                    verticalAlign: 'top',
                   }}
                 >
                   {col.render ? col.render(item) : item[col.key]}

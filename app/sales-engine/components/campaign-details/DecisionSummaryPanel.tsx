@@ -274,7 +274,7 @@ export function DecisionSummaryPanel({
       backgroundColor: NSD_COLORS.background,
       borderRadius: NSD_RADIUS.lg,
       border: `1px solid ${NSD_COLORS.border.light}`,
-      padding: '24px',
+      padding: 'clamp(16px, 4vw, 24px)',
       marginBottom: '24px',
       boxShadow: NSD_SHADOWS.sm,
     }}>
@@ -316,10 +316,10 @@ export function DecisionSummaryPanel({
         </div>
       </div>
 
-      {/* Checks Grid */}
+      {/* Checks Grid - stacks on mobile */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '8px',
         marginBottom: '20px',
       }}>
@@ -384,11 +384,12 @@ export function DecisionSummaryPanel({
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions - wraps on mobile */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
+        flexWrap: 'wrap',
       }}>
         {/* Primary Action */}
         {primaryActionLabel && (
