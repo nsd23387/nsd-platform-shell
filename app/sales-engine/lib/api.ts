@@ -1042,6 +1042,108 @@ export async function updateCampaign(
 }
 
 // =============================================================================
+// REVERT TO DRAFT
+// Reverts a campaign to DRAFT status to enable editing.
+// This is a governance state change that enables configuration modifications.
+//
+// GOVERNANCE ALIGNMENT:
+// Reverting to draft is a control-plane write that changes governance state
+// to enable human editing. It does NOT initiate execution.
+// =============================================================================
+
+export interface RevertToDraftResponse {
+  /** Campaign ID */
+  id: string;
+  /** Campaign name */
+  name?: string;
+  /** Always "draft" after successful revert */
+  status: 'DRAFT' | string;
+  /** Whether the status was actually changed */
+  reverted: boolean;
+  /** Previous status before revert (if status changed) */
+  previousStatus?: string;
+  /** Human-readable message */
+  message: string;
+  /** Governance permissions after revert */
+  governance: {
+    canEdit: boolean;
+    canSubmit: boolean;
+    canApprove: boolean;
+    isRunnable: boolean;
+  };
+}
+
+/**
+ * Revert a campaign to DRAFT status.
+ * This enables editing of the campaign configuration.
+ * 
+ * @param campaignId - The ID of the campaign to revert
+ * @returns The reverted campaign details with governance info
+ * @throws Error if campaign is archived or cannot be reverted
+ */
+export async function revertCampaignToDraft(
+  campaignId: string
+): Promise<RevertToDraftResponse> {
+  // When API is disabled, return a mock response
+  if (isApiDisabled) {
+    console.log(`[API] API mode disabled - mock revert to draft for campaign ${campaignId}`);
+    return {
+      id: campaignId,
+      status: 'DRAFT',
+      reverted: true,
+      previousStatus: 'RUNNABLE',
+      message: 'Campaign reverted to draft (mock)',
+      governance: {
+        canEdit: true,
+        canSubmit: true,
+        canApprove: false,
+        isRunnable: false,
+      },
+    };
+  }
+
+  try {
+    const response = await fetch(`/api/v1/campaigns/${campaignId}/revert-to-draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const data = await response.json();
+
+    if (response.status === 403) {
+      throw new Error('Cannot edit archived campaigns');
+    }
+
+    if (response.status === 404) {
+      throw new Error('Campaign not found');
+    }
+
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `Failed to revert campaign: ${response.status}`);
+    }
+
+    // Normalize response to expected shape
+    return {
+      id: data.id || campaignId,
+      name: data.name,
+      status: data.status || 'DRAFT',
+      reverted: data.reverted ?? true,
+      previousStatus: data.previousStatus || data.previous_status,
+      message: data.message || 'Campaign reverted to draft',
+      governance: data.governance || {
+        canEdit: true,
+        canSubmit: true,
+        canApprove: false,
+        isRunnable: false,
+      },
+    };
+  } catch (error) {
+    console.error('[API] revertCampaignToDraft error:', error);
+    throw error;
+  }
+}
+
+// =============================================================================
 // CAMPAIGN DUPLICATION
 // Duplicates an existing campaign with a new ID and DRAFT status.
 // This is a control-plane write similar to campaign creation.

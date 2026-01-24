@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Campaign, CampaignStatus, DashboardThroughput, NeedsAttentionItem } from './types/campaign';
-import { listCampaigns, getDashboardThroughput, getNeedsAttention } from './lib/api';
+import { listCampaigns, getDashboardThroughput, getNeedsAttention, revertCampaignToDraft } from './lib/api';
 import { PageHeader, StatusChip, Button, DataTable, CampaignListHeader, MiniPipelineIndicator, SkeletonTable, EmptyState } from './components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, NSD_SHADOWS, NSD_GRADIENTS, NSD_TRANSITIONS, NSD_SPACING, NSD_GLOW } from './lib/design-tokens';
 import { Icon } from '../../design/components/Icon';
@@ -61,6 +61,10 @@ export default function SalesEnginePage() {
   const [throughput, setThroughput] = useState<DashboardThroughput | null>(null);
   const [attention, setAttention] = useState<NeedsAttentionItem[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  
+  // Edit configuration state (revert to draft)
+  const [revertingCampaignId, setRevertingCampaignId] = useState<string | null>(null);
+  const [revertError, setRevertError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSummary() {
@@ -113,6 +117,40 @@ export default function SalesEnginePage() {
   const activeCampaigns = campaigns.filter(
     (c) => c.status === 'RUNNING' || c.status === 'RUNNABLE' || c.status === 'PENDING_REVIEW'
   ).length;
+
+  // Handle edit configuration (revert to draft and navigate to edit)
+  const handleEditConfiguration = async (campaign: Campaign) => {
+    setRevertError(null);
+    
+    // If already draft, go directly to edit
+    if (campaign.status === 'DRAFT') {
+      router.push(`/sales-engine/campaigns/${campaign.id}/edit`);
+      return;
+    }
+    
+    // If archived, show error
+    if (campaign.status === 'ARCHIVED') {
+      setRevertError('Cannot edit archived campaigns');
+      return;
+    }
+    
+    // Otherwise, revert to draft first
+    setRevertingCampaignId(campaign.id);
+    try {
+      const result = await revertCampaignToDraft(campaign.id);
+      
+      if (result.reverted || result.status === 'DRAFT') {
+        // Navigate to edit page
+        router.push(`/sales-engine/campaigns/${campaign.id}/edit`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to prepare campaign for editing';
+      setRevertError(message);
+      console.error('Failed to revert campaign:', err);
+    } finally {
+      setRevertingCampaignId(null);
+    }
+  };
 
   const columns = [
     {
@@ -184,19 +222,39 @@ export default function SalesEnginePage() {
     {
       key: 'actions',
       header: '',
-      width: '80px',
+      width: '160px',
       align: 'right' as const,
-      render: (campaign: Campaign) => (
-        <Link
-          href={`/sales-engine/campaigns/${campaign.id}`}
-          style={{ textDecoration: 'none' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Button variant="ghost" size="sm">
-            View
-          </Button>
-        </Link>
-      ),
+      render: (campaign: Campaign) => {
+        const canEditConfig = campaign.status !== 'DRAFT' && campaign.status !== 'ARCHIVED';
+        const isReverting = revertingCampaignId === campaign.id;
+        
+        return (
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            {canEditConfig && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEditConfiguration(campaign);
+                }}
+                disabled={isReverting}
+              >
+                {isReverting ? 'Preparing...' : 'Edit Config'}
+              </Button>
+            )}
+            <Link
+              href={`/sales-engine/campaigns/${campaign.id}`}
+              style={{ textDecoration: 'none' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Button variant="ghost" size="sm">
+                View
+              </Button>
+            </Link>
+          </div>
+        );
+      },
     },
   ];
 
@@ -266,6 +324,35 @@ export default function SalesEnginePage() {
           dailyLimit={throughput?.dailyLimit ?? 100}
           isLoading={summaryLoading}
         />
+
+        {/* Revert Error Message */}
+        {revertError && (
+          <div style={{
+            padding: '12px 16px',
+            marginBottom: NSD_SPACING.lg,
+            backgroundColor: NSD_COLORS.semantic.critical.bg,
+            borderRadius: NSD_RADIUS.md,
+            border: `1px solid ${NSD_COLORS.semantic.critical.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.semantic.critical.text }}>
+              {revertError}
+            </p>
+            <button
+              onClick={() => setRevertError(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px',
+              }}
+            >
+              <Icon name="close" size={16} color={NSD_COLORS.semantic.critical.text} />
+            </button>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: NSD_SPACING.lg, marginBottom: NSD_SPACING.lg, alignItems: 'center' }}>
           <div style={{ flex: 1, position: 'relative', maxWidth: '400px' }}>

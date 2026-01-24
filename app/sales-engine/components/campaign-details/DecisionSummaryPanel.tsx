@@ -64,8 +64,12 @@ interface DecisionSummaryPanelProps {
   isRunRequesting?: boolean;
   /** Is duplicate in progress */
   isDuplicating?: boolean;
+  /** Is revert to draft in progress */
+  isReverting?: boolean;
   /** Optional message about run request */
   runRequestMessage?: string | null;
+  /** Show "Edit Configuration" instead of "Edit" (for non-draft campaigns) */
+  showEditConfiguration?: boolean;
 }
 
 function CheckItem({ check }: { check: DecisionCheck }) {
@@ -195,7 +199,9 @@ export function DecisionSummaryPanel({
   onDuplicate,
   isRunRequesting = false,
   isDuplicating = false,
+  isReverting = false,
   runRequestMessage,
+  showEditConfiguration = false,
 }: DecisionSummaryPanelProps) {
   // Get decision context for explanations
   const statusKey = phaseToStatusKey(phase);
@@ -415,6 +421,7 @@ export function DecisionSummaryPanel({
           {onEdit && (
             <button
               onClick={onEdit}
+              disabled={isReverting}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -426,11 +433,12 @@ export function DecisionSummaryPanel({
                 color: NSD_COLORS.text.secondary,
                 border: `1px solid ${NSD_COLORS.border.default}`,
                 borderRadius: NSD_RADIUS.md,
-                cursor: 'pointer',
+                cursor: isReverting ? 'not-allowed' : 'pointer',
+                opacity: isReverting ? 0.6 : 1,
               }}
             >
               <Icon name="edit" size={14} color={NSD_COLORS.text.secondary} />
-              Edit
+              {isReverting ? 'Preparing...' : (showEditConfiguration ? 'Edit Configuration' : 'Edit')}
             </button>
           )}
           {onDuplicate && (

@@ -33,7 +33,7 @@ import { PageHeader, SectionCard } from '../../components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY } from '../../lib/design-tokens';
 import { Icon } from '../../../../design/components/Icon';
 import type { CampaignDetail, MarketScope, OperationalWorkingSet } from '../../types/campaign';
-import { getCampaign, requestCampaignRun, duplicateCampaign, type RunIntent } from '../../lib/api';
+import { getCampaign, requestCampaignRun, duplicateCampaign, revertCampaignToDraft, type RunIntent } from '../../lib/api';
 import { mapToGovernanceState, type CampaignGovernanceState } from '../../lib/campaign-state';
 import { formatEt, formatEtDate } from '../../lib/time';
 import { isTestCampaign, getTestCampaignDetail } from '../../lib/test-campaign';
@@ -76,6 +76,8 @@ export default function CampaignDetailPage() {
   const [isRunRequesting, setIsRunRequesting] = useState(false);
   const [runRequestMessage, setRunRequestMessage] = useState<string | null>(null);
   const [isDuplicating, setIsDuplicating] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
+  const [revertError, setRevertError] = useState<string | null>(null);
   
   // Run intent
   const [runIntent, setRunIntent] = useState<RunIntent>('HARVEST_ONLY');
@@ -210,10 +212,43 @@ export default function CampaignDetailPage() {
     }
   }, [campaign, router]);
 
-  // Handle edit
-  const handleEditCampaign = useCallback(() => {
+  // Handle edit - for draft campaigns, go directly to edit
+  // For non-draft campaigns, revert to draft first
+  const handleEditCampaign = useCallback(async () => {
     if (!campaign) return;
-    router.push(`/sales-engine/campaigns/${campaign.id}/edit`);
+    setRevertError(null);
+    
+    // If already draft, go directly to edit
+    if (campaign.status === 'DRAFT') {
+      router.push(`/sales-engine/campaigns/${campaign.id}/edit`);
+      return;
+    }
+    
+    // If archived, show error
+    if (campaign.status === 'ARCHIVED') {
+      setRevertError('Cannot edit archived campaigns');
+      return;
+    }
+    
+    // Otherwise, revert to draft first
+    setIsReverting(true);
+    try {
+      const result = await revertCampaignToDraft(campaign.id);
+      
+      if (result.reverted || result.status === 'DRAFT') {
+        // Refresh campaign data with new draft status
+        const updatedCampaign = await getCampaign(campaign.id);
+        setCampaign(updatedCampaign);
+        // Navigate to edit page
+        router.push(`/sales-engine/campaigns/${campaign.id}/edit`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to prepare campaign for editing';
+      setRevertError(message);
+      console.error('Failed to revert campaign:', err);
+    } finally {
+      setIsReverting(false);
+    }
   }, [campaign, router]);
 
   // Loading state
@@ -347,6 +382,21 @@ export default function CampaignDetailPage() {
           currentStage={executionState?.run?.stage}
         />
 
+        {/* Revert Error Message */}
+        {revertError && (
+          <div style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            backgroundColor: NSD_COLORS.semantic.critical.bg,
+            borderRadius: NSD_RADIUS.md,
+            border: `1px solid ${NSD_COLORS.semantic.critical.border}`,
+          }}>
+            <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.semantic.critical.text }}>
+              {revertError}
+            </p>
+          </div>
+        )}
+
         {/* 2. Decision Summary Panel - Should I act right now? */}
         <DecisionSummaryPanel
           phase={campaignPhase}
@@ -355,13 +405,16 @@ export default function CampaignDetailPage() {
           safetyChecksPassed={true}
           isPlanningOnly={isPlanningOnly}
           isRunning={isRunning}
+          hasRun={hasRun}
           runIntent={runIntent}
           onRunCampaign={canRun ? handleRunCampaign : undefined}
-          onEdit={handleEditCampaign}
+          onEdit={campaign.status !== 'ARCHIVED' ? handleEditCampaign : undefined}
           onDuplicate={handleDuplicateCampaign}
           isRunRequesting={isRunRequesting}
           isDuplicating={isDuplicating}
+          isReverting={isReverting}
           runRequestMessage={runRequestMessage}
+          showEditConfiguration={campaign.status !== 'DRAFT' && campaign.status !== 'ARCHIVED'}
         />
 
         {/* Run Intent Selector - Only show if can run */}
