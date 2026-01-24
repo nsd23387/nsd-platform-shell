@@ -91,28 +91,36 @@ function CheckItem({ check }: { check: DecisionCheck }) {
     <div>
       <div style={{
         display: 'flex',
+        flexWrap: 'wrap',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '12px 16px',
+        padding: 'clamp(10px, 2vw, 12px) clamp(12px, 3vw, 16px)',
         backgroundColor: config.bg,
         borderRadius: showExplanation ? `${NSD_RADIUS.md} ${NSD_RADIUS.md} 0 0` : NSD_RADIUS.md,
+        gap: '8px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Icon name={config.icon as any} size={16} color={config.color} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+          <span style={{ flexShrink: 0, display: 'flex' }}>
+            <Icon name={config.icon as any} size={14} color={config.color} />
+          </span>
           <span style={{
-            fontSize: '14px',
+            fontSize: 'clamp(12px, 3vw, 14px)',
             fontWeight: 500,
             color: NSD_COLORS.text.primary,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}>
             {check.label}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
           {check.detail && (
             <span style={{
-              fontSize: '12px',
+              fontSize: '11px',
               color: config.color,
               fontWeight: 500,
+              whiteSpace: 'nowrap',
             }}>
               {check.detail}
             </span>
@@ -126,7 +134,7 @@ function CheckItem({ check }: { check: DecisionCheck }) {
                 alignItems: 'center',
                 gap: '4px',
                 padding: '2px 6px',
-                fontSize: '11px',
+                fontSize: '10px',
                 fontWeight: 500,
                 backgroundColor: 'rgba(255,255,255,0.5)',
                 color: config.color,
@@ -136,7 +144,7 @@ function CheckItem({ check }: { check: DecisionCheck }) {
               }}
               title="Why is this blocked?"
             >
-              <Icon name="info" size={12} color={config.color} />
+              <Icon name="info" size={10} color={config.color} />
               {showExplanation ? 'Hide' : 'Why?'}
             </button>
           )}
@@ -275,7 +283,7 @@ export function DecisionSummaryPanel({
     }}>
       {/* Header - subtle gradient top border */}
       <div style={{
-        padding: '20px 24px',
+        padding: 'clamp(14px, 3vw, 20px) clamp(16px, 4vw, 24px)',
         borderBottom: `1px solid ${NSD_COLORS.border.light}`,
         background: `linear-gradient(to bottom, ${NSD_COLORS.surface}, ${NSD_COLORS.background})`,
       }}>
@@ -317,12 +325,12 @@ export function DecisionSummaryPanel({
       </div>
 
       {/* Content area */}
-      <div style={{ padding: '24px' }}>
+      <div style={{ padding: 'clamp(16px, 4vw, 24px)' }}>
 
-      {/* Checks Grid */}
+      {/* Checks Grid - responsive 1 or 2 columns */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
         gap: '8px',
         marginBottom: '20px',
       }}>
@@ -387,9 +395,10 @@ export function DecisionSummaryPanel({
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions - stack on mobile */}
       <div style={{
         display: 'flex',
+        flexWrap: 'wrap',
         alignItems: 'center',
         gap: '12px',
       }}>
