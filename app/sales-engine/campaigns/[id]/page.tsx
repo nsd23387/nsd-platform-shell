@@ -335,9 +335,15 @@ export default function CampaignDetailPage() {
   const isPlanningOnly = campaign.sourcing_config?.benchmarks_only === true;
   const isApproved = campaign.status === 'RUNNABLE';
   const hasRun = executionState?.run !== null;
-  const isRunning = executionState?.run?.status === 'running';
-  const isExecutionComplete = executionState?.run?.status === 'completed';
-  const canRun = campaign.isRunnable && isApproved && !isPlanningOnly && !hasRun;
+  const runStatus = executionState?.run?.status;
+  const isRunning = runStatus === 'running';
+  const isExecutionComplete = runStatus === 'completed';
+  const isFailed = runStatus === 'failed';
+  const isStopped = runStatus === 'stopped';
+  
+  // Allow re-running if previous run failed or was stopped
+  const canRerun = isFailed || isStopped;
+  const canRun = campaign.isRunnable && isApproved && !isPlanningOnly && (!hasRun || canRerun);
 
   // Extract scope data from campaign ICP
   const industries = campaign.icp?.industries || [];
@@ -408,6 +414,7 @@ export default function CampaignDetailPage() {
           isPlanningOnly={isPlanningOnly}
           isRunning={isRunning}
           hasRun={hasRun}
+          canRerun={canRerun}
           runIntent={runIntent}
           onRunCampaign={canRun ? handleRunCampaign : undefined}
           onEdit={campaign.status !== 'ARCHIVED' ? handleEditCampaign : undefined}

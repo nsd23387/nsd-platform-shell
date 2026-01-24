@@ -50,6 +50,8 @@ interface DecisionSummaryPanelProps {
   isRunning: boolean;
   /** Whether a run has already occurred */
   hasRun?: boolean;
+  /** Whether the campaign can be re-run (failed/stopped state) */
+  canRerun?: boolean;
   /** Optional: Current run intent */
   runIntent?: RunIntent;
   /** Optional: Outcome type from completed run */
@@ -196,6 +198,7 @@ export function DecisionSummaryPanel({
   isPlanningOnly,
   isRunning,
   hasRun = false,
+  canRerun = false,
   runIntent,
   outcomeType,
   onRunCampaign,
@@ -251,7 +254,8 @@ export function DecisionSummaryPanel({
   ];
 
   // Determine primary action
-  const canRunCampaign = isApproved && isExecutionReady && !isRunning && !isPlanningOnly && !hasRun && onRunCampaign;
+  // Allow running if: approved, ready, not running, not planning-only, AND (no run OR can re-run)
+  const canRunCampaign = isApproved && isExecutionReady && !isRunning && !isPlanningOnly && (!hasRun || canRerun) && onRunCampaign;
   const isComplete = phase === 'completed';
   const isStopped = phase === 'stopped';
   const isFailed = phase === 'failed';
@@ -260,10 +264,9 @@ export function DecisionSummaryPanel({
   const getDisabledReason = (): string | null => {
     if (isRunRequesting) return 'Starting campaign...';
     if (isRunning) return 'Campaign is currently running';
-    if (hasRun) return 'Campaign has already been executed';
-    if (isComplete) return 'Campaign is complete';
-    if (isStopped) return 'Campaign has been stopped';
-    if (isFailed) return 'Campaign failed - review before re-running';
+    if (isComplete) return 'Campaign completed successfully';
+    // For failed/stopped, we allow re-run so don't show as disabled reason
+    if (hasRun && !canRerun) return 'Campaign has already been executed';
     if (!isApproved) return 'Awaiting governance approval';
     if (!isExecutionReady) return 'Campaign not ready for execution';
     if (isPlanningOnly) return 'Planning-only mode - disable to execute';
@@ -271,11 +274,17 @@ export function DecisionSummaryPanel({
   };
 
   const disabledReason = getDisabledReason();
-  const showRunButton = onRunCampaign && !isComplete && !isStopped && !isFailed && !hasRun;
+  // Show run button if: has handler AND (not complete OR can re-run)
+  const showRunButton = onRunCampaign && (!isComplete || canRerun) && (!hasRun || canRerun);
   const isRunDisabled = !canRunCampaign || isRunRequesting;
-  const runButtonLabel = isRunRequesting 
-    ? 'Starting...' 
-    : (runIntent === 'HARVEST_ONLY' ? 'Run (Harvest Only)' : 'Run Campaign');
+  
+  // Update button label for re-run scenario
+  const getRunButtonLabel = () => {
+    if (isRunRequesting) return 'Starting...';
+    if (canRerun) return runIntent === 'HARVEST_ONLY' ? 'Re-run (Harvest Only)' : 'Re-run Campaign';
+    return runIntent === 'HARVEST_ONLY' ? 'Run (Harvest Only)' : 'Run Campaign';
+  };
+  const runButtonLabel = getRunButtonLabel();
 
   // Use decision context for status message
   const statusMessage = decisionContext.reason;
