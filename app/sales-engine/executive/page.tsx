@@ -22,6 +22,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { NSD_COLORS, NSD_TYPOGRAPHY, NSD_RADIUS, NSD_GRADIENTS } from '../lib/design-tokens';
 import { Icon } from '../../../design/components/Icon';
+import { NavBar } from '../components/ui/NavBar';
 
 interface ExecutiveSummary {
   systemHealth: {
@@ -123,36 +124,24 @@ export default function ExecutiveDashboardPage() {
       {/* Gradient accent bar */}
       <div style={{ height: '4px', background: NSD_GRADIENTS.accentBar }} />
       
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '48px 64px' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px 16px' }}>
+        <NavBar active="executive" />
+        
         {/* Header */}
-        <div style={{ marginBottom: '40px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <Link 
-              href="/sales-engine" 
-              style={{ 
-                color: NSD_COLORS.text.muted, 
-                textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                fontSize: '14px',
-              }}
-            >
-              <Icon name="arrow-left" size={16} color={NSD_COLORS.text.muted} />
-              Back to Campaigns
-            </Link>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '13px', color: NSD_COLORS.text.muted }}>
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '8px' }}>
+              <span style={{ fontSize: '12px', color: NSD_COLORS.text.muted }}>
                 Last refresh: {formatTimeAgo(lastRefresh.toISOString())}
               </span>
               <button
                 onClick={handleRefresh}
                 style={{
-                  padding: '8px 16px',
+                  padding: '8px 12px',
                   backgroundColor: NSD_COLORS.background,
                   border: `1px solid ${NSD_COLORS.border.default}`,
                   borderRadius: NSD_RADIUS.md,
-                  fontSize: '14px',
+                  fontSize: '13px',
                   color: NSD_COLORS.text.primary,
                   cursor: 'pointer',
                   display: 'flex',
@@ -167,10 +156,11 @@ export default function ExecutiveDashboardPage() {
           </div>
           <h1 style={{ 
             margin: 0, 
-            fontSize: '32px', 
+            fontSize: 'clamp(24px, 5vw, 32px)', 
             fontWeight: 700, 
             color: NSD_COLORS.text.primary,
             fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+            lineHeight: 1.2,
           }}>
             Executive Dashboard
           </h1>
@@ -189,14 +179,14 @@ export default function ExecutiveDashboardPage() {
         {/* Main Grid: Market Reality + Operational Yield */}
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: '1fr 1fr', 
-          gap: '24px', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+          gap: '16px', 
           marginBottom: '24px' 
         }}>
           {/* Market Reality */}
           <div>
             <SectionLabel>Market Reality</SectionLabel>
-            <p style={{ fontSize: '13px', color: NSD_COLORS.text.muted, margin: '4px 0 16px 0' }}>
+            <p style={{ fontSize: '12px', color: NSD_COLORS.text.muted, margin: '4px 0 12px 0' }}>
               What exists in the market (observed, not processed)
             </p>
             <MarketRealityCard market={data.marketReality} />
@@ -205,7 +195,7 @@ export default function ExecutiveDashboardPage() {
           {/* Operational Yield */}
           <div>
             <SectionLabel>Operational Yield</SectionLabel>
-            <p style={{ fontSize: '13px', color: NSD_COLORS.text.muted, margin: '4px 0 16px 0' }}>
+            <p style={{ fontSize: '12px', color: NSD_COLORS.text.muted, margin: '4px 0 12px 0' }}>
               What we have processed and converted
             </p>
             <OperationalYieldCard yield_data={data.operationalYield} />

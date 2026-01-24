@@ -9,6 +9,7 @@ import { PageHeader, StatusChip, Button, DataTable, CampaignListHeader, MiniPipe
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, NSD_SHADOWS, NSD_GRADIENTS, NSD_TRANSITIONS, NSD_SPACING, NSD_GLOW } from './lib/design-tokens';
 import { Icon } from '../../design/components/Icon';
 import { getTestCampaigns, shouldShowTestCampaigns, isTestCampaign } from './lib/test-campaign';
+import { NavBar } from './components/ui/NavBar';
 
 type FilterOption = 'ALL' | CampaignStatus;
 
@@ -219,32 +220,36 @@ export default function SalesEnginePage() {
           background: NSD_GRADIENTS.accentBar,
         }}
       />
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: `${NSD_SPACING.xxl} ${NSD_SPACING.page}` }}>
-        <div style={{ marginBottom: NSD_SPACING.xxl }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: NSD_SPACING.md }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
+        <NavBar active="campaigns" />
+        
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '16px' }}>
             <div>
               <h1
                 style={{
-                  ...NSD_TYPOGRAPHY.pageTitle,
+                  fontSize: 'clamp(24px, 5vw, 36px)',
+                  fontWeight: 700,
                   color: NSD_COLORS.text.primary,
                   fontFamily: NSD_TYPOGRAPHY.fontDisplay,
                   margin: 0,
+                  lineHeight: 1.2,
                 }}
               >
                 Campaigns
               </h1>
               <p
                 style={{
-                  ...NSD_TYPOGRAPHY.body,
+                  fontSize: '14px',
                   color: NSD_COLORS.text.secondary,
-                  marginTop: NSD_SPACING.sm,
+                  marginTop: '8px',
                   marginBottom: 0,
                 }}
               >
                 Observe and manage your sales campaigns
               </p>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: NSD_SPACING.md }}>
+            <div>
               <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
                 <Button variant="cta" icon="plus">
                   New Campaign
@@ -262,18 +267,18 @@ export default function SalesEnginePage() {
           isLoading={summaryLoading}
         />
 
-        <div style={{ display: 'flex', gap: NSD_SPACING.lg, marginBottom: NSD_SPACING.lg, alignItems: 'center' }}>
-          <div style={{ flex: 1, position: 'relative', maxWidth: '400px' }}>
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
             <div
               style={{
                 position: 'absolute',
-                left: '16px',
+                left: '14px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 pointerEvents: 'none',
               }}
             >
-              <Icon name="target" size={18} color={NSD_COLORS.text.muted} />
+              <Icon name="target" size={16} color={NSD_COLORS.text.muted} />
             </div>
             <input
               type="text"
@@ -282,15 +287,16 @@ export default function SalesEnginePage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
                 width: '100%',
-                padding: '14px 18px 14px 48px',
-                fontSize: '15px',
+                padding: '12px 16px 12px 42px',
+                fontSize: '14px',
                 fontFamily: NSD_TYPOGRAPHY.fontBody,
                 backgroundColor: NSD_COLORS.background,
                 border: `1px solid ${NSD_COLORS.border.light}`,
-                borderRadius: NSD_RADIUS.xl,
+                borderRadius: NSD_RADIUS.lg,
                 outline: 'none',
                 boxShadow: NSD_SHADOWS.input,
                 transition: NSD_TRANSITIONS.default,
+                boxSizing: 'border-box',
               }}
               onFocus={(e) => {
                 e.currentTarget.style.boxShadow = NSD_SHADOWS.inputFocus;
@@ -307,9 +313,12 @@ export default function SalesEnginePage() {
         <div
           style={{
             display: 'flex',
-            gap: NSD_SPACING.sm,
+            gap: '8px',
             flexWrap: 'wrap',
-            marginBottom: NSD_SPACING.xl,
+            marginBottom: '24px',
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            paddingBottom: '4px',
           }}
         >
           {FILTER_OPTIONS.map((filter) => {

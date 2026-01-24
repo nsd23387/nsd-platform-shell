@@ -56,11 +56,12 @@ function StatCard({
         backgroundColor: 'rgba(255, 255, 255, 0.85)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
-        borderRadius: NSD_RADIUS.xl,
-        padding: NSD_SPACING.lg,
+        borderRadius: NSD_RADIUS.lg,
+        padding: '16px',
         boxShadow: NSD_SHADOWS.card,
         transition: NSD_TRANSITIONS.default,
-        minWidth: '180px',
+        flex: '1 1 140px',
+        minWidth: '140px',
         border: `1px solid ${NSD_COLORS.border.light}`,
         position: 'relative',
         overflow: 'hidden',
@@ -76,12 +77,12 @@ function StatCard({
           background: `linear-gradient(90deg, ${styles.borderAccent}, transparent)`,
         }}
       />
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: NSD_SPACING.md }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
         <div
           style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: NSD_RADIUS.lg,
+            width: '36px',
+            height: '36px',
+            borderRadius: NSD_RADIUS.md,
             backgroundColor: styles.iconBg,
             display: 'flex',
             alignItems: 'center',
@@ -89,23 +90,28 @@ function StatCard({
             flexShrink: 0,
           }}
         >
-          <Icon name={icon} size={22} color={styles.iconColor} />
+          <Icon name={icon} size={18} color={styles.iconColor} />
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              ...NSD_TYPOGRAPHY.statLabel,
+              fontSize: '11px',
+              fontWeight: 500,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
               color: NSD_COLORS.text.muted,
-              marginBottom: NSD_SPACING.xs,
+              marginBottom: '4px',
             }}
           >
             {label}
           </div>
           <span
             style={{
-              ...NSD_TYPOGRAPHY.statNumber,
+              fontSize: '24px',
+              fontWeight: 700,
               color: styles.valueColor,
               display: 'block',
+              lineHeight: 1,
             }}
           >
             {value}
@@ -134,12 +140,12 @@ function CapacityCard({
         backgroundColor: 'rgba(255, 255, 255, 0.85)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
-        borderRadius: NSD_RADIUS.xl,
-        padding: NSD_SPACING.lg,
+        borderRadius: NSD_RADIUS.lg,
+        padding: '16px',
         boxShadow: NSD_SHADOWS.card,
         transition: NSD_TRANSITIONS.default,
-        flex: 1,
-        minWidth: '280px',
+        flex: '1 1 100%',
+        minWidth: '200px',
         border: `1px solid ${NSD_COLORS.border.light}`,
         position: 'relative',
         overflow: 'hidden',
@@ -156,12 +162,12 @@ function CapacityCard({
           opacity: 0.6,
         }}
       />
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: NSD_SPACING.md }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
         <div
           style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: NSD_RADIUS.lg,
+            width: '36px',
+            height: '36px',
+            borderRadius: NSD_RADIUS.md,
             backgroundColor: isHighUsage ? NSD_COLORS.semantic.attention.bg : NSD_COLORS.violet.light,
             display: 'flex',
             alignItems: 'center',
@@ -171,26 +177,29 @@ function CapacityCard({
         >
           <Icon 
             name="chart" 
-            size={22} 
+            size={18} 
             color={isHighUsage ? NSD_COLORS.semantic.attention.text : NSD_COLORS.violet.dark} 
           />
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              ...NSD_TYPOGRAPHY.statLabel,
+              fontSize: '11px',
+              fontWeight: 500,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
               color: NSD_COLORS.text.muted,
-              marginBottom: NSD_SPACING.sm,
+              marginBottom: '8px',
             }}
           >
             Daily Capacity
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: NSD_SPACING.md }}>
-            <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 100px', minWidth: '100px' }}>
               <div
                 style={{
-                  height: '10px',
+                  height: '8px',
                   backgroundColor: NSD_COLORS.border.light,
                   borderRadius: NSD_RADIUS.full,
                   overflow: 'hidden',
@@ -211,7 +220,7 @@ function CapacityCard({
             </div>
             <span
               style={{
-                fontSize: '18px',
+                fontSize: '16px',
                 fontWeight: 700,
                 color: isHighUsage ? NSD_COLORS.semantic.attention.text : NSD_COLORS.text.primary,
                 whiteSpace: 'nowrap',
@@ -234,39 +243,39 @@ function SkeletonCard({ wide = false }: { wide?: boolean }) {
         backgroundColor: 'rgba(255, 255, 255, 0.85)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
-        borderRadius: NSD_RADIUS.xl,
-        padding: NSD_SPACING.lg,
+        borderRadius: NSD_RADIUS.lg,
+        padding: '16px',
         boxShadow: NSD_SHADOWS.card,
-        minWidth: wide ? '280px' : '180px',
-        flex: wide ? 1 : 'none',
+        flex: wide ? '1 1 100%' : '1 1 140px',
+        minWidth: wide ? '200px' : '140px',
         overflow: 'hidden',
         position: 'relative',
         border: `1px solid ${NSD_COLORS.border.light}`,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: NSD_SPACING.md }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
         <div
           style={{
-            width: '44px',
-            height: '44px',
+            width: '36px',
+            height: '36px',
             backgroundColor: NSD_COLORS.border.light,
-            borderRadius: NSD_RADIUS.lg,
+            borderRadius: NSD_RADIUS.md,
           }}
         />
         <div style={{ flex: 1 }}>
           <div
             style={{
-              width: '80px',
+              width: '70px',
               height: '11px',
               backgroundColor: NSD_COLORS.border.light,
               borderRadius: NSD_RADIUS.sm,
-              marginBottom: NSD_SPACING.sm,
+              marginBottom: '8px',
             }}
           />
           <div
             style={{
-              width: wide ? '100%' : '60px',
-              height: wide ? '10px' : '40px',
+              width: wide ? '100%' : '50px',
+              height: wide ? '8px' : '24px',
               backgroundColor: NSD_COLORS.border.light,
               borderRadius: NSD_RADIUS.md,
             }}
@@ -307,8 +316,8 @@ export function CampaignListHeader({
       <div
         style={{
           display: 'flex',
-          gap: NSD_SPACING.lg,
-          marginBottom: NSD_SPACING.xl,
+          gap: '12px',
+          marginBottom: '24px',
           flexWrap: 'wrap',
         }}
       >
@@ -323,8 +332,8 @@ export function CampaignListHeader({
     <div
       style={{
         display: 'flex',
-        gap: NSD_SPACING.lg,
-        marginBottom: NSD_SPACING.xl,
+        gap: '12px',
+        marginBottom: '24px',
         flexWrap: 'wrap',
       }}
     >
