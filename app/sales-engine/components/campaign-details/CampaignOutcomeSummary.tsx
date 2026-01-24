@@ -83,24 +83,23 @@ function MetricBlock({
   return (
     <div style={{
       textAlign: 'center',
-      padding: '16px 12px',
+      padding: '12px',
     }}>
       <div style={{
-        fontSize: '28px',
+        fontSize: '24px',
         fontWeight: 700,
-        color: NSD_COLORS.text.primary,
+        color: NSD_COLORS.primary,
         fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-        marginBottom: '6px',
-        letterSpacing: '-0.02em',
+        marginBottom: '4px',
       }}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
       <div style={{
-        fontSize: '11px',
-        fontWeight: 600,
-        color: NSD_COLORS.text.muted,
+        fontSize: '12px',
+        fontWeight: 500,
+        color: NSD_COLORS.text.secondary,
         textTransform: 'uppercase',
-        letterSpacing: '0.75px',
+        letterSpacing: '0.5px',
       }}>
         {label}
       </div>
@@ -108,8 +107,7 @@ function MetricBlock({
         <div style={{
           fontSize: '11px',
           color: NSD_COLORS.text.muted,
-          marginTop: '4px',
-          opacity: 0.8,
+          marginTop: '2px',
         }}>
           {subValue}
         </div>
@@ -178,89 +176,52 @@ export function CampaignOutcomeSummary({
     <div style={{
       backgroundColor: NSD_COLORS.background,
       borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${NSD_COLORS.border.default}`,
-      marginBottom: '28px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+      border: `1px solid ${NSD_COLORS.border.light}`,
+      marginBottom: '24px',
+      boxShadow: NSD_SHADOWS.sm,
       overflow: 'hidden',
     }}>
-      {/* Header - Run Report feel */}
+      {/* Header */}
       <div style={{
-        padding: '24px 28px',
+        padding: '20px 24px',
         backgroundColor: headerConfig.bg,
-        borderBottom: `1px solid ${headerConfig.text}15`,
+        borderBottom: `1px solid ${headerConfig.text}20`,
       }}>
         <div style={{
           display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: '16px',
+          alignItems: 'center',
+          gap: '12px',
         }}>
           <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: NSD_RADIUS.md,
+            backgroundColor: 'rgba(255,255,255,0.5)',
             display: 'flex',
-            alignItems: 'flex-start',
-            gap: '16px',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}>
-            <div style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: NSD_RADIUS.md,
-              backgroundColor: 'rgba(255,255,255,0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}>
-              <Icon name={headerConfig.icon} size={22} color={headerConfig.text} />
-            </div>
-            <div>
-              <span style={{
-                fontSize: '10px',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.75px',
-                color: headerConfig.text,
-                opacity: 0.7,
-              }}>
-                Execution Outcome
-              </span>
-              <h3 style={{
-                margin: '4px 0 0 0',
-                fontSize: '20px',
-                fontWeight: 700,
-                color: headerConfig.text,
-                fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-                letterSpacing: '-0.01em',
-              }}>
-                {outcomeDisplay?.label || 'Execution Complete'}
-              </h3>
-              <p style={{
-                margin: '6px 0 0 0',
-                fontSize: '14px',
-                color: headerConfig.text,
-                opacity: 0.85,
-                lineHeight: 1.4,
-              }}>
-                {outcomeDisplay?.description || 'Campaign execution has finished.'}
-              </p>
-            </div>
+            <Icon name={headerConfig.icon} size={20} color={headerConfig.text} />
           </div>
-          {/* Duration badge in header */}
-          {duration && (
-            <div style={{
-              padding: '6px 12px',
-              backgroundColor: 'rgba(255,255,255,0.4)',
-              borderRadius: NSD_RADIUS.full,
-              flexShrink: 0,
+          <div>
+            <h3 style={{
+              margin: 0,
+              fontSize: '18px',
+              fontWeight: 600,
+              color: headerConfig.text,
+              fontFamily: NSD_TYPOGRAPHY.fontDisplay,
             }}>
-              <span style={{
-                fontSize: '12px',
-                fontWeight: 500,
-                color: headerConfig.text,
-              }}>
-                {duration}
-              </span>
-            </div>
-          )}
+              {outcomeDisplay?.label || 'Execution Complete'}
+            </h3>
+            <p style={{
+              margin: '4px 0 0 0',
+              fontSize: '14px',
+              color: headerConfig.text,
+              opacity: 0.9,
+            }}>
+              {outcomeDisplay?.description || 'Campaign execution has finished.'}
+            </p>
+          </div>
         </div>
       </div>
 

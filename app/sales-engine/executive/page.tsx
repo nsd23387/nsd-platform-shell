@@ -1,467 +1,688 @@
-'use client';
-
 /**
- * Executive Dashboard
+ * Executive Dashboard Page
  * 
- * Read-only observability dashboard designed for executive-level understanding.
+ * OBSERVATIONS-FIRST ARCHITECTURE:
+ * Read-only executive metrics dashboard.
  * 
- * Layout:
- * - System Health (top) - Is the system healthy?
- * - Market Reality (left) - How big is the opportunity?
- * - Operational Yield (right) - What have we processed?
- * - Campaign Distribution (bottom) - How are campaigns distributed?
+ * CRITICAL CONSTRAINTS:
+ * - NO execution controls (no Run buttons)
+ * - NO governance actions (no Approve/Reject)
+ * - PURE observability — metrics only
+ * - Uses /api/proxy/executive-summary
  * 
- * Key Principles:
- * - READ-ONLY: No execution controls
- * - SELF-EXPLANATORY: Clear labels, explicit source attribution
- * - TRUST-BUILDING: Neutral language, no alarming failure states
- * - OBSERVATIONS-FIRST: Market Reality ≠ Operational Yield
+ * PURPOSE:
+ * Provide executives with confidence in system health
+ * without exposing operational complexity or controls.
+ * 
+ * METRICS SHOWN:
+ * - Campaign counts by governance status
+ * - Recent execution outcomes by type
+ * - Aggregate market reality
+ * - Aggregate operational yield
+ * - System health indicators
  */
+
+'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { NSD_COLORS, NSD_TYPOGRAPHY, NSD_RADIUS, NSD_GRADIENTS } from '../lib/design-tokens';
+import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, NSD_SHADOWS, NSD_GRADIENTS } from '../lib/design-tokens';
 import { Icon } from '../../../design/components/Icon';
-import { NavBar } from '../components/ui/NavBar';
+import { getOutcomeMessage, type OutcomeType } from '../lib/outcome-messaging';
 
+/**
+ * Executive summary data structure.
+ */
 interface ExecutiveSummary {
-  systemHealth: {
-    status: 'healthy' | 'degraded' | 'unavailable';
-    lastChecked: string;
-    activeWorkflows: number;
-    errorRate: number;
+  timestamp: string;
+  campaigns: {
+    total: number;
+    byGovernanceStatus: Record<string, number>;
+  };
+  recentOutcomes: {
+    last24h: {
+      total: number;
+      SUCCESS: number;
+      VALID_EMPTY_OBSERVATION: number;
+      CONFIG_INCOMPLETE: number;
+      INFRA_ERROR: number;
+      EXECUTION_ERROR: number;
+    };
+    last7d: {
+      total: number;
+      SUCCESS: number;
+      VALID_EMPTY_OBSERVATION: number;
+      CONFIG_INCOMPLETE: number;
+      INFRA_ERROR: number;
+      EXECUTION_ERROR: number;
+    };
   };
   marketReality: {
-    totalOrganizations: number;
-    totalContacts: number;
-    geographicCoverage: string[];
-    dataFreshness: string;
+    totalObservedOrganizations: number;
+    totalObservedContacts: number;
+    totalEstimatedReachable: number;
   };
   operationalYield: {
-    processedOrganizations: number;
-    qualifiedContacts: number;
-    promotedLeads: number;
-    conversionRate: number;
+    totalProcessedOrganizations: number;
+    totalProcessedContacts: number;
+    totalPromotedLeads: number;
+    totalSentEmails: number;
   };
-  campaignDistribution: {
-    draft: number;
-    pendingReview: number;
-    approved: number;
-    completed: number;
-    total: number;
+  health: {
+    systemStatus: 'healthy' | 'degraded' | 'down' | 'unknown';
+    lastSuccessfulExecution: string | null;
+    errorRate24h: number;
   };
+  _source?: string;
 }
 
-const MOCK_EXECUTIVE_DATA: ExecutiveSummary = {
-  systemHealth: {
-    status: 'healthy',
-    lastChecked: new Date().toISOString(),
-    activeWorkflows: 3,
-    errorRate: 0.02,
-  },
-  marketReality: {
-    totalOrganizations: 14523,
-    totalContacts: 89421,
-    geographicCoverage: ['Northeast US', 'Southeast US', 'Midwest US'],
-    dataFreshness: '2 hours ago',
-  },
-  operationalYield: {
-    processedOrganizations: 2341,
-    qualifiedContacts: 12456,
-    promotedLeads: 847,
-    conversionRate: 6.8,
-  },
-  campaignDistribution: {
-    draft: 5,
-    pendingReview: 3,
-    approved: 8,
-    completed: 22,
-    total: 38,
-  },
-};
+/**
+ * Metric card for large numbers.
+ */
+function MetricCard({
+  label,
+  value,
+  subtitle,
+  color,
+  trend,
+}: {
+  label: string;
+  value: number | string;
+  subtitle?: string;
+  color?: string;
+  trend?: { value: number; label: string };
+}) {
+  return (
+    <div style={{
+      padding: '20px',
+      backgroundColor: NSD_COLORS.background,
+      borderRadius: NSD_RADIUS.lg,
+      boxShadow: NSD_SHADOWS.sm,
+      border: `1px solid ${NSD_COLORS.border.light}`,
+    }}>
+      <div style={{
+        fontSize: '12px',
+        fontWeight: 500,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+        color: NSD_COLORS.text.muted,
+        marginBottom: '8px',
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontSize: '32px',
+        fontWeight: 700,
+        color: color || NSD_COLORS.text.primary,
+        fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+        lineHeight: 1,
+      }}>
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </div>
+      {subtitle && (
+        <div style={{
+          fontSize: '12px',
+          color: NSD_COLORS.text.muted,
+          marginTop: '4px',
+        }}>
+          {subtitle}
+        </div>
+      )}
+      {trend && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          marginTop: '8px',
+          fontSize: '12px',
+          color: trend.value >= 0 ? NSD_COLORS.semantic.positive.text : NSD_COLORS.semantic.critical.text,
+        }}>
+          <Icon name={trend.value >= 0 ? 'check' : 'warning'} size={12} />
+          {trend.label}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Outcome distribution bar.
+ */
+function OutcomeDistribution({
+  title,
+  data,
+}: {
+  title: string;
+  data: {
+    total: number;
+    SUCCESS: number;
+    VALID_EMPTY_OBSERVATION: number;
+    CONFIG_INCOMPLETE: number;
+    INFRA_ERROR: number;
+    EXECUTION_ERROR: number;
+  };
+}) {
+  const outcomes: OutcomeType[] = ['SUCCESS', 'VALID_EMPTY_OBSERVATION', 'CONFIG_INCOMPLETE', 'INFRA_ERROR', 'EXECUTION_ERROR'];
+  
+  return (
+    <div style={{ marginBottom: '20px' }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        marginBottom: '8px',
+      }}>
+        <span style={{
+          fontSize: '13px',
+          fontWeight: 500,
+          color: NSD_COLORS.text.primary,
+        }}>
+          {title}
+        </span>
+        <span style={{
+          fontSize: '14px',
+          fontWeight: 600,
+          color: NSD_COLORS.text.primary,
+        }}>
+          {data.total} runs
+        </span>
+      </div>
+      
+      {/* Stacked bar */}
+      {data.total > 0 && (
+        <div style={{
+          height: '24px',
+          borderRadius: NSD_RADIUS.sm,
+          overflow: 'hidden',
+          display: 'flex',
+          backgroundColor: NSD_COLORS.surface,
+        }}>
+          {outcomes.map((outcome) => {
+            const count = data[outcome];
+            if (count === 0) return null;
+            const percentage = (count / data.total) * 100;
+            const message = getOutcomeMessage(outcome);
+            return (
+              <div
+                key={outcome}
+                style={{
+                  width: `${percentage}%`,
+                  backgroundColor: message.colors.bg,
+                  borderRight: `1px solid ${NSD_COLORS.background}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title={`${message.label}: ${count}`}
+              >
+                {percentage > 10 && (
+                  <span style={{
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    color: message.colors.text,
+                  }}>
+                    {count}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Legend */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '12px',
+        marginTop: '8px',
+      }}>
+        {outcomes.map((outcome) => {
+          const count = data[outcome];
+          if (count === 0) return null;
+          const message = getOutcomeMessage(outcome);
+          return (
+            <div key={outcome} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}>
+              <div style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '2px',
+                backgroundColor: message.colors.bg,
+                border: `1px solid ${message.colors.border}`,
+              }} />
+              <span style={{
+                fontSize: '11px',
+                color: NSD_COLORS.text.muted,
+              }}>
+                {message.label} ({count})
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * System health indicator.
+ */
+function HealthIndicator({ status, errorRate, lastSuccess }: {
+  status: string;
+  errorRate: number;
+  lastSuccess: string | null;
+}) {
+  const statusConfig: Record<string, { label: string; color: { bg: string; text: string; border: string } }> = {
+    healthy: { label: 'Healthy', color: NSD_COLORS.semantic.positive },
+    degraded: { label: 'Degraded', color: NSD_COLORS.semantic.attention },
+    down: { label: 'Down', color: NSD_COLORS.semantic.critical },
+    unknown: { label: 'Unknown', color: NSD_COLORS.semantic.muted },
+  };
+  
+  const config = statusConfig[status] || statusConfig.unknown;
+  
+  return (
+    <div style={{
+      padding: '16px',
+      backgroundColor: config.color.bg,
+      borderRadius: NSD_RADIUS.lg,
+      border: `1px solid ${config.color.border}`,
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        marginBottom: '8px',
+      }}>
+        <div style={{
+          width: '12px',
+          height: '12px',
+          borderRadius: '50%',
+          backgroundColor: config.color.text,
+        }} />
+        <span style={{
+          fontSize: '16px',
+          fontWeight: 600,
+          color: config.color.text,
+        }}>
+          System {config.label}
+        </span>
+      </div>
+      <div style={{
+        display: 'flex',
+        gap: '24px',
+        fontSize: '12px',
+        color: config.color.text,
+      }}>
+        <div>
+          <strong>Error Rate (24h):</strong> {(errorRate * 100).toFixed(1)}%
+        </div>
+        {lastSuccess && (
+          <div>
+            <strong>Last Success:</strong> {new Date(lastSuccess).toLocaleString()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function ExecutiveDashboardPage() {
   const [data, setData] = useState<ExecutiveSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
+  async function fetchData() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/proxy/executive-summary');
+      const result = await response.json();
+      setData(result);
+      setLastRefresh(new Date());
+    } catch (err) {
+      console.error('[ExecutiveDashboard] Fetch error:', err);
+      setError('Unable to load executive summary');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    // In production, this would fetch from /api/proxy/executive-summary
-    // For now, using mock data to demonstrate the layout
-    setData(MOCK_EXECUTIVE_DATA);
-    setLoading(false);
+    fetchData();
+    
+    // Auto-refresh every 5 minutes
+    const interval = setInterval(fetchData, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
-
-  const handleRefresh = () => {
-    setLastRefresh(new Date());
-    // In production, this would refetch data
-  };
-
-  if (loading) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        backgroundColor: NSD_COLORS.surface, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center' 
-      }}>
-        <p style={{ color: NSD_COLORS.text.secondary }}>Loading executive summary...</p>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface, padding: '32px' }}>
-        <p style={{ color: NSD_COLORS.text.secondary }}>Unable to load dashboard data.</p>
-      </div>
-    );
-  }
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: NSD_COLORS.surface }}>
-      {/* Gradient accent bar */}
-      <div style={{ height: '4px', background: NSD_GRADIENTS.accentBar }} />
-      
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px 16px' }}>
-        <NavBar active="executive" />
-        
-        {/* Header */}
-        <div style={{ marginBottom: '32px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: NSD_COLORS.text.muted }}>
-                Last refresh: {formatTimeAgo(lastRefresh.toISOString())}
-              </span>
-              <button
-                onClick={handleRefresh}
-                style={{
-                  padding: '8px 12px',
-                  backgroundColor: NSD_COLORS.background,
-                  border: `1px solid ${NSD_COLORS.border.default}`,
-                  borderRadius: NSD_RADIUS.md,
-                  fontSize: '13px',
-                  color: NSD_COLORS.text.primary,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <Icon name="refresh" size={14} color={NSD_COLORS.text.secondary} />
-                Refresh
-              </button>
-            </div>
-          </div>
-          <h1 style={{ 
-            margin: 0, 
-            fontSize: 'clamp(24px, 5vw, 32px)', 
-            fontWeight: 700, 
-            color: NSD_COLORS.text.primary,
-            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-            lineHeight: 1.2,
-          }}>
-            Executive Dashboard
-          </h1>
-          <p style={{ 
-            margin: '8px 0 0 0', 
-            fontSize: '15px', 
-            color: NSD_COLORS.text.secondary 
-          }}>
-            Read-only metrics overview • No execution controls
-          </p>
-        </div>
-
-        {/* System Health Banner */}
-        <SystemHealthBanner health={data.systemHealth} />
-
-        {/* Main Grid: Market Reality + Operational Yield */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
-          gap: '16px', 
-          marginBottom: '24px' 
-        }}>
-          {/* Market Reality */}
-          <div>
-            <SectionLabel>Market Reality</SectionLabel>
-            <p style={{ fontSize: '12px', color: NSD_COLORS.text.muted, margin: '4px 0 12px 0' }}>
-              What exists in the market (observed, not processed)
-            </p>
-            <MarketRealityCard market={data.marketReality} />
-          </div>
-
-          {/* Operational Yield */}
-          <div>
-            <SectionLabel>Operational Yield</SectionLabel>
-            <p style={{ fontSize: '12px', color: NSD_COLORS.text.muted, margin: '4px 0 12px 0' }}>
-              What we have processed and converted
-            </p>
-            <OperationalYieldCard yield_data={data.operationalYield} />
-          </div>
-        </div>
-
-        {/* Campaign Distribution */}
-        <div>
-          <SectionLabel>Campaign Distribution</SectionLabel>
-          <p style={{ fontSize: '13px', color: NSD_COLORS.text.muted, margin: '4px 0 16px 0' }}>
-            Current state of all campaigns by governance status
-          </p>
-          <CampaignDistributionCard distribution={data.campaignDistribution} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 style={{
-      margin: 0,
-      fontSize: '18px',
-      fontWeight: 600,
-      color: NSD_COLORS.text.primary,
-    }}>
-      {children}
-    </h2>
-  );
-}
-
-function SystemHealthBanner({ health }: { health: ExecutiveSummary['systemHealth'] }) {
-  const statusConfig = {
-    healthy: { 
-      bg: NSD_COLORS.background, 
-      border: NSD_COLORS.violet.base,
-      text: NSD_COLORS.violet.dark,
-      label: 'System Healthy',
-      icon: 'check' as const,
-    },
-    degraded: { 
-      bg: NSD_COLORS.background, 
-      border: NSD_COLORS.magenta.base,
-      text: NSD_COLORS.magenta.dark,
-      label: 'System Degraded',
-      icon: 'warning' as const,
-    },
-    unavailable: { 
-      bg: NSD_COLORS.background, 
-      border: NSD_COLORS.magenta.dark,
-      text: NSD_COLORS.magenta.dark,
-      label: 'System Unavailable',
-      icon: 'warning' as const,
-    },
-  };
-
-  const config = statusConfig[health.status];
-
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '20px 24px',
-      backgroundColor: config.bg,
-      borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${NSD_COLORS.border.light}`,
-      borderLeft: `4px solid ${config.border}`,
-      marginBottom: '32px',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{
-          width: '32px',
-          height: '32px',
-          borderRadius: '50%',
-          backgroundColor: `${config.border}15`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          <Icon name={config.icon} size={18} color={config.border} />
-        </div>
-        <div>
-          <div style={{ 
-            fontSize: '16px', 
-            fontWeight: 600, 
-            color: config.text,
-          }}>
-            {config.label}
-          </div>
-          <div style={{ fontSize: '13px', color: NSD_COLORS.text.muted }}>
-            Last checked: {formatTimeAgo(health.lastChecked)}
-          </div>
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: '32px' }}>
-        <MetricItem label="Active Workflows" value={health.activeWorkflows.toString()} />
-        <MetricItem label="Error Rate (24h)" value={`${(health.errorRate * 100).toFixed(1)}%`} />
-      </div>
-    </div>
-  );
-}
-
-function MarketRealityCard({ market }: { market: ExecutiveSummary['marketReality'] }) {
-  return (
-    <div style={{
-      padding: '24px',
-      backgroundColor: NSD_COLORS.background,
-      borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${NSD_COLORS.border.light}`,
-    }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-        <LargeMetric label="Organizations" value={market.totalOrganizations.toLocaleString()} sublabel="Total in market" />
-        <LargeMetric label="Contacts" value={market.totalContacts.toLocaleString()} sublabel="Total identified" />
-      </div>
-      <div style={{ 
-        display: 'flex', 
-        gap: '24px', 
-        paddingTop: '16px',
-        borderTop: `1px solid ${NSD_COLORS.border.light}`,
-      }}>
-        <MetricItem label="Geographic Coverage" value={market.geographicCoverage.join(', ')} />
-        <MetricItem label="Data Freshness" value={market.dataFreshness} />
-      </div>
-    </div>
-  );
-}
-
-function OperationalYieldCard({ yield_data }: { yield_data: ExecutiveSummary['operationalYield'] }) {
-  return (
-    <div style={{
-      padding: '24px',
-      backgroundColor: NSD_COLORS.background,
-      borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${NSD_COLORS.border.light}`,
-    }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-        <LargeMetric label="Organizations" value={yield_data.processedOrganizations.toLocaleString()} sublabel="Processed" />
-        <LargeMetric label="Contacts" value={yield_data.qualifiedContacts.toLocaleString()} sublabel="Qualified" />
-      </div>
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: '1fr 1fr', 
-        gap: '20px',
-        paddingTop: '16px',
-        borderTop: `1px solid ${NSD_COLORS.border.light}`,
-      }}>
-        <LargeMetric label="Promoted Leads" value={yield_data.promotedLeads.toLocaleString()} sublabel="Ready for outreach" />
-        <LargeMetric label="Conversion Rate" value={`${yield_data.conversionRate.toFixed(1)}%`} sublabel="Contacts → Leads" />
-      </div>
-    </div>
-  );
-}
-
-function CampaignDistributionCard({ distribution }: { distribution: ExecutiveSummary['campaignDistribution'] }) {
-  const segments = [
-    { label: 'Draft', count: distribution.draft, color: NSD_COLORS.indigo.base },
-    { label: 'Pending Review', count: distribution.pendingReview, color: NSD_COLORS.magenta.base },
-    { label: 'Approved', count: distribution.approved, color: NSD_COLORS.violet.base },
-    { label: 'Completed', count: distribution.completed, color: NSD_COLORS.violet.dark },
-  ];
-
-  return (
-    <div style={{
-      padding: '24px',
-      backgroundColor: NSD_COLORS.background,
-      borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${NSD_COLORS.border.light}`,
-    }}>
-      {/* Total */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ fontSize: '14px', color: NSD_COLORS.text.muted, marginBottom: '4px' }}>
-          Total Campaigns
-        </div>
-        <div style={{ fontSize: '36px', fontWeight: 700, color: NSD_COLORS.text.primary }}>
-          {distribution.total}
-        </div>
-      </div>
-
-      {/* Distribution Bar */}
+      {/* Header gradient bar */}
       <div style={{
-        height: '12px',
-        borderRadius: '6px',
-        overflow: 'hidden',
-        display: 'flex',
-        backgroundColor: NSD_COLORS.border.light,
-        marginBottom: '16px',
-      }}>
-        {segments.map((seg, idx) => (
-          <div
-            key={seg.label}
-            style={{
-              width: distribution.total > 0 ? `${(seg.count / distribution.total) * 100}%` : '0%',
-              height: '100%',
-              backgroundColor: seg.color,
-              transition: 'width 0.3s ease',
-            }}
-          />
-        ))}
-      </div>
+        height: '4px',
+        background: NSD_GRADIENTS.accentBar,
+      }} />
 
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-        {segments.map((seg) => (
-          <div key={seg.label} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px' }}>
+        {/* Page Header */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: '32px',
+        }}>
+          <div>
             <div style={{
-              width: '12px',
-              height: '12px',
-              borderRadius: '3px',
-              backgroundColor: seg.color,
-            }} />
-            <span style={{ fontSize: '14px', color: NSD_COLORS.text.secondary }}>
-              {seg.label}
-            </span>
-            <span style={{ fontSize: '14px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
-              {seg.count}
-            </span>
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '8px',
+            }}>
+              <Link href="/sales-engine" style={{
+                fontSize: '14px',
+                color: NSD_COLORS.text.muted,
+                textDecoration: 'none',
+              }}>
+                ← Back to Campaigns
+              </Link>
+            </div>
+            <h1 style={{
+              margin: 0,
+              fontSize: '28px',
+              fontWeight: 700,
+              color: NSD_COLORS.text.primary,
+              fontFamily: NSD_TYPOGRAPHY.fontDisplay,
+            }}>
+              Executive Dashboard
+            </h1>
+            <p style={{
+              margin: '8px 0 0 0',
+              fontSize: '14px',
+              color: NSD_COLORS.text.secondary,
+            }}>
+              Read-only metrics overview • No execution controls
+            </p>
           </div>
-        ))}
+          
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+          }}>
+            <span style={{
+              fontSize: '12px',
+              color: NSD_COLORS.text.muted,
+            }}>
+              Last refresh: {lastRefresh.toLocaleTimeString()}
+            </span>
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              style={{
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: 500,
+                backgroundColor: NSD_COLORS.background,
+                color: NSD_COLORS.text.primary,
+                border: `1px solid ${NSD_COLORS.border.light}`,
+                borderRadius: NSD_RADIUS.md,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
+              }}
+            >
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div style={{
+            padding: '16px',
+            marginBottom: '24px',
+            backgroundColor: NSD_COLORS.semantic.critical.bg,
+            borderRadius: NSD_RADIUS.lg,
+            border: `1px solid ${NSD_COLORS.semantic.critical.border}`,
+          }}>
+            <p style={{ margin: 0, color: NSD_COLORS.semantic.critical.text }}>
+              {error}
+            </p>
+          </div>
+        )}
+
+        {data && (
+          <>
+            {/* System Health */}
+            <div style={{ marginBottom: '24px' }}>
+              <HealthIndicator
+                status={data.health.systemStatus}
+                errorRate={data.health.errorRate24h}
+                lastSuccess={data.health.lastSuccessfulExecution}
+              />
+            </div>
+
+            {/* Key Metrics */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: '16px',
+              marginBottom: '32px',
+            }}>
+              <MetricCard
+                label="Total Campaigns"
+                value={data.campaigns.total}
+              />
+              <MetricCard
+                label="Market Observed"
+                value={data.marketReality.totalObservedOrganizations}
+                subtitle="Organizations"
+                color={NSD_COLORS.secondary}
+              />
+              <MetricCard
+                label="Leads Promoted"
+                value={data.operationalYield.totalPromotedLeads}
+                subtitle="From execution"
+                color={NSD_COLORS.primary}
+              />
+              <MetricCard
+                label="Emails Sent"
+                value={data.operationalYield.totalSentEmails}
+                subtitle="Total dispatched"
+                color={NSD_COLORS.cta}
+              />
+            </div>
+
+            {/* Two Column Layout */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '24px',
+            }}>
+              {/* Left: Execution Outcomes */}
+              <div style={{
+                padding: '20px',
+                backgroundColor: NSD_COLORS.background,
+                borderRadius: NSD_RADIUS.lg,
+                boxShadow: NSD_SHADOWS.sm,
+                border: `1px solid ${NSD_COLORS.border.light}`,
+              }}>
+                <h3 style={{
+                  margin: '0 0 16px 0',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  color: NSD_COLORS.text.primary,
+                }}>
+                  Execution Outcomes
+                </h3>
+                <OutcomeDistribution
+                  title="Last 24 Hours"
+                  data={data.recentOutcomes.last24h}
+                />
+                <OutcomeDistribution
+                  title="Last 7 Days"
+                  data={data.recentOutcomes.last7d}
+                />
+              </div>
+
+              {/* Right: Market & Yield */}
+              <div style={{
+                padding: '20px',
+                backgroundColor: NSD_COLORS.background,
+                borderRadius: NSD_RADIUS.lg,
+                boxShadow: NSD_SHADOWS.sm,
+                border: `1px solid ${NSD_COLORS.border.light}`,
+              }}>
+                <h3 style={{
+                  margin: '0 0 16px 0',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  color: NSD_COLORS.text.primary,
+                }}>
+                  Market Reality vs Operational Yield
+                </h3>
+                
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '16px',
+                }}>
+                  {/* Market Reality */}
+                  <div style={{
+                    padding: '16px',
+                    backgroundColor: NSD_COLORS.indigo.light + '40',
+                    borderRadius: NSD_RADIUS.md,
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      color: NSD_COLORS.text.muted,
+                      marginBottom: '12px',
+                    }}>
+                      Market Reality
+                    </div>
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Organizations</div>
+                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                        {data.marketReality.totalObservedOrganizations.toLocaleString()}
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Contacts</div>
+                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                        {data.marketReality.totalObservedContacts.toLocaleString()}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Est. Reachable</div>
+                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                        {data.marketReality.totalEstimatedReachable.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Operational Yield */}
+                  <div style={{
+                    padding: '16px',
+                    backgroundColor: NSD_COLORS.magenta.light + '40',
+                    borderRadius: NSD_RADIUS.md,
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      color: NSD_COLORS.text.muted,
+                      marginBottom: '12px',
+                    }}>
+                      Operational Yield
+                    </div>
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Orgs Processed</div>
+                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                        {data.operationalYield.totalProcessedOrganizations.toLocaleString()}
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Leads</div>
+                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                        {data.operationalYield.totalPromotedLeads.toLocaleString()}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: NSD_COLORS.text.muted }}>Emails Sent</div>
+                      <div style={{ fontSize: '20px', fontWeight: 600, color: NSD_COLORS.text.primary }}>
+                        {data.operationalYield.totalSentEmails.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <p style={{
+                  margin: '12px 0 0 0',
+                  fontSize: '11px',
+                  color: NSD_COLORS.text.muted,
+                }}>
+                  Market Reality = what exists. Operational Yield = what we&apos;ve processed.
+                </p>
+              </div>
+            </div>
+
+            {/* Campaign Status Breakdown */}
+            <div style={{
+              marginTop: '24px',
+              padding: '20px',
+              backgroundColor: NSD_COLORS.background,
+              borderRadius: NSD_RADIUS.lg,
+              boxShadow: NSD_SHADOWS.sm,
+              border: `1px solid ${NSD_COLORS.border.light}`,
+            }}>
+              <h3 style={{
+                margin: '0 0 16px 0',
+                fontSize: '15px',
+                fontWeight: 600,
+                color: NSD_COLORS.text.primary,
+              }}>
+                Campaigns by Governance Status
+              </h3>
+              <div style={{
+                display: 'flex',
+                gap: '24px',
+                flexWrap: 'wrap',
+              }}>
+                {Object.entries(data.campaigns.byGovernanceStatus).map(([status, count]) => (
+                  <div key={status} style={{
+                    padding: '12px 16px',
+                    backgroundColor: NSD_COLORS.surface,
+                    borderRadius: NSD_RADIUS.md,
+                    minWidth: '100px',
+                  }}>
+                    <div style={{
+                      fontSize: '24px',
+                      fontWeight: 700,
+                      color: NSD_COLORS.text.primary,
+                    }}>
+                      {count}
+                    </div>
+                    <div style={{
+                      fontSize: '12px',
+                      color: NSD_COLORS.text.muted,
+                      textTransform: 'capitalize',
+                    }}>
+                      {status.replace('_', ' ').toLowerCase()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
-}
-
-function MetricItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>
-        {label}
-      </div>
-      <div style={{ fontSize: '14px', color: NSD_COLORS.text.primary, fontWeight: 500 }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function LargeMetric({ label, value, sublabel }: { label: string; value: string; sublabel: string }) {
-  return (
-    <div>
-      <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
-        {label}
-      </div>
-      <div style={{ fontSize: '28px', fontWeight: 700, color: NSD_COLORS.text.primary, lineHeight: 1.2 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: '12px', color: NSD_COLORS.text.muted, marginTop: '2px' }}>
-        {sublabel}
-      </div>
-    </div>
-  );
-}
-
-function formatTimeAgo(isoString: string): string {
-  const now = new Date();
-  const then = new Date(isoString);
-  const diffMs = now.getTime() - then.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins} min ago`;
-  
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-  
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
 }

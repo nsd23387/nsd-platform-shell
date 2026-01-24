@@ -199,28 +199,20 @@ function TimelineStage({
   // In retrospective view, compress completed stages
   const isCompressed = isRetrospective && stage.status === 'completed' && !isLast;
   const effectiveCompact = compact || isCompressed;
-  
-  // Terminal stage gets extra visual emphasis
-  const isTerminal = stage.status === 'terminal';
-  const isInProgress = stage.status === 'in_progress';
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'flex-start',
-      transition: 'opacity 0.2s ease',
-    }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
       {/* Timeline connector */}
       <div style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        marginRight: '18px',
+        marginRight: '16px',
       }}>
         {/* Stage Icon Circle */}
         <div style={{
-          width: isTerminal ? '44px' : (effectiveCompact ? '28px' : '36px'),
-          height: isTerminal ? '44px' : (effectiveCompact ? '28px' : '36px'),
+          width: effectiveCompact ? '32px' : '40px',
+          height: effectiveCompact ? '32px' : '40px',
           borderRadius: '50%',
           backgroundColor: config.bgColor,
           border: `2px solid ${config.borderColor}`,
@@ -228,13 +220,8 @@ function TimelineStage({
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          // Highlight terminal stage with outer ring
-          boxShadow: isTerminal 
-            ? `0 0 0 4px ${config.borderColor}30` 
-            : isInProgress 
-              ? `0 0 0 3px ${config.borderColor}20`
-              : undefined,
-          transition: 'all 0.2s ease',
+          // Highlight terminal stage
+          boxShadow: stage.status === 'terminal' ? `0 0 0 3px ${config.borderColor}40` : undefined,
         }}>
           <Icon 
             name={stage.status === 'completed' ? 'check' : 
@@ -242,19 +229,18 @@ function TimelineStage({
                   stage.status === 'terminal' && terminalOutcome === 'failed' ? 'warning' :
                   stage.status === 'terminal' ? 'check' :
                   (stage.icon as any)} 
-            size={isTerminal ? 20 : (effectiveCompact ? 12 : 16)} 
+            size={effectiveCompact ? 14 : 18} 
             color={config.iconColor} 
           />
         </div>
-        {/* Connector Line - improved visual rhythm */}
+        {/* Connector Line */}
         {!isLast && (
           <div style={{
             width: '2px',
-            height: effectiveCompact ? '12px' : '28px',
+            height: effectiveCompact ? '16px' : '32px',
             backgroundColor: stage.status === 'completed' || stage.status === 'terminal'
               ? NSD_COLORS.semantic.positive.border 
               : NSD_COLORS.border.light,
-            transition: 'background-color 0.2s ease',
           }} />
         )}
       </div>
@@ -262,38 +248,32 @@ function TimelineStage({
       {/* Stage Content */}
       <div style={{ 
         flex: 1, 
-        paddingBottom: isLast ? 0 : (effectiveCompact ? '4px' : '20px'),
-        paddingTop: isTerminal ? '8px' : (effectiveCompact ? '2px' : '4px'),
+        paddingBottom: isLast ? 0 : (effectiveCompact ? '8px' : '24px'),
       }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: effectiveCompact ? '0' : '6px',
+          marginBottom: effectiveCompact ? '0' : '4px',
         }}>
           <h4 style={{
             margin: 0,
-            fontSize: isTerminal ? '15px' : (effectiveCompact ? '13px' : '14px'),
-            fontWeight: isTerminal ? 700 : 600,
+            fontSize: effectiveCompact ? '13px' : '14px',
+            fontWeight: stage.status === 'terminal' ? 700 : 600,
             color: config.textColor,
-            letterSpacing: isTerminal ? '-0.01em' : undefined,
           }}>
             {stage.label}
           </h4>
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: '8px',
           }}>
-            {/* Duration badge - styled as secondary metadata */}
+            {/* Duration (retrospective) */}
             {duration && isRetrospective && (
               <span style={{
                 fontSize: '11px',
                 color: NSD_COLORS.text.muted,
-                padding: '2px 8px',
-                backgroundColor: NSD_COLORS.surface,
-                borderRadius: NSD_RADIUS.full,
-                fontWeight: 500,
               }}>
                 {duration}
               </span>
@@ -303,9 +283,6 @@ function TimelineStage({
                 fontSize: '12px',
                 fontWeight: 600,
                 color: NSD_COLORS.primary,
-                padding: '2px 8px',
-                backgroundColor: `${NSD_COLORS.primary}10`,
-                borderRadius: NSD_RADIUS.full,
               }}>
                 {stage.count.toLocaleString()}
               </span>
@@ -314,10 +291,9 @@ function TimelineStage({
               fontSize: '11px',
               fontWeight: 500,
               color: config.iconColor,
-              padding: '3px 10px',
+              padding: '2px 8px',
               backgroundColor: config.bgColor,
               borderRadius: NSD_RADIUS.full,
-              border: `1px solid ${config.borderColor}`,
             }}>
               {config.statusLabel}
             </span>
@@ -328,7 +304,6 @@ function TimelineStage({
             margin: 0,
             fontSize: '13px',
             color: NSD_COLORS.text.muted,
-            lineHeight: 1.4,
           }}>
             {stage.description}
           </p>
@@ -520,30 +495,22 @@ export function ExecutionTimeline({
         </div>
       )}
 
-      {/* Pre-execution message - anticipatory, not broken */}
+      {/* Pre-execution message */}
       {!hasStartedExecution && (
         <div style={{
-          marginTop: '20px',
-          padding: '16px 20px',
-          backgroundColor: NSD_COLORS.surface,
+          marginTop: '16px',
+          padding: '12px 16px',
+          backgroundColor: NSD_COLORS.semantic.muted.bg,
           borderRadius: NSD_RADIUS.md,
-          border: `1px dashed ${NSD_COLORS.border.light}`,
         }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
+          <p style={{
+            margin: 0,
+            fontSize: '13px',
+            color: NSD_COLORS.text.secondary,
+            textAlign: 'center',
           }}>
-            <Icon name="clock" size={16} color={NSD_COLORS.text.muted} />
-            <p style={{
-              margin: 0,
-              fontSize: '13px',
-              color: NSD_COLORS.text.secondary,
-            }}>
-              Ready to execute — timeline will update in real-time once the campaign starts.
-            </p>
-          </div>
+            This timeline will update as the campaign executes through each stage.
+          </p>
         </div>
       )}
     </div>

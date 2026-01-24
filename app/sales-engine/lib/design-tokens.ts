@@ -40,39 +40,37 @@ export const NSD_COLORS = {
   
   /**
    * NSD Brand-aligned status colors
-   * MINIMALIST: White backgrounds with colored borders/text as accents
-   * NO colored backgrounds - magenta/violet/indigo used for borders and text only
+   * NO yellow, green, or red - only magenta, indigo, violet variations
    */
   status: {
-    draft: { bg: '#FFFFFF', text: '#020F5A', border: '#C5CAE9', accent: '#020F5A' },           // Indigo accent - draft
-    pendingReview: { bg: '#FFFFFF', text: '#912D73', border: '#F9A8D4', accent: '#CC368F' },   // Magenta accent - needs review
-    approvedReady: { bg: '#FFFFFF', text: '#4A1D7A', border: '#CE93D8', accent: '#692BAA' },   // Violet accent - ready
-    running: { bg: '#FFFFFF', text: '#020F5A', border: '#9FA8DA', accent: '#020F5A' },         // Indigo accent - running
-    completed: { bg: '#FFFFFF', text: '#4A1D7A', border: '#CE93D8', accent: '#692BAA' },       // Violet accent - completed
-    failed: { bg: '#FFFFFF', text: '#912D73', border: '#F48FB1', accent: '#912D73' },          // Magenta accent - failed
-    archived: { bg: '#F9FAFB', text: '#4B5563', border: '#D1D5DB', accent: '#6B7280' },        // Gray - archived
+    draft: { bg: '#E8EAF6', text: '#020F5A', border: '#C5CAE9' },           // Indigo tint - draft
+    pendingReview: { bg: '#FCE7F3', text: '#912D73', border: '#F9A8D4' },   // Magenta tint - needs review
+    approvedReady: { bg: '#EDE7F6', text: '#4A1D7A', border: '#CE93D8' },   // Violet tint - ready
+    running: { bg: '#E8EAF6', text: '#020F5A', border: '#9FA8DA' },         // Indigo - running
+    completed: { bg: '#EDE7F6', text: '#4A1D7A', border: '#CE93D8' },       // Violet - completed
+    failed: { bg: '#FCE7F3', text: '#912D73', border: '#F48FB1' },          // Magenta - failed
+    archived: { bg: '#F3F4F6', text: '#4B5563', border: '#D1D5DB' },        // Gray - archived
   },
   
   /**
    * NSD Brand semantic status colors
-   * MINIMALIST: White/neutral backgrounds with colored accents
-   * Use borders and text for color - NOT backgrounds
+   * All colors derived from magenta/indigo/violet palette only
    * 
    * Brand palette mapping:
-   * - active: Indigo accent (running processes, active states)
-   * - positive: Violet accent (completed, success states)
-   * - attention: Magenta accent (needs review, conditional states)
-   * - critical: Magenta dark accent (failures, blocked states)
+   * - active: Indigo (running processes, active states)
+   * - positive: Violet (completed, success states)
+   * - attention: Magenta light (needs review, conditional states)
+   * - critical: Magenta dark (failures, blocked states)
    * - muted: Neutral gray (idle, pending states)
-   * - info: Indigo accent (informational)
+   * - info: Indigo light (informational)
    */
   semantic: {
-    active: { bg: '#FFFFFF', text: '#020F5A', border: '#9FA8DA', accent: '#020F5A' },      // Indigo accent - running/active
-    positive: { bg: '#FFFFFF', text: '#4A1D7A', border: '#CE93D8', accent: '#692BAA' },    // Violet accent - completed/success
-    attention: { bg: '#FFFFFF', text: '#912D73', border: '#F9A8D4', accent: '#CC368F' },   // Magenta accent - warning/review
-    critical: { bg: '#FFFFFF', text: '#912D73', border: '#F48FB1', accent: '#912D73' },    // Magenta accent - error/failed
-    muted: { bg: '#F9FAFB', text: '#6B7280', border: '#D1D5DB', accent: '#6B7280' },       // Gray - idle/pending
-    info: { bg: '#FFFFFF', text: '#020F5A', border: '#C5CAE9', accent: '#020F5A' },        // Indigo accent - informational
+    active: { bg: '#E8EAF6', text: '#020F5A', border: '#9FA8DA' },      // Indigo - running/active
+    positive: { bg: '#EDE7F6', text: '#4A1D7A', border: '#CE93D8' },    // Violet - completed/success
+    attention: { bg: '#FCE7F3', text: '#912D73', border: '#F9A8D4' },   // Magenta light - warning/review
+    critical: { bg: '#FCE7F3', text: '#912D73', border: '#F48FB1' },    // Magenta - error/failed
+    muted: { bg: '#F3F4F6', text: '#6B7280', border: '#D1D5DB' },       // Gray - idle/pending
+    info: { bg: '#E8EAF6', text: '#020F5A', border: '#C5CAE9' },        // Indigo light - informational
   },
   
   // Brand-aligned semantic colors (NO green/yellow/red)

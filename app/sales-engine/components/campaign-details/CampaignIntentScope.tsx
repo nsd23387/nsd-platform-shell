@@ -156,51 +156,45 @@ export function CampaignIntentScope({
       marginBottom: '24px',
       boxShadow: NSD_SHADOWS.sm,
     }}>
-      {/* Campaign Thesis (if provided) - quotation/callout styling */}
+      {/* Campaign Thesis (if provided) */}
       {thesis && (
         <div style={{
-          padding: '20px 24px',
-          marginBottom: '24px',
-          backgroundColor: NSD_COLORS.surface,
+          padding: '16px 20px',
+          marginBottom: '20px',
+          backgroundColor: NSD_COLORS.semantic.info.bg,
           borderRadius: NSD_RADIUS.md,
-          borderLeft: `3px solid ${NSD_COLORS.semantic.info.border}`,
-          position: 'relative',
+          borderLeft: `4px solid ${NSD_COLORS.semantic.info.border}`,
         }}>
-          {/* Subtle quotation mark decoration */}
-          <span style={{
-            position: 'absolute',
-            top: '8px',
-            left: '12px',
-            fontSize: '40px',
-            fontFamily: 'Georgia, serif',
-            color: NSD_COLORS.semantic.info.border,
-            opacity: 0.3,
-            lineHeight: 1,
-          }}>
-            &ldquo;
-          </span>
           <div style={{
-            paddingLeft: '32px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
           }}>
-            <span style={{
-              fontSize: '10px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.75px',
-              color: NSD_COLORS.text.muted,
-            }}>
-              Campaign Thesis
-            </span>
-            <p style={{
-              margin: '8px 0 0 0',
-              fontSize: '16px',
-              fontWeight: 500,
-              color: NSD_COLORS.text.primary,
-              lineHeight: 1.6,
-              fontStyle: 'italic',
-            }}>
-              {thesis}
-            </p>
+            <div style={{ marginTop: '2px', flexShrink: 0 }}>
+              <Icon name="lightbulb" size={18} color={NSD_COLORS.semantic.info.text} />
+            </div>
+            <div>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                color: NSD_COLORS.semantic.info.text,
+                opacity: 0.8,
+              }}>
+                Campaign Thesis
+              </span>
+              <p style={{
+                margin: '6px 0 0 0',
+                fontSize: '15px',
+                fontWeight: 500,
+                color: NSD_COLORS.semantic.info.text,
+                lineHeight: 1.5,
+                fontStyle: 'italic',
+              }}>
+                &ldquo;{thesis}&rdquo;
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -346,38 +340,16 @@ export function CampaignIntentScope({
         </div>
       </div>
 
-      {/* Empty State - calm, informational */}
+      {/* Empty State */}
       {!hasIndustries && !hasRoles && !hasKeywords && !hasCompanySizes && !hasRegions && (
         <div style={{
-          padding: '32px 24px',
+          padding: '24px',
           textAlign: 'center',
+          color: NSD_COLORS.text.muted,
         }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            backgroundColor: NSD_COLORS.surface,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '12px',
-          }}>
-            <Icon name="target" size={22} color={NSD_COLORS.text.muted} />
-          </div>
-          <p style={{ 
-            margin: '0 0 4px 0', 
-            fontSize: '14px',
-            fontWeight: 500,
-            color: NSD_COLORS.text.secondary,
-          }}>
-            Scope not yet defined
-          </p>
-          <p style={{ 
-            margin: 0, 
-            fontSize: '13px',
-            color: NSD_COLORS.text.muted,
-          }}>
-            Campaign targeting will be configured before execution.
+          <Icon name="info" size={24} color={NSD_COLORS.text.muted} />
+          <p style={{ margin: '8px 0 0 0', fontSize: '13px' }}>
+            Campaign scope will be defined during configuration.
           </p>
         </div>
       )}

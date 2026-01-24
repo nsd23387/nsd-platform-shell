@@ -64,8 +64,12 @@ interface DecisionSummaryPanelProps {
   isRunRequesting?: boolean;
   /** Is duplicate in progress */
   isDuplicating?: boolean;
+  /** Is revert to draft in progress */
+  isReverting?: boolean;
   /** Optional message about run request */
   runRequestMessage?: string | null;
+  /** Show "Edit Configuration" instead of "Edit" (for non-draft campaigns) */
+  showEditConfiguration?: boolean;
 }
 
 function CheckItem({ check }: { check: DecisionCheck }) {
@@ -91,36 +95,28 @@ function CheckItem({ check }: { check: DecisionCheck }) {
     <div>
       <div style={{
         display: 'flex',
-        flexWrap: 'wrap',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 'clamp(10px, 2vw, 12px) clamp(12px, 3vw, 16px)',
+        padding: '12px 16px',
         backgroundColor: config.bg,
         borderRadius: showExplanation ? `${NSD_RADIUS.md} ${NSD_RADIUS.md} 0 0` : NSD_RADIUS.md,
-        gap: '8px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
-          <span style={{ flexShrink: 0, display: 'flex' }}>
-            <Icon name={config.icon as any} size={14} color={config.color} />
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Icon name={config.icon as any} size={16} color={config.color} />
           <span style={{
-            fontSize: 'clamp(12px, 3vw, 14px)',
+            fontSize: '14px',
             fontWeight: 500,
             color: NSD_COLORS.text.primary,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
           }}>
             {check.label}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {check.detail && (
             <span style={{
-              fontSize: '11px',
+              fontSize: '12px',
               color: config.color,
               fontWeight: 500,
-              whiteSpace: 'nowrap',
             }}>
               {check.detail}
             </span>
@@ -134,7 +130,7 @@ function CheckItem({ check }: { check: DecisionCheck }) {
                 alignItems: 'center',
                 gap: '4px',
                 padding: '2px 6px',
-                fontSize: '10px',
+                fontSize: '11px',
                 fontWeight: 500,
                 backgroundColor: 'rgba(255,255,255,0.5)',
                 color: config.color,
@@ -144,7 +140,7 @@ function CheckItem({ check }: { check: DecisionCheck }) {
               }}
               title="Why is this blocked?"
             >
-              <Icon name="info" size={10} color={config.color} />
+              <Icon name="info" size={12} color={config.color} />
               {showExplanation ? 'Hide' : 'Why?'}
             </button>
           )}
@@ -203,7 +199,9 @@ export function DecisionSummaryPanel({
   onDuplicate,
   isRunRequesting = false,
   isDuplicating = false,
+  isReverting = false,
   runRequestMessage,
+  showEditConfiguration = false,
 }: DecisionSummaryPanelProps) {
   // Get decision context for explanations
   const statusKey = phaseToStatusKey(phase);
@@ -275,62 +273,53 @@ export function DecisionSummaryPanel({
     <div style={{
       backgroundColor: NSD_COLORS.background,
       borderRadius: NSD_RADIUS.lg,
-      border: `1px solid ${NSD_COLORS.border.default}`,
-      padding: '0',
-      marginBottom: '28px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-      overflow: 'hidden',
+      border: `1px solid ${NSD_COLORS.border.light}`,
+      padding: 'clamp(16px, 4vw, 24px)',
+      marginBottom: '24px',
+      boxShadow: NSD_SHADOWS.sm,
     }}>
-      {/* Header - subtle gradient top border */}
+      {/* Header */}
       <div style={{
-        padding: 'clamp(14px, 3vw, 20px) clamp(16px, 4vw, 24px)',
-        borderBottom: `1px solid ${NSD_COLORS.border.light}`,
-        background: `linear-gradient(to bottom, ${NSD_COLORS.surface}, ${NSD_COLORS.background})`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        marginBottom: '20px',
       }}>
         <div style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: NSD_RADIUS.md,
+          backgroundColor: NSD_COLORS.semantic.info.bg,
           display: 'flex',
           alignItems: 'center',
-          gap: '14px',
+          justifyContent: 'center',
         }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: NSD_RADIUS.md,
-            backgroundColor: NSD_COLORS.semantic.info.bg,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+          <Icon name="campaigns" size={18} color={NSD_COLORS.semantic.info.text} />
+        </div>
+        <div>
+          <h3 style={{
+            margin: 0,
+            fontSize: '16px',
+            fontWeight: 600,
+            color: NSD_COLORS.text.primary,
+            fontFamily: NSD_TYPOGRAPHY.fontDisplay,
           }}>
-            <Icon name="campaigns" size={20} color={NSD_COLORS.semantic.info.text} />
-          </div>
-          <div>
-            <h3 style={{
-              margin: 0,
-              fontSize: '17px',
-              fontWeight: 600,
-              color: NSD_COLORS.text.primary,
-              fontFamily: NSD_TYPOGRAPHY.fontDisplay,
-            }}>
-              Decision Summary
-            </h3>
-            <p style={{
-              margin: '3px 0 0 0',
-              fontSize: '13px',
-              color: NSD_COLORS.text.secondary,
-            }}>
-              Should I act right now?
-            </p>
-          </div>
+            Decision Summary
+          </h3>
+          <p style={{
+            margin: '2px 0 0 0',
+            fontSize: '13px',
+            color: NSD_COLORS.text.secondary,
+          }}>
+            Should I act right now?
+          </p>
         </div>
       </div>
 
-      {/* Content area */}
-      <div style={{ padding: 'clamp(16px, 4vw, 24px)' }}>
-
-      {/* Checks Grid - responsive 1 or 2 columns */}
+      {/* Checks Grid - stacks on mobile */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '8px',
         marginBottom: '20px',
       }}>
@@ -395,14 +384,14 @@ export function DecisionSummaryPanel({
         </div>
       )}
 
-      {/* Actions - stack on mobile */}
+      {/* Actions - wraps on mobile */}
       <div style={{
         display: 'flex',
-        flexWrap: 'wrap',
         alignItems: 'center',
         gap: '12px',
+        flexWrap: 'wrap',
       }}>
-        {/* Primary Action - Dominant CTA */}
+        {/* Primary Action */}
         {primaryActionLabel && (
           <button
             onClick={primaryActionHandler}
@@ -410,9 +399,9 @@ export function DecisionSummaryPanel({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
-              padding: '12px 28px',
-              fontSize: '15px',
+              gap: '8px',
+              padding: '10px 20px',
+              fontSize: '14px',
               fontWeight: 600,
               backgroundColor: primaryActionDisabled ? NSD_COLORS.text.muted : NSD_COLORS.primary,
               color: '#FFFFFF',
@@ -420,14 +409,10 @@ export function DecisionSummaryPanel({
               borderRadius: NSD_RADIUS.md,
               cursor: primaryActionDisabled ? 'not-allowed' : 'pointer',
               opacity: primaryActionDisabled ? 0.6 : 1,
-              transition: 'all 0.2s ease',
-              boxShadow: primaryActionDisabled 
-                ? 'none' 
-                : `0 4px 12px ${NSD_COLORS.primary}40`,
-              letterSpacing: '0.01em',
+              transition: 'all 0.15s ease',
             }}
           >
-            <Icon name={primaryActionDisabled ? 'clock' : 'play'} size={18} color="#FFFFFF" />
+            <Icon name={primaryActionDisabled ? 'clock' : 'play'} size={16} color="#FFFFFF" />
             {primaryActionLabel}
           </button>
         )}
@@ -437,6 +422,7 @@ export function DecisionSummaryPanel({
           {onEdit && (
             <button
               onClick={onEdit}
+              disabled={isReverting}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -448,11 +434,12 @@ export function DecisionSummaryPanel({
                 color: NSD_COLORS.text.secondary,
                 border: `1px solid ${NSD_COLORS.border.default}`,
                 borderRadius: NSD_RADIUS.md,
-                cursor: 'pointer',
+                cursor: isReverting ? 'not-allowed' : 'pointer',
+                opacity: isReverting ? 0.6 : 1,
               }}
             >
               <Icon name="edit" size={14} color={NSD_COLORS.text.secondary} />
-              Edit
+              {isReverting ? 'Preparing...' : (showEditConfiguration ? 'Edit Configuration' : 'Edit')}
             </button>
           )}
           {onDuplicate && (
@@ -479,7 +466,6 @@ export function DecisionSummaryPanel({
             </button>
           )}
         </div>
-      </div>
       </div>
     </div>
   );

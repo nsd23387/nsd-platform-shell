@@ -4,12 +4,11 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Campaign, CampaignStatus, DashboardThroughput, NeedsAttentionItem } from './types/campaign';
-import { listCampaigns, getDashboardThroughput, getNeedsAttention } from './lib/api';
+import { listCampaigns, getDashboardThroughput, getNeedsAttention, revertCampaignToDraft } from './lib/api';
 import { PageHeader, StatusChip, Button, DataTable, CampaignListHeader, MiniPipelineIndicator, SkeletonTable, EmptyState } from './components/ui';
 import { NSD_COLORS, NSD_RADIUS, NSD_TYPOGRAPHY, NSD_SHADOWS, NSD_GRADIENTS, NSD_TRANSITIONS, NSD_SPACING, NSD_GLOW } from './lib/design-tokens';
 import { Icon } from '../../design/components/Icon';
 import { getTestCampaigns, shouldShowTestCampaigns, isTestCampaign } from './lib/test-campaign';
-import { NavBar } from './components/ui/NavBar';
 
 type FilterOption = 'ALL' | CampaignStatus;
 
@@ -62,6 +61,10 @@ export default function SalesEnginePage() {
   const [throughput, setThroughput] = useState<DashboardThroughput | null>(null);
   const [attention, setAttention] = useState<NeedsAttentionItem[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  
+  // Edit configuration state (revert to draft)
+  const [revertingCampaignId, setRevertingCampaignId] = useState<string | null>(null);
+  const [revertError, setRevertError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSummary() {
@@ -115,6 +118,40 @@ export default function SalesEnginePage() {
     (c) => c.status === 'RUNNING' || c.status === 'RUNNABLE' || c.status === 'PENDING_REVIEW'
   ).length;
 
+  // Handle edit configuration (revert to draft and navigate to edit)
+  const handleEditConfiguration = async (campaign: Campaign) => {
+    setRevertError(null);
+    
+    // If already draft, go directly to edit
+    if (campaign.status === 'DRAFT') {
+      router.push(`/sales-engine/campaigns/${campaign.id}/edit`);
+      return;
+    }
+    
+    // If archived, show error
+    if (campaign.status === 'ARCHIVED') {
+      setRevertError('Cannot edit archived campaigns');
+      return;
+    }
+    
+    // Otherwise, revert to draft first
+    setRevertingCampaignId(campaign.id);
+    try {
+      const result = await revertCampaignToDraft(campaign.id);
+      
+      if (result.reverted || result.status === 'DRAFT') {
+        // Navigate to edit page
+        router.push(`/sales-engine/campaigns/${campaign.id}/edit`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to prepare campaign for editing';
+      setRevertError(message);
+      console.error('Failed to revert campaign:', err);
+    } finally {
+      setRevertingCampaignId(null);
+    }
+  };
+
   const columns = [
     {
       key: 'name',
@@ -150,7 +187,7 @@ export default function SalesEnginePage() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: 'Governance',
       width: '150px',
       render: (campaign: Campaign) => <StatusChip status={campaign.status} size="sm" />,
     },
@@ -169,8 +206,8 @@ export default function SalesEnginePage() {
     },
     {
       key: 'updated_at',
-      header: 'Activity',
-      width: '80px',
+      header: 'Last Activity',
+      width: '100px',
       hideOnMobile: true,
       render: (campaign: Campaign) => (
         <span
@@ -187,20 +224,40 @@ export default function SalesEnginePage() {
     {
       key: 'actions',
       header: '',
-      width: '60px',
+      width: '160px',
       align: 'right' as const,
       hideOnMobile: true,
-      render: (campaign: Campaign) => (
-        <Link
-          href={`/sales-engine/campaigns/${campaign.id}`}
-          style={{ textDecoration: 'none' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Button variant="ghost" size="sm">
-            View
-          </Button>
-        </Link>
-      ),
+      render: (campaign: Campaign) => {
+        const canEditConfig = campaign.status !== 'DRAFT' && campaign.status !== 'ARCHIVED';
+        const isReverting = revertingCampaignId === campaign.id;
+        
+        return (
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            {canEditConfig && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEditConfiguration(campaign);
+                }}
+                disabled={isReverting}
+              >
+                {isReverting ? 'Preparing...' : 'Edit Config'}
+              </Button>
+            )}
+            <Link
+              href={`/sales-engine/campaigns/${campaign.id}`}
+              style={{ textDecoration: 'none' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Button variant="ghost" size="sm">
+                View
+              </Button>
+            </Link>
+          </div>
+        );
+      },
     },
   ];
 
@@ -223,36 +280,37 @@ export default function SalesEnginePage() {
           background: NSD_GRADIENTS.accentBar,
         }}
       />
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 16px' }}>
-        <NavBar active="campaigns" />
-        
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '16px' }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: `${NSD_SPACING.xxl} ${NSD_SPACING.page}` }}>
+        <div style={{ marginBottom: NSD_SPACING.xxl }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: NSD_SPACING.md }}>
             <div>
               <h1
                 style={{
-                  fontSize: 'clamp(24px, 5vw, 36px)',
-                  fontWeight: 700,
+                  ...NSD_TYPOGRAPHY.pageTitle,
                   color: NSD_COLORS.text.primary,
                   fontFamily: NSD_TYPOGRAPHY.fontDisplay,
                   margin: 0,
-                  lineHeight: 1.2,
                 }}
               >
                 Campaigns
               </h1>
               <p
                 style={{
-                  fontSize: '14px',
+                  ...NSD_TYPOGRAPHY.body,
                   color: NSD_COLORS.text.secondary,
-                  marginTop: '8px',
+                  marginTop: NSD_SPACING.sm,
                   marginBottom: 0,
                 }}
               >
                 Observe and manage your sales campaigns
               </p>
             </div>
-            <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: NSD_SPACING.md }}>
+              <Link href="/sales-engine/home" style={{ textDecoration: 'none' }}>
+                <Button variant="secondary" icon="chart">
+                  Dashboard
+                </Button>
+              </Link>
               <Link href="/sales-engine/campaigns/new" style={{ textDecoration: 'none' }}>
                 <Button variant="cta" icon="plus">
                   New Campaign
@@ -270,18 +328,47 @@ export default function SalesEnginePage() {
           isLoading={summaryLoading}
         />
 
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
+        {/* Revert Error Message */}
+        {revertError && (
+          <div style={{
+            padding: '12px 16px',
+            marginBottom: NSD_SPACING.lg,
+            backgroundColor: NSD_COLORS.semantic.critical.bg,
+            borderRadius: NSD_RADIUS.md,
+            border: `1px solid ${NSD_COLORS.semantic.critical.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <p style={{ margin: 0, fontSize: '14px', color: NSD_COLORS.semantic.critical.text }}>
+              {revertError}
+            </p>
+            <button
+              onClick={() => setRevertError(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px',
+              }}
+            >
+              <Icon name="close" size={16} color={NSD_COLORS.semantic.critical.text} />
+            </button>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: NSD_SPACING.lg, marginBottom: NSD_SPACING.lg, alignItems: 'center' }}>
+          <div style={{ flex: 1, position: 'relative', maxWidth: '400px' }}>
             <div
               style={{
                 position: 'absolute',
-                left: '14px',
+                left: '16px',
                 top: '50%',
                 transform: 'translateY(-50%)',
                 pointerEvents: 'none',
               }}
             >
-              <Icon name="target" size={16} color={NSD_COLORS.text.muted} />
+              <Icon name="target" size={18} color={NSD_COLORS.text.muted} />
             </div>
             <input
               type="text"
@@ -290,16 +377,15 @@ export default function SalesEnginePage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
                 width: '100%',
-                padding: '12px 16px 12px 42px',
-                fontSize: '14px',
+                padding: '14px 18px 14px 48px',
+                fontSize: '15px',
                 fontFamily: NSD_TYPOGRAPHY.fontBody,
                 backgroundColor: NSD_COLORS.background,
                 border: `1px solid ${NSD_COLORS.border.light}`,
-                borderRadius: NSD_RADIUS.lg,
+                borderRadius: NSD_RADIUS.xl,
                 outline: 'none',
                 boxShadow: NSD_SHADOWS.input,
                 transition: NSD_TRANSITIONS.default,
-                boxSizing: 'border-box',
               }}
               onFocus={(e) => {
                 e.currentTarget.style.boxShadow = NSD_SHADOWS.inputFocus;
@@ -316,12 +402,9 @@ export default function SalesEnginePage() {
         <div
           style={{
             display: 'flex',
-            gap: '8px',
+            gap: NSD_SPACING.sm,
             flexWrap: 'wrap',
-            marginBottom: '24px',
-            overflowX: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            paddingBottom: '4px',
+            marginBottom: NSD_SPACING.xl,
           }}
         >
           {FILTER_OPTIONS.map((filter) => {
