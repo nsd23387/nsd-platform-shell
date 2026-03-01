@@ -41,7 +41,8 @@ const SOURCE_TAXONOMY: Record<string, string> = {
   referral: 'referral',
 };
 
-export function canonicalSource(raw: string): string {
+export function canonicalSource(raw: string | null | undefined): string {
+  if (raw == null) return 'other';
   return SOURCE_TAXONOMY[raw.toLowerCase().trim()] ?? 'other';
 }
 
@@ -71,6 +72,12 @@ const KPI_CONVERSION_SQL = `
   WHERE conversion_date BETWEEN $1 AND $2
 `;
 
+/**
+ * LIFETIME VIEW — metrics_search_console_page has no date column.
+ * This query returns lifetime totals, not period-filtered values.
+ * Comparisons for organic_clicks/impressions will show delta_pct=0
+ * because both current and previous periods see identical data.
+ */
 const KPI_SEARCH_SQL = `
   SELECT
     COALESCE(SUM(clicks), 0)      AS organic_clicks,
@@ -124,6 +131,10 @@ const PAGES_SQL = `
 // SQL — Sources
 // ============================================
 
+/**
+ * LIFETIME VIEW — dashboard_sources has no date column.
+ * Returns lifetime submission/pipeline totals by source.
+ */
 const SOURCES_SQL = `
   SELECT
     submission_source,
@@ -148,6 +159,11 @@ const FRESHNESS_SQL = `
 // SQL — Phase B: SEO query intelligence
 // ============================================
 
+/**
+ * LIFETIME VIEW — metrics_search_console_query has no date column.
+ * dashboard_pages also has no date column.
+ * Returns lifetime totals per query.
+ */
 const SEO_QUERIES_SQL = `
   SELECT
     q.query,
@@ -357,45 +373,49 @@ export async function executeMarketingQueries(
   const curParams = [opts.startDate, opts.endDate];
   const prevParams = [opts.prevStartDate, opts.prevEndDate];
 
-  // Build parallel query batch
+  // Build parallel query batch.
+  // KPI_SEARCH_SQL has no date params (lifetime view) so it is called
+  // once and reused for both current and previous period KPI builds.
   const queries: Promise<{ rows: Row[] }>[] = [
-    /* 0 */ db.query(KPI_ENGAGEMENT_SQL, curParams),
-    /* 1 */ db.query(KPI_CONVERSION_SQL, curParams),
-    /* 2 */ db.query(KPI_SEARCH_SQL),
-    /* 3 */ db.query(PAGES_SQL, curParams),
-    /* 4 */ db.query(SOURCES_SQL),
-    /* 5 */ db.query(FRESHNESS_SQL),
-    /* 6 */ db.query(KPI_ENGAGEMENT_SQL, prevParams),
-    /* 7 */ db.query(KPI_CONVERSION_SQL, prevParams),
-    /* 8 */ db.query(KPI_SEARCH_SQL),
-    /* 9 */ db.query(SEO_QUERIES_SQL),
-    /* 10 */ db.query(ANOMALY_SESSIONS_SQL, curParams),
-    /* 11 */ db.query(ANOMALY_SUBMISSIONS_SQL, curParams),
-    /* 12 */ db.query(ANOMALY_PIPELINE_SQL, curParams),
+    /* 0  */ db.query(KPI_ENGAGEMENT_SQL, curParams),
+    /* 1  */ db.query(KPI_CONVERSION_SQL, curParams),
+    /* 2  */ db.query(KPI_SEARCH_SQL),
+    /* 3  */ db.query(PAGES_SQL, curParams),
+    /* 4  */ db.query(SOURCES_SQL),
+    /* 5  */ db.query(FRESHNESS_SQL),
+    /* 6  */ db.query(KPI_ENGAGEMENT_SQL, prevParams),
+    /* 7  */ db.query(KPI_CONVERSION_SQL, prevParams),
+    /* 8  */ db.query(SEO_QUERIES_SQL),
+    /* 9  */ db.query(ANOMALY_SESSIONS_SQL, curParams),
+    /* 10 */ db.query(ANOMALY_SUBMISSIONS_SQL, curParams),
+    /* 11 */ db.query(ANOMALY_PIPELINE_SQL, curParams),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 13 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
-      /* 14 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
-      /* 15 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
+      /* 12 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
+      /* 13 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
+      /* 14 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
     );
   }
 
   const results = await Promise.all(queries);
 
+  // KPI_SEARCH_SQL result (lifetime, no date filter) — shared between periods
+  const searchRow = results[2].rows[0] ?? {};
+
   // Current-period KPIs
   const kpis = buildKPIs(
     results[0].rows[0] ?? {},
     results[1].rows[0] ?? {},
-    results[2].rows[0] ?? {},
+    searchRow,
   );
 
   // Previous-period KPIs for comparisons
   const prevKpis = buildKPIs(
     results[6].rows[0] ?? {},
     results[7].rows[0] ?? {},
-    results[8].rows[0] ?? {},
+    searchRow,
   );
 
   const comparisons: MarketingKPIComparisons = {
@@ -441,8 +461,8 @@ export async function executeMarketingQueries(
     conversion_last_date: (fresh.conversion_last_date as string) ?? null,
   };
 
-  // SEO queries
-  const seo_queries: MarketingSEOQuery[] = (results[9].rows ?? [])
+  // SEO queries (index 8 after dedup)
+  const seo_queries: MarketingSEOQuery[] = (results[8].rows ?? [])
     .filter((r: Row) => r.query != null)
     .map((r: Row) => {
       const clicks = nonNegative(toNumber(r.clicks));
@@ -459,20 +479,20 @@ export async function executeMarketingQueries(
       };
     });
 
-  // Anomalies
+  // Anomalies (indices 9-11 after dedup)
   const anomalies: MarketingAnomalies = {
-    sessions_spike: detectSpike(results[10].rows[0] ?? {}),
-    submissions_spike: detectSpike(results[11].rows[0] ?? {}),
-    pipeline_spike: detectSpike(results[12].rows[0] ?? {}),
+    sessions_spike: detectSpike(results[9].rows[0] ?? {}),
+    submissions_spike: detectSpike(results[10].rows[0] ?? {}),
+    pipeline_spike: detectSpike(results[11].rows[0] ?? {}),
   };
 
-  // Timeseries (conditional)
+  // Timeseries (indices 12-14, conditional)
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 13) {
+  if (opts.includeTimeseries && results.length > 12) {
     timeseries = {
-      sessions: mapTimeseries(results[13].rows),
-      submissions: mapTimeseries(results[14].rows),
-      pipeline_value_usd: mapTimeseries(results[15].rows),
+      sessions: mapTimeseries(results[12].rows),
+      submissions: mapTimeseries(results[13].rows),
+      pipeline_value_usd: mapTimeseries(results[14].rows),
     };
   }
 
