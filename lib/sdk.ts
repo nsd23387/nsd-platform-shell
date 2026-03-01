@@ -443,11 +443,12 @@ export async function getSalesDashboardData(period: TimePeriod = '30d') {
 /**
  * GET /activity-spine/marketing/overview
  *
- * Fetches marketing overview metrics (purchases, revenue, channels, landing pages).
+ * Fetches marketing overview metrics.
+ * Accepts flexible query params: preset, start/end, include_timeseries.
  * Read-only endpoint - no mutations.
  */
 export async function getMarketingDashboardData(
-  period: TimePeriod = '30d'
+  params: Record<string, string> = { period: '30d' }
 ): Promise<ActivitySpineResponse<MarketingOverviewResponse>> {
-  return fetchFromActivitySpine<MarketingOverviewResponse>('/marketing/overview', { period });
+  return fetchFromActivitySpine<MarketingOverviewResponse>('/marketing/overview', params);
 }
