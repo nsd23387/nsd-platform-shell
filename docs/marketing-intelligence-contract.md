@@ -38,7 +38,7 @@ The endpoint accepts three mutually exclusive period modes plus two independent 
 | `start` + `end` | `YYYY-MM-DD` each | Explicit date range. Both required. Maximum span: 1095 days (3 years). |
 | `period` (legacy) | `7d`, `30d`, `90d` | Mapped to preset equivalents: `7d` -> `last_7d`, `30d` -> `last_30d`, `90d` -> `last_90d`. |
 | `include_timeseries` | `true` or absent | When `true`, response includes daily timeseries arrays. Does not affect base KPIs. |
-| `compare` | `false` or absent | UI toggle only. Does not affect the backend request. Controls rendering of delta badges. |
+| `compare` | `false` or absent | UI-only rendering toggle. The backend always computes previous-period comparisons regardless of this parameter. The toggle controls whether delta badges are displayed in the UI. It is never sent to the backend. |
 
 ### 2.2 Precedence Rules
 
@@ -102,15 +102,15 @@ All KPIs are aggregated server-side. The UI formats and displays them. No metric
 
 ### 3.7 Organic Clicks
 
-- **Source view:** `analytics.metrics_search_console_page`
+- **Source view:** `analytics.metrics_search_console_page_daily`
 - **Aggregation:** `COALESCE(SUM(clicks), 0)`
-- **Note:** This view has no date column. The aggregation is lifetime, not period-filtered. See Section 9.
+- **Period filtering:** `WHERE metric_date BETWEEN $1 AND $2`
 
 ### 3.8 Impressions
 
-- **Source view:** `analytics.metrics_search_console_page`
+- **Source view:** `analytics.metrics_search_console_page_daily`
 - **Aggregation:** `COALESCE(SUM(impressions), 0)`
-- **Note:** Lifetime view. Same caveat as Organic Clicks.
+- **Period filtering:** `WHERE metric_date BETWEEN $1 AND $2`
 
 ### 3.9 CTR (Click-Through Rate)
 
@@ -141,11 +141,13 @@ These are derived from the KPIs above. Computed server-side via `safeDivide` wit
 
 ### 4.1 Delta Calculation
 
-The backend computes a previous-period value for each of the following KPIs:
+The backend unconditionally computes a previous-period value for each of the following KPIs on every request:
 
 `sessions`, `page_views`, `total_submissions`, `total_pipeline_value_usd`, `organic_clicks`, `impressions`
 
-For each:
+The `comparisons` block is always present in the response. There is no server-side flag to suppress it.
+
+For each KPI:
 
 ```
 delta_pct = safeDivide(current - previous, previous)
@@ -157,7 +159,7 @@ delta_pct = safeDivide(current - previous, previous)
 
 ### 4.2 UI Delta Rendering
 
-The UI renders delta badges only when the Compare toggle is enabled. The toggle does not affect the backend request. Delta values are passed through `safeNumber` before display. If `delta_pct` is null or NaN, the badge renders `0.0%`.
+The UI renders delta badges only when the Compare toggle is enabled (`compare` URL parameter is not `false`). The toggle is purely a rendering concern. The backend always returns comparison data regardless of the toggle state. Delta values are passed through `safeNumber` before display. If `delta_pct` is null or NaN, the badge renders `0.0%`.
 
 ---
 
@@ -178,12 +180,12 @@ A composite executive health indicator on a 0--100 scale. Computed entirely in t
 
 ### 5.3 Availability Rules
 
-A component is included only if its underlying data is available:
+A component is included in the score only when sufficient data exists to produce a meaningful signal. Inclusion is based on data availability, not merely on non-zero values.
 
-- **Revenue Growth:** Included if `total_pipeline_value_usd > 0` OR `delta_pct != 0`.
-- **Traffic Growth:** Included if `sessions > 0` OR `delta_pct != 0`.
-- **Conversion Efficiency:** Included if `sessions > 0`.
-- **SEO CTR:** Included if `impressions > 0`.
+- **Revenue Growth:** Included if `total_pipeline_value_usd > 0` OR the comparison object provides a non-null `delta_pct` value (indicating the backend observed pipeline data in at least one period).
+- **Traffic Growth:** Included if `sessions > 0` OR the comparison object provides a non-null `delta_pct` value (indicating the backend observed session data in at least one period).
+- **Conversion Efficiency:** Included if `sessions > 0` (a conversion rate requires a non-zero denominator).
+- **SEO CTR:** Included if `impressions > 0` (CTR requires a non-zero denominator).
 
 ### 5.4 Weight Renormalization
 
@@ -329,7 +331,7 @@ A spike indicates a statistical deviation, not a guaranteed issue. It is a signa
 
 The following limitations are structural and documented for transparency:
 
-1. **Lifetime views without date filtering.** `metrics_search_console_page`, `metrics_search_console_query`, `dashboard_pages`, and `dashboard_sources` have no date column. Metrics sourced from these views (organic clicks, impressions, avg position, SEO queries, page-level submissions/pipeline, source breakdowns) are lifetime aggregates, not period-filtered. Comparisons for these metrics will show `delta_pct = 0`.
+1. **Lifetime views without date filtering.** `metrics_search_console_query`, `dashboard_pages`, and `dashboard_sources` have no date column. Metrics sourced exclusively from these views (SEO query-level data, page-level submissions/pipeline, source breakdowns) are lifetime aggregates, not period-filtered. Note: KPI-level organic clicks and impressions are sourced from `metrics_search_console_page_daily`, which is period-filtered.
 
 2. **Page-level attribution is not organic-only.** Revenue attributed to a page includes all traffic sources that converted on that page, not only organic visitors.
 
@@ -362,6 +364,38 @@ The following capabilities are anticipated but not yet implemented:
 - **Google Ads ingestion.** Importing ad spend, cost-per-click, and ROAS from Google Ads into the analytics schema for blended organic/paid reporting.
 - **Forecasting layer.** Time-series forecasting based on historical trends to project future sessions, submissions, and pipeline value.
 - **Weekly/monthly rollup granularity.** The `granularity` field in the period block is reserved for future use. Currently fixed to `"day"`.
+
+---
+
+## 12. Data Freshness Expectations
+
+### 12.1 Update Cadence by Source
+
+| Source View | Expected Refresh Frequency | Typical Lag |
+|---|---|---|
+| `analytics.metrics_page_engagement_daily` | Daily | Less than 24 hours. Page engagement data from the previous calendar day is typically available by the following morning (UTC). |
+| `analytics.conversion_metrics_daily` | Daily | Less than 24 hours. Conversion events are ingested on a daily cadence. Near-real-time for submissions that flow through the platform's own form infrastructure. |
+| `analytics.metrics_search_console_page_daily` | Daily | 24--48 hours. Google Search Console data is subject to Google's processing pipeline, which typically finalizes data 24--48 hours after the reporting date. Preliminary data may appear earlier but is subject to revision. |
+| `analytics.dashboard_pages` | Materialized / periodic | Refresh cadence depends on the ODS materialization schedule. Not guaranteed to reflect same-day activity. |
+| `analytics.dashboard_sources` | Materialized / periodic | Same as `dashboard_pages`. |
+
+### 12.2 Freshness Metadata
+
+The endpoint response includes a `meta.data_freshness` block with the latest available date per source:
+
+```
+{
+  "engagement_last_date": "2026-02-28",
+  "search_console_last_date": "2026-02-27",
+  "conversion_last_date": "2026-02-28"
+}
+```
+
+A null value indicates that the corresponding view contains no data.
+
+### 12.3 Design Intent
+
+The Marketing Dashboard is designed for **daily and strategic decision-making**. It is not designed for sub-minute operational monitoring. Users should expect that search console metrics reflect activity from 1--2 days prior, and that conversion metrics reflect the previous complete calendar day. Period selections ending on the current date may show incomplete data for the in-progress day.
 
 ---
 
