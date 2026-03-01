@@ -18,56 +18,85 @@ function safe(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function normalizeDelta(d: number): number {
-  if (d <= -1) return 0;
-  if (d >= 1) return 100;
-  return 50 + d * 50;
+function normalizeDelta(d: unknown): number {
+  const v = safe(d);
+  if (v <= -1) return 0;
+  if (v >= 1) return 100;
+  return 50 + v * 50;
 }
 
-function normalizeRate(r: number): number {
-  const clamped = Math.max(0, Math.min(1, safe(r)));
-  return clamped * 100;
+function normalizeRate(r: unknown): number {
+  const v = Math.max(0, Math.min(1, safe(r)));
+  return v * 100;
+}
+
+interface WeightedComponent {
+  label: string;
+  baseWeight: number;
+  value: number;
 }
 
 function computeScore(
   kpis: MarketingKPIs | undefined,
   comparisons: MarketingKPIComparisons | undefined
 ): { score: number; breakdown: { label: string; value: number; weight: number }[] } {
-  const revDelta = safe(comparisons?.total_pipeline_value_usd?.delta_pct);
-  const trafficDelta = safe(comparisons?.sessions?.delta_pct);
   const sessions = safe(kpis?.sessions);
   const submissions = safe(kpis?.total_submissions);
   const clicks = safe(kpis?.organic_clicks);
   const impressions = safe(kpis?.impressions);
 
-  const convRate = sessions > 0 ? submissions / sessions : 0;
-  const ctr = impressions > 0 ? clicks / impressions : 0;
+  const revenueAvailable = safe(kpis?.total_pipeline_value_usd) > 0 ||
+    safe(comparisons?.total_pipeline_value_usd?.delta_pct) !== 0;
+  const trafficAvailable = sessions > 0 ||
+    safe(comparisons?.sessions?.delta_pct) !== 0;
+  const conversionAvailable = sessions > 0;
+  const ctrAvailable = impressions > 0;
 
-  const hasRevenue = safe(kpis?.total_pipeline_value_usd) > 0 || revDelta !== 0;
+  const components: WeightedComponent[] = [];
 
-  let w1 = 0.4, w2 = 0.3, w3 = 0.2, w4 = 0.1;
-  if (!hasRevenue) {
-    const redistributed = w1;
-    w1 = 0;
-    w2 += redistributed * (w2 / (w2 + w3 + w4));
-    w3 += redistributed * (w3 / (w2 + w3 + w4));
-    w4 += redistributed * (w4 / (w2 + w3 + w4));
+  if (revenueAvailable) {
+    components.push({
+      label: 'Revenue Growth',
+      baseWeight: 0.4,
+      value: normalizeDelta(comparisons?.total_pipeline_value_usd?.delta_pct),
+    });
+  }
+  if (trafficAvailable) {
+    components.push({
+      label: 'Traffic Growth',
+      baseWeight: 0.3,
+      value: normalizeDelta(comparisons?.sessions?.delta_pct),
+    });
+  }
+  if (conversionAvailable) {
+    components.push({
+      label: 'Conversion Efficiency',
+      baseWeight: 0.2,
+      value: normalizeRate(submissions / sessions),
+    });
+  }
+  if (ctrAvailable) {
+    components.push({
+      label: 'SEO CTR',
+      baseWeight: 0.1,
+      value: normalizeRate(clicks / impressions),
+    });
   }
 
-  const revScore = normalizeDelta(revDelta);
-  const trafficScore = normalizeDelta(trafficDelta);
-  const convScore = normalizeRate(convRate);
-  const ctrScore = normalizeRate(ctr);
+  const totalWeight = components.reduce((s, c) => s + c.baseWeight, 0);
 
-  const raw = w1 * revScore + w2 * trafficScore + w3 * convScore + w4 * ctrScore;
+  if (totalWeight === 0) {
+    return { score: 50, breakdown: [] };
+  }
+
+  const raw = components.reduce((s, c) => s + (c.baseWeight / totalWeight) * c.value, 0);
   const score = Math.max(0, Math.min(100, Math.round(raw)));
 
-  const breakdown = [
-    { label: 'Revenue Growth', value: Math.round(revScore), weight: w1 },
-    { label: 'Traffic Growth', value: Math.round(trafficScore), weight: w2 },
-    { label: 'Conversion Efficiency', value: Math.round(convScore), weight: w3 },
-    { label: 'SEO CTR', value: Math.round(ctrScore), weight: w4 },
-  ].filter((b) => b.weight > 0);
+  const breakdown = components.map((c) => ({
+    label: c.label,
+    value: Math.round(c.value),
+    weight: c.baseWeight / totalWeight,
+  }));
 
   return { score, breakdown };
 }
@@ -103,7 +132,6 @@ export function MarketingPerformanceScore({ kpis, comparisons, loading }: Market
         position: 'relative',
       }}
     >
-      {/* Circular badge */}
       <div
         style={{ position: 'relative', flexShrink: 0, cursor: 'default' }}
         onMouseEnter={() => setShowTooltip(true)}
@@ -137,7 +165,6 @@ export function MarketingPerformanceScore({ kpis, comparisons, loading }: Market
         </div>
       </div>
 
-      {/* Label */}
       <div>
         <div style={{ fontFamily: fontFamily.display, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: text.primary, lineHeight: lineHeight.snug }}>
           Marketing Performance Score
@@ -147,8 +174,7 @@ export function MarketingPerformanceScore({ kpis, comparisons, loading }: Market
         </div>
       </div>
 
-      {/* Hover tooltip */}
-      {showTooltip && (
+      {showTooltip && breakdown.length > 0 && (
         <div
           style={{
             position: 'absolute',
