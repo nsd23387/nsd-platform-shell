@@ -139,6 +139,34 @@ export interface MockupSLAMetrics {
 }
 
 // ============================================
+// Marketing Metrics
+// ============================================
+
+export interface MarketingChannel {
+  channel: string;
+  visitors: number;
+  conversions: number;
+  conversionRate: number;
+}
+
+export interface MarketingLandingPage {
+  path: string;
+  visitors: number;
+  bounceRate: number;
+  avgTimeOnPageSeconds: number;
+}
+
+export interface MarketingOverviewResponse {
+  purchases: number;
+  revenue: number;
+  conversionRate: number;
+  organicClicks: number;
+  channels?: MarketingChannel[];
+  landingPages?: MarketingLandingPage[];
+  periodDays: number;
+}
+
+// ============================================
 // Time Period Options
 // ============================================
 export type TimePeriod = '7d' | '30d';

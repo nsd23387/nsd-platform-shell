@@ -18,6 +18,7 @@ import type {
   OrderFunnel,
   SLAMetrics,
   MockupSLAMetrics,
+  MarketingOverviewResponse,
   TimePeriod,
   AsyncState,
 } from '../types/activity-spine';
@@ -33,6 +34,7 @@ import {
   getDesignDashboardData,
   getMediaDashboardData,
   getSalesDashboardData,
+  getMarketingDashboardData,
 } from '../lib/sdk';
 
 // ============================================
@@ -315,6 +317,38 @@ export function useSalesDashboard(period: TimePeriod = '30d') {
           funnel: funnel.data,
           orders: orders.data,
         },
+        loading: false,
+        error: null,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch dashboard data';
+      setState({ data: null, loading: false, error: message });
+    }
+  }, [period]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { ...state, refetch: fetchData };
+}
+
+/**
+ * Fetch all data needed for Marketing Dashboard
+ */
+export function useMarketingDashboard(period: TimePeriod = '30d') {
+  const [state, setState] = useState<AsyncState<MarketingOverviewResponse>>({
+    data: null,
+    loading: true,
+    error: null,
+  });
+
+  const fetchData = useCallback(async () => {
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const response = await getMarketingDashboardData(period);
+      setState({
+        data: response.data,
         loading: false,
         error: null,
       });

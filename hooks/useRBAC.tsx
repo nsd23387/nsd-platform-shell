@@ -30,6 +30,7 @@ export const DASHBOARD_PERMISSIONS = {
   design: 'dashboard:design:view',
   media: 'dashboard:media:view',
   sales: 'dashboard:sales:view',
+  marketing: 'dashboard:marketing:view',
 } as const;
 
 export type DashboardName = keyof typeof DASHBOARD_PERMISSIONS;
