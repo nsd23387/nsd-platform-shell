@@ -50,3 +50,6 @@ export type { EmptyStateCardProps } from './EmptyStateCard';
 
 export { TimeseriesChart } from './TimeseriesChart';
 export type { TimeseriesChartProps } from './TimeseriesChart';
+
+export { MarketingPerformanceScore } from './MarketingPerformanceScore';
+export type { MarketingPerformanceScoreProps } from './MarketingPerformanceScore';

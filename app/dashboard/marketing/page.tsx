@@ -11,12 +11,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useMarketingDashboard } from '../../../hooks/useActivitySpine';
 import { DashboardGuard } from '../../../hooks/useRBAC';
-import { DashboardCard, AccessDenied } from '../../../components/dashboard';
+import { DashboardCard, AccessDenied, MarketingPerformanceScore } from '../../../components/dashboard';
 import { parsePeriodState, toBackendParams, updateUrl } from './lib/period';
 import type { PeriodState } from './lib/period';
 import { MarketingDashboardHeader } from './components/MarketingDashboardHeader';
 import { MarketingKPIOverview } from './components/MarketingKPIOverview';
 import { MarketingSourcesPanel } from './components/MarketingSourcesPanel';
+import { MarketingSeoRevenuePanel } from './components/MarketingSeoRevenuePanel';
 import { MarketingSeoIntelligencePanel } from './components/MarketingSeoIntelligencePanel';
 import { MarketingPagesPerformancePanel } from './components/MarketingPagesPerformancePanel';
 import { MarketingTimeseriesPanel } from './components/MarketingTimeseriesPanel';
@@ -58,6 +59,12 @@ export default function MarketingDashboard() {
       {/* Data panels */}
       {!error && (
         <>
+          <MarketingPerformanceScore
+            kpis={data?.kpis}
+            comparisons={data?.comparisons}
+            loading={loading}
+          />
+
           <MarketingKPIOverview
             kpis={data?.kpis}
             comparisons={data?.comparisons}
@@ -71,6 +78,12 @@ export default function MarketingDashboard() {
 
           <MarketingSourcesPanel
             sources={data?.sources ?? []}
+            loading={loading}
+            error={error}
+          />
+
+          <MarketingSeoRevenuePanel
+            pages={data?.pages ?? []}
             loading={loading}
             error={error}
           />
