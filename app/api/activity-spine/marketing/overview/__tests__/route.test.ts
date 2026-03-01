@@ -458,4 +458,45 @@ describe('canonicalSource', () => {
   it('maps direct → direct', () => expect(canonicalSource('direct')).toBe('direct'));
   it('maps email → email', () => expect(canonicalSource('email')).toBe('email'));
   it('maps unknown → other', () => expect(canonicalSource('random')).toBe('other'));
+  it('handles null input', () => expect(canonicalSource(null as unknown as string)).toBe('other'));
+  it('handles undefined input', () => expect(canonicalSource(undefined as unknown as string)).toBe('other'));
+  it('trims whitespace', () => expect(canonicalSource('  google  ')).toBe('organic'));
+  it('handles mixed case with spaces', () => expect(canonicalSource(' Facebook ')).toBe('paid'));
+});
+
+// ============================================
+// Audit-added: anomaly flat data
+// ============================================
+
+describe('anomaly: flat data (stddev=0)', () => {
+  it('returns false for all spikes when daily values are identical', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 10, mean: 100, stddev: 0, latest_val: 100 }] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.anomalies.sessions_spike).toBe(false);
+    expect(data.anomalies.submissions_spike).toBe(false);
+    expect(data.anomalies.pipeline_spike).toBe(false);
+  });
+});
+
+// ============================================
+// Audit-added: query deduplication
+// ============================================
+
+describe('query deduplication', () => {
+  it('calls KPI_SEARCH_SQL only once (not twice)', async () => {
+    stubEmpty();
+    await GET(req('/o?start=2026-02-01&end=2026-02-28'));
+    const searchCalls = mockQuery.mock.calls.filter(
+      (c: unknown[]) => typeof c[0] === 'string' &&
+        (c[0] as string).includes('metrics_search_console_page') &&
+        !(c[0] as string).includes('MAX(') &&
+        !(c[0] as string).includes('FULL OUTER')
+    );
+    expect(searchCalls).toHaveLength(1);
+  });
 });

@@ -334,19 +334,22 @@ export function useSalesDashboard(period: TimePeriod = '30d') {
 }
 
 /**
- * Fetch all data needed for Marketing Dashboard
+ * Fetch all data needed for Marketing Dashboard.
+ * Accepts flexible query params (preset, start/end, include_timeseries).
  */
-export function useMarketingDashboard(period: TimePeriod = '30d') {
+export function useMarketingDashboard(queryParams: Record<string, string> = { period: '30d' }) {
   const [state, setState] = useState<AsyncState<MarketingOverviewResponse>>({
     data: null,
     loading: true,
     error: null,
   });
 
+  const paramsKey = JSON.stringify(queryParams);
+
   const fetchData = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const response = await getMarketingDashboardData(period);
+      const response = await getMarketingDashboardData(queryParams);
       setState({
         data: response.data,
         loading: false,
@@ -356,7 +359,8 @@ export function useMarketingDashboard(period: TimePeriod = '30d') {
       const message = err instanceof Error ? err.message : 'Failed to fetch dashboard data';
       setState({ data: null, loading: false, error: message });
     }
-  }, [period]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey]);
 
   useEffect(() => {
     fetchData();
