@@ -25,6 +25,7 @@ import type {
   OrderFunnel,
   SLAMetrics,
   MockupSLAMetrics,
+  MarketingOverviewResponse,
   TimePeriod,
   ActivitySpineResponse,
 } from '../types/activity-spine';
@@ -433,4 +434,20 @@ export async function getSalesDashboardData(period: TimePeriod = '30d') {
   ]);
 
   return { funnel, orders };
+}
+
+// ============================================
+// Marketing Metrics API
+// ============================================
+
+/**
+ * GET /activity-spine/marketing/overview
+ *
+ * Fetches marketing overview metrics (purchases, revenue, channels, landing pages).
+ * Read-only endpoint - no mutations.
+ */
+export async function getMarketingDashboardData(
+  period: TimePeriod = '30d'
+): Promise<ActivitySpineResponse<MarketingOverviewResponse>> {
+  return fetchFromActivitySpine<MarketingOverviewResponse>('/marketing/overview', { period });
 }

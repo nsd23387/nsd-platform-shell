@@ -27,6 +27,7 @@ export async function GET() {
       'dashboard:design:view',
       'dashboard:media:view',
       'dashboard:sales:view',
+      'dashboard:marketing:view',
     ],
     environment: {
       name: 'development' as const,
@@ -38,6 +39,7 @@ export async function GET() {
       design_dashboard: true,
       media_dashboard: true,
       sales_dashboard: true,
+      marketing_dashboard: true,
       sales_engine: true,
       campaigns: true,
     },
