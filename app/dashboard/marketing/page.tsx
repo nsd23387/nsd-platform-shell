@@ -1,15 +1,14 @@
 /**
  * Marketing Dashboard
  *
- * Marketing team visibility for purchase volume, revenue, channels,
- * and landing page performance.
- * Read-only metrics from Activity Spine.
+ * Read-only marketing analytics sourced from Activity Spine.
+ * KPIs from page engagement, search console, and conversion views.
  */
 
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import type { TimePeriod, MarketingLandingPage } from '../../../types/activity-spine';
+import type { TimePeriod, MarketingPage, MarketingSource } from '../../../types/activity-spine';
 import { useMarketingDashboard } from '../../../hooks/useActivitySpine';
 import { DashboardGuard } from '../../../hooks/useRBAC';
 import {
@@ -46,38 +45,59 @@ const PERIODS: { value: TimePeriod; label: string }[] = [
 
 const EMPTY_STATE_MESSAGE = 'No marketing data available for this period.';
 
-const LANDING_PAGE_COLUMNS = [
+const PAGE_COLUMNS = [
   {
-    key: 'path',
-    header: 'Page Path',
-    width: '40%',
+    key: 'page_url',
+    header: 'Page',
+    width: '30%',
   },
   {
-    key: 'visitors',
-    header: 'Visitors',
-    width: '20%',
+    key: 'sessions',
+    header: 'Sessions',
+    width: '10%',
     align: 'right' as const,
-    render: (item: MarketingLandingPage) => (item.visitors ?? 0).toLocaleString(),
+    render: (item: MarketingPage) => (item.sessions ?? 0).toLocaleString(),
   },
   {
-    key: 'bounceRate',
+    key: 'bounce_rate',
     header: 'Bounce Rate',
-    width: '20%',
+    width: '12%',
     align: 'right' as const,
-    render: (item: MarketingLandingPage) =>
-      `${((item.bounceRate ?? 0) * 100).toFixed(1)}%`,
+    render: (item: MarketingPage) =>
+      `${((item.bounce_rate ?? 0) * 100).toFixed(1)}%`,
   },
   {
-    key: 'avgTimeOnPageSeconds',
-    header: 'Avg Time on Page',
-    width: '20%',
+    key: 'avg_time_on_page_seconds',
+    header: 'Avg Time',
+    width: '10%',
     align: 'right' as const,
-    render: (item: MarketingLandingPage) => {
-      const seconds = item.avgTimeOnPageSeconds ?? 0;
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.round(seconds % 60);
+    render: (item: MarketingPage) => {
+      const s = item.avg_time_on_page_seconds ?? 0;
+      const mins = Math.floor(s / 60);
+      const secs = Math.round(s % 60);
       return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
     },
+  },
+  {
+    key: 'clicks',
+    header: 'Clicks',
+    width: '10%',
+    align: 'right' as const,
+    render: (item: MarketingPage) => (item.clicks ?? 0).toLocaleString(),
+  },
+  {
+    key: 'submissions',
+    header: 'Submissions',
+    width: '12%',
+    align: 'right' as const,
+    render: (item: MarketingPage) => (item.submissions ?? 0).toLocaleString(),
+  },
+  {
+    key: 'pipeline_value_usd',
+    header: 'Pipeline ($)',
+    width: '16%',
+    align: 'right' as const,
+    render: (item: MarketingPage) => formatCurrency(item.pipeline_value_usd ?? 0),
   },
 ];
 
@@ -90,6 +110,12 @@ function formatCurrency(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   })}`;
+}
+
+function formatSeconds(s: number): string {
+  const mins = Math.floor(s / 60);
+  const secs = Math.round(s % 60);
+  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 }
 
 function isValidPeriod(value: string | null): value is TimePeriod {
@@ -174,31 +200,24 @@ export default function MarketingDashboard() {
 
   const { data, loading, error, refetch } = useMarketingDashboard(period);
 
-  const hasChannels = !loading && !error && (data?.channels?.length ?? 0) > 0;
-  const hasLandingPages =
-    !loading && !error && (data?.landingPages?.length ?? 0) > 0;
+  const kpis = data?.kpis;
+  const hasPages = !loading && !error && (data?.pages?.length ?? 0) > 0;
+  const hasSources = !loading && !error && (data?.sources?.length ?? 0) > 0;
 
-  const channelVisitorItems = (data?.channels ?? []).map((ch, i) => ({
-    label: ch.channel,
-    value: ch.visitors,
-    color: chartColors[i % chartColors.length],
-  }));
-
-  const channelConversionItems = (data?.channels ?? []).map((ch, i) => ({
-    label: ch.channel,
-    value: ch.conversions,
+  const sourceItems = (data?.sources ?? []).map((s: MarketingSource, i: number) => ({
+    label: s.submission_source,
+    value: s.pipeline_value_usd,
     color: chartColors[i % chartColors.length],
   }));
 
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
-      {/* Header with segmented period control */}
+      {/* Header */}
       <div style={headerStyles}>
         <div>
           <h1 style={titleStyles}>Marketing Dashboard</h1>
           <p style={descriptionStyles}>
-            Purchase volume, revenue, channel distribution, and landing page
-            performance
+            Page engagement, search performance, and pipeline conversion metrics
           </p>
         </div>
         <div style={segmentedControlStyles}>
@@ -217,62 +236,48 @@ export default function MarketingDashboard() {
         </div>
       </div>
 
-      {/* Overview KPIs */}
+      {/* Pipeline KPIs */}
       <DashboardSection
-        title="Overview"
-        description="Key marketing performance indicators for selected period."
+        title="Pipeline"
+        description="Submission volume and pipeline value for selected period."
       >
         <DashboardGrid columns={4}>
           <MetricCard
-            title="Revenue"
-            value={
-              data?.revenue != null ? formatCurrency(data.revenue) : undefined
-            }
-            subtitle="Gross revenue"
+            title="Pipeline Value"
+            value={kpis?.total_pipeline_value_usd != null
+              ? formatCurrency(kpis.total_pipeline_value_usd) : undefined}
+            subtitle="Total pipeline USD"
             variant="success"
             loading={loading}
             error={error}
             onRetry={refetch}
             timeWindow={period}
           />
-
           <MetricCard
-            title="Purchases"
-            value={
-              data?.purchases != null
-                ? data.purchases.toLocaleString()
-                : undefined
-            }
-            subtitle="Total purchases in period"
+            title="Submissions"
+            value={kpis?.total_submissions != null
+              ? kpis.total_submissions.toLocaleString() : undefined}
+            subtitle="Form submissions"
             loading={loading}
             error={error}
             onRetry={refetch}
             timeWindow={period}
           />
-
-          <MetricCard
-            title="Conversion Rate"
-            value={
-              data?.conversionRate != null
-                ? (data.conversionRate * 100).toFixed(1)
-                : undefined
-            }
-            unit="%"
-            subtitle="Visitor to purchase"
-            loading={loading}
-            error={error}
-            onRetry={refetch}
-            timeWindow={period}
-          />
-
           <MetricCard
             title="Organic Clicks"
-            value={
-              data?.organicClicks != null
-                ? data.organicClicks.toLocaleString()
-                : undefined
-            }
-            subtitle="Unpaid search traffic"
+            value={kpis?.organic_clicks != null
+              ? kpis.organic_clicks.toLocaleString() : undefined}
+            subtitle="Search console clicks"
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+            timeWindow={period}
+          />
+          <MetricCard
+            title="Impressions"
+            value={kpis?.impressions != null
+              ? kpis.impressions.toLocaleString() : undefined}
+            subtitle="Search impressions"
             loading={loading}
             error={error}
             onRetry={refetch}
@@ -281,82 +286,105 @@ export default function MarketingDashboard() {
         </DashboardGrid>
       </DashboardSection>
 
-      {/* Channel Distribution */}
+      {/* Engagement KPIs */}
       <DashboardSection
-        title="Channels"
-        description="Conversion and traffic distribution by acquisition source."
+        title="Engagement"
+        description="Site-wide session and engagement metrics for selected period."
       >
-        {loading ? (
-          <DashboardGrid columns={2}>
-            <DashboardCard
-              title="Visitors by Channel"
-              loading
-              timeWindow={period}
-            />
-            <DashboardCard
-              title="Conversions by Channel"
-              loading
-              timeWindow={period}
-            />
-          </DashboardGrid>
-        ) : error ? (
-          <DashboardCard
-            title="Channels"
+        <DashboardGrid columns={4}>
+          <MetricCard
+            title="Sessions"
+            value={kpis?.sessions != null
+              ? kpis.sessions.toLocaleString() : undefined}
+            subtitle="Total sessions"
+            loading={loading}
             error={error}
             onRetry={refetch}
             timeWindow={period}
           />
-        ) : !hasChannels ? (
-          <DashboardCard
-            title="Channel Data"
-            empty
-            emptyMessage={EMPTY_STATE_MESSAGE}
+          <MetricCard
+            title="Page Views"
+            value={kpis?.page_views != null
+              ? kpis.page_views.toLocaleString() : undefined}
+            subtitle="Total page views"
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+            timeWindow={period}
           />
+          <MetricCard
+            title="Bounce Rate"
+            value={kpis?.bounce_rate != null
+              ? (kpis.bounce_rate * 100).toFixed(1) : undefined}
+            unit="%"
+            subtitle="Single-page sessions"
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+            timeWindow={period}
+          />
+          <MetricCard
+            title="Avg Time on Page"
+            value={kpis?.avg_time_on_page_seconds != null
+              ? formatSeconds(kpis.avg_time_on_page_seconds) : undefined}
+            subtitle="Weighted average"
+            loading={loading}
+            error={error}
+            onRetry={refetch}
+            timeWindow={period}
+          />
+        </DashboardGrid>
+      </DashboardSection>
+
+      {/* Sources */}
+      <DashboardSection
+        title="Sources"
+        description="Submission sources ranked by pipeline value."
+      >
+        {loading ? (
+          <DashboardCard title="Sources" loading timeWindow={period} />
+        ) : error ? (
+          <DashboardCard title="Sources" error={error} onRetry={refetch} timeWindow={period} />
+        ) : !hasSources ? (
+          <DashboardCard title="Source Data" empty emptyMessage={EMPTY_STATE_MESSAGE} />
         ) : (
           <DashboardGrid columns={2}>
             <DistributionCard
-              title="Visitors by Channel"
-              items={channelVisitorItems}
+              title="Pipeline by Source"
+              items={sourceItems}
+              showPercentages
               timeWindow={period}
             />
             <DistributionCard
-              title="Conversions by Channel"
-              items={channelConversionItems}
+              title="Submissions by Source"
+              items={(data?.sources ?? []).map((s: MarketingSource, i: number) => ({
+                label: s.submission_source,
+                value: s.submissions,
+                color: chartColors[i % chartColors.length],
+              }))}
+              showPercentages
               timeWindow={period}
             />
           </DashboardGrid>
         )}
       </DashboardSection>
 
-      {/* Landing Pages */}
+      {/* Pages */}
       <DashboardSection
-        title="Landing Pages"
-        description="SEO performance and downstream revenue by landing page."
+        title="Pages"
+        description="Per-page engagement, search, and conversion metrics."
       >
         {loading ? (
-          <DashboardCard
-            title="Landing Pages"
-            loading
-            timeWindow={period}
-          />
+          <DashboardCard title="Pages" loading timeWindow={period} />
         ) : error ? (
-          <DashboardCard
-            title="Landing Pages"
-            error={error}
-            onRetry={refetch}
-            timeWindow={period}
-          />
-        ) : !hasLandingPages ? (
-          <DashboardCard
-            title="Landing Page Data"
-            empty
-            emptyMessage={EMPTY_STATE_MESSAGE}
-          />
+          <DashboardCard title="Pages" error={error} onRetry={refetch} timeWindow={period} />
+        ) : !hasPages ? (
+          <DashboardCard title="Page Data" empty emptyMessage={EMPTY_STATE_MESSAGE} />
         ) : (
-          <DataTable<MarketingLandingPage>
-            columns={LANDING_PAGE_COLUMNS}
-            data={data?.landingPages ?? []}
-            keyExtractor={(item) => item.path}
+          <DataTable<MarketingPage>
+            columns={PAGE_COLUMNS}
+            data={data?.pages ?? []}
+            keyExtractor={(item) => item.page_url}
             emptyMessage={EMPTY_STATE_MESSAGE}
           />
         )}

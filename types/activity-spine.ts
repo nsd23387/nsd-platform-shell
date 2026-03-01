@@ -142,28 +142,45 @@ export interface MockupSLAMetrics {
 // Marketing Metrics
 // ============================================
 
-export interface MarketingChannel {
-  channel: string;
-  visitors: number;
-  conversions: number;
-  conversionRate: number;
+export interface MarketingKPIs {
+  sessions: number;
+  page_views: number;
+  bounce_rate: number;
+  avg_time_on_page_seconds: number;
+  total_submissions: number;
+  total_pipeline_value_usd: number;
+  organic_clicks: number;
+  impressions: number;
+  avg_position: number;
 }
 
-export interface MarketingLandingPage {
-  path: string;
-  visitors: number;
-  bounceRate: number;
-  avgTimeOnPageSeconds: number;
+export interface MarketingPage {
+  page_url: string;
+  sessions: number;
+  page_views: number;
+  bounce_rate: number;
+  avg_time_on_page_seconds: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  submissions: number;
+  pipeline_value_usd: number;
 }
+
+export interface MarketingSource {
+  submission_source: string;
+  submissions: number;
+  pipeline_value_usd: number;
+}
+
+export type MarketingPeriod = '7d' | '30d' | '90d';
 
 export interface MarketingOverviewResponse {
-  purchases: number;
-  revenue: number;
-  conversionRate: number;
-  organicClicks: number;
-  channels?: MarketingChannel[];
-  landingPages?: MarketingLandingPage[];
-  periodDays: number;
+  period: MarketingPeriod;
+  generated_at: string;
+  kpis: MarketingKPIs;
+  pages: MarketingPage[];
+  sources: MarketingSource[];
 }
 
 // ============================================
