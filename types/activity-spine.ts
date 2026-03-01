@@ -152,6 +152,10 @@ export interface MarketingKPIs {
   organic_clicks: number;
   impressions: number;
   avg_position: number;
+  revenue_per_session: number;
+  revenue_per_click: number;
+  submissions_per_session: number;
+  submissions_per_click: number;
 }
 
 export interface MarketingPage {
@@ -175,12 +179,36 @@ export interface MarketingSource {
 
 export type MarketingPeriod = '7d' | '30d' | '90d';
 
+export type MarketingPreset = 'last_7d' | 'last_30d' | 'last_90d' | 'mtd' | 'qtd' | 'ytd';
+
+export interface MarketingPeriodBlock {
+  start: string;
+  end: string;
+  granularity: 'day';
+}
+
+export interface MarketingDataFreshness {
+  engagement_last_date: string | null;
+  search_console_last_date: string | null;
+  conversion_last_date: string | null;
+}
+
+export interface MarketingMeta {
+  query_execution_ms: number;
+  row_counts: {
+    pages: number;
+    sources: number;
+  };
+  data_freshness: MarketingDataFreshness;
+}
+
 export interface MarketingOverviewResponse {
-  period: MarketingPeriod;
+  period: MarketingPeriodBlock;
   generated_at: string;
   kpis: MarketingKPIs;
   pages: MarketingPage[];
   sources: MarketingSource[];
+  meta: MarketingMeta;
 }
 
 // ============================================

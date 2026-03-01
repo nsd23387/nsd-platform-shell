@@ -8,7 +8,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import type { TimePeriod, MarketingPage, MarketingSource } from '../../../types/activity-spine';
+import type { TimePeriod, MarketingPage, MarketingSource, MarketingKPIs } from '../../../types/activity-spine';
 import { useMarketingDashboard } from '../../../hooks/useActivitySpine';
 import { DashboardGuard } from '../../../hooks/useRBAC';
 import {
