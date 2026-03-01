@@ -1,0 +1,134 @@
+Intent:
+Read-only audit of the PRODUCTION Supabase database schema for the marketing intelligence layer.
+
+This is investigation only.
+Do NOT modify database.
+Do NOT create or drop objects.
+Do NOT propose fixes.
+Return structured findings only.
+
+--------------------------------------------------
+STEP 1 — Confirm DATABASE Connection
+--------------------------------------------------
+
+1. Read DATABASE_URL from environment.
+2. Print host (without password).
+3. Confirm which Supabase project is being connected to.
+
+Output:
+- Host
+- Port
+- Database name
+- SSL mode
+
+--------------------------------------------------
+STEP 2 — List All analytics.* Objects
+--------------------------------------------------
+
+Run:
+
+SELECT table_name, table_type
+FROM information_schema.tables
+WHERE table_schema = 'analytics'
+ORDER BY table_name;
+
+Return:
+- Full list of analytics schema tables and views
+- Identify which are VIEW vs BASE TABLE
+
+--------------------------------------------------
+STEP 3 — Inspect Required Daily Views
+--------------------------------------------------
+
+For each of the following:
+
+analytics.metrics_page_engagement_daily
+analytics.metrics_search_console_page_daily
+analytics.conversion_metrics_daily
+
+Run:
+
+SELECT column_name, data_type
+FROM information_schema.columns
+WHERE table_schema = 'analytics'
+AND table_name = '<table_name>'
+ORDER BY ordinal_position;
+
+Return:
+- Column list
+- Data types
+- Whether column `metric_date` exists
+- If not, what date-like column exists instead
+
+--------------------------------------------------
+STEP 4 — Inspect View Definitions
+--------------------------------------------------
+
+For each of the 3 daily views above:
+
+Run:
+
+SELECT definition
+FROM pg_views
+WHERE schemaname = 'analytics'
+AND viewname = '<view_name>';
+
+Return:
+- Full SQL definition
+- Identify which column is being selected as date
+- Identify alias name used for date column
+
+--------------------------------------------------
+STEP 5 — Search Entire analytics Schema for metric_date
+--------------------------------------------------
+
+Run:
+
+SELECT table_name
+FROM information_schema.columns
+WHERE table_schema = 'analytics'
+AND column_name = 'metric_date'
+ORDER BY table_name;
+
+Return:
+- All objects that contain metric_date
+
+--------------------------------------------------
+STEP 6 — Detect Column Name Drift
+--------------------------------------------------
+
+Specifically check if any of the daily views expose:
+
+- date
+- day
+- event_date
+- created_at
+- any other temporal column
+
+Return a summary:
+
+For each daily view:
+- Expected column: metric_date
+- Actual column:
+- Match: YES/NO
+
+--------------------------------------------------
+OUTPUT FORMAT
+--------------------------------------------------
+
+Return a structured report:
+
+1. Database connection target
+2. List of analytics objects
+3. Daily view column definitions
+4. View SQL definitions
+5. metric_date coverage map
+6. Drift summary table
+
+DO NOT:
+- Suggest fixes
+- Write migrations
+- Modify schema
+- Modify code
+
+This is a production schema audit only.
