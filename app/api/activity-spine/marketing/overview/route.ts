@@ -38,12 +38,9 @@ let pool: Pool | null = null;
 
 function getPool(): Pool {
   if (!pool) {
-    const connectionString =
-      process.env.SUPABASE_DATABASE_URL ||
-      process.env.DATABASE_URL ||
-      process.env.POSTGRES_URL;
+    const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
-      throw new Error('SUPABASE_DATABASE_URL not configured — required for analytics queries');
+      throw new Error('DATABASE_URL not configured');
     }
     pool = new Pool({
       connectionString,
@@ -57,7 +54,7 @@ function getPool(): Pool {
 }
 
 function isDatabaseConfigured(): boolean {
-  return Boolean(process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL);
+  return Boolean(process.env.DATABASE_URL);
 }
 
 // ============================================
