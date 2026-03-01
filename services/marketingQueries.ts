@@ -69,7 +69,7 @@ const KPI_CONVERSION_SQL = `
     COALESCE(SUM(total_submissions), 0)        AS total_submissions,
     COALESCE(SUM(total_pipeline_value_usd), 0) AS total_pipeline_value_usd
   FROM analytics.conversion_metrics_daily
-  WHERE conversion_date BETWEEN $1 AND $2
+  WHERE metric_date BETWEEN $1 AND $2
 `;
 
 /**
@@ -151,8 +151,8 @@ const SOURCES_SQL = `
 const FRESHNESS_SQL = `
   SELECT
     (SELECT MAX(metric_date)::text     FROM analytics.metrics_page_engagement_daily) AS engagement_last_date,
-    (SELECT MAX(metric_date)::text     FROM analytics.metrics_search_console_page)   AS search_console_last_date,
-    (SELECT MAX(conversion_date)::text FROM analytics.conversion_metrics_daily)      AS conversion_last_date
+    (SELECT MAX(metric_date)::text     FROM analytics.metrics_search_console_page_daily) AS search_console_last_date,
+    (SELECT MAX(metric_date)::text FROM analytics.conversion_metrics_daily)      AS conversion_last_date
 `;
 
 // ============================================
@@ -175,10 +175,9 @@ const SEO_QUERIES_SQL = `
     CASE WHEN SUM(q.impressions) > 0
       THEN SUM(q.avg_position * q.impressions) / SUM(q.impressions)
       ELSE 0 END                     AS avg_position,
-    COALESCE(SUM(d.submissions), 0)        AS submissions,
-    COALESCE(SUM(d.pipeline_value_usd), 0) AS pipeline_value_usd
+    0                                AS submissions,
+    0                                AS pipeline_value_usd
   FROM analytics.metrics_search_console_query q
-  LEFT JOIN analytics.dashboard_pages d ON q.page_url = d.page_url
   GROUP BY q.query
   ORDER BY SUM(q.clicks) DESC
   LIMIT 50
@@ -209,14 +208,14 @@ const TIMESERIES_SUBMISSIONS_SQL = `
     SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
   ),
   daily AS (
-    SELECT conversion_date, SUM(total_submissions) AS val
+    SELECT metric_date, SUM(total_submissions) AS val
     FROM analytics.conversion_metrics_daily
-    WHERE conversion_date BETWEEN $1 AND $2
-    GROUP BY conversion_date
+    WHERE metric_date BETWEEN $1 AND $2
+    GROUP BY metric_date
   )
   SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
   FROM date_range dr
-  LEFT JOIN daily dy ON dr.d = dy.conversion_date
+  LEFT JOIN daily dy ON dr.d = dy.metric_date
   ORDER BY dr.d ASC
 `;
 
@@ -225,14 +224,14 @@ const TIMESERIES_PIPELINE_SQL = `
     SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
   ),
   daily AS (
-    SELECT conversion_date, SUM(total_pipeline_value_usd) AS val
+    SELECT metric_date, SUM(total_pipeline_value_usd) AS val
     FROM analytics.conversion_metrics_daily
-    WHERE conversion_date BETWEEN $1 AND $2
-    GROUP BY conversion_date
+    WHERE metric_date BETWEEN $1 AND $2
+    GROUP BY metric_date
   )
   SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
   FROM date_range dr
-  LEFT JOIN daily dy ON dr.d = dy.conversion_date
+  LEFT JOIN daily dy ON dr.d = dy.metric_date
   ORDER BY dr.d ASC
 `;
 
@@ -257,31 +256,31 @@ const ANOMALY_SESSIONS_SQL = `
 
 const ANOMALY_SUBMISSIONS_SQL = `
   WITH daily AS (
-    SELECT conversion_date, SUM(total_submissions) AS val
+    SELECT metric_date, SUM(total_submissions) AS val
     FROM analytics.conversion_metrics_daily
-    WHERE conversion_date BETWEEN $1 AND $2
-    GROUP BY conversion_date
+    WHERE metric_date BETWEEN $1 AND $2
+    GROUP BY metric_date
   )
   SELECT
     COUNT(*)::int AS n,
     COALESCE(AVG(val), 0) AS mean,
     COALESCE(STDDEV_POP(val), 0) AS stddev,
-    COALESCE((SELECT val FROM daily ORDER BY conversion_date DESC LIMIT 1), 0) AS latest_val
+    COALESCE((SELECT val FROM daily ORDER BY metric_date DESC LIMIT 1), 0) AS latest_val
   FROM daily
 `;
 
 const ANOMALY_PIPELINE_SQL = `
   WITH daily AS (
-    SELECT conversion_date, SUM(total_pipeline_value_usd) AS val
+    SELECT metric_date, SUM(total_pipeline_value_usd) AS val
     FROM analytics.conversion_metrics_daily
-    WHERE conversion_date BETWEEN $1 AND $2
-    GROUP BY conversion_date
+    WHERE metric_date BETWEEN $1 AND $2
+    GROUP BY metric_date
   )
   SELECT
     COUNT(*)::int AS n,
     COALESCE(AVG(val), 0) AS mean,
     COALESCE(STDDEV_POP(val), 0) AS stddev,
-    COALESCE((SELECT val FROM daily ORDER BY conversion_date DESC LIMIT 1), 0) AS latest_val
+    COALESCE((SELECT val FROM daily ORDER BY metric_date DESC LIMIT 1), 0) AS latest_val
   FROM daily
 `;
 
