@@ -173,8 +173,52 @@ export interface MarketingPage {
 
 export interface MarketingSource {
   submission_source: string;
+  canonical_source: string;
   submissions: number;
   pipeline_value_usd: number;
+}
+
+export interface MarketingKPIComparison {
+  current: number;
+  previous: number;
+  delta_pct: number;
+}
+
+export interface MarketingKPIComparisons {
+  sessions: MarketingKPIComparison;
+  page_views: MarketingKPIComparison;
+  total_submissions: MarketingKPIComparison;
+  total_pipeline_value_usd: MarketingKPIComparison;
+  organic_clicks: MarketingKPIComparison;
+  impressions: MarketingKPIComparison;
+}
+
+export interface MarketingSEOQuery {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  avg_position: number;
+  submissions: number;
+  pipeline_value_usd: number;
+  revenue_per_click: number;
+}
+
+export interface MarketingTimeseriesPoint {
+  date: string;
+  value: number;
+}
+
+export interface MarketingTimeseries {
+  sessions: MarketingTimeseriesPoint[];
+  submissions: MarketingTimeseriesPoint[];
+  pipeline_value_usd: MarketingTimeseriesPoint[];
+}
+
+export interface MarketingAnomalies {
+  sessions_spike: boolean;
+  submissions_spike: boolean;
+  pipeline_spike: boolean;
 }
 
 export type MarketingPeriod = '7d' | '30d' | '90d';
@@ -206,8 +250,12 @@ export interface MarketingOverviewResponse {
   period: MarketingPeriodBlock;
   generated_at: string;
   kpis: MarketingKPIs;
+  comparisons: MarketingKPIComparisons;
   pages: MarketingPage[];
   sources: MarketingSource[];
+  seo_queries: MarketingSEOQuery[];
+  timeseries?: MarketingTimeseries;
+  anomalies: MarketingAnomalies;
   meta: MarketingMeta;
 }
 
