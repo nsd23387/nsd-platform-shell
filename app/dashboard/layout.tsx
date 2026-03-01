@@ -11,6 +11,7 @@
 'use client';
 
 import React from 'react';
+import { Icon } from '../../design/components/Icon';
 import {
   background,
   text,
@@ -30,12 +31,12 @@ interface DashboardLayoutProps {
 }
 
 const navItems = [
-  { href: '/dashboard/executive', label: 'Executive', icon: '📊' },
-  { href: '/dashboard/operations', label: 'Operations', icon: '⚙️' },
-  { href: '/dashboard/design', label: 'Design', icon: '🎨' },
-  { href: '/dashboard/media', label: 'Media', icon: '📸' },
-  { href: '/dashboard/sales', label: 'Sales', icon: '💰' },
-  { href: '/dashboard/marketing', label: 'Marketing', icon: '📈' },
+  { href: '/dashboard/executive', label: 'Executive', icon: 'chart' },
+  { href: '/dashboard/operations', label: 'Operations', icon: 'clock' },
+  { href: '/dashboard/design', label: 'Design', icon: 'lightbulb' },
+  { href: '/dashboard/media', label: 'Media', icon: 'eye' },
+  { href: '/dashboard/sales', label: 'Sales', icon: 'trending' },
+  { href: '/dashboard/marketing', label: 'Marketing', icon: 'target' },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -104,7 +105,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   transition: `all ${duration.normal} ${easing.DEFAULT}`,
                 }}
               >
-                <span>{item.icon}</span>
+                <Icon name={item.icon as any} size={18} />
                 <span>{item.label}</span>
               </a>
             );
