@@ -33,7 +33,36 @@ The architecture enforces a read-only principle, prioritizing observation over c
 - **ENM Governance Lock**: The Execution Narrative Mapper (ENM) is the sole interpreter of execution state. All execution-aware UI components must consume `ExecutionNarrative` output only.
 - **Canonical Execution Narrative Mapper (ENM) Implementation**: Implements truthful, event-driven execution storytelling with canonical mapping rules for states like `IDLE`, `QUEUED`, `RUNNING`, `STALLED`, `COMPLETED`, `FAILED`.
 
+## Marketing Dashboard
+The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics view powered by live data from the Supabase `analytics` schema. It renders 8 panel categories:
+
+**Data Sources:**
+- `raw_web_events` (page views, conversions) — active
+- `raw_search_console` (SEO queries, pages, device/country) — active, 7-day window
+- `raw_ga4_events`, `raw_google_ads`, `raw_clarity_sessions` — empty (pipelines not connected)
+- `metrics_page_engagement_daily` — empty; dashboard falls back to `dashboard_funnel_daily` for page view counts
+
+**Panels:**
+1. **KPI Overview** — Pipeline Value, Submissions, Organic Clicks, Impressions, Sessions, Page Views (with funnel fallback)
+2. **Conversion Funnel** — Page Views → Submissions → Pipeline Value with daily breakdown
+3. **Sources** — Pipeline and submissions by canonical source
+4. **Pipeline by Category** — Product type breakdown (from `pipeline_by_category` view)
+5. **Recent Conversions** — Chronological feed of quote submissions (from `conversion_events`)
+6. **Audience** — Device breakdown (Desktop/Mobile/Tablet) and Top Countries (from `raw_search_console` payload)
+7. **SEO Intelligence** — Top queries with Rising/Falling movers detection (from `metrics_search_console_query_daily`)
+8. **Data Pipeline Health** — Ingestion status per source (from `ingestion_runs`)
+9. **Timeseries** — Sessions, Submissions, Pipeline, Impressions, Clicks (toggle-enabled)
+
+**Database Connection:** Uses `SUPABASE_DATABASE_URL || DATABASE_URL` with always-on SSL (`rejectUnauthorized: false`). All queries are date-range filtered via `$1/$2` params.
+
+**Key Files:**
+- `services/marketingQueries.ts` — All SQL queries and data mapping
+- `app/api/activity-spine/marketing/overview/route.ts` — API route handler
+- `app/dashboard/marketing/page.tsx` — Page orchestrator
+- `app/dashboard/marketing/components/` — All panel components
+- `types/activity-spine.ts` — Type definitions
+
 ## External Dependencies
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.
 - **ODS API**: Used for bootstrap and identity services.
-- **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, and for campaign editing and duplication.
+- **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, campaign editing/duplication, and Marketing Dashboard analytics (via `analytics` schema).

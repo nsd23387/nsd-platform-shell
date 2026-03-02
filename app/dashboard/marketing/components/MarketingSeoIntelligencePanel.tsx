@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import type { MarketingSEOQuery } from '../../../../types/activity-spine';
-import { DashboardSection, EmptyStateCard } from '../../../../components/dashboard';
+import type { MarketingSEOQuery, MarketingSEOQueryMover } from '../../../../types/activity-spine';
+import { DashboardSection, DashboardGrid, EmptyStateCard } from '../../../../components/dashboard';
 import { DataTable } from '../../../sales-engine/components/ui/DataTable';
 import { formatNumber, formatPercent, formatPosition, formatCurrency } from '../lib/format';
 import { text, border, background, semantic } from '../../../../design/tokens/colors';
@@ -11,6 +11,7 @@ import { space, radius, duration, easing } from '../../../../design/tokens/spaci
 
 interface Props {
   seoQueries: MarketingSEOQuery[];
+  seoMovers?: MarketingSEOQueryMover[];
   loading: boolean;
   error: string | null;
 }
@@ -40,7 +41,40 @@ function toggleStyle(active: boolean): React.CSSProperties {
   };
 }
 
-export function MarketingSeoIntelligencePanel({ seoQueries, loading, error }: Props) {
+function MoversCard({ movers, direction }: { movers: MarketingSEOQueryMover[]; direction: 'rising' | 'falling' }) {
+  const filtered = movers.filter((m) => m.direction === direction);
+  if (filtered.length === 0) return null;
+
+  const isRising = direction === 'rising';
+  const arrow = isRising ? '\u2191' : '\u2193';
+  const color = isRising ? semantic.info.dark : semantic.danger.dark;
+  const bg = isRising ? semantic.info.light : semantic.danger.light;
+
+  return (
+    <div style={{ backgroundColor: background.surface, border: `1px solid ${border.default}`, borderRadius: radius.xl, padding: space['4'] }}
+      data-testid={`card-seo-movers-${direction}`}>
+      <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: text.primary, marginBottom: space['3'] }}>
+        {isRising ? 'Rising Queries' : 'Falling Queries'}
+      </h4>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: space['2'] }}>
+        {filtered.map((m, idx) => (
+          <div key={m.query} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${space['2']} 0`, borderBottom: `1px solid ${border.subtle}` }}
+            data-testid={`row-mover-${direction}-${idx}`}>
+            <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: text.primary, flex: 1 }}>{m.query}</span>
+            <span style={{
+              fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium,
+              color, backgroundColor: bg, padding: `${space['0.5']} ${space['2']}`, borderRadius: radius.full, whiteSpace: 'nowrap',
+            }}>
+              {arrow} {Math.abs(m.delta_pct * 100).toFixed(0)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function MarketingSeoIntelligencePanel({ seoQueries, seoMovers = [], loading, error }: Props) {
   const [filterLowCTR, setFilterLowCTR] = useState(false);
 
   if (loading || error) return null;
@@ -51,6 +85,14 @@ export function MarketingSeoIntelligencePanel({ seoQueries, loading, error }: Pr
 
   return (
     <DashboardSection title="SEO Query Intelligence" description="Top search queries by clicks with revenue attribution.">
+      {seoMovers.length > 0 && (
+        <div style={{ marginBottom: space['4'] }}>
+          <DashboardGrid columns={2}>
+            <MoversCard movers={seoMovers} direction="rising" />
+            <MoversCard movers={seoMovers} direction="falling" />
+          </DashboardGrid>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: space['3'] }}>
         <button onClick={() => setFilterLowCTR(!filterLowCTR)} style={toggleStyle(filterLowCTR)}>
           High impressions, low CTR

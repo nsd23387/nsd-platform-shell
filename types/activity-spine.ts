@@ -213,12 +213,64 @@ export interface MarketingTimeseries {
   sessions: MarketingTimeseriesPoint[];
   submissions: MarketingTimeseriesPoint[];
   pipeline_value_usd: MarketingTimeseriesPoint[];
+  impressions: MarketingTimeseriesPoint[];
+  clicks: MarketingTimeseriesPoint[];
 }
 
 export interface MarketingAnomalies {
   sessions_spike: boolean;
   submissions_spike: boolean;
   pipeline_spike: boolean;
+}
+
+export interface MarketingDeviceBreakdown {
+  device: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+}
+
+export interface MarketingCountryBreakdown {
+  country: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+}
+
+export interface MarketingPipelineCategory {
+  product_category: string;
+  submissions: number;
+  pipeline_value_usd: number;
+}
+
+export interface MarketingConversionEvent {
+  created_at: string;
+  product_category: string;
+  preliminary_price_usd: number;
+  submission_source: string;
+}
+
+export interface MarketingSEOQueryMover {
+  query: string;
+  impressions_first_half: number;
+  impressions_second_half: number;
+  delta_pct: number;
+  direction: 'rising' | 'falling';
+}
+
+export interface MarketingFunnelStep {
+  date: string;
+  page_views: number;
+  submissions: number;
+  conversion_rate: number;
+  pipeline_value_usd: number;
+}
+
+export interface MarketingPipelineHealth {
+  source: string;
+  last_success: string | null;
+  failure_rate_24h: number;
+  status: 'healthy' | 'warning' | 'stale';
 }
 
 export type MarketingPeriod = '7d' | '30d' | '90d';
@@ -257,6 +309,13 @@ export interface MarketingOverviewResponse {
   timeseries?: MarketingTimeseries;
   anomalies: MarketingAnomalies;
   meta: MarketingMeta;
+  device_breakdown: MarketingDeviceBreakdown[];
+  country_breakdown: MarketingCountryBreakdown[];
+  pipeline_categories: MarketingPipelineCategory[];
+  recent_conversions: MarketingConversionEvent[];
+  seo_movers: MarketingSEOQueryMover[];
+  funnel: MarketingFunnelStep[];
+  pipeline_health: MarketingPipelineHealth[];
 }
 
 // ============================================
