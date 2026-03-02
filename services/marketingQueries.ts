@@ -109,20 +109,9 @@ const KPI_SEARCH_SQL = `
 // ============================================
 
 const PAGES_SQL = `
-  SELECT
-    COALESCE(e.page_path, s.page_url, d.page_url) AS page_url,
-    COALESCE(e.sessions, 0)                        AS sessions,
-    COALESCE(e.page_views, 0)                      AS page_views,
-    COALESCE(e.bounce_rate, 0)                     AS bounce_rate,
-    COALESCE(e.avg_time_on_page_seconds, 0)        AS avg_time_on_page_seconds,
-    COALESCE(s.clicks, 0)                          AS clicks,
-    COALESCE(s.impressions, 0)                     AS impressions,
-    COALESCE(s.ctr, 0)                             AS ctr,
-    COALESCE(d.submissions, 0)                     AS submissions,
-    COALESCE(d.pipeline_value_usd, 0)              AS pipeline_value_usd
-  FROM (
+  WITH engagement AS (
     SELECT
-      page_path,
+      RTRIM(split_part(page_path, '?', 1), '/') || '/' AS canon_url,
       SUM(sessions)    AS sessions,
       SUM(page_views)  AS page_views,
       CASE WHEN SUM(sessions) > 0
@@ -133,13 +122,62 @@ const PAGES_SQL = `
         ELSE 0 END    AS avg_time_on_page_seconds
     FROM analytics.metrics_page_engagement_daily
     WHERE metric_date BETWEEN $1 AND $2
-    GROUP BY page_path
-  ) e
-  FULL OUTER JOIN analytics.metrics_search_console_page s
-    ON e.page_path = s.page_url
-  FULL OUTER JOIN analytics.dashboard_pages d
-    ON COALESCE(e.page_path, s.page_url) = d.page_url
-  ORDER BY COALESCE(e.sessions, 0) DESC
+    GROUP BY 1
+  ),
+  web_page_views AS (
+    SELECT
+      RTRIM(split_part(page_url, '?', 1), '/') || '/' AS canon_url,
+      COUNT(*) AS page_views
+    FROM analytics.raw_web_events
+    WHERE event_type = 'page_view'
+      AND occurred_at >= $1::date AND occurred_at < ($2::date + INTERVAL '1 day')
+    GROUP BY 1
+  ),
+  search_console_norm AS (
+    SELECT
+      RTRIM(split_part(page_url, '?', 1), '/') || '/' AS canon_url,
+      SUM(clicks::int)       AS clicks,
+      SUM(impressions::int)  AS impressions,
+      CASE WHEN SUM(impressions::int) > 0
+        THEN SUM(clicks::int)::numeric / SUM(impressions::int)
+        ELSE 0 END           AS ctr
+    FROM analytics.metrics_search_console_page
+    GROUP BY 1
+  ),
+  dashboard_norm AS (
+    SELECT
+      RTRIM(split_part(page_url, '?', 1), '/') || '/' AS canon_url,
+      SUM(COALESCE(page_views, 0))           AS page_views,
+      SUM(COALESCE(submissions, 0))          AS submissions,
+      SUM(COALESCE(pipeline_value_usd, 0))   AS pipeline_value_usd
+    FROM analytics.dashboard_pages
+    GROUP BY 1
+  )
+  SELECT
+    COALESCE(e.canon_url, s.canon_url, d.canon_url) AS page_url,
+    COALESCE(e.sessions, 0)                          AS sessions,
+    COALESCE(e.page_views, w.page_views, d.page_views, 0) AS page_views,
+    COALESCE(e.bounce_rate, 0)                       AS bounce_rate,
+    COALESCE(e.avg_time_on_page_seconds, 0)          AS avg_time_on_page_seconds,
+    COALESCE(s.clicks, 0)                            AS clicks,
+    COALESCE(s.impressions, 0)                       AS impressions,
+    COALESCE(s.ctr, 0)                               AS ctr,
+    COALESCE(d.submissions, 0)                       AS submissions,
+    COALESCE(d.pipeline_value_usd, 0)                AS pipeline_value_usd
+  FROM engagement e
+  FULL OUTER JOIN search_console_norm s
+    ON e.canon_url = s.canon_url
+  FULL OUTER JOIN dashboard_norm d
+    ON COALESCE(e.canon_url, s.canon_url) = d.canon_url
+  LEFT JOIN web_page_views w
+    ON COALESCE(e.canon_url, s.canon_url, d.canon_url) = w.canon_url
+  ORDER BY
+    COALESCE(d.pipeline_value_usd, 0)
+    + COALESCE(s.clicks, 0) * 10
+    + COALESCE(s.impressions, 0) * 0.01
+    + COALESCE(e.page_views, w.page_views, d.page_views, 0)
+    + COALESCE(e.sessions, 0) * 5
+    DESC
   LIMIT 100
 `;
 

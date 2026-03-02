@@ -37,10 +37,12 @@ The architecture enforces a read-only principle, prioritizing observation over c
 The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics view powered by live data from the Supabase `analytics` schema. It renders 8 panel categories:
 
 **Data Sources:**
-- `raw_web_events` (page views, conversions) — active
+- `raw_web_events` (page views, conversions) — active, 1,039 page_view events, used as fallback for page-level view counts
 - `raw_search_console` (SEO queries, pages, device/country) — active, 7-day window
 - `raw_ga4_events`, `raw_google_ads`, `raw_clarity_sessions` — empty (pipelines not connected)
-- `metrics_page_engagement_daily` — empty; dashboard falls back to `dashboard_funnel_daily` for page view counts
+- `metrics_page_engagement_daily` — empty (GA4 session aggregation pipeline not connected); Pages query falls back to `raw_web_events` page_view counts
+- `dashboard_pages` — 617 rows, URLs normalized (query params stripped) before joining with Search Console data
+- `metrics_search_console_page` — 98 rows, lifetime aggregated (no date column), provides clicks/impressions per page
 
 **Panels:**
 1. **KPI Overview** — Pipeline Value, Submissions, Organic Clicks, Impressions, Sessions, Page Views (with funnel fallback)

@@ -1,0 +1,124 @@
+Intent:
+Normalize analytics.conversion_metrics_daily so that it exposes `metric_date`
+instead of `conversion_date`.
+
+This is a controlled production schema correction.
+
+Requirements:
+- Preserve all existing logic
+- Preserve all existing data
+- Preserve grouping logic
+- Preserve numeric aggregations
+- Do NOT modify any other objects
+- Make change idempotent
+- No data migration required (VIEW only)
+
+--------------------------------------------------
+STEP 1 — Inspect Existing View Definition
+--------------------------------------------------
+
+Run:
+
+SELECT definition
+FROM pg_views
+WHERE schemaname = 'analytics'
+AND viewname = 'conversion_metrics_daily';
+
+Print full definition.
+
+--------------------------------------------------
+STEP 2 — Replace conversion_date Alias
+--------------------------------------------------
+
+If the definition contains:
+
+date(created_at) AS conversion_date
+
+or similar alias producing conversion_date,
+
+Rewrite the view so that:
+
+date(created_at) AS metric_date
+
+All other select fields must remain identical.
+
+Do NOT change:
+- Aggregation logic
+- WHERE clauses
+- GROUP BY clauses
+- Numeric calculations
+- Table references
+
+--------------------------------------------------
+STEP 3 — Use CREATE OR REPLACE VIEW
+--------------------------------------------------
+
+Generate:
+
+CREATE OR REPLACE VIEW analytics.conversion_metrics_daily AS
+<updated definition>;
+
+Ensure:
+- Column order remains same except rename
+- First column is metric_date (date type)
+- total_submissions remains bigint
+- total_pipeline_value_usd remains numeric
+
+--------------------------------------------------
+STEP 4 — Verify Column Exists
+--------------------------------------------------
+
+Run:
+
+SELECT column_name, data_type
+FROM information_schema.columns
+WHERE table_schema = 'analytics'
+AND table_name = 'conversion_metrics_daily'
+ORDER BY ordinal_position;
+
+Confirm:
+- metric_date exists
+- conversion_date no longer exists
+
+--------------------------------------------------
+STEP 5 — Backward Compatibility Check
+--------------------------------------------------
+
+Search database for any object referencing:
+conversion_date
+
+Return:
+- Any view
+- Any function
+- Any materialized view
+- Any trigger
+- Any SQL function
+
+If found, list them.
+Do NOT modify them.
+Report only.
+
+--------------------------------------------------
+STEP 6 — Safety Confirmation
+--------------------------------------------------
+
+Confirm:
+
+- View replaced successfully
+- No errors
+- No dependent object invalidation
+- Column list aligned with:
+  - metrics_page_engagement_daily
+  - metrics_search_console_page_daily
+
+--------------------------------------------------
+
+Output:
+1. Old definition
+2. New definition
+3. Confirmation of metric_date column
+4. Confirmation no residual conversion_date references (or list if any)
+
+Do NOT modify route code.
+Do NOT modify any other schema object.
+This is a targeted view normalization only.
