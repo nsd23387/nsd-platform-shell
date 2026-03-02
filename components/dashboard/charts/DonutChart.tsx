@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
-import { background, text, border, chartColors } from '../../../design/tokens/colors';
+import { useThemeColors } from '../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
 import { radius, space } from '../../../design/tokens/spacing';
 
@@ -27,22 +27,23 @@ function CustomTooltip({ active, payload, formatValue }: {
   payload?: Array<{ name: string; value: number; payload: DonutChartItem }>;
   formatValue: (v: number) => string;
 }) {
+  const tc = useThemeColors();
   if (!active || !payload?.length) return null;
   const entry = payload[0];
   return (
     <div style={{
-      backgroundColor: background.surface,
-      border: `1px solid ${border.default}`,
+      backgroundColor: tc.background.surface,
+      border: `1px solid ${tc.border.default}`,
       borderRadius: radius.lg,
       padding: `${space['2']} ${space['3']}`,
       fontFamily: fontFamily.body,
       fontSize: fontSize.sm,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: entry.payload.color ?? chartColors[0] }} />
-        <span style={{ color: text.secondary }}>{entry.name}</span>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: entry.payload.color ?? tc.chartColors[0] }} />
+        <span style={{ color: tc.text.secondary }}>{entry.name}</span>
       </div>
-      <div style={{ fontWeight: fontWeight.semibold, color: text.primary, marginTop: 2 }}>{formatValue(entry.value)}</div>
+      <div style={{ fontWeight: fontWeight.semibold, color: tc.text.primary, marginTop: 2 }}>{formatValue(entry.value)}</div>
     </div>
   );
 }
@@ -56,9 +57,11 @@ export function DonutChart({
   centerLabel,
   centerValue,
 }: DonutChartProps) {
+  const tc = useThemeColors();
+
   const coloredData = data.map((d, i) => ({
     ...d,
-    color: d.color ?? chartColors[i % chartColors.length],
+    color: d.color ?? tc.chartColors[i % tc.chartColors.length],
   }));
 
   return (
@@ -93,11 +96,11 @@ export function DonutChart({
           pointerEvents: 'none',
         }}>
           {centerValue && (
-            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: text.primary }}>
+            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }}>
               {centerValue}
             </div>
           )}
-          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: text.muted }}>
+          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
             {centerLabel}
           </div>
         </div>

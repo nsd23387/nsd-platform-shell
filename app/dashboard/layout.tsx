@@ -1,30 +1,13 @@
-/**
- * Dashboard Layout
- * 
- * Shared layout for all dashboard pages.
- * Provides navigation between dashboards.
- * Read-only - no edit actions.
- * 
- * Updated to use design system tokens.
- */
-
 'use client';
 
 import React from 'react';
+import { Sun, Moon } from 'lucide-react';
 import { Icon } from '../../design/components/Icon';
-import {
-  background,
-  text,
-  border,
-  violet,
-  semantic,
-} from '../../design/tokens/colors';
-import {
-  fontFamily,
-  fontSize,
-  fontWeight,
-} from '../../design/tokens/typography';
+import { violet } from '../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../design/tokens/spacing';
+import { useThemeColors } from '../../hooks/useThemeColors';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -39,25 +22,57 @@ const navItems = [
   { href: '/dashboard/marketing', label: 'Marketing', icon: 'target' },
 ];
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  // In a real app, this would use usePathname() from next/navigation
-  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+function ThemeToggle() {
+  const { mode, toggle } = useTheme();
+  const tc = useThemeColors();
+  const isDark = mode === 'dark';
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: background.page }}>
-      {/* Sidebar Navigation */}
+    <button
+      onClick={toggle}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: space['2'],
+        width: '100%',
+        padding: `${space['2.5']} ${space['6']}`,
+        fontFamily: fontFamily.body,
+        fontSize: fontSize.sm,
+        fontWeight: fontWeight.medium,
+        color: tc.text.muted,
+        backgroundColor: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+        transition: `all ${duration.normal} ${easing.DEFAULT}`,
+      }}
+      data-testid="button-theme-toggle"
+    >
+      {isDark ? <Sun size={16} /> : <Moon size={16} />}
+      <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+    </button>
+  );
+}
+
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  const tc = useThemeColors();
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: tc.background.page, transition: `background-color ${duration.slow} ${easing.DEFAULT}` }}>
       <aside
         style={{
           width: '240px',
-          backgroundColor: background.surface,
-          borderRight: `1px solid ${border.default}`,
+          backgroundColor: tc.background.surface,
+          borderRight: `1px solid ${tc.border.default}`,
           padding: `${space['6']} 0`,
+          position: 'relative',
+          transition: `background-color ${duration.slow}, border-color ${duration.slow}`,
         }}
       >
         <div
           style={{
             padding: `0 ${space['6']} ${space['6']}`,
-            borderBottom: `1px solid ${border.default}`,
+            borderBottom: `1px solid ${tc.border.default}`,
             marginBottom: space['4'],
           }}
         >
@@ -66,7 +81,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               fontFamily: fontFamily.display,
               fontSize: fontSize.xl,
               fontWeight: fontWeight.semibold,
-              color: text.primary,
+              color: tc.text.primary,
             }}
           >
             Dashboards
@@ -75,7 +90,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             style={{
               fontFamily: fontFamily.body,
               fontSize: fontSize.sm,
-              color: text.muted,
+              color: tc.text.muted,
               marginTop: space['1'],
             }}
           >
@@ -98,8 +113,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   fontFamily: fontFamily.body,
                   fontSize: fontSize.base,
                   fontWeight: isActive ? fontWeight.semibold : fontWeight.normal,
-                  color: isActive ? text.primary : text.muted,
-                  backgroundColor: isActive ? background.muted : 'transparent',
+                  color: isActive ? tc.text.primary : tc.text.muted,
+                  backgroundColor: isActive ? tc.background.muted : 'transparent',
                   textDecoration: 'none',
                   borderLeft: isActive ? `3px solid ${violet[500]}` : '3px solid transparent',
                   transition: `all ${duration.normal} ${easing.DEFAULT}`,
@@ -121,14 +136,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             padding: `0 ${space['6']}`,
           }}
         >
+          <ThemeToggle />
           <div
             style={{
               padding: space['3'],
-              backgroundColor: semantic.info.light,
+              backgroundColor: tc.semantic.info.light,
               borderRadius: radius.lg,
               fontFamily: fontFamily.body,
               fontSize: fontSize.sm,
-              color: semantic.info.dark,
+              color: tc.semantic.info.dark,
+              marginTop: space['2'],
             }}
           >
             <strong>Read-Only Mode</strong>
@@ -139,7 +156,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main style={{ flex: 1, padding: space['8'], overflow: 'auto' }}>
         {children}
       </main>

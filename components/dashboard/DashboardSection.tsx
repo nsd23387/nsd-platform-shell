@@ -1,13 +1,7 @@
-/**
- * DashboardSection Component
- * 
- * Groups related cards with a section title.
- * 
- * Updated to use design system tokens.
- */
+'use client';
 
 import React from 'react';
-import { text } from '../../design/tokens/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../design/tokens/typography';
 import { space, componentSpacing } from '../../design/tokens/spacing';
 
@@ -18,6 +12,8 @@ export interface DashboardSectionProps {
 }
 
 export function DashboardSection({ title, description, children }: DashboardSectionProps) {
+  const tc = useThemeColors();
+
   return (
     <section
       style={{
@@ -31,7 +27,7 @@ export function DashboardSection({ title, description, children }: DashboardSect
             fontFamily: fontFamily.display,
             fontSize: fontSize.xl,
             fontWeight: fontWeight.semibold,
-            color: text.secondary,
+            color: tc.text.secondary,
             marginBottom: space['1'],
             lineHeight: lineHeight.snug,
           }}
@@ -43,7 +39,7 @@ export function DashboardSection({ title, description, children }: DashboardSect
             style={{
               fontFamily: fontFamily.body,
               fontSize: fontSize.base,
-              color: text.muted,
+              color: tc.text.muted,
               lineHeight: lineHeight.normal,
             }}
           >

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { background, border } from '../../design/tokens/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import { radius, space } from '../../design/tokens/spacing';
 
 interface SkeletonCardProps {
@@ -10,6 +10,8 @@ interface SkeletonCardProps {
 }
 
 export function SkeletonCard({ height, lines = 3 }: SkeletonCardProps) {
+  const tc = useThemeColors();
+
   return (
     <>
       <style>{`
@@ -18,7 +20,7 @@ export function SkeletonCard({ height, lines = 3 }: SkeletonCardProps) {
           100% { background-position: 200% 0; }
         }
         .skeleton-bar {
-          background: linear-gradient(90deg, ${background.muted} 25%, ${background.active} 50%, ${background.muted} 75%);
+          background: linear-gradient(90deg, ${tc.background.muted} 25%, ${tc.background.active} 50%, ${tc.background.muted} 75%);
           background-size: 200% 100%;
           animation: shimmer 1.5s ease-in-out infinite;
           border-radius: 0.375rem;
@@ -26,8 +28,8 @@ export function SkeletonCard({ height, lines = 3 }: SkeletonCardProps) {
       `}</style>
       <div
         style={{
-          backgroundColor: background.surface,
-          border: `1px solid ${border.default}`,
+          backgroundColor: tc.background.surface,
+          border: `1px solid ${tc.border.default}`,
           borderRadius: radius.xl,
           padding: space['6'],
           height: height ? `${height}px` : 'auto',

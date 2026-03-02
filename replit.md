@@ -69,6 +69,15 @@ The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics vi
 - `components/dashboard/DashboardGrid.tsx` — Supports responsive column objects `{sm, md, lg}`
 - `components/dashboard/SkeletonCard.tsx` — Per-panel shimmer skeleton loading
 
+**Dark Mode:**
+- `contexts/ThemeContext.tsx` — `ThemeProvider` with `useTheme()` hook (mode, toggle, setMode). Persists to localStorage (`nsd-theme-mode`). Sets `data-theme` attribute on `<html>` element.
+- `design/tokens/theme-colors.ts` — `getThemeColors(mode)` returns `ThemeColors` object with light/dark variants of functional tokens (background, text, border, semantic, trendColors, statusColors, cardVariants, chartColors).
+- `hooks/useThemeColors.ts` — `useThemeColors()` hook combining `useTheme()` + `getThemeColors()`. Used by all dashboard components.
+- Brand colors (`violet`, `indigo`, `magenta` from `design/tokens/colors.ts`) are NOT theme-dependent and remain as direct imports.
+- Theme toggle button in sidebar (`app/dashboard/layout.tsx`), data-testid: `button-theme-toggle`.
+- `app/globals.css` — CSS overrides for `[data-theme="dark"]` (body, headings, scrollbars).
+- All shared dashboard components (`DashboardCard`, `DashboardSection`, `EmptyStateCard`, `SkeletonCard`), chart components (`AreaLineChart`, `DonutChart`, `BarChart`), and all 13 marketing panel components use `useThemeColors()`.
+
 **Key Files:**
 - `services/marketingQueries.ts` — All SQL queries and data mapping
 - `app/api/activity-spine/marketing/overview/route.ts` — API route handler

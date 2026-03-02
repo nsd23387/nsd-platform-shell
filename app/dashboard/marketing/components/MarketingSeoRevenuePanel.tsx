@@ -5,7 +5,7 @@ import type { MarketingPage } from '../../../../types/activity-spine';
 import { DashboardSection, EmptyStateCard } from '../../../../components/dashboard';
 import { DataTable } from '../../../sales-engine/components/ui/DataTable';
 import { formatNumber, formatCurrency, formatPercent, safeNumber, safeDivideUI } from '../lib/format';
-import { text, semantic } from '../../../../design/tokens/colors';
+import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 
@@ -45,6 +45,8 @@ const COLUMNS = [
 ];
 
 export function MarketingSeoRevenuePanel({ pages, loading, error }: Props) {
+  const tc = useThemeColors();
+
   if (loading || error) return null;
 
   const rows: RevenueRow[] = pages
@@ -73,8 +75,7 @@ export function MarketingSeoRevenuePanel({ pages, loading, error }: Props) {
       title="SEO Revenue Intelligence"
       description="Organic attribution based on page-level aggregation for selected period."
     >
-      {/* Attribution caveat */}
-      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: text.muted, marginBottom: space['4'] }}>
+      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['4'] }}>
         Revenue attribution reflects page-level pipeline for the selected period and may include mixed traffic sources.
       </p>
 
@@ -84,19 +85,19 @@ export function MarketingSeoRevenuePanel({ pages, loading, error }: Props) {
             display: 'flex',
             alignItems: 'center',
             gap: space['4'],
-            backgroundColor: semantic.success.light,
-            border: `1px solid ${semantic.success.base}`,
+            backgroundColor: tc.semantic.success.light,
+            border: `1px solid ${tc.semantic.success.base}`,
             borderRadius: radius.xl,
             padding: `${space['4']} ${space['5']}`,
             marginBottom: space['4'],
           }}
         >
-          <div style={{ width: space['3'], height: space['3'], borderRadius: radius.full, backgroundColor: semantic.success.base, flexShrink: 0 }} />
+          <div style={{ width: space['3'], height: space['3'], borderRadius: radius.full, backgroundColor: tc.semantic.success.base, flexShrink: 0 }} />
           <div>
-            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: semantic.success.dark }}>
+            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.semantic.success.dark }}>
               Top Organic Revenue Page
             </div>
-            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: text.primary }}>
+            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary }}>
               {shortenUrl(topPage.page_url)} — {formatCurrency(topPage.pipeline_value_usd)}
             </div>
           </div>

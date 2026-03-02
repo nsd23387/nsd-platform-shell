@@ -7,7 +7,7 @@ import { SkeletonCard } from '../../../../components/dashboard';
 import { DonutChart } from '../../../../components/dashboard/charts';
 import { BarChart } from '../../../../components/dashboard/charts';
 import { formatCurrency, formatNumber } from '../lib/format';
-import { chartColors, text, border, background } from '../../../../design/tokens/colors';
+import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 
@@ -18,6 +18,8 @@ interface Props {
 }
 
 export function MarketingPipelineCategoryPanel({ categories, loading, error }: Props) {
+  const tc = useThemeColors();
+
   if (loading) {
     return (
       <DashboardSection title="Pipeline by Category" description="Pipeline value and submissions by product type.">
@@ -42,7 +44,7 @@ export function MarketingPipelineCategoryPanel({ categories, loading, error }: P
   const donutData = categories.map((c, i) => ({
     name: c.product_category,
     value: c.pipeline_value_usd,
-    color: chartColors[i % chartColors.length],
+    color: tc.chartColors[i % tc.chartColors.length],
   }));
 
   const barData = categories
@@ -50,14 +52,14 @@ export function MarketingPipelineCategoryPanel({ categories, loading, error }: P
     .map((c, i) => ({
       name: c.product_category,
       value: c.submissions,
-      color: chartColors[i % chartColors.length],
+      color: tc.chartColors[i % tc.chartColors.length],
     }));
 
   return (
     <DashboardSection title="Pipeline by Category" description="Pipeline value and submissions by product type.">
       <DashboardGrid columns={{ sm: 1, md: 2, lg: 2 }}>
-        <div style={{ backgroundColor: background.surface, border: `1px solid ${border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="chart-pipeline-category">
-          <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: text.primary, marginBottom: space['2'] }}>
+        <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="chart-pipeline-category">
+          <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['2'] }}>
             Pipeline Value
           </h4>
           <DonutChart
@@ -73,13 +75,13 @@ export function MarketingPipelineCategoryPanel({ categories, loading, error }: P
             {donutData.map((d) => (
               <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: space['1.5'] }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: d.color, display: 'inline-block' }} />
-                <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: text.muted }}>{d.name}</span>
+                <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>{d.name}</span>
               </div>
             ))}
           </div>
         </div>
-        <div style={{ backgroundColor: background.surface, border: `1px solid ${border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="chart-submissions-category">
-          <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: text.primary, marginBottom: space['2'] }}>
+        <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="chart-submissions-category">
+          <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['2'] }}>
             Submissions
           </h4>
           <BarChart data={barData} height={240} layout="vertical" formatValue={formatNumber} barSize={18} />

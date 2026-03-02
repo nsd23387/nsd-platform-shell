@@ -5,9 +5,10 @@ import type { MarketingPipelineHealth } from '../../../../types/activity-spine';
 import { DashboardSection, EmptyStateCard } from '../../../../components/dashboard';
 import { SkeletonCard } from '../../../../components/dashboard';
 import { DashboardGrid } from '../../../../components/dashboard';
-import { text, border, background, semantic } from '../../../../design/tokens/colors';
+import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
+import type { ThemeColors } from '../../../../design/tokens/theme-colors';
 
 interface Props {
   health: MarketingPipelineHealth[];
@@ -15,11 +16,13 @@ interface Props {
   error: string | null;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; pulseColor: string }> = {
-  healthy: { label: 'Healthy', color: semantic.success.dark, bg: semantic.success.light, pulseColor: semantic.success.base },
-  warning: { label: 'Warning', color: semantic.warning.dark, bg: semantic.warning.light, pulseColor: semantic.warning.base },
-  stale: { label: 'Stale', color: semantic.danger.dark, bg: semantic.danger.light, pulseColor: semantic.danger.base },
-};
+function getStatusConfig(tc: ThemeColors): Record<string, { label: string; color: string; bg: string; pulseColor: string }> {
+  return {
+    healthy: { label: 'Healthy', color: tc.semantic.success.dark, bg: tc.semantic.success.light, pulseColor: tc.semantic.success.base },
+    warning: { label: 'Warning', color: tc.semantic.warning.dark, bg: tc.semantic.warning.light, pulseColor: tc.semantic.warning.base },
+    stale: { label: 'Stale', color: tc.semantic.danger.dark, bg: tc.semantic.danger.light, pulseColor: tc.semantic.danger.base },
+  };
+}
 
 const SOURCE_LABELS: Record<string, string> = {
   'web-events': 'Web Events',
@@ -61,6 +64,9 @@ function PulseDot({ color, isActive }: { color: string; isActive: boolean }) {
 }
 
 export function MarketingPipelineHealthPanel({ health, loading, error }: Props) {
+  const tc = useThemeColors();
+  const STATUS_CONFIG = getStatusConfig(tc);
+
   if (loading) {
     return (
       <DashboardSection title="Data Pipeline Health" description="Ingestion status for each data source.">
@@ -92,8 +98,8 @@ export function MarketingPipelineHealthPanel({ health, loading, error }: Props) 
             <div
               key={h.source}
               style={{
-                backgroundColor: background.surface,
-                border: `1px solid ${border.default}`,
+                backgroundColor: tc.background.surface,
+                border: `1px solid ${tc.border.default}`,
                 borderRadius: radius.xl,
                 padding: space['5'],
               }}
@@ -102,7 +108,7 @@ export function MarketingPipelineHealthPanel({ health, loading, error }: Props) 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: space['4'] }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: space['2'] }}>
                   <PulseDot color={cfg.pulseColor} isActive={isHealthy} />
-                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: text.primary }}>
+                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary }}>
                     {SOURCE_LABELS[h.source] ?? h.source}
                   </span>
                 </div>
@@ -116,12 +122,12 @@ export function MarketingPipelineHealthPanel({ health, loading, error }: Props) 
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: space['2'] }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: text.muted }}>Last Success</span>
-                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: text.secondary }}>{timeAgo(h.last_success)}</span>
+                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Last Success</span>
+                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.secondary }}>{timeAgo(h.last_success)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: text.muted }}>Failure Rate (24h)</span>
-                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: h.failure_rate_24h > 0.3 ? semantic.danger.dark : text.secondary }}>
+                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Failure Rate (24h)</span>
+                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: h.failure_rate_24h > 0.3 ? tc.semantic.danger.dark : tc.text.secondary }}>
                     {(h.failure_rate_24h * 100).toFixed(1)}%
                   </span>
                 </div>

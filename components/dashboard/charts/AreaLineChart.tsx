@@ -11,7 +11,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { background, text, border, chartColors } from '../../../design/tokens/colors';
+import { useThemeColors } from '../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
 import { radius, space } from '../../../design/tokens/spacing';
 
@@ -39,22 +39,23 @@ function CustomTooltip({ active, payload, label, formatValue }: {
   label?: string;
   formatValue: (v: number) => string;
 }) {
+  const tc = useThemeColors();
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      backgroundColor: background.surface,
-      border: `1px solid ${border.default}`,
+      backgroundColor: tc.background.surface,
+      border: `1px solid ${tc.border.default}`,
       borderRadius: radius.lg,
       padding: `${space['2']} ${space['3']}`,
       fontFamily: fontFamily.body,
       fontSize: fontSize.sm,
     }}>
-      <div style={{ color: text.muted, marginBottom: 4 }}>{label}</div>
+      <div style={{ color: tc.text.muted, marginBottom: 4 }}>{label}</div>
       {payload.map((entry) => (
         <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: entry.color }} />
-          <span style={{ color: text.secondary }}>{entry.name}:</span>
-          <span style={{ fontWeight: fontWeight.semibold, color: text.primary }}>{formatValue(entry.value)}</span>
+          <span style={{ color: tc.text.secondary }}>{entry.name}:</span>
+          <span style={{ fontWeight: fontWeight.semibold, color: tc.text.primary }}>{formatValue(entry.value)}</span>
         </div>
       ))}
     </div>
@@ -71,9 +72,11 @@ export function AreaLineChart({
   showGrid = true,
   showLegend = true,
 }: AreaLineChartProps) {
+  const tc = useThemeColors();
+
   if (!data.length) {
     return (
-      <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: text.muted, fontFamily: fontFamily.body }}>
+      <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>
         No data available
       </div>
     );
@@ -82,16 +85,16 @@ export function AreaLineChart({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        {showGrid && <CartesianGrid strokeDasharray="3 3" stroke={border.subtle} vertical={false} />}
+        {showGrid && <CartesianGrid strokeDasharray="3 3" stroke={tc.border.subtle} vertical={false} />}
         <XAxis
           dataKey={xDataKey}
-          tick={{ fill: text.muted, fontSize: 11, fontFamily: fontFamily.body }}
+          tick={{ fill: tc.text.muted, fontSize: 11, fontFamily: fontFamily.body }}
           tickLine={false}
-          axisLine={{ stroke: border.default }}
+          axisLine={{ stroke: tc.border.default }}
           tickFormatter={formatXAxis}
         />
         <YAxis
-          tick={{ fill: text.muted, fontSize: 11, fontFamily: fontFamily.body }}
+          tick={{ fill: tc.text.muted, fontSize: 11, fontFamily: fontFamily.body }}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v) => formatValue(v)}
@@ -106,7 +109,7 @@ export function AreaLineChart({
           />
         )}
         {series.map((s, i) => {
-          const color = s.color ?? chartColors[i % chartColors.length];
+          const color = s.color ?? tc.chartColors[i % tc.chartColors.length];
           const gradientId = `gradient-${s.dataKey}`;
           return (
             <React.Fragment key={s.dataKey}>
@@ -124,7 +127,7 @@ export function AreaLineChart({
                 strokeWidth={2}
                 fill={s.type === 'line' ? 'none' : `url(#${gradientId})`}
                 dot={false}
-                activeDot={{ r: 4, fill: color, stroke: background.surface, strokeWidth: 2 }}
+                activeDot={{ r: 4, fill: color, stroke: tc.background.surface, strokeWidth: 2 }}
               />
             </React.Fragment>
           );
