@@ -69,6 +69,13 @@ The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics vi
 - `components/dashboard/DashboardGrid.tsx` — Supports responsive column objects `{sm, md, lg}`
 - `components/dashboard/SkeletonCard.tsx` — Per-panel shimmer skeleton loading
 
+**DataTable (shared):**
+- `app/sales-engine/components/ui/DataTable.tsx` — Theme-aware data table with built-in pagination and column sorting
+- Uses `useThemeColors()` for dark mode compatibility (backgrounds, text, borders)
+- Pagination: configurable `pageSize` (default 10), shows "X–Y of Z" info and page buttons when data exceeds page size
+- Sorting: columns are sortable by default if their `key` exists in row data; use `sortable: false` to opt out; `defaultSortKey` and `defaultSortDir` props set initial sort
+- Used by: MarketingPagesPerformancePanel (sort: pipeline_value_usd desc), MarketingSeoIntelligencePanel (sort: impressions desc), MarketingSeoRevenuePanel (sort: pipeline_value_usd desc)
+
 **Dark Mode:**
 - `contexts/ThemeContext.tsx` — `ThemeProvider` with `useTheme()` hook (mode, toggle, setMode). Persists to localStorage (`nsd-theme-mode`). Sets `data-theme` attribute on `<html>` element.
 - `design/tokens/theme-colors.ts` — `getThemeColors(mode)` returns `ThemeColors` object with light/dark variants of functional tokens (background, text, border, semantic, trendColors, statusColors, cardVariants, chartColors).
