@@ -5,7 +5,7 @@ import type { MarketingKPIs, MarketingKPIComparisons } from '../../../../types/a
 import { DashboardGrid, DashboardSection } from '../../../../components/dashboard';
 import { SkeletonCard } from '../../../../components/dashboard';
 import { formatCurrency, formatNumber, formatPercent, formatDuration, safeNumber } from '../lib/format';
-import { violet, indigo, chartColors } from '../../../../design/tokens/colors';
+import { violet, indigo } from '../../../../design/tokens/colors';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../../design/tokens/spacing';
@@ -28,19 +28,23 @@ interface KPIConfig {
   accentColor: string;
 }
 
-const PIPELINE_ROW: KPIConfig[] = [
-  { title: 'Pipeline Value', key: 'total_pipeline_value_usd', compKey: 'total_pipeline_value_usd', format: formatCurrency, subtitle: 'Total pipeline USD', accentColor: violet[500] },
-  { title: 'Submissions', key: 'total_submissions', compKey: 'total_submissions', format: formatNumber, subtitle: 'Form submissions', accentColor: chartColors[1] },
-  { title: 'Organic Clicks', key: 'organic_clicks', compKey: 'organic_clicks', format: formatNumber, subtitle: 'Search console clicks', accentColor: chartColors[2] },
-  { title: 'Impressions', key: 'impressions', compKey: 'impressions', format: formatNumber, subtitle: 'Search impressions', accentColor: indigo[500] },
-];
+function getPipelineRow(tc: { chartColors: readonly string[] }): KPIConfig[] {
+  return [
+    { title: 'Pipeline Value', key: 'total_pipeline_value_usd', compKey: 'total_pipeline_value_usd', format: formatCurrency, subtitle: 'Total pipeline USD', accentColor: violet[500] },
+    { title: 'Submissions', key: 'total_submissions', compKey: 'total_submissions', format: formatNumber, subtitle: 'Form submissions', accentColor: tc.chartColors[1] },
+    { title: 'Organic Clicks', key: 'organic_clicks', compKey: 'organic_clicks', format: formatNumber, subtitle: 'Search console clicks', accentColor: tc.chartColors[2] },
+    { title: 'Impressions', key: 'impressions', compKey: 'impressions', format: formatNumber, subtitle: 'Search impressions', accentColor: indigo[500] },
+  ];
+}
 
-const ENGAGEMENT_ROW: KPIConfig[] = [
-  { title: 'Sessions', key: 'sessions', compKey: 'sessions', format: formatNumber, subtitle: 'Total sessions', accentColor: violet[400] },
-  { title: 'Page Views', key: 'page_views', compKey: 'page_views', format: formatNumber, subtitle: 'Total page views', accentColor: indigo[400] },
-  { title: 'Bounce Rate', key: 'bounce_rate', format: formatPercent, subtitle: 'Single-page sessions', accentColor: chartColors[3] },
-  { title: 'Avg Time on Page', key: 'avg_time_on_page_seconds', format: formatDuration, subtitle: 'Weighted average', accentColor: chartColors[4] },
-];
+function getEngagementRow(tc: { chartColors: readonly string[] }): KPIConfig[] {
+  return [
+    { title: 'Sessions', key: 'sessions', compKey: 'sessions', format: formatNumber, subtitle: 'Total sessions', accentColor: violet[400] },
+    { title: 'Page Views', key: 'page_views', compKey: 'page_views', format: formatNumber, subtitle: 'Total page views', accentColor: indigo[400] },
+    { title: 'Bounce Rate', key: 'bounce_rate', format: formatPercent, subtitle: 'Single-page sessions', accentColor: tc.chartColors[3] },
+    { title: 'Avg Time on Page', key: 'avg_time_on_page_seconds', format: formatDuration, subtitle: 'Weighted average', accentColor: tc.chartColors[4] },
+  ];
+}
 
 function AnimatedValue({ value, delay = 0 }: { value: string; delay?: number }) {
   const [visible, setVisible] = useState(false);
@@ -151,13 +155,16 @@ function renderRow(row: KPIConfig[], props: Props) {
 }
 
 export function MarketingKPIOverview(props: Props) {
+  const tc = useThemeColors();
+  const pipelineRow = getPipelineRow(tc);
+  const engagementRow = getEngagementRow(tc);
   return (
     <>
       <DashboardSection title="Pipeline" description="Submission volume and pipeline value for selected period.">
-        {renderRow(PIPELINE_ROW, props)}
+        {renderRow(pipelineRow, props)}
       </DashboardSection>
       <DashboardSection title="Engagement" description="Site-wide session and engagement metrics for selected period.">
-        {renderRow(ENGAGEMENT_ROW, props)}
+        {renderRow(engagementRow, props)}
       </DashboardSection>
     </>
   );

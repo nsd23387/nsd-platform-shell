@@ -5,7 +5,7 @@ import type { MarketingConversionEvent } from '../../../../types/activity-spine'
 import { DashboardSection, EmptyStateCard } from '../../../../components/dashboard';
 import { SkeletonCard } from '../../../../components/dashboard';
 import { formatCurrency } from '../lib/format';
-import { violet, chartColors } from '../../../../design/tokens/colors';
+import { violet } from '../../../../design/tokens/colors';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
@@ -28,15 +28,14 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  'Logo/Image': violet[500],
-  'Text Only': chartColors[2],
-  'Channel Letters': chartColors[1],
-  'Custom': chartColors[3],
-};
-
 export function MarketingRecentConversionsPanel({ conversions, loading, error }: Props) {
   const tc = useThemeColors();
+  const CATEGORY_COLORS: Record<string, string> = {
+    'Logo/Image': violet[500],
+    'Text Only': tc.chartColors[2],
+    'Channel Letters': tc.chartColors[1],
+    'Custom': tc.chartColors[3],
+  };
 
   if (loading) {
     return (
