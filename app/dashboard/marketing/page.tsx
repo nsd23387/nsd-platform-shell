@@ -27,6 +27,7 @@ import { MarketingPipelineCategoryPanel } from './components/MarketingPipelineCa
 import { MarketingRecentConversionsPanel } from './components/MarketingRecentConversionsPanel';
 import { MarketingFunnelPanel } from './components/MarketingFunnelPanel';
 import { MarketingPipelineHealthPanel } from './components/MarketingPipelineHealthPanel';
+import { space } from '../../../design/tokens/spacing';
 
 export default function MarketingDashboard() {
   const [periodState, setPeriodState] = useState<PeriodState>(() => parsePeriodState());
@@ -45,103 +46,93 @@ export default function MarketingDashboard() {
 
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
-      <MarketingDashboardHeader state={periodState} onChange={handlePeriodChange} />
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
+        <MarketingDashboardHeader state={periodState} onChange={handlePeriodChange} />
 
-      {error && !loading && (
-        <DashboardCard title="Error" error={error} onRetry={refetch} />
-      )}
+        {error && !loading && (
+          <DashboardCard title="Error" error={error} onRetry={refetch} />
+        )}
 
-      {loading && (
-        <>
-          <DashboardCard title="Pipeline" loading />
-          <div style={{ height: '1rem' }} />
-          <DashboardCard title="Engagement" loading />
-        </>
-      )}
+        <MarketingPerformanceScore
+          kpis={data?.kpis}
+          comparisons={data?.comparisons}
+          loading={loading}
+        />
 
-      {!error && (
-        <>
-          <MarketingPerformanceScore
-            kpis={data?.kpis}
-            comparisons={data?.comparisons}
-            loading={loading}
-          />
+        <MarketingKPIOverview
+          kpis={data?.kpis}
+          comparisons={data?.comparisons}
+          compareEnabled={periodState.compare}
+          loading={loading}
+          error={error}
+          onRetry={refetch}
+        />
 
-          <MarketingKPIOverview
-            kpis={data?.kpis}
-            comparisons={data?.comparisons}
-            compareEnabled={periodState.compare}
-            loading={loading}
-            error={error}
-            onRetry={refetch}
-          />
+        <MarketingFunnelPanel
+          funnel={data?.funnel ?? []}
+          loading={loading}
+          error={error}
+        />
 
-          <MarketingFunnelPanel
-            funnel={data?.funnel ?? []}
-            loading={loading}
-            error={error}
-          />
+        <MarketingAnomaliesPanel anomalies={data?.anomalies} loading={loading} error={error} />
 
-          <MarketingAnomaliesPanel anomalies={data?.anomalies} loading={loading} error={error} />
+        <MarketingSourcesPanel
+          sources={data?.sources ?? []}
+          loading={loading}
+          error={error}
+        />
 
-          <MarketingSourcesPanel
-            sources={data?.sources ?? []}
-            loading={loading}
-            error={error}
-          />
+        <MarketingPipelineCategoryPanel
+          categories={data?.pipeline_categories ?? []}
+          loading={loading}
+          error={error}
+        />
 
-          <MarketingPipelineCategoryPanel
-            categories={data?.pipeline_categories ?? []}
-            loading={loading}
-            error={error}
-          />
+        <MarketingRecentConversionsPanel
+          conversions={data?.recent_conversions ?? []}
+          loading={loading}
+          error={error}
+        />
 
-          <MarketingRecentConversionsPanel
-            conversions={data?.recent_conversions ?? []}
-            loading={loading}
-            error={error}
-          />
+        <MarketingAudiencePanel
+          devices={data?.device_breakdown ?? []}
+          countries={data?.country_breakdown ?? []}
+          loading={loading}
+          error={error}
+        />
 
-          <MarketingAudiencePanel
-            devices={data?.device_breakdown ?? []}
-            countries={data?.country_breakdown ?? []}
-            loading={loading}
-            error={error}
-          />
+        <MarketingSeoRevenuePanel
+          pages={data?.pages ?? []}
+          loading={loading}
+          error={error}
+        />
 
-          <MarketingSeoRevenuePanel
-            pages={data?.pages ?? []}
-            loading={loading}
-            error={error}
-          />
+        <MarketingTimeseriesPanel
+          timeseries={data?.timeseries}
+          enabled={periodState.includeTimeseries}
+          loading={loading}
+          error={error}
+        />
 
-          <MarketingTimeseriesPanel
-            timeseries={data?.timeseries}
-            enabled={periodState.includeTimeseries}
-            loading={loading}
-            error={error}
-          />
+        <MarketingSeoIntelligencePanel
+          seoQueries={data?.seo_queries ?? []}
+          seoMovers={data?.seo_movers ?? []}
+          loading={loading}
+          error={error}
+        />
 
-          <MarketingSeoIntelligencePanel
-            seoQueries={data?.seo_queries ?? []}
-            seoMovers={data?.seo_movers ?? []}
-            loading={loading}
-            error={error}
-          />
+        <MarketingPagesPerformancePanel
+          pages={data?.pages ?? []}
+          loading={loading}
+          error={error}
+        />
 
-          <MarketingPagesPerformancePanel
-            pages={data?.pages ?? []}
-            loading={loading}
-            error={error}
-          />
-
-          <MarketingPipelineHealthPanel
-            health={data?.pipeline_health ?? []}
-            loading={loading}
-            error={error}
-          />
-        </>
-      )}
+        <MarketingPipelineHealthPanel
+          health={data?.pipeline_health ?? []}
+          loading={loading}
+          error={error}
+        />
+      </div>
     </DashboardGuard>
   );
 }

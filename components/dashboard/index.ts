@@ -53,3 +53,5 @@ export type { TimeseriesChartProps } from './TimeseriesChart';
 
 export { MarketingPerformanceScore } from './MarketingPerformanceScore';
 export type { MarketingPerformanceScoreProps } from './MarketingPerformanceScore';
+
+export { SkeletonCard } from './SkeletonCard';

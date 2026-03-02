@@ -55,11 +55,25 @@ The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics vi
 
 **Database Connection:** Uses `SUPABASE_DATABASE_URL || DATABASE_URL` with always-on SSL (`rejectUnauthorized: false`). All queries are date-range filtered via `$1/$2` params.
 
+**Chart Library (Recharts):**
+- `components/dashboard/charts/` — Shared chart wrappers: `AreaLineChart`, `DonutChart`, `BarChart`, `Sparkline`
+- All charts use NSD brand color tokens, `ResponsiveContainer`, custom tooltips
+- Timeseries panel uses `AreaLineChart` (replaced hand-rolled SVG)
+- Audience panel uses `DonutChart` for device breakdown
+- Sources + Pipeline Category panels use `BarChart` + `DonutChart`
+
+**Responsive & Animation System:**
+- `design/tokens/breakpoints.ts` — Breakpoint constants (sm: 640, md: 768, lg: 1024, xl: 1280)
+- `design/tokens/animations.ts` — Keyframe definitions (shimmer, fadeIn, pulse, growWidth, countUp)
+- `hooks/useMediaQuery.ts` — `useMediaQuery` + `useBreakpoint` hooks
+- `components/dashboard/DashboardGrid.tsx` — Supports responsive column objects `{sm, md, lg}`
+- `components/dashboard/SkeletonCard.tsx` — Per-panel shimmer skeleton loading
+
 **Key Files:**
 - `services/marketingQueries.ts` — All SQL queries and data mapping
 - `app/api/activity-spine/marketing/overview/route.ts` — API route handler
-- `app/dashboard/marketing/page.tsx` — Page orchestrator
-- `app/dashboard/marketing/components/` — All panel components
+- `app/dashboard/marketing/page.tsx` — Page orchestrator (max-width container, per-panel loading)
+- `app/dashboard/marketing/components/` — All panel components (modernized with charts, animations, responsive grids)
 - `types/activity-spine.ts` — Type definitions
 
 ## Testing
