@@ -65,8 +65,7 @@ export function MarketingSeoRevenuePanel({ pages, loading, error }: Props) {
         stable: clicks >= VOLATILITY_THRESHOLD,
       };
     })
-    .sort((a, b) => b.pipeline_value_usd - a.pipeline_value_usd)
-    .slice(0, 10);
+    .sort((a, b) => b.pipeline_value_usd - a.pipeline_value_usd);
 
   const topPage = rows.length > 0 && rows[0].pipeline_value_usd > 0 ? rows[0] : null;
 
@@ -112,6 +111,9 @@ export function MarketingSeoRevenuePanel({ pages, loading, error }: Props) {
           data={rows}
           keyExtractor={(r) => r.page_url}
           emptyMessage="No organic revenue data."
+          pageSize={10}
+          defaultSortKey="pipeline_value_usd"
+          defaultSortDir="desc"
         />
       )}
     </DashboardSection>

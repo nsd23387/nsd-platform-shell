@@ -44,6 +44,9 @@ export function MarketingPagesPerformancePanel({ pages, loading, error }: Props)
           data={pages}
           keyExtractor={(r) => r.page_url}
           emptyMessage="No page data available."
+          pageSize={10}
+          defaultSortKey="pipeline_value_usd"
+          defaultSortDir="desc"
         />
       )}
     </DashboardSection>

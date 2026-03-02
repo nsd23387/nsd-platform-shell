@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import type { MarketingKPIs, MarketingKPIComparisons } from '../../types/activity-spine';
-import { background, text, border, semantic, violet } from '../../design/tokens/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
+import { violet } from '../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../design/tokens/typography';
 import { space, radius } from '../../design/tokens/spacing';
 
@@ -101,20 +102,21 @@ function computeScore(
   return { score, breakdown };
 }
 
-function scoreColor(score: number): string {
-  if (score >= 80) return semantic.success.base;
+function scoreColor(score: number, tc: ReturnType<typeof useThemeColors>): string {
+  if (score >= 80) return tc.semantic.success.base;
   if (score >= 60) return violet[500];
-  if (score >= 40) return semantic.warning.base;
-  return semantic.danger.base;
+  if (score >= 40) return tc.semantic.warning.base;
+  return tc.semantic.danger.base;
 }
 
 export function MarketingPerformanceScore({ kpis, comparisons, loading }: MarketingPerformanceScoreProps) {
+  const tc = useThemeColors();
   const [showTooltip, setShowTooltip] = useState(false);
 
   if (loading) return null;
 
   const { score, breakdown } = computeScore(kpis, comparisons);
-  const color = scoreColor(score);
+  const color = scoreColor(score, tc);
   const circumference = 2 * Math.PI * 40;
   const dashOffset = circumference - (score / 100) * circumference;
 
@@ -124,8 +126,8 @@ export function MarketingPerformanceScore({ kpis, comparisons, loading }: Market
         display: 'flex',
         alignItems: 'center',
         gap: space['5'],
-        backgroundColor: background.surface,
-        border: `1px solid ${border.default}`,
+        backgroundColor: tc.background.surface,
+        border: `1px solid ${tc.border.default}`,
         borderRadius: radius.xl,
         padding: `${space['5']} ${space['6']}`,
         marginBottom: space['6'],
@@ -138,7 +140,7 @@ export function MarketingPerformanceScore({ kpis, comparisons, loading }: Market
         onMouseLeave={() => setShowTooltip(false)}
       >
         <svg width={96} height={96} viewBox="0 0 96 96">
-          <circle cx={48} cy={48} r={40} fill="none" stroke={border.subtle} strokeWidth={6} />
+          <circle cx={48} cy={48} r={40} fill="none" stroke={tc.border.subtle} strokeWidth={6} />
           <circle
             cx={48} cy={48} r={40}
             fill="none" stroke={color} strokeWidth={6}
@@ -166,10 +168,10 @@ export function MarketingPerformanceScore({ kpis, comparisons, loading }: Market
       </div>
 
       <div>
-        <div style={{ fontFamily: fontFamily.display, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: text.primary, lineHeight: lineHeight.snug }}>
+        <div style={{ fontFamily: fontFamily.display, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary, lineHeight: lineHeight.snug }}>
           Marketing Performance Score
         </div>
-        <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: text.muted, marginTop: space['1'] }}>
+        <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['1'] }}>
           Composite of revenue growth, traffic, conversion, and SEO efficiency.
         </div>
       </div>
@@ -181,22 +183,21 @@ export function MarketingPerformanceScore({ kpis, comparisons, loading }: Market
             top: '100%',
             left: space['6'],
             marginTop: space['2'],
-            backgroundColor: background.surface,
-            border: `1px solid ${border.default}`,
+            backgroundColor: tc.background.surface,
+            border: `1px solid ${tc.border.default}`,
             borderRadius: radius.lg,
             padding: space['4'],
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
             zIndex: 10,
             minWidth: '240px',
             fontFamily: fontFamily.body,
             fontSize: fontSize.sm,
           }}
         >
-          <div style={{ fontWeight: fontWeight.medium, color: text.primary, marginBottom: space['2'] }}>Score Breakdown</div>
+          <div style={{ fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['2'] }}>Score Breakdown</div>
           {breakdown.map((b) => (
-            <div key={b.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: space['1'], color: text.secondary }}>
+            <div key={b.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: space['1'], color: tc.text.secondary }}>
               <span>{b.label} ({Math.round(b.weight * 100)}%)</span>
-              <span style={{ fontWeight: fontWeight.medium, color: text.primary }}>{b.value}/100</span>
+              <span style={{ fontWeight: fontWeight.medium, color: tc.text.primary }}>{b.value}/100</span>
             </div>
           ))}
         </div>

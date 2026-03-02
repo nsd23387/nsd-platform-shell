@@ -173,6 +173,9 @@ export function MarketingSeoIntelligencePanel({ seoQueries, seoMovers = [], load
           data={filtered}
           keyExtractor={(r) => r.query}
           emptyMessage="No SEO data available."
+          pageSize={10}
+          defaultSortKey="impressions"
+          defaultSortDir="desc"
         />
       )}
     </DashboardSection>
