@@ -62,6 +62,15 @@ The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics vi
 - `app/dashboard/marketing/components/` — All panel components
 - `types/activity-spine.ts` — Type definitions
 
+## Testing
+- **Test runner**: vitest 3.x with vite 5.x (pinned for Node.js 18 CJS compatibility)
+- **Test environment**: `node` (API route tests don't need jsdom)
+- **Test files**:
+  - `app/api/activity-spine/marketing/overview/__tests__/route.test.ts` — 104 tests covering T001-T008 marketing panel improvements
+  - `app/sales-engine/lib/__tests__/read-only-guard.test.ts` — 29 tests for read-only guard
+- **Run tests**: `npx vitest run`
+- **Note**: vitest uses `// @vitest-environment node` directive in API test files; vitest.config.ts defaults to `environment: 'node'`
+
 ## External Dependencies
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.
 - **ODS API**: Used for bootstrap and identity services.

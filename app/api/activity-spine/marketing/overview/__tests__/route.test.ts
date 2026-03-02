@@ -1,7 +1,8 @@
+// @vitest-environment node
 /**
  * Marketing Overview Route — Unit Tests
  *
- * Covers Phases A-E + all previous upgrade tests.
+ * Covers Phases A-E + T001-T008 new panel coverage.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -30,6 +31,11 @@ function stubEmpty() {
     if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('generate_series') || sql.includes('metrics_search_console_query')) {
       return Promise.resolve({ rows: [] });
     }
+    if (sql.includes('raw_search_console')) return Promise.resolve({ rows: [] });
+    if (sql.includes('pipeline_by_category')) return Promise.resolve({ rows: [] });
+    if (sql.includes('conversion_events')) return Promise.resolve({ rows: [] });
+    if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+    if (sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
     if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
     if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
     return Promise.resolve({ rows: [{}] });
@@ -38,18 +44,51 @@ function stubEmpty() {
 
 function stubWithData() {
   mockQuery.mockImplementation((sql: string, params?: unknown[]) => {
-    if (sql.includes('MAX(')) return Promise.resolve({ rows: [{ engagement_last_date: '2026-02-28', search_console_last_date: '2026-02-27', conversion_last_date: '2026-02-28' }] });
+    if (sql.includes('MAX(') && sql.includes('engagement_last_date')) return Promise.resolve({ rows: [{ engagement_last_date: '2026-02-28', search_console_last_date: '2026-02-27', conversion_last_date: '2026-02-28' }] });
     if (sql.includes('generate_series') && sql.includes('sessions')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '100' }, { date: '2026-02-27', value: '90' }] });
     if (sql.includes('generate_series') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '5' }] });
     if (sql.includes('generate_series') && sql.includes('total_pipeline_value_usd')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '1000' }] });
+    if (sql.includes('generate_series') && sql.includes('impressions')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '4000' }] });
+    if (sql.includes('generate_series') && sql.includes('clicks')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '50' }] });
     if (sql.includes('STDDEV') && sql.includes('sessions')) return Promise.resolve({ rows: [{ n: 30, mean: 100, stddev: 10, latest_val: 130 }] });
     if (sql.includes('STDDEV') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ n: 30, mean: 5, stddev: 1, latest_val: 6 }] });
     if (sql.includes('STDDEV') && sql.includes('total_pipeline_value_usd')) return Promise.resolve({ rows: [{ n: 30, mean: 1000, stddev: 100, latest_val: 1100 }] });
-    if (sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [{ query: 'neon signs', clicks: '200', impressions: '5000', ctr: '0.04', avg_position: '5.2', submissions: '3', pipeline_value_usd: '4500' }] });
-    if (sql.includes('FULL OUTER JOIN')) return Promise.resolve({ rows: [{ page_url: '/products', sessions: '800', page_views: '1200', bounce_rate: '0.35', avg_time_on_page_seconds: '45', clicks: '300', impressions: '5000', ctr: '0.06', submissions: '20', pipeline_value_usd: '30000' }] });
+
+    if (sql.includes('metrics_search_console_query_daily')) return Promise.resolve({ rows: [
+      { query: 'neon signs custom', impressions_first_half: '100', impressions_second_half: '300', delta_pct: '2.0', direction: 'rising' },
+      { query: 'led signs cheap', impressions_first_half: '500', impressions_second_half: '200', delta_pct: '-0.6', direction: 'falling' },
+    ] });
+    if (sql.includes('metrics_search_console_query') && !sql.includes('_daily')) return Promise.resolve({ rows: [{ query: 'neon signs', clicks: '200', impressions: '5000', ctr: '0.04', avg_position: '5.2', submissions: '3', pipeline_value_usd: '4500' }] });
+    if (sql.includes('FULL OUTER JOIN') && sql.includes('metrics_page_engagement_daily')) return Promise.resolve({ rows: [{ page_url: '/products', sessions: '800', page_views: '1200', bounce_rate: '0.35', avg_time_on_page_seconds: '45', clicks: '300', impressions: '5000', ctr: '0.06', submissions: '20', pipeline_value_usd: '30000' }] });
     if (sql.includes('dashboard_sources')) return Promise.resolve({ rows: [{ submission_source: 'Google', submissions: '50', pipeline_value_usd: '75000' }, { submission_source: 'direct', submissions: '35', pipeline_value_usd: '50000' }] });
 
-    // KPI queries — differentiate current vs previous by params
+    if (sql.includes('raw_search_console') && sql.includes('device')) return Promise.resolve({ rows: [
+      { device: 'DESKTOP', impressions: '3170', clicks: '1', ctr: '0.00032' },
+      { device: 'MOBILE', impressions: '1596', clicks: '1', ctr: '0.00063' },
+      { device: 'TABLET', impressions: '42', clicks: '0', ctr: '0' },
+    ] });
+    if (sql.includes('raw_search_console') && sql.includes('country')) return Promise.resolve({ rows: [
+      { country: 'US', impressions: '4200', clicks: '2', ctr: '0.00048' },
+      { country: 'CA', impressions: '200', clicks: '0', ctr: '0' },
+    ] });
+    if (sql.includes('pipeline_by_category')) return Promise.resolve({ rows: [
+      { product_category: 'Logo/Image', submissions: '1', pipeline_value_usd: '375' },
+      { product_category: 'Text Only', submissions: '1', pipeline_value_usd: '300' },
+    ] });
+    if (sql.includes('conversion_events')) return Promise.resolve({ rows: [
+      { created_at: '2026-03-01T12:00:00Z', product_category: 'Logo/Image', preliminary_price_usd: '375', submission_source: 'quote.neonsignsdepot.com' },
+      { created_at: '2026-02-28T10:00:00Z', product_category: 'Text Only', preliminary_price_usd: '300', submission_source: 'quote.neonsignsdepot.com' },
+    ] });
+    if (sql.includes('dashboard_funnel_daily') && !sql.includes('SUM')) return Promise.resolve({ rows: [
+      { date: '2026-03-01', page_views: '590', submissions: '1', conversion_rate: '0.0017', pipeline_value_usd: '375' },
+      { date: '2026-02-28', page_views: '80', submissions: '1', conversion_rate: '0.0125', pipeline_value_usd: '300' },
+    ] });
+    if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{ page_views: '677', submissions: '2' }] });
+    if (sql.includes('ingestion_runs')) return Promise.resolve({ rows: [
+      { source: 'web-events', last_success: new Date(Date.now() - 3600_000).toISOString(), failure_rate_24h: '0' },
+      { source: 'search_console', last_success: new Date(Date.now() - 96 * 3600_000).toISOString(), failure_rate_24h: '0' },
+    ] });
+
     const isCurrentPeriod = Array.isArray(params) && typeof params[0] === 'string' && params[0] >= '2026-02';
 
     if (sql.includes('metrics_page_engagement_daily')) {
@@ -71,6 +110,8 @@ function stubAnomalySpike() {
     if (sql.includes('STDDEV') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ n: 10, mean: 5, stddev: 1, latest_val: 20 }] });
     if (sql.includes('STDDEV') && sql.includes('total_pipeline_value_usd')) return Promise.resolve({ rows: [{ n: 10, mean: 1000, stddev: 100, latest_val: 5000 }] });
     if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+    if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+    if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
     if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
     return Promise.resolve({ rows: [{}] });
   });
@@ -82,6 +123,8 @@ function stubNegativeAndNaN() {
     if (sql.includes('conversion_metrics_daily') && !sql.includes('STDDEV') && !sql.includes('generate_series')) return Promise.resolve({ rows: [{ total_submissions: 'Infinity', total_pipeline_value_usd: null }] });
     if (sql.includes('metrics_search_console_page') && !sql.includes('FULL OUTER') && !sql.includes('STDDEV')) return Promise.resolve({ rows: [{ organic_clicks: '-1', impressions: undefined, avg_position: '-3' }] });
     if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+    if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+    if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
     if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
     if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
     return Promise.resolve({ rows: [{}] });
@@ -369,6 +412,8 @@ describe('Phase D: anomalies', () => {
       if (sql.includes('STDDEV') && sql.includes('sessions')) return Promise.resolve({ rows: [{ n: 10, mean: 100, stddev: 10, latest_val: 115 }] });
       if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 10, mean: 50, stddev: 5, latest_val: 55 }] });
       if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
       if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
       return Promise.resolve({ rows: [{}] });
     });
@@ -401,6 +446,8 @@ describe('Phase E: source taxonomy', () => {
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes('dashboard_sources')) return Promise.resolve({ rows: [{ submission_source: 'random_site', submissions: '1', pipeline_value_usd: '100' }] });
       if (sql.includes('FULL OUTER JOIN') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
       if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
       if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
       return Promise.resolve({ rows: [{}] });
@@ -473,6 +520,8 @@ describe('anomaly: flat data (stddev=0)', () => {
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 10, mean: 100, stddev: 0, latest_val: 100 }] });
       if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
       if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
       return Promise.resolve({ rows: [{}] });
     });
@@ -498,5 +547,402 @@ describe('query deduplication', () => {
         !(c[0] as string).includes('FULL OUTER')
     );
     expect(searchCalls).toHaveLength(1);
+  });
+});
+
+// ============================================
+// T001: Page Views KPI fallback
+// ============================================
+
+describe('T001: page views fallback', () => {
+  it('uses dashboard_funnel_daily when engagement table returns zeros', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('metrics_page_engagement_daily') && !sql.includes('FULL OUTER') && !sql.includes('STDDEV') && !sql.includes('generate_series')) return Promise.resolve({ rows: [{ sessions: '0', page_views: '0', bounce_rate: '0', avg_time_on_page_seconds: '0' }] });
+      if (sql.includes('dashboard_funnel_daily') && sql.includes('SUM')) return Promise.resolve({ rows: [{ page_views: '677', submissions: '2' }] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.kpis.page_views).toBe(677);
+    expect(data.kpis.sessions).toBe(677);
+  });
+
+  it('prefers engagement data over fallback when engagement has data', async () => {
+    stubWithData();
+    const { data } = await (await GET(req('/o?start=2026-02-01&end=2026-02-28'))).json();
+    expect(data.kpis.sessions).toBe(1200);
+    expect(data.kpis.page_views).toBe(3400);
+  });
+});
+
+// ============================================
+// T003: Device & Country breakdown
+// ============================================
+
+describe('T003: device & country breakdown', () => {
+  it('returns device_breakdown with populated data', async () => {
+    stubWithData();
+    const { data } = await (await GET(req('/o?start=2026-02-01&end=2026-02-28'))).json();
+    expect(data.device_breakdown).toHaveLength(3);
+    expect(data.device_breakdown[0].device).toBe('DESKTOP');
+    expect(data.device_breakdown[0].impressions).toBe(3170);
+    expect(data.device_breakdown[0].clicks).toBe(1);
+    expect(data.device_breakdown[0].ctr).toBeCloseTo(0.00032, 4);
+  });
+
+  it('returns country_breakdown with populated data', async () => {
+    stubWithData();
+    const { data } = await (await GET(req('/o?start=2026-02-01&end=2026-02-28'))).json();
+    expect(data.country_breakdown).toHaveLength(2);
+    expect(data.country_breakdown[0].country).toBe('US');
+    expect(data.country_breakdown[0].impressions).toBe(4200);
+  });
+
+  it('returns empty arrays when no search console data', async () => {
+    stubEmpty();
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.device_breakdown).toEqual([]);
+    expect(data.country_breakdown).toEqual([]);
+  });
+
+  it('filters null device rows', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('raw_search_console') && sql.includes('device')) return Promise.resolve({ rows: [{ device: null, impressions: '10', clicks: '0', ctr: '0' }, { device: 'DESKTOP', impressions: '100', clicks: '1', ctr: '0.01' }] });
+      if (sql.includes('raw_search_console')) return Promise.resolve({ rows: [] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.device_breakdown).toHaveLength(1);
+    expect(data.device_breakdown[0].device).toBe('DESKTOP');
+  });
+
+  it('clamps CTR values to [0, 1]', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('raw_search_console') && sql.includes('device')) return Promise.resolve({ rows: [{ device: 'DESKTOP', impressions: '100', clicks: '5', ctr: '1.5' }] });
+      if (sql.includes('raw_search_console')) return Promise.resolve({ rows: [] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.device_breakdown[0].ctr).toBeLessThanOrEqual(1);
+  });
+
+  it('passes date range params to device/country queries', async () => {
+    stubWithData();
+    await GET(req('/o?start=2026-02-01&end=2026-02-28'));
+    const deviceCall = mockQuery.mock.calls.find(
+      (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('raw_search_console') && (c[0] as string).includes('device')
+    );
+    expect(deviceCall).toBeTruthy();
+    expect(deviceCall![1]).toEqual(['2026-02-01', '2026-02-28']);
+  });
+});
+
+// ============================================
+// T004: Pipeline categories
+// ============================================
+
+describe('T004: pipeline categories', () => {
+  it('returns pipeline_categories with populated data', async () => {
+    stubWithData();
+    const { data } = await (await GET(req('/o?start=2026-02-01&end=2026-02-28'))).json();
+    expect(data.pipeline_categories).toHaveLength(2);
+    expect(data.pipeline_categories[0].product_category).toBe('Logo/Image');
+    expect(data.pipeline_categories[0].pipeline_value_usd).toBe(375);
+    expect(data.pipeline_categories[1].product_category).toBe('Text Only');
+  });
+
+  it('returns empty array when no categories', async () => {
+    stubEmpty();
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.pipeline_categories).toEqual([]);
+  });
+
+  it('filters rows with null product_category', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('pipeline_by_category')) return Promise.resolve({ rows: [{ product_category: null, submissions: '1', pipeline_value_usd: '100' }] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.pipeline_categories).toEqual([]);
+  });
+});
+
+// ============================================
+// T005: Recent conversions
+// ============================================
+
+describe('T005: recent conversions', () => {
+  it('returns recent_conversions with populated data', async () => {
+    stubWithData();
+    const { data } = await (await GET(req('/o?start=2026-02-01&end=2026-02-28'))).json();
+    expect(data.recent_conversions).toHaveLength(2);
+    expect(data.recent_conversions[0].product_category).toBe('Logo/Image');
+    expect(data.recent_conversions[0].preliminary_price_usd).toBe(375);
+    expect(data.recent_conversions[0].submission_source).toBe('quote.neonsignsdepot.com');
+  });
+
+  it('returns empty array when no conversions', async () => {
+    stubEmpty();
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.recent_conversions).toEqual([]);
+  });
+
+  it('defaults missing fields to safe values', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('conversion_events')) return Promise.resolve({ rows: [{ created_at: null, product_category: null, preliminary_price_usd: null, submission_source: null }] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.recent_conversions).toHaveLength(1);
+    expect(data.recent_conversions[0].product_category).toBe('Unknown');
+    expect(data.recent_conversions[0].submission_source).toBe('Unknown');
+    expect(data.recent_conversions[0].preliminary_price_usd).toBe(0);
+  });
+});
+
+// ============================================
+// T006: SEO query movers
+// ============================================
+
+describe('T006: seo movers', () => {
+  it('returns seo_movers with rising and falling queries', async () => {
+    stubWithData();
+    const { data } = await (await GET(req('/o?start=2026-02-01&end=2026-02-28'))).json();
+    expect(data.seo_movers).toHaveLength(2);
+    const rising = data.seo_movers.find((m: { direction: string }) => m.direction === 'rising');
+    const falling = data.seo_movers.find((m: { direction: string }) => m.direction === 'falling');
+    expect(rising).toBeDefined();
+    expect(rising.query).toBe('neon signs custom');
+    expect(rising.delta_pct).toBe(2.0);
+    expect(falling).toBeDefined();
+    expect(falling.query).toBe('led signs cheap');
+    expect(falling.delta_pct).toBe(-0.6);
+  });
+
+  it('returns empty array when no query data', async () => {
+    stubEmpty();
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.seo_movers).toEqual([]);
+  });
+
+  it('filters null query rows', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('metrics_search_console_query_daily')) return Promise.resolve({ rows: [{ query: null, impressions_first_half: '10', impressions_second_half: '20', delta_pct: '1.0', direction: 'rising' }] });
+      if (sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.seo_movers).toEqual([]);
+  });
+
+  it('passes date range params to SEO movers query', async () => {
+    stubWithData();
+    await GET(req('/o?start=2026-02-01&end=2026-02-28'));
+    const moversCall = mockQuery.mock.calls.find(
+      (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('metrics_search_console_query_daily')
+    );
+    expect(moversCall).toBeTruthy();
+    expect(moversCall![1]).toEqual(['2026-02-01', '2026-02-28']);
+  });
+});
+
+// ============================================
+// T007: Funnel visualization
+// ============================================
+
+describe('T007: funnel', () => {
+  it('returns funnel with populated data', async () => {
+    stubWithData();
+    const { data } = await (await GET(req('/o?start=2026-02-01&end=2026-02-28'))).json();
+    expect(data.funnel.length).toBeGreaterThanOrEqual(1);
+    expect(data.funnel[0]).toHaveProperty('date');
+    expect(data.funnel[0]).toHaveProperty('page_views');
+    expect(data.funnel[0]).toHaveProperty('submissions');
+    expect(data.funnel[0]).toHaveProperty('conversion_rate');
+    expect(data.funnel[0]).toHaveProperty('pipeline_value_usd');
+  });
+
+  it('clamps conversion_rate to [0, 1]', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('dashboard_funnel_daily') && !sql.includes('SUM')) return Promise.resolve({ rows: [{ date: '2026-03-01', page_views: '100', submissions: '5', conversion_rate: '1.5', pipeline_value_usd: '500' }] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.funnel[0].conversion_rate).toBeLessThanOrEqual(1);
+  });
+
+  it('returns empty funnel when no funnel data', async () => {
+    stubEmpty();
+    const { data } = await (await GET(req('/o'))).json();
+    expect(Array.isArray(data.funnel)).toBe(true);
+  });
+});
+
+// ============================================
+// T008: Pipeline health
+// ============================================
+
+describe('T008: pipeline health', () => {
+  it('returns pipeline_health with status for each source', async () => {
+    stubWithData();
+    const { data } = await (await GET(req('/o?start=2026-02-01&end=2026-02-28'))).json();
+    expect(data.pipeline_health).toHaveLength(2);
+    const webEvents = data.pipeline_health.find((h: { source: string }) => h.source === 'web-events');
+    const searchConsole = data.pipeline_health.find((h: { source: string }) => h.source === 'search_console');
+    expect(webEvents).toBeDefined();
+    expect(webEvents.status).toBe('healthy');
+    expect(searchConsole).toBeDefined();
+    expect(searchConsole.status).toBe('stale');
+  });
+
+  it('marks as stale when last_success is null', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('ingestion_runs')) return Promise.resolve({ rows: [{ source: 'test_source', last_success: null, failure_rate_24h: '0' }] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.pipeline_health[0].status).toBe('stale');
+  });
+
+  it('marks as stale when last_success is invalid date', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('ingestion_runs')) return Promise.resolve({ rows: [{ source: 'test_source', last_success: 'not-a-date', failure_rate_24h: '0' }] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.pipeline_health[0].status).toBe('stale');
+  });
+
+  it('marks as warning when failure_rate > 0.3', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('ingestion_runs')) return Promise.resolve({ rows: [{ source: 'test_source', last_success: new Date(Date.now() - 3600_000).toISOString(), failure_rate_24h: '0.5' }] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.pipeline_health[0].status).toBe('warning');
+    expect(data.pipeline_health[0].failure_rate_24h).toBe(0.5);
+  });
+
+  it('clamps failure_rate to [0, 1]', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('ingestion_runs')) return Promise.resolve({ rows: [{ source: 'test_source', last_success: new Date(Date.now() - 3600_000).toISOString(), failure_rate_24h: '1.5' }] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.pipeline_health[0].failure_rate_24h).toBeLessThanOrEqual(1);
+  });
+
+  it('returns empty array when no ingestion data', async () => {
+    stubEmpty();
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.pipeline_health).toEqual([]);
+  });
+
+  it('defaults source to unknown when null', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('ingestion_runs')) return Promise.resolve({ rows: [{ source: null, last_success: null, failure_rate_24h: '0' }] });
+      if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+    const { data } = await (await GET(req('/o'))).json();
+    expect(data.pipeline_health[0].source).toBe('unknown');
+  });
+});
+
+// ============================================
+// T002: SEO timeseries (impressions & clicks)
+// ============================================
+
+describe('T002: SEO timeseries', () => {
+  it('includes impressions and clicks in timeseries', async () => {
+    stubWithData();
+    const { data } = await (await GET(req('/o?start=2026-02-01&end=2026-02-28&include_timeseries=true'))).json();
+    expect(data.timeseries).toBeDefined();
+    expect(Array.isArray(data.timeseries.impressions)).toBe(true);
+    expect(Array.isArray(data.timeseries.clicks)).toBe(true);
+    expect(data.timeseries.impressions[0]).toHaveProperty('date');
+    expect(data.timeseries.impressions[0]).toHaveProperty('value');
+  });
+
+  it('omits timeseries.impressions/clicks when timeseries disabled', async () => {
+    stubWithData();
+    const { data } = await (await GET(req('/o?start=2026-02-01&end=2026-02-28'))).json();
+    expect(data.timeseries).toBeUndefined();
+  });
+});
+
+// ============================================
+// New fields in empty state
+// ============================================
+
+describe('new fields: empty state defaults', () => {
+  it('returns all new fields as arrays when empty', async () => {
+    stubEmpty();
+    const { data } = await (await GET(req('/o'))).json();
+    expect(Array.isArray(data.device_breakdown)).toBe(true);
+    expect(Array.isArray(data.country_breakdown)).toBe(true);
+    expect(Array.isArray(data.pipeline_categories)).toBe(true);
+    expect(Array.isArray(data.recent_conversions)).toBe(true);
+    expect(Array.isArray(data.seo_movers)).toBe(true);
+    expect(Array.isArray(data.funnel)).toBe(true);
+    expect(Array.isArray(data.pipeline_health)).toBe(true);
   });
 });

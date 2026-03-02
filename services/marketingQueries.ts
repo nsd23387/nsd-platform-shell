@@ -344,7 +344,8 @@ const DEVICE_BREAKDOWN_SQL = `
       THEN SUM((payload->>'clicks')::float) / SUM((payload->>'impressions')::int)
       ELSE 0 END AS ctr
   FROM analytics.raw_search_console
-  WHERE (payload->>'date')::date BETWEEN $1 AND $2
+  WHERE payload->>'date' IS NOT NULL
+    AND (payload->>'date')::date BETWEEN $1 AND $2
   GROUP BY device
   ORDER BY impressions DESC
 `;
@@ -358,7 +359,8 @@ const COUNTRY_BREAKDOWN_SQL = `
       THEN SUM((payload->>'clicks')::float) / SUM((payload->>'impressions')::int)
       ELSE 0 END AS ctr
   FROM analytics.raw_search_console
-  WHERE (payload->>'date')::date BETWEEN $1 AND $2
+  WHERE payload->>'date' IS NOT NULL
+    AND (payload->>'date')::date BETWEEN $1 AND $2
   GROUP BY country
   ORDER BY impressions DESC
   LIMIT 10
