@@ -64,7 +64,7 @@ export function MarketingFunnelPanel({ funnel, loading, error }: Props) {
                   }}
                   data-testid={`funnel-stage-${i}`}
                 >
-                  <div style={{ fontFamily: fontFamily.display, fontSize: fontSize['2xl'], fontWeight: fontWeight.bold, color: '#fff' }}>
+                  <div style={{ fontFamily: fontFamily.display, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: '#fff' }}>
                     {stage.format(stage.value)}
                   </div>
                   <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: 'rgba(255,255,255,0.85)', marginTop: space['1'] }}>

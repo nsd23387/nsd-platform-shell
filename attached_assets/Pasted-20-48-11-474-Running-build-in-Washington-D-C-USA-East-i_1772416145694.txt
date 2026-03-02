@@ -1,0 +1,40 @@
+20:48:11.474 Running build in Washington, D.C., USA (East) – iad1
+20:48:11.475 Build machine configuration: 4 cores, 8 GB
+20:48:11.604 Cloning github.com/nsd23387/nsd-platform-shell (Branch: main, Commit: f4e581d)
+20:48:12.441 Cloning completed: 837.000ms
+20:48:12.742 Restored build cache from previous deployment (W3828V1epsUhDm6XjSK12oGiEWoC)
+20:48:15.426 Warning: Detected "engines": { "node": ">=18.0.0" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version
+20:48:15.427 Running "vercel build"
+20:48:16.047 Vercel CLI 50.23.2
+20:48:16.641 Warning: Detected "engines": { "node": ">=18.0.0" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version
+20:48:16.659 Installing dependencies...
+20:48:18.891 
+20:48:18.892 added 10 packages, removed 2 packages, and changed 17 packages in 2s
+20:48:18.892 
+20:48:18.892 162 packages are looking for funding
+20:48:18.892   run `npm fund` for details
+20:48:18.928 Detected Next.js version: 14.2.35
+20:48:18.930 Running "npm run build"
+20:48:19.033 
+20:48:19.034 > nsd-platform-shell@1.0.0 build
+20:48:19.034 > next build
+20:48:19.034 
+20:48:19.742   ▲ Next.js 14.2.35
+20:48:19.742 
+20:48:19.766    Creating an optimized production build ...
+20:48:29.567  ✓ Compiled successfully
+20:48:29.568    Linting and checking validity of types ...
+20:48:41.653 Failed to compile.
+20:48:41.654 
+20:48:41.654 ./app/dashboard/marketing/components/MarketingFunnelPanel.tsx:67:115
+20:48:41.654 Type error: Property 'bold' does not exist on type '{ readonly normal: 400; readonly medium: 500; readonly semibold: 600; }'.
+20:48:41.654 
+20:48:41.654 [0m [90m 65 |[39m                   data[33m-[39mtestid[33m=[39m{[32m`funnel-stage-${i}`[39m}[0m
+20:48:41.654 [0m [90m 66 |[39m                 [33m>[39m[0m
+20:48:41.655 [0m[31m[1m>[22m[39m[90m 67 |[39m                   [33m<[39m[33mdiv[39m style[33m=[39m{{ fontFamily[33m:[39m fontFamily[33m.[39mdisplay[33m,[39m fontSize[33m:[39m fontSize[[32m'2xl'[39m][33m,[39m fontWeight[33m:[39m fontWeight[33m.[39mbold[33m,[39m color[33m:[39m [32m'#fff'[39m }}[33m>[39m[0m
+20:48:41.655 [0m [90m    |[39m                                                                                                                   [31m[1m^[22m[39m[0m
+20:48:41.655 [0m [90m 68 |[39m                     {stage[33m.[39mformat(stage[33m.[39mvalue)}[0m
+20:48:41.655 [0m [90m 69 |[39m                   [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+20:48:41.655 [0m [90m 70 |[39m                   [33m<[39m[33mdiv[39m style[33m=[39m{{ fontFamily[33m:[39m fontFamily[33m.[39mbody[33m,[39m fontSize[33m:[39m fontSize[33m.[39mxs[33m,[39m color[33m:[39m [32m'rgba(255,255,255,0.85)'[39m[33m,[39m marginTop[33m:[39m space[[32m'1'[39m] }}[33m>[39m[0m
+20:48:41.694 Next.js build worker exited with code: 1 and signal: null
+20:48:41.715 Error: Command "npm run build" exited with 1
