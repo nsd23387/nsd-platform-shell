@@ -6,9 +6,11 @@ import { DashboardSection, DashboardGrid, EmptyStateCard } from '../../../../com
 import { SkeletonCard } from '../../../../components/dashboard';
 import { DataTable } from '../../../sales-engine/components/ui/DataTable';
 import { formatNumber, formatPercent, formatPosition, formatCurrency } from '../lib/format';
-import { text, border, background, semantic, violet, indigo } from '../../../../design/tokens/colors';
+import { violet } from '../../../../design/tokens/colors';
+import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../../design/tokens/spacing';
+import type { ThemeColors } from '../../../../design/tokens/theme-colors';
 
 interface Props {
   seoQueries: MarketingSEOQuery[];
@@ -27,7 +29,7 @@ const COLUMNS = [
   { key: 'revenue_per_click', header: 'Rev/Click', width: '12%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatCurrency(r.revenue_per_click) },
 ];
 
-function toggleStyle(active: boolean): React.CSSProperties {
+function toggleStyle(active: boolean, tc: ThemeColors): React.CSSProperties {
   return {
     display: 'inline-flex',
     alignItems: 'center',
@@ -37,8 +39,8 @@ function toggleStyle(active: boolean): React.CSSProperties {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     backgroundColor: active ? violet[50] : 'transparent',
-    color: active ? violet[700] : text.muted,
-    border: `1px solid ${active ? violet[200] : border.default}`,
+    color: active ? violet[700] : tc.text.muted,
+    border: `1px solid ${active ? violet[200] : tc.border.default}`,
     borderRadius: radius.full,
     cursor: 'pointer',
     transition: `all ${duration.normal} ${easing.DEFAULT}`,
@@ -46,15 +48,16 @@ function toggleStyle(active: boolean): React.CSSProperties {
 }
 
 function MoversCard({ movers, direction }: { movers: MarketingSEOQueryMover[]; direction: 'rising' | 'falling' }) {
+  const tc = useThemeColors();
   const filtered = movers.filter((m) => m.direction === direction);
   if (filtered.length === 0) return null;
 
   const isRising = direction === 'rising';
   const arrow = isRising ? '\u2191' : '\u2193';
-  const cardBg = isRising ? semantic.info.light : semantic.danger.light;
-  const borderColor = isRising ? semantic.info.base : semantic.danger.base;
-  const badgeColor = isRising ? semantic.info.dark : semantic.danger.dark;
-  const badgeBg = isRising ? `${semantic.info.base}22` : `${semantic.danger.base}22`;
+  const cardBg = isRising ? tc.semantic.info.light : tc.semantic.danger.light;
+  const borderColor = isRising ? tc.semantic.info.base : tc.semantic.danger.base;
+  const badgeColor = isRising ? tc.semantic.info.dark : tc.semantic.danger.dark;
+  const badgeBg = isRising ? `${tc.semantic.info.base}22` : `${tc.semantic.danger.base}22`;
 
   return (
     <div style={{
@@ -80,7 +83,7 @@ function MoversCard({ movers, direction }: { movers: MarketingSEOQueryMover[]; d
         }}>
           {arrow}
         </span>
-        <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: text.primary }}>
+        <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
           {isRising ? 'Rising' : 'Falling'} Queries
         </h4>
       </div>
@@ -94,7 +97,7 @@ function MoversCard({ movers, direction }: { movers: MarketingSEOQueryMover[]; d
               alignItems: 'center',
               padding: `${space['2']} ${space['3']}`,
               borderRadius: radius.lg,
-              backgroundColor: background.surface,
+              backgroundColor: tc.background.surface,
               opacity: 0.7,
               transition: `opacity ${duration.fast}`,
             }}
@@ -102,7 +105,7 @@ function MoversCard({ movers, direction }: { movers: MarketingSEOQueryMover[]; d
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.7'; }}
             data-testid={`row-mover-${direction}-${idx}`}
           >
-            <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: text.primary, flex: 1 }}>{m.query}</span>
+            <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary, flex: 1 }}>{m.query}</span>
             <span style={{
               fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium,
               color: badgeColor, backgroundColor: badgeBg,
@@ -119,6 +122,7 @@ function MoversCard({ movers, direction }: { movers: MarketingSEOQueryMover[]; d
 }
 
 export function MarketingSeoIntelligencePanel({ seoQueries, seoMovers = [], loading, error }: Props) {
+  const tc = useThemeColors();
   const [filterLowCTR, setFilterLowCTR] = useState(false);
 
   if (loading) {
@@ -151,10 +155,10 @@ export function MarketingSeoIntelligencePanel({ seoQueries, seoMovers = [], load
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: space['3'] }}>
-        <button onClick={() => setFilterLowCTR(!filterLowCTR)} style={toggleStyle(filterLowCTR)} data-testid="toggle-low-ctr">
+        <button onClick={() => setFilterLowCTR(!filterLowCTR)} style={toggleStyle(filterLowCTR, tc)} data-testid="toggle-low-ctr">
           <span style={{
             width: 8, height: 8, borderRadius: '50%',
-            backgroundColor: filterLowCTR ? violet[500] : border.strong,
+            backgroundColor: filterLowCTR ? violet[500] : tc.border.strong,
             display: 'inline-block',
             transition: `background-color ${duration.normal}`,
           }} />

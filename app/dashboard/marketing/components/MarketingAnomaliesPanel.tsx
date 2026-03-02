@@ -3,7 +3,7 @@
 import React from 'react';
 import type { MarketingAnomalies } from '../../../../types/activity-spine';
 import { DashboardSection, DashboardGrid } from '../../../../components/dashboard';
-import { background, text, border, semantic } from '../../../../design/tokens/colors';
+import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 
@@ -25,6 +25,8 @@ const ANOMALY_DEFS: AnomalyDef[] = [
 ];
 
 export function MarketingAnomaliesPanel({ anomalies, loading, error }: Props) {
+  const tc = useThemeColors();
+
   if (loading || error || !anomalies) return null;
 
   const hasAny = ANOMALY_DEFS.some((d) => anomalies[d.key]);
@@ -37,8 +39,8 @@ export function MarketingAnomaliesPanel({ anomalies, loading, error }: Props) {
           <div
             key={d.key}
             style={{
-              backgroundColor: semantic.warning.light,
-              border: `1px solid ${semantic.warning.base}`,
+              backgroundColor: tc.semantic.warning.light,
+              border: `1px solid ${tc.semantic.warning.base}`,
               borderRadius: radius.xl,
               padding: space['5'],
               display: 'flex',
@@ -52,15 +54,15 @@ export function MarketingAnomaliesPanel({ anomalies, loading, error }: Props) {
                 width: space['3'],
                 height: space['3'],
                 borderRadius: radius.full,
-                backgroundColor: semantic.warning.base,
+                backgroundColor: tc.semantic.warning.base,
                 flexShrink: 0,
               }}
             />
             <div>
-              <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: text.primary }}>
+              <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary }}>
                 {d.label}
               </div>
-              <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: semantic.warning.dark }}>
+              <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.semantic.warning.dark }}>
                 Observed spike
               </div>
             </div>

@@ -5,7 +5,8 @@ import type { MarketingKPIs, MarketingKPIComparisons } from '../../../../types/a
 import { DashboardGrid, DashboardSection } from '../../../../components/dashboard';
 import { SkeletonCard } from '../../../../components/dashboard';
 import { formatCurrency, formatNumber, formatPercent, formatDuration, safeNumber } from '../lib/format';
-import { text, border, background, violet, indigo, chartColors, trendColors } from '../../../../design/tokens/colors';
+import { violet, indigo, chartColors } from '../../../../design/tokens/colors';
+import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../../design/tokens/spacing';
 
@@ -68,6 +69,8 @@ function KPICard({ cfg, kpis, comparisons, compareEnabled, loading, index }: {
   loading: boolean;
   index: number;
 }) {
+  const tc = useThemeColors();
+
   if (loading) return <SkeletonCard lines={2} />;
 
   const val = safeNumber(kpis?.[cfg.key]);
@@ -78,8 +81,8 @@ function KPICard({ cfg, kpis, comparisons, compareEnabled, loading, index }: {
   return (
     <div
       style={{
-        backgroundColor: background.surface,
-        border: `1px solid ${border.default}`,
+        backgroundColor: tc.background.surface,
+        border: `1px solid ${tc.border.default}`,
         borderRadius: radius.xl,
         overflow: 'hidden',
         position: 'relative',
@@ -95,13 +98,13 @@ function KPICard({ cfg, kpis, comparisons, compareEnabled, loading, index }: {
         backgroundColor: cfg.accentColor,
       }} />
       <div style={{ padding: space['5'] }}>
-      <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: text.muted, marginBottom: space['1'] }}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.muted, marginBottom: space['1'] }}>
         {cfg.title}
       </div>
-      <div style={{ fontFamily: fontFamily.body, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: text.primary, lineHeight: 1.2 }}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary, lineHeight: 1.2 }}>
         <AnimatedValue value={cfg.format(val)} delay={index * 0.05} />
       </div>
-      <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: text.muted, marginTop: space['1'] }}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['1'] }}>
         {cfg.subtitle}
       </div>
       {comp && (
@@ -112,14 +115,14 @@ function KPICard({ cfg, kpis, comparisons, compareEnabled, loading, index }: {
           marginTop: space['2'],
           padding: `${space['0.5']} ${space['2']}`,
           borderRadius: radius.full,
-          backgroundColor: isUp ? trendColors.up.bg : trendColors.down.bg,
+          backgroundColor: isUp ? tc.trendColors.up.bg : tc.trendColors.down.bg,
           fontFamily: fontFamily.body,
           fontSize: fontSize.xs,
           fontWeight: fontWeight.medium,
-          color: isUp ? trendColors.up.text : trendColors.down.text,
+          color: isUp ? tc.trendColors.up.text : tc.trendColors.down.text,
         }} data-testid={`kpi-delta-${cfg.key}`}>
           {isUp ? '\u2191' : '\u2193'} {Math.abs(deltaPct * 100).toFixed(1)}%
-          <span style={{ color: text.muted, fontWeight: fontWeight.normal }}>
+          <span style={{ color: tc.text.muted, fontWeight: fontWeight.normal }}>
             vs prior ({safeNumber(comp.previous).toLocaleString()})
           </span>
         </div>

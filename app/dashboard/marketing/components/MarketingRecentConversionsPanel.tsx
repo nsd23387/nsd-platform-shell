@@ -5,7 +5,8 @@ import type { MarketingConversionEvent } from '../../../../types/activity-spine'
 import { DashboardSection, EmptyStateCard } from '../../../../components/dashboard';
 import { SkeletonCard } from '../../../../components/dashboard';
 import { formatCurrency } from '../lib/format';
-import { text, border, background, violet, chartColors } from '../../../../design/tokens/colors';
+import { violet, chartColors } from '../../../../design/tokens/colors';
+import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 
@@ -35,6 +36,8 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export function MarketingRecentConversionsPanel({ conversions, loading, error }: Props) {
+  const tc = useThemeColors();
+
   if (loading) {
     return (
       <DashboardSection title="Recent Conversions" description="Latest quote submissions from all sources.">
@@ -54,7 +57,7 @@ export function MarketingRecentConversionsPanel({ conversions, loading, error }:
 
   return (
     <DashboardSection title="Recent Conversions" description="Latest quote submissions from all sources.">
-      <div style={{ backgroundColor: background.surface, border: `1px solid ${border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="card-recent-conversions">
+      <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="card-recent-conversions">
         <div style={{ position: 'relative', paddingLeft: space['6'] }}>
           <div style={{
             position: 'absolute',
@@ -62,7 +65,7 @@ export function MarketingRecentConversionsPanel({ conversions, loading, error }:
             top: 4,
             bottom: 4,
             width: 2,
-            backgroundColor: border.default,
+            backgroundColor: tc.border.default,
             borderRadius: radius.full,
           }} />
 
@@ -86,7 +89,7 @@ export function MarketingRecentConversionsPanel({ conversions, loading, error }:
                   width: 16,
                   height: 16,
                   borderRadius: '50%',
-                  backgroundColor: background.surface,
+                  backgroundColor: tc.background.surface,
                   border: `2px solid ${catColor}`,
                   display: 'flex',
                   alignItems: 'center',
@@ -110,15 +113,15 @@ export function MarketingRecentConversionsPanel({ conversions, loading, error }:
                     }}>
                       {c.product_category}
                     </span>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: text.muted }}>
+                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
                       {c.submission_source ?? 'Direct'}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: text.primary }}>
+                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
                       {formatCurrency(c.preliminary_price_usd)}
                     </div>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: text.muted }}>
+                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
                       {timeAgo(c.created_at)}
                     </div>
                   </div>
