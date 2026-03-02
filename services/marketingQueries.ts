@@ -2,7 +2,7 @@
  * Marketing Analytics Query Service
  *
  * All SQL for /marketing/overview lives here.
- * Queries canonical analytics views only — no raw tables.
+ * Queries canonical analytics views only — no raw tables (except for device/country from raw_search_console).
  * All date filtering uses BETWEEN $1 AND $2 (UTC dates).
  */
 
@@ -19,6 +19,13 @@ import type {
   MarketingTimeseries,
   MarketingAnomalies,
   MarketingDataFreshness,
+  MarketingDeviceBreakdown,
+  MarketingCountryBreakdown,
+  MarketingPipelineCategory,
+  MarketingConversionEvent,
+  MarketingSEOQueryMover,
+  MarketingFunnelStep,
+  MarketingPipelineHealth,
 } from '../types/activity-spine';
 
 // ============================================
@@ -62,6 +69,15 @@ const KPI_ENGAGEMENT_SQL = `
       ELSE 0 END                  AS avg_time_on_page_seconds
   FROM analytics.metrics_page_engagement_daily
   WHERE metric_date BETWEEN $1 AND $2
+`;
+
+// T001: Fallback for page views when engagement table is empty
+const KPI_FUNNEL_FALLBACK_SQL = `
+  SELECT
+    COALESCE(SUM(page_views), 0)  AS page_views,
+    COALESCE(SUM(submissions), 0) AS submissions
+  FROM analytics.dashboard_funnel_daily
+  WHERE event_date BETWEEN $1 AND $2
 `;
 
 const KPI_CONVERSION_SQL = `
@@ -235,6 +251,37 @@ const TIMESERIES_PIPELINE_SQL = `
   ORDER BY dr.d ASC
 `;
 
+// T002: SEO timeseries from metrics_search_console_daily (column is "date" not "metric_date")
+const TIMESERIES_IMPRESSIONS_SQL = `
+  WITH date_range AS (
+    SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
+  ),
+  daily AS (
+    SELECT date AS metric_date, impressions AS val
+    FROM analytics.metrics_search_console_daily
+    WHERE date BETWEEN $1 AND $2
+  )
+  SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
+  FROM date_range dr
+  LEFT JOIN daily dy ON dr.d = dy.metric_date
+  ORDER BY dr.d ASC
+`;
+
+const TIMESERIES_CLICKS_SQL = `
+  WITH date_range AS (
+    SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
+  ),
+  daily AS (
+    SELECT date AS metric_date, clicks AS val
+    FROM analytics.metrics_search_console_daily
+    WHERE date BETWEEN $1 AND $2
+  )
+  SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
+  FROM date_range dr
+  LEFT JOIN daily dy ON dr.d = dy.metric_date
+  ORDER BY dr.d ASC
+`;
+
 // ============================================
 // SQL — Phase D: Anomaly detection stats
 // ============================================
@@ -285,16 +332,195 @@ const ANOMALY_PIPELINE_SQL = `
 `;
 
 // ============================================
+// T003: Device & Country breakdown from raw_search_console payload
+// ============================================
+
+const DEVICE_BREAKDOWN_SQL = `
+  SELECT
+    payload->>'device' AS device,
+    SUM((payload->>'impressions')::int) AS impressions,
+    SUM((payload->>'clicks')::int) AS clicks,
+    CASE WHEN SUM((payload->>'impressions')::int) > 0
+      THEN SUM((payload->>'clicks')::float) / SUM((payload->>'impressions')::int)
+      ELSE 0 END AS ctr
+  FROM analytics.raw_search_console
+  WHERE payload->>'date' IS NOT NULL
+    AND (payload->>'date')::date BETWEEN $1 AND $2
+  GROUP BY device
+  ORDER BY impressions DESC
+`;
+
+const COUNTRY_BREAKDOWN_SQL = `
+  SELECT
+    UPPER(payload->>'country') AS country,
+    SUM((payload->>'impressions')::int) AS impressions,
+    SUM((payload->>'clicks')::int) AS clicks,
+    CASE WHEN SUM((payload->>'impressions')::int) > 0
+      THEN SUM((payload->>'clicks')::float) / SUM((payload->>'impressions')::int)
+      ELSE 0 END AS ctr
+  FROM analytics.raw_search_console
+  WHERE payload->>'date' IS NOT NULL
+    AND (payload->>'date')::date BETWEEN $1 AND $2
+  GROUP BY country
+  ORDER BY impressions DESC
+  LIMIT 10
+`;
+
+// ============================================
+// T004: Pipeline by product category
+// ============================================
+
+const PIPELINE_CATEGORY_SQL = `
+  SELECT
+    product_category,
+    COALESCE(submissions, 0) AS submissions,
+    COALESCE(pipeline_value_usd, 0) AS pipeline_value_usd
+  FROM analytics.pipeline_by_category
+  ORDER BY pipeline_value_usd DESC
+`;
+
+// ============================================
+// T005: Recent conversion events
+// ============================================
+
+const RECENT_CONVERSIONS_SQL = `
+  SELECT
+    created_at,
+    COALESCE(product_category, 'Unknown') AS product_category,
+    COALESCE(preliminary_price_usd, 0) AS preliminary_price_usd,
+    COALESCE(submission_source, 'Unknown') AS submission_source
+  FROM analytics.conversion_events
+  ORDER BY created_at DESC
+  LIMIT 20
+`;
+
+// ============================================
+// T006: SEO query movers (rising/falling)
+// ============================================
+
+const SEO_MOVERS_SQL = `
+  WITH date_bounds AS (
+    SELECT
+      GREATEST(MIN(metric_date), $1::date) AS min_date,
+      LEAST(MAX(metric_date), $2::date) AS max_date
+    FROM analytics.metrics_search_console_query_daily
+    WHERE metric_date BETWEEN $1 AND $2
+  ),
+  midpoint AS (
+    SELECT min_date + ((max_date - min_date) / 2) AS mid
+    FROM date_bounds
+  ),
+  first_half AS (
+    SELECT query, SUM(impressions) AS impressions
+    FROM analytics.metrics_search_console_query_daily d, midpoint m
+    WHERE d.metric_date BETWEEN $1 AND m.mid
+    GROUP BY query
+  ),
+  second_half AS (
+    SELECT query, SUM(impressions) AS impressions
+    FROM analytics.metrics_search_console_query_daily d, midpoint m
+    WHERE d.metric_date > m.mid AND d.metric_date <= $2
+    GROUP BY query
+  ),
+  combined AS (
+    SELECT
+      COALESCE(f.query, s.query) AS query,
+      COALESCE(f.impressions, 0) AS impressions_first_half,
+      COALESCE(s.impressions, 0) AS impressions_second_half,
+      CASE WHEN COALESCE(f.impressions, 0) > 0
+        THEN (COALESCE(s.impressions, 0) - f.impressions)::float / f.impressions
+        ELSE CASE WHEN COALESCE(s.impressions, 0) > 0 THEN 1.0 ELSE 0 END
+      END AS delta_pct
+    FROM first_half f
+    FULL OUTER JOIN second_half s ON f.query = s.query
+  )
+  (
+    SELECT query, impressions_first_half, impressions_second_half, delta_pct, 'rising' AS direction
+    FROM combined
+    WHERE delta_pct > 0 AND (impressions_first_half + impressions_second_half) >= 5
+    ORDER BY delta_pct DESC
+    LIMIT 5
+  )
+  UNION ALL
+  (
+    SELECT query, impressions_first_half, impressions_second_half, delta_pct, 'falling' AS direction
+    FROM combined
+    WHERE delta_pct < 0 AND (impressions_first_half + impressions_second_half) >= 5
+    ORDER BY delta_pct ASC
+    LIMIT 5
+  )
+`;
+
+// ============================================
+// T007: Funnel from dashboard_funnel_daily
+// ============================================
+
+const FUNNEL_SQL = `
+  SELECT
+    event_date::text AS date,
+    COALESCE(page_views, 0) AS page_views,
+    COALESCE(submissions, 0) AS submissions,
+    COALESCE(conversion_rate, 0) AS conversion_rate,
+    COALESCE(pipeline_value_usd, 0) AS pipeline_value_usd
+  FROM analytics.dashboard_funnel_daily
+  ORDER BY event_date DESC
+  LIMIT 30
+`;
+
+// ============================================
+// T008: Pipeline health from ingestion_runs
+// ============================================
+
+const PIPELINE_HEALTH_SQL = `
+  WITH sources AS (
+    SELECT DISTINCT source FROM analytics.ingestion_runs WHERE source IS NOT NULL
+  ),
+  last_success AS (
+    SELECT source, MAX(completed_at) AS last_success
+    FROM analytics.ingestion_runs
+    WHERE status = 'completed'
+    GROUP BY source
+  ),
+  recent_stats AS (
+    SELECT
+      source,
+      COUNT(*) FILTER (WHERE status = 'failed') AS failures,
+      COUNT(*) AS total
+    FROM analytics.ingestion_runs
+    WHERE created_at > NOW() - INTERVAL '24 hours'
+    GROUP BY source
+  )
+  SELECT
+    s.source,
+    ls.last_success::text AS last_success,
+    CASE WHEN COALESCE(rs.total, 0) > 0
+      THEN rs.failures::float / rs.total
+      ELSE 0 END AS failure_rate_24h
+  FROM sources s
+  LEFT JOIN last_success ls ON s.source = ls.source
+  LEFT JOIN recent_stats rs ON s.source = rs.source
+  WHERE s.source NOT LIKE 'debug_%'
+  ORDER BY s.source
+`;
+
+// ============================================
 // Row helpers
 // ============================================
 
 type Row = Record<string, unknown>;
 
-function buildKPIs(eng: Row, conv: Row, sch: Row): MarketingKPIs {
-  const sessions = nonNegative(toNumber(eng.sessions));
-  const pageViews = nonNegative(toNumber(eng.page_views));
+function buildKPIs(eng: Row, conv: Row, sch: Row, funnelFallback?: Row): MarketingKPIs {
+  let sessions = nonNegative(toNumber(eng.sessions));
+  let pageViews = nonNegative(toNumber(eng.page_views));
   const bounceRate = clamp(toNumber(eng.bounce_rate), 0, 1);
   const avgTime = nonNegative(toNumber(eng.avg_time_on_page_seconds));
+
+  // T001: If engagement table is empty, fall back to dashboard_funnel_daily
+  if (sessions === 0 && pageViews === 0 && funnelFallback) {
+    pageViews = nonNegative(toNumber(funnelFallback.page_views));
+    sessions = pageViews; // approximate: 1 session per page view when no session data
+  }
+
   const submissions = nonNegative(toNumber(conv.total_submissions));
   const pipeline = nonNegative(toNumber(conv.total_pipeline_value_usd));
   const clicks = nonNegative(toNumber(sch.organic_clicks));
@@ -363,6 +589,13 @@ export interface MarketingQueryResult {
   timeseries?: MarketingTimeseries;
   anomalies: MarketingAnomalies;
   data_freshness: MarketingDataFreshness;
+  device_breakdown: MarketingDeviceBreakdown[];
+  country_breakdown: MarketingCountryBreakdown[];
+  pipeline_categories: MarketingPipelineCategory[];
+  recent_conversions: MarketingConversionEvent[];
+  seo_movers: MarketingSEOQueryMover[];
+  funnel: MarketingFunnelStep[];
+  pipeline_health: MarketingPipelineHealth[];
 }
 
 export async function executeMarketingQueries(
@@ -372,9 +605,6 @@ export async function executeMarketingQueries(
   const curParams = [opts.startDate, opts.endDate];
   const prevParams = [opts.prevStartDate, opts.prevEndDate];
 
-  // Build parallel query batch.
-  // KPI_SEARCH_SQL has no date params (lifetime view) so it is called
-  // once and reused for both current and previous period KPI builds.
   const queries: Promise<{ rows: Row[] }>[] = [
     /* 0  */ db.query(KPI_ENGAGEMENT_SQL, curParams),
     /* 1  */ db.query(KPI_CONVERSION_SQL, curParams),
@@ -388,33 +618,45 @@ export async function executeMarketingQueries(
     /* 9  */ db.query(ANOMALY_SESSIONS_SQL, curParams),
     /* 10 */ db.query(ANOMALY_SUBMISSIONS_SQL, curParams),
     /* 11 */ db.query(ANOMALY_PIPELINE_SQL, curParams),
+    /* 12 */ db.query(KPI_FUNNEL_FALLBACK_SQL, curParams),
+    /* 13 */ db.query(KPI_FUNNEL_FALLBACK_SQL, prevParams),
+    /* 14 */ db.query(DEVICE_BREAKDOWN_SQL, curParams),
+    /* 15 */ db.query(COUNTRY_BREAKDOWN_SQL, curParams),
+    /* 16 */ db.query(PIPELINE_CATEGORY_SQL),
+    /* 17 */ db.query(RECENT_CONVERSIONS_SQL),
+    /* 18 */ db.query(SEO_MOVERS_SQL, curParams),
+    /* 19 */ db.query(FUNNEL_SQL),
+    /* 20 */ db.query(PIPELINE_HEALTH_SQL),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 12 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
-      /* 13 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
-      /* 14 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
+      /* 21 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
+      /* 22 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
+      /* 23 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
+      /* 24 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
+      /* 25 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
     );
   }
 
   const results = await Promise.all(queries);
 
-  // KPI_SEARCH_SQL result (lifetime, no date filter) — shared between periods
   const searchRow = results[2].rows[0] ?? {};
+  const funnelFallback = results[12].rows[0] ?? {};
+  const prevFunnelFallback = results[13].rows[0] ?? {};
 
-  // Current-period KPIs
   const kpis = buildKPIs(
     results[0].rows[0] ?? {},
     results[1].rows[0] ?? {},
     searchRow,
+    funnelFallback,
   );
 
-  // Previous-period KPIs for comparisons
   const prevKpis = buildKPIs(
     results[6].rows[0] ?? {},
     results[7].rows[0] ?? {},
     searchRow,
+    prevFunnelFallback,
   );
 
   const comparisons: MarketingKPIComparisons = {
@@ -426,7 +668,6 @@ export async function executeMarketingQueries(
     impressions: buildComparison(kpis.impressions, prevKpis.impressions),
   };
 
-  // Pages
   const pages: MarketingPage[] = (results[3].rows ?? [])
     .filter((r: Row) => r.page_url != null)
     .map((r: Row) => ({
@@ -442,7 +683,6 @@ export async function executeMarketingQueries(
       pipeline_value_usd: nonNegative(toNumber(r.pipeline_value_usd)),
     }));
 
-  // Sources with canonical taxonomy
   const sources: MarketingSource[] = (results[4].rows ?? [])
     .filter((r: Row) => r.submission_source != null)
     .map((r: Row) => ({
@@ -452,7 +692,6 @@ export async function executeMarketingQueries(
       pipeline_value_usd: nonNegative(toNumber(r.pipeline_value_usd)),
     }));
 
-  // Freshness
   const fresh = results[5].rows[0] ?? {};
   const data_freshness: MarketingDataFreshness = {
     engagement_last_date: (fresh.engagement_last_date as string) ?? null,
@@ -460,7 +699,6 @@ export async function executeMarketingQueries(
     conversion_last_date: (fresh.conversion_last_date as string) ?? null,
   };
 
-  // SEO queries (index 8 after dedup)
   const seo_queries: MarketingSEOQuery[] = (results[8].rows ?? [])
     .filter((r: Row) => r.query != null)
     .map((r: Row) => {
@@ -478,20 +716,105 @@ export async function executeMarketingQueries(
       };
     });
 
-  // Anomalies (indices 9-11 after dedup)
   const anomalies: MarketingAnomalies = {
     sessions_spike: detectSpike(results[9].rows[0] ?? {}),
     submissions_spike: detectSpike(results[10].rows[0] ?? {}),
     pipeline_spike: detectSpike(results[11].rows[0] ?? {}),
   };
 
-  // Timeseries (indices 12-14, conditional)
+  // T003: Device & Country
+  const device_breakdown: MarketingDeviceBreakdown[] = (results[14].rows ?? [])
+    .filter((r: Row) => r.device != null)
+    .map((r: Row) => ({
+      device: String(r.device),
+      impressions: nonNegative(toNumber(r.impressions)),
+      clicks: nonNegative(toNumber(r.clicks)),
+      ctr: clamp(toNumber(r.ctr), 0, 1),
+    }));
+
+  const country_breakdown: MarketingCountryBreakdown[] = (results[15].rows ?? [])
+    .filter((r: Row) => r.country != null)
+    .map((r: Row) => ({
+      country: String(r.country),
+      impressions: nonNegative(toNumber(r.impressions)),
+      clicks: nonNegative(toNumber(r.clicks)),
+      ctr: clamp(toNumber(r.ctr), 0, 1),
+    }));
+
+  // T004: Pipeline categories
+  const pipeline_categories: MarketingPipelineCategory[] = (results[16].rows ?? [])
+    .filter((r: Row) => r.product_category != null)
+    .map((r: Row) => ({
+      product_category: String(r.product_category),
+      submissions: nonNegative(toNumber(r.submissions)),
+      pipeline_value_usd: nonNegative(toNumber(r.pipeline_value_usd)),
+    }));
+
+  // T005: Recent conversions
+  const recent_conversions: MarketingConversionEvent[] = (results[17].rows ?? [])
+    .map((r: Row) => ({
+      created_at: String(r.created_at ?? ''),
+      product_category: String(r.product_category ?? 'Unknown'),
+      preliminary_price_usd: nonNegative(toNumber(r.preliminary_price_usd)),
+      submission_source: String(r.submission_source ?? 'Unknown'),
+    }));
+
+  // T006: SEO movers
+  const seo_movers: MarketingSEOQueryMover[] = (results[18].rows ?? [])
+    .filter((r: Row) => r.query != null)
+    .map((r: Row) => ({
+      query: String(r.query),
+      impressions_first_half: nonNegative(toNumber(r.impressions_first_half)),
+      impressions_second_half: nonNegative(toNumber(r.impressions_second_half)),
+      delta_pct: toNumber(r.delta_pct),
+      direction: String(r.direction) as 'rising' | 'falling',
+    }));
+
+  // T007: Funnel
+  const funnel: MarketingFunnelStep[] = (results[19].rows ?? [])
+    .map((r: Row) => ({
+      date: String(r.date ?? ''),
+      page_views: nonNegative(toNumber(r.page_views)),
+      submissions: nonNegative(toNumber(r.submissions)),
+      conversion_rate: clamp(toNumber(r.conversion_rate), 0, 1),
+      pipeline_value_usd: nonNegative(toNumber(r.pipeline_value_usd)),
+    }));
+
+  // T008: Pipeline health
+  const pipeline_health: MarketingPipelineHealth[] = (results[20].rows ?? [])
+    .map((r: Row) => {
+      const lastSuccess = r.last_success ? String(r.last_success) : null;
+      const failureRate = clamp(toNumber(r.failure_rate_24h), 0, 1);
+      let status: 'healthy' | 'warning' | 'stale' = 'healthy';
+      if (!lastSuccess) {
+        status = 'stale';
+      } else {
+        const parsed = new Date(lastSuccess).getTime();
+        if (isNaN(parsed)) {
+          status = 'stale';
+        } else {
+          const hoursSince = (Date.now() - parsed) / (1000 * 60 * 60);
+          if (hoursSince > 24) status = 'stale';
+          else if (failureRate > 0.3) status = 'warning';
+        }
+      }
+      return {
+        source: String(r.source ?? 'unknown'),
+        last_success: lastSuccess,
+        failure_rate_24h: failureRate,
+        status,
+      };
+    });
+
+  // Timeseries
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 12) {
+  if (opts.includeTimeseries && results.length > 21) {
     timeseries = {
-      sessions: mapTimeseries(results[12].rows),
-      submissions: mapTimeseries(results[13].rows),
-      pipeline_value_usd: mapTimeseries(results[14].rows),
+      sessions: mapTimeseries(results[21].rows),
+      submissions: mapTimeseries(results[22].rows),
+      pipeline_value_usd: mapTimeseries(results[23].rows),
+      impressions: mapTimeseries(results[24].rows),
+      clicks: mapTimeseries(results[25].rows),
     };
   }
 
@@ -504,5 +827,12 @@ export async function executeMarketingQueries(
     timeseries,
     anomalies,
     data_freshness,
+    device_breakdown,
+    country_breakdown,
+    pipeline_categories,
+    recent_conversions,
+    seo_movers,
+    funnel,
+    pipeline_health,
   };
 }

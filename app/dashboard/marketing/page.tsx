@@ -22,6 +22,11 @@ import { MarketingSeoIntelligencePanel } from './components/MarketingSeoIntellig
 import { MarketingPagesPerformancePanel } from './components/MarketingPagesPerformancePanel';
 import { MarketingTimeseriesPanel } from './components/MarketingTimeseriesPanel';
 import { MarketingAnomaliesPanel } from './components/MarketingAnomaliesPanel';
+import { MarketingAudiencePanel } from './components/MarketingAudiencePanel';
+import { MarketingPipelineCategoryPanel } from './components/MarketingPipelineCategoryPanel';
+import { MarketingRecentConversionsPanel } from './components/MarketingRecentConversionsPanel';
+import { MarketingFunnelPanel } from './components/MarketingFunnelPanel';
+import { MarketingPipelineHealthPanel } from './components/MarketingPipelineHealthPanel';
 
 export default function MarketingDashboard() {
   const [periodState, setPeriodState] = useState<PeriodState>(() => parsePeriodState());
@@ -42,12 +47,10 @@ export default function MarketingDashboard() {
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <MarketingDashboardHeader state={periodState} onChange={handlePeriodChange} />
 
-      {/* Global error state */}
       {error && !loading && (
         <DashboardCard title="Error" error={error} onRetry={refetch} />
       )}
 
-      {/* Loading skeletons */}
       {loading && (
         <>
           <DashboardCard title="Pipeline" loading />
@@ -56,7 +59,6 @@ export default function MarketingDashboard() {
         </>
       )}
 
-      {/* Data panels */}
       {!error && (
         <>
           <MarketingPerformanceScore
@@ -74,10 +76,35 @@ export default function MarketingDashboard() {
             onRetry={refetch}
           />
 
+          <MarketingFunnelPanel
+            funnel={data?.funnel ?? []}
+            loading={loading}
+            error={error}
+          />
+
           <MarketingAnomaliesPanel anomalies={data?.anomalies} loading={loading} error={error} />
 
           <MarketingSourcesPanel
             sources={data?.sources ?? []}
+            loading={loading}
+            error={error}
+          />
+
+          <MarketingPipelineCategoryPanel
+            categories={data?.pipeline_categories ?? []}
+            loading={loading}
+            error={error}
+          />
+
+          <MarketingRecentConversionsPanel
+            conversions={data?.recent_conversions ?? []}
+            loading={loading}
+            error={error}
+          />
+
+          <MarketingAudiencePanel
+            devices={data?.device_breakdown ?? []}
+            countries={data?.country_breakdown ?? []}
             loading={loading}
             error={error}
           />
@@ -97,12 +124,19 @@ export default function MarketingDashboard() {
 
           <MarketingSeoIntelligencePanel
             seoQueries={data?.seo_queries ?? []}
+            seoMovers={data?.seo_movers ?? []}
             loading={loading}
             error={error}
           />
 
           <MarketingPagesPerformancePanel
             pages={data?.pages ?? []}
+            loading={loading}
+            error={error}
+          />
+
+          <MarketingPipelineHealthPanel
+            health={data?.pipeline_health ?? []}
             loading={loading}
             error={error}
           />
