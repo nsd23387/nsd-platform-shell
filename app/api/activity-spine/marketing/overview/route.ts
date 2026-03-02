@@ -214,6 +214,13 @@ export async function GET(request: NextRequest) {
         seo_queries: [],
         anomalies: EMPTY_ANOMALIES,
         meta: EMPTY_META,
+        device_breakdown: [],
+        country_breakdown: [],
+        pipeline_categories: [],
+        recent_conversions: [],
+        seo_movers: [],
+        funnel: [],
+        pipeline_health: [],
       },
       timestamp: new Date().toISOString(),
       orgId: 'unconfigured',
@@ -251,6 +258,13 @@ export async function GET(request: NextRequest) {
       seo_queries: result.seo_queries,
       anomalies: result.anomalies,
       meta,
+      device_breakdown: result.device_breakdown,
+      country_breakdown: result.country_breakdown,
+      pipeline_categories: result.pipeline_categories,
+      recent_conversions: result.recent_conversions,
+      seo_movers: result.seo_movers,
+      funnel: result.funnel,
+      pipeline_health: result.pipeline_health,
     };
 
     if (result.timeseries) {

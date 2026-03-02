@@ -15,12 +15,14 @@ interface Props {
   error: string | null;
 }
 
-type MetricKey = 'sessions' | 'submissions' | 'pipeline_value_usd';
+type MetricKey = 'sessions' | 'submissions' | 'pipeline_value_usd' | 'impressions' | 'clicks';
 
 const METRICS: { key: MetricKey; label: string; format: (v: number) => string }[] = [
   { key: 'sessions', label: 'Sessions', format: formatNumber },
   { key: 'submissions', label: 'Submissions', format: formatNumber },
   { key: 'pipeline_value_usd', label: 'Pipeline', format: formatCurrency },
+  { key: 'impressions', label: 'Impressions', format: formatNumber },
+  { key: 'clicks', label: 'Clicks', format: formatNumber },
 ];
 
 function segBtn(active: boolean, isLast: boolean): React.CSSProperties {

@@ -1,9 +1,7 @@
 # M67 Sales Engine UI
 
-> **M68-01: Preview runtime flag validation branch.**
-
 ## Overview
-The Sales Engine UI is a governed, read-only interface for campaign observability and approval. Its core purpose is to provide situational awareness regarding campaign lifecycles, readiness, and outcomes by observing M60 Campaign Management APIs. The UI focuses on displaying information and explicitly does not initiate execution, approval, sourcing, or governance transitions, as all state changes occur in backend systems. A single exception is campaign creation (POST /campaign-create), where campaigns are initialized in a `DRAFT` governance state without execution or sourcing capabilities from this UI. The project prioritizes a governance-first architecture, emphasizing truthfulness, explicit handling of `UNKNOWN` states, and avoiding implied autonomy or UI-initiated mutations. The project aims to provide clear, outcome-oriented execution transparency to users.
+The Sales Engine UI is a governed, read-only interface for campaign observability and approval. Its primary goal is to provide situational awareness regarding campaign lifecycles, readiness, and outcomes by observing the M60 Campaign Management APIs. The UI focuses on displaying information and explicitly avoids initiating execution, approval, sourcing, or governance transitions. The only exception is campaign creation, where campaigns are initialized in a `DRAFT` governance state. The project emphasizes a governance-first architecture, ensuring truthfulness, explicit handling of `UNKNOWN` states, and providing clear, outcome-oriented execution transparency to users.
 
 ## User Preferences
 I prefer detailed explanations.
@@ -11,143 +9,69 @@ Do not make changes to the folder `docs/`.
 Do not remove governance lock comments.
 
 ## System Architecture
-The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, running on Node.js 20 with npm. It uses NSD Brand Tokens for its design system.
+The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, running on Node.js 20 with npm. It utilizes NSD Brand Tokens for its design system.
 
-The architecture adheres to a read-only principle, enforcing observation over control. All API interactions, except for the `campaign-create` endpoint, are read-only proxies to the M60 API, enforced by a runtime guard (`read-only-guard.ts`).
+The architecture enforces a read-only principle, prioritizing observation over control. All API interactions, except for the `campaign-create` endpoint, are read-only proxies to the M60 API.
 
 **UI/UX Design:**
-- **Color Scheme**: Strictly adheres to Neon Signs Depot brand colors - NO yellow, green, or red. Uses only magenta (#CC368F, #912D73, #FCE7F3), indigo (#020F5A, #E8EAF6), and violet (#692BAA, #4A1D7A, #EDE7F6) from the logo gradient. CTA uses magenta.
-- **Campaign Creation Wizard**: Employs a mandatory vertical left-hand navigation stepper for visibility of all steps and independent navigation.
-- **Form Fields Governance**: Strictly defines required fields (`name`, `keywords[]`, `geographies[]`) and explicitly forbids others to maintain data integrity and prevent UI-initiated execution parameters.
-- **Governance Components**: Includes `ReadOnlyBanner`, `CampaignStateBadge`, `ExecutionReadinessPanel`, `ConfidenceBadge`, `ProvenancePill`, and `LearningSignalsPanel` for visual communication of governance, readiness, and data quality.
-- **Execution Explainability Components**: Features `ExecutionConfidenceBadge`, `ExecutionTimeline`, `NextStepCard`, `ExecutionTooltip`, and `ExecutionExplainabilityPanel` to provide outcome-oriented execution transparency.
+- **Color Scheme**: Adheres strictly to Neon Signs Depot brand colors (magenta, indigo, violet), avoiding yellow, green, or red.
+- **Campaign Creation Wizard**: Features a mandatory vertical left-hand navigation stepper for visibility and independent navigation.
+- **Form Fields Governance**: Strictly defines required fields and forbids others to maintain data integrity.
+- **Governance Components**: Includes `ReadOnlyBanner`, `CampaignStateBadge`, `ExecutionReadinessPanel`, `ConfidenceBadge`, `ProvenancePill`, and `LearningSignalsPanel` for visual communication of governance and data quality.
+- **Execution Explainability Components**: Features `ExecutionConfidenceBadge`, `ExecutionTimeline`, `NextStepCard`, `ExecutionTooltip`, and `ExecutionExplainabilityPanel` for outcome-oriented execution transparency.
 
 **Technical Implementations:**
 - **Environment Variables**: Uses `NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL` (client-side), `SALES_ENGINE_API_BASE_URL` (server-side proxy), and `NEXT_PUBLIC_ODS_API_URL`.
 - **Governance States**: UI-level governance states (`DRAFT`, `PENDING_REVIEW`, `APPROVED_READY`, `BLOCKED`, `EXECUTED_READ_ONLY`, `ARCHIVED`) represent the human approval lifecycle, distinct from backend runtime states.
-- **Readiness vs. Governance**: These are orthogonal; a campaign can be `APPROVED` but `NOT_READY`.
-- **Campaign Creation API (`/api/campaign-create`)**: This is a control-plane write, persisting a single row to `core.campaigns` in Supabase with `status = 'draft'`, running in the Node.js runtime.
-- **Read-Only Mode**: Specific deployments can operate in a strict read-only mode, disabling all API calls and modifications, indicated by a global banner.
-- **Execution Explainability**: Replaces ambiguous execution indicators with clear, outcome-oriented states. It maps backend conditions to UI meanings (e.g., "No run exists" to "No execution has run yet"). All data is derived from observed backend funnel stages without inference.
-- **Run State Reconciliation**: A centralized `resolveCanonicalRunState()` function provides a single source of truth for execution states, enforcing mandatory messaging across components.
-- **Run Staleness & Active Run Resolution**: A `resolveActiveRun.ts` utility handles run selection logic, considering staleness thresholds (30 minutes) to prevent "Running" status for stalled executions.
-- **Live Execution Observability**: Utilizes a `useExecutionPolling` hook for live updates every 7 seconds during active execution, stopping automatically on terminal states. All timestamps are displayed in America/New_York timezone with an "ET" label.
-- **UI Hardening for Future Execution Stages**: Uses `CANONICAL_STAGE_CONFIG` for all execution stages, ensuring components like `ExecutionStageTracker`, `ActiveStageFocusPanel`, and `ExecutionHealthIndicator` are stage-agnostic and handle unknown stages gracefully, promoting extensibility.
-- **ENM Governance Lock**: The Execution Narrative Mapper (ENM) is the SOLE interpreter of execution state. All execution-aware UI components must consume `ExecutionNarrative` output only. No component may access raw `campaign_runs`, `activity.events`, or derive state from timestamps/counts. See `app/sales-engine/lib/execution-governance.md` for full governance rules.
+- **Campaign Creation API (`/api/campaign-create`)**: This is a control-plane write operation that persists a new campaign in a `draft` status to Supabase.
+- **Read-Only Mode**: Deployments can operate in a strict read-only mode, disabling all API calls and modifications, indicated by a global banner.
+- **Execution Explainability**: Replaces ambiguous execution indicators with clear, outcome-oriented states, mapping backend conditions to UI meanings without inference.
+- **Run State Reconciliation**: A centralized `resolveCanonicalRunState()` function provides a single source of truth for execution states.
+- **Run Staleness & Active Run Resolution**: A `resolveActiveRun.ts` utility handles run selection logic, considering staleness thresholds to prevent "Running" status for stalled executions.
+- **Live Execution Observability**: Utilizes a `useExecutionPolling` hook for live updates during active execution, stopping automatically on terminal states.
+- **UI Hardening for Future Execution Stages**: Uses `CANONICAL_STAGE_CONFIG` for all execution stages, ensuring components are stage-agnostic and handle unknown stages gracefully for extensibility.
+- **ENM Governance Lock**: The Execution Narrative Mapper (ENM) is the sole interpreter of execution state. All execution-aware UI components must consume `ExecutionNarrative` output only.
+- **Canonical Execution Narrative Mapper (ENM) Implementation**: Implements truthful, event-driven execution storytelling with canonical mapping rules for states like `IDLE`, `QUEUED`, `RUNNING`, `STALLED`, `COMPLETED`, `FAILED`.
+
+## Marketing Dashboard
+The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics view powered by live data from the Supabase `analytics` schema. It renders 8 panel categories:
+
+**Data Sources:**
+- `raw_web_events` (page views, conversions) — active
+- `raw_search_console` (SEO queries, pages, device/country) — active, 7-day window
+- `raw_ga4_events`, `raw_google_ads`, `raw_clarity_sessions` — empty (pipelines not connected)
+- `metrics_page_engagement_daily` — empty; dashboard falls back to `dashboard_funnel_daily` for page view counts
+
+**Panels:**
+1. **KPI Overview** — Pipeline Value, Submissions, Organic Clicks, Impressions, Sessions, Page Views (with funnel fallback)
+2. **Conversion Funnel** — Page Views → Submissions → Pipeline Value with daily breakdown
+3. **Sources** — Pipeline and submissions by canonical source
+4. **Pipeline by Category** — Product type breakdown (from `pipeline_by_category` view)
+5. **Recent Conversions** — Chronological feed of quote submissions (from `conversion_events`)
+6. **Audience** — Device breakdown (Desktop/Mobile/Tablet) and Top Countries (from `raw_search_console` payload)
+7. **SEO Intelligence** — Top queries with Rising/Falling movers detection (from `metrics_search_console_query_daily`)
+8. **Data Pipeline Health** — Ingestion status per source (from `ingestion_runs`)
+9. **Timeseries** — Sessions, Submissions, Pipeline, Impressions, Clicks (toggle-enabled)
+
+**Database Connection:** Uses `SUPABASE_DATABASE_URL || DATABASE_URL` with always-on SSL (`rejectUnauthorized: false`). All queries are date-range filtered via `$1/$2` params.
+
+**Key Files:**
+- `services/marketingQueries.ts` — All SQL queries and data mapping
+- `app/api/activity-spine/marketing/overview/route.ts` — API route handler
+- `app/dashboard/marketing/page.tsx` — Page orchestrator
+- `app/dashboard/marketing/components/` — All panel components
+- `types/activity-spine.ts` — Type definitions
+
+## Testing
+- **Test runner**: vitest 3.x with vite 5.x (pinned for Node.js 18 CJS compatibility)
+- **Test environment**: `node` (API route tests don't need jsdom)
+- **Test files**:
+  - `app/api/activity-spine/marketing/overview/__tests__/route.test.ts` — 104 tests covering T001-T008 marketing panel improvements
+  - `app/sales-engine/lib/__tests__/read-only-guard.test.ts` — 29 tests for read-only guard
+- **Run tests**: `npx vitest run`
+- **Note**: vitest uses `// @vitest-environment node` directive in API test files; vitest.config.ts defaults to `environment: 'node'`
 
 ## External Dependencies
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.
 - **ODS API**: Used for bootstrap and identity services.
-- **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, specifically writing to the `core.campaigns` table.
-
-## Recent Changes
-- January 24, 2026: Campaign Detail View Zone-Based UX Architecture
-  - **Zone-based design pattern**: 4px colored left-border accents distinguish sections
-    - Action zone (magenta #CC368F): DecisionSummaryPanel, RunIntentCard
-    - Progress zone (indigo #020F5A / violet #692BAA): ExecutionTimeline, ResultsSection
-    - Context zone (neutral): CampaignIntentScope (no accent - pure information)
-  - All campaign detail components updated with white backgrounds (#FFFFFF)
-  - PrimaryCampaignStatusBanner: Dynamic left-border color based on status
-  - Added 4px gradient accent bar at top of Campaign Detail page
-  - Removed box-shadows in favor of subtle border treatment
-  - WizardNav stepper line fixed: repositioned to align with step circle centers (left: 35px)
-  - Background track line now uses neutral border color for cleaner appearance
-
-- January 24, 2026: Executive Dashboard & NSD Brand Background Compliance
-  - **CRITICAL DESIGN RULE**: Magenta/purple/violet are ONLY for accents (text, borders, CTAs) - NEVER for backgrounds
-  - Sales Engine Executive Dashboard is now the main dashboard (redirects from /dashboard)
-  - All Executive Dashboard components now use white backgrounds (#FFFFFF) with colored left-border accents
-  - HealthIndicator: White background with colored left-border based on status
-  - OutcomeDistribution: Redesigned as minimalist list with white backgrounds and colored border/text accents
-  - Market Reality / Operational Yield cards: White backgrounds with indigo/magenta left-border accents
-  - Campaign status chips: White backgrounds with colored left-border and colored number text
-  - Error banners: White background with magenta left-border accent
-  - All grids responsive with auto-fit minmax patterns
-  - 4px gradient accent bar at top is the ONLY permitted non-white background element
-
-- January 24, 2026: Mobile Responsiveness Fixes
-  - DataTable component enhanced with hideOnMobile column property and mobile detection (<640px breakpoint)
-  - Campaigns list: Pipeline, Last Activity, Actions columns hidden on mobile
-  - Campaign details: Responsive padding with clamp(), grid stacking, word-break for text overflow
-  - StatusChip: Reduced padding to fit text on mobile
-  - All major components use responsive patterns: clamp(), flexWrap, auto-fit grids
-
-- January 20, 2026: Comprehensive UX/UI Redesign (Minimalist Neon-Focused)
-  - Added NSD_GLOW, NSD_GRADIENTS, NSD_TRANSITIONS design tokens for neon-inspired effects
-  - Added gradient accent bar at top of all major pages (magenta → violet brand gradient)
-  - Redesigned CampaignListHeader with glass-style stat cards: icons, large numbers, gradient top borders
-  - Created SkeletonLoader component with brand-colored shimmer effect for loading states
-  - Created EmptyState component with neon sign-style SVG illustration
-  - Redesigned filter pills with gradient fill for active state and hover glow effects
-  - Updated Button component with gradient CTA styling and hover glow animations
-  - Redesigned WizardNav stepper with gradient connecting line and filled step circles
-  - Updated search bar with rounded corners, shadow, and focus glow effect
-  - Increased page margins (48-64px) and typography hierarchy for minimalist white space
-  - All buttons have micro-animations (hover glow, translateY lift effect)
-
-- January 20, 2026: NSD Brand Color Compliance (Complete Overhaul)
-  - Removed ALL yellow (#FEF3C7, #92400E, #FCD34D), green (#D1FAE5, #6EE7B7, #065F46), and red (#FEE2E2, #FECACA, #991B1B) colors
-  - Updated design-tokens.ts with NSD-only palette: magenta, indigo, violet
-  - Semantic status colors now use brand palette:
-    - semantic.attention (warning/review): magenta light (#FCE7F3, #912D73, #F9A8D4)
-    - semantic.positive (success/completed): violet (#EDE7F6, #4A1D7A, #CE93D8)
-    - semantic.critical (error/failed): magenta (#FCE7F3, #912D73, #F48FB1)
-    - semantic.info (informational): indigo light (#E8EAF6, #020F5A, #C5CAE9)
-    - semantic.active (running): indigo (#E8EAF6, #020F5A, #9FA8DA)
-  - Updated all governance state, status, confidence, and provenance styling functions
-  - Fixed 15+ components with hardcoded legacy colors
-  - Brand reference: www.neonsignsdepot.com, logo gradient #CC368F → #912D73 → #692BAA
-
-- January 20, 2026: Campaign-Centric UX Optimization (Option A: Minimal)
-  - Simplified navigation from 5 sections to campaign-focused single view
-  - Created CampaignListHeader component with collapsible summary stats (active campaigns, needs attention, daily capacity)
-  - Created MiniPipelineIndicator component for compact pipeline visibility (Orgs → Contacts → Leads) in table rows
-  - Created ExecutionStatusBadge component for execution state indicators (idle, running, completed, failed)
-  - Enhanced campaigns table with execution status, pipeline progress, and relative time columns
-  - Added smart filter pills: All, Draft, Pending Review, Ready, Running, Completed, Failed
-  - Removed NavBar from campaigns page - replaced with inline filter pills
-  - Updated /approvals, /runs, /monitoring pages to redirect to campaigns with appropriate filter query params
-  - TagInput now supports paste with comma-separated values auto-splitting into tags
-  - Contact Targeting step now auto-inherits ICP job_titles/seniority_levels (reduces duplicate data entry)
-  - All hardcoded colors replaced with NSD_COLORS design tokens
-
-- January 19, 2026: Keyword-Aware ENM Narrative for Org Sourcing Observability
-  - Extended ExecutionNarrative with KeywordContext interface (totalKeywords, keywordsWithResults, keywordsWithZeroResults, hasLowCoverageWarning, warningMessage)
-  - ENM mapper now parses org_sourcing:keyword_summary, org_sourcing:keyword_health, and run.warning (keyword_coverage_low) events
-  - Added KEYWORD_COPY constants for informational messaging about keyword coverage
-  - Created KeywordCoverageWarningBannerENM component for informational warnings (amber styling, not failure)
-  - Updated ActiveStageFocusPanelENM to display keyword context and warning banner during org_sourcing stage
-  - UI guardrail: Keyword warnings are INFORMATIONAL, not failures
-
-- January 19, 2026: Fix Duplicate Campaign Edit Flow
-  - Created `/api/campaign-get/[id]` endpoint to fetch campaigns from Supabase
-  - Updated edit page to use Supabase-based fetch instead of M60 API
-  - Duplicated campaigns now load correctly in the edit wizard
-  - Root cause: Duplicates were created in Supabase but edit page fetched from M60 API
-
-- January 18, 2026: ENM Governance Lock (Complete)
-  - Created `execution-narrative-governance.ts` with strict ENM-only types
-  - Created ENM-governed components: ExecutionHealthIndicatorENM, ActiveStageFocusPanelENM, LatestRunStatusCardENM, LastExecutionSummaryCardENM
-  - All ENM components consume ONLY ExecutionNarrative output
-  - Added governance documentation in `app/sales-engine/lib/execution-governance.md`
-  - ENM is now the SOLE execution truth source - UI cannot regress into heuristics
-
-- January 18, 2026: Canonical Execution Narrative Mapper (ENM) Implementation
-  - Created `execution-narrative-mapper.ts` with truthful, event-driven execution storytelling
-  - Implements canonical mapping rules: IDLE, QUEUED, RUNNING, STALLED, COMPLETED, FAILED
-  - Parses stage.boundary events to show active stage with details
-  - Enforces hard UI rules: never show "No orgs found" while running
-  - Added trust accelerator copy for historical data and running states
-  - Created `useExecutionNarrative` hook for component consumption
-  - Created `ExecutionNarrativeCard` component for displaying narratives
-  - ENM is deterministic, testable, and event-driven (not heuristic-driven)
-
-- January 18, 2026: Campaign Edit & Duplicate Features (Complete)
-  - Created `/api/campaign-update` endpoint for updating campaign configuration
-  - Created `/sales-engine/campaigns/[id]/edit` wizard page for editing any campaign
-  - Edit wizard loads existing campaign data and pre-populates all form fields
-  - Created `/api/campaign-duplicate` endpoint to copy campaign data with new ID and DRAFT status
-  - Copies: name (prefixed with "Copy of"), ICP, sourcing_config, lead_qualification_config
-  - Does NOT copy: execution history, runs, metrics (fresh campaign)
-  - Added "Edit Campaign" and "Duplicate Campaign" buttons to GovernanceActionsPanel
-  - After duplication, navigates to edit wizard for review and adjustment
+- **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, campaign editing/duplication, and Marketing Dashboard analytics (via `analytics` schema).
