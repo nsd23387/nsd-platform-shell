@@ -1,26 +1,8 @@
-/**
- * DashboardCard Component
- * 
- * Reusable card component for displaying metrics on dashboards.
- * Read-only display - no edit actions.
- * 
- * Features:
- * - Loading state with skeleton
- * - Error state with retry option
- * - Empty state messaging
- * - Time window display
- * 
- * Updated to use design system tokens.
- */
+'use client';
 
 import React from 'react';
-import {
-  background,
-  text,
-  border,
-  cardVariants,
-  trendColors,
-} from '../../design/tokens/colors';
+import { useThemeColors } from '../../hooks/useThemeColors';
+import type { ThemeColors } from '../../design/tokens/theme-colors';
 import {
   fontFamily,
   fontSize,
@@ -28,10 +10,6 @@ import {
   lineHeight,
 } from '../../design/tokens/typography';
 import { space, radius } from '../../design/tokens/spacing';
-
-// ============================================
-// Types
-// ============================================
 
 export interface DashboardCardProps {
   title: string;
@@ -51,110 +29,14 @@ export interface DashboardCardProps {
   children?: React.ReactNode;
 }
 
-// ============================================
-// Styles (using design tokens)
-// ============================================
-
-const cardStyles: React.CSSProperties = {
-  backgroundColor: background.surface,
-  borderRadius: radius.xl,
-  padding: space['6'],
-  border: `1px solid ${border.default}`,
-  minHeight: '140px',
-  display: 'flex',
-  flexDirection: 'column',
-};
-
-const titleStyles: React.CSSProperties = {
-  fontFamily: fontFamily.body,
-  fontSize: fontSize.base,
-  fontWeight: fontWeight.medium,
-  color: text.muted,
-  marginBottom: space['2'],
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  lineHeight: lineHeight.normal,
-};
-
-const valueStyles: React.CSSProperties = {
-  fontFamily: fontFamily.body,
-  fontSize: fontSize['5xl'],
-  fontWeight: fontWeight.semibold,
-  color: text.primary,
-  marginBottom: space['1'],
-  lineHeight: lineHeight.tight,
-};
-
-const subtitleStyles: React.CSSProperties = {
-  fontFamily: fontFamily.body,
-  fontSize: fontSize.base,
-  color: text.muted,
-  lineHeight: lineHeight.normal,
-};
-
-const timeWindowStyles: React.CSSProperties = {
-  fontFamily: fontFamily.body,
-  fontSize: fontSize.sm,
-  color: text.muted,
-  backgroundColor: background.muted,
-  padding: `${space['0.5']} ${space['2']}`,
-  borderRadius: radius.DEFAULT,
-};
-
-const skeletonStyles: React.CSSProperties = {
-  backgroundColor: border.default,
-  borderRadius: radius.DEFAULT,
-  animation: 'pulse 2s infinite',
-};
-
-const errorStyles: React.CSSProperties = {
-  color: text.primary,
-  fontFamily: fontFamily.body,
-  fontSize: fontSize.base,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flex: 1,
-  textAlign: 'center',
-};
-
-const emptyStyles: React.CSSProperties = {
-  color: text.muted,
-  fontFamily: fontFamily.body,
-  fontSize: fontSize.base,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flex: 1,
-  textAlign: 'center',
-};
-
-const retryButtonStyles: React.CSSProperties = {
-  marginTop: space['2'],
-  padding: `${space['1.5']} ${space['3']}`,
-  fontFamily: fontFamily.body,
-  fontSize: fontSize.sm,
-  fontWeight: fontWeight.medium,
-  backgroundColor: background.muted,
-  border: `1px solid ${border.default}`,
-  borderRadius: radius.md,
-  cursor: 'pointer',
-  color: text.secondary,
-};
-
-// ============================================
-// Trend Component
-// ============================================
-
 interface TrendBadgeProps {
   direction: 'up' | 'down' | 'neutral';
   value: string;
 }
 
 function TrendBadge({ direction, value }: TrendBadgeProps) {
-  const colors = trendColors[direction];
+  const tc = useThemeColors();
+  const colors = tc.trendColors[direction];
 
   const arrows = {
     up: '↑',
@@ -182,48 +64,14 @@ function TrendBadge({ direction, value }: TrendBadgeProps) {
   );
 }
 
-// ============================================
-// Loading Skeleton
-// ============================================
-
-function CardSkeleton() {
-  return (
-    <div style={{ flex: 1 }}>
-      <div
-        style={{
-          ...skeletonStyles,
-          height: '32px',
-          width: '60%',
-          marginBottom: space['2'],
-        }}
-      />
-      <div
-        style={{
-          ...skeletonStyles,
-          height: '16px',
-          width: '40%',
-        }}
-      />
-    </div>
-  );
-}
-
-// ============================================
-// Variant Styles
-// ============================================
-
-function getVariantStyles(variant: DashboardCardProps['variant']): React.CSSProperties {
+function getVariantStyles(variant: DashboardCardProps['variant'], tc: ThemeColors): React.CSSProperties {
   if (!variant || variant === 'default') return {};
   return {
     borderLeftWidth: '4px',
     borderLeftStyle: 'solid',
-    borderLeftColor: cardVariants[variant],
+    borderLeftColor: tc.cardVariants[variant],
   };
 }
-
-// ============================================
-// Main Component
-// ============================================
 
 export function DashboardCard({
   title,
@@ -239,18 +87,124 @@ export function DashboardCard({
   onRetry,
   children,
 }: DashboardCardProps) {
+  const tc = useThemeColors();
+
+  const cardStyles: React.CSSProperties = {
+    backgroundColor: tc.background.surface,
+    borderRadius: radius.xl,
+    padding: space['6'],
+    border: `1px solid ${tc.border.default}`,
+    minHeight: '140px',
+    display: 'flex',
+    flexDirection: 'column',
+  };
+
+  const titleStyles: React.CSSProperties = {
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.medium,
+    color: tc.text.muted,
+    marginBottom: space['2'],
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    lineHeight: lineHeight.normal,
+  };
+
+  const valueStyles: React.CSSProperties = {
+    fontFamily: fontFamily.body,
+    fontSize: fontSize['5xl'],
+    fontWeight: fontWeight.semibold,
+    color: tc.text.primary,
+    marginBottom: space['1'],
+    lineHeight: lineHeight.tight,
+  };
+
+  const subtitleStyles: React.CSSProperties = {
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.base,
+    color: tc.text.muted,
+    lineHeight: lineHeight.normal,
+  };
+
+  const timeWindowStyles: React.CSSProperties = {
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.sm,
+    color: tc.text.muted,
+    backgroundColor: tc.background.muted,
+    padding: `${space['0.5']} ${space['2']}`,
+    borderRadius: radius.DEFAULT,
+  };
+
+  const skeletonStyles: React.CSSProperties = {
+    backgroundColor: tc.border.default,
+    borderRadius: radius.DEFAULT,
+    animation: 'pulse 2s infinite',
+  };
+
+  const errorStyles: React.CSSProperties = {
+    color: tc.text.primary,
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.base,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    textAlign: 'center',
+  };
+
+  const emptyStyles: React.CSSProperties = {
+    color: tc.text.muted,
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.base,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    textAlign: 'center',
+  };
+
+  const retryButtonStyles: React.CSSProperties = {
+    marginTop: space['2'],
+    padding: `${space['1.5']} ${space['3']}`,
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    backgroundColor: tc.background.muted,
+    border: `1px solid ${tc.border.default}`,
+    borderRadius: radius.md,
+    cursor: 'pointer',
+    color: tc.text.secondary,
+  };
+
   return (
-    <div style={{ ...cardStyles, ...getVariantStyles(variant) }}>
-      {/* Header */}
+    <div style={{ ...cardStyles, ...getVariantStyles(variant, tc) }}>
       <div style={titleStyles}>
         <span>{title}</span>
         {timeWindow && <span style={timeWindowStyles}>{timeWindow}</span>}
       </div>
 
-      {/* Loading State */}
-      {loading && <CardSkeleton />}
+      {loading && (
+        <div style={{ flex: 1 }}>
+          <div
+            style={{
+              ...skeletonStyles,
+              height: '32px',
+              width: '60%',
+              marginBottom: space['2'],
+            }}
+          />
+          <div
+            style={{
+              ...skeletonStyles,
+              height: '16px',
+              width: '40%',
+            }}
+          />
+        </div>
+      )}
 
-      {/* Error State */}
       {!loading && error && (
         <div style={errorStyles}>
           <span>⚠️ {error}</span>
@@ -262,14 +216,12 @@ export function DashboardCard({
         </div>
       )}
 
-      {/* Empty State */}
       {!loading && !error && empty && (
         <div style={emptyStyles}>
           <span>{emptyMessage}</span>
         </div>
       )}
 
-      {/* Content */}
       {!loading && !error && !empty && (
         <>
           {value !== undefined && (

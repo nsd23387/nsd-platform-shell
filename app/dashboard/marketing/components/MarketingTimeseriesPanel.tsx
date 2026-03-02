@@ -6,7 +6,9 @@ import { DashboardSection, DashboardCard } from '../../../../components/dashboar
 import { SkeletonCard } from '../../../../components/dashboard';
 import { AreaLineChart } from '../../../../components/dashboard/charts';
 import { formatNumber, formatCurrency } from '../lib/format';
-import { text, border, background, indigo, violet } from '../../../../design/tokens/colors';
+import { indigo, violet } from '../../../../design/tokens/colors';
+import { useThemeColors } from '../../../../hooks/useThemeColors';
+import type { ThemeColors } from '../../../../design/tokens/theme-colors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../../design/tokens/spacing';
 
@@ -27,14 +29,14 @@ const METRICS: { key: MetricKey; label: string; format: (v: number) => string; c
   { key: 'clicks', label: 'Clicks', format: formatNumber, color: '#f59e0b' },
 ];
 
-function pillStyle(active: boolean): React.CSSProperties {
+function pillStyle(active: boolean, tc: ThemeColors): React.CSSProperties {
   return {
     padding: `${space['1.5']} ${space['3']}`,
     fontFamily: fontFamily.body,
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     backgroundColor: active ? indigo[950] : 'transparent',
-    color: active ? '#fff' : text.muted,
+    color: active ? '#fff' : tc.text.muted,
     border: 'none',
     borderRadius: radius.full,
     cursor: 'pointer',
@@ -43,6 +45,7 @@ function pillStyle(active: boolean): React.CSSProperties {
 }
 
 export function MarketingTimeseriesPanel({ timeseries, enabled, loading, error }: Props) {
+  const tc = useThemeColors();
   const [metric, setMetric] = useState<MetricKey>('sessions');
 
   if (!enabled) {
@@ -74,11 +77,11 @@ export function MarketingTimeseriesPanel({ timeseries, enabled, loading, error }
 
   return (
     <DashboardSection title="Timeseries" description="Daily trend data for key metrics.">
-      <div style={{ backgroundColor: background.surface, border: `1px solid ${border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="panel-timeseries">
+      <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="panel-timeseries">
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: space['3'] }}>
-          <div style={{ display: 'inline-flex', backgroundColor: background.muted, borderRadius: radius.full, padding: space['0.5'], gap: space['0.5'] }}>
+          <div style={{ display: 'inline-flex', backgroundColor: tc.background.muted, borderRadius: radius.full, padding: space['0.5'], gap: space['0.5'] }}>
             {METRICS.map((m) => (
-              <button key={m.key} onClick={() => setMetric(m.key)} style={pillStyle(metric === m.key)} data-testid={`ts-metric-${m.key}`}>
+              <button key={m.key} onClick={() => setMetric(m.key)} style={pillStyle(metric === m.key, tc)} data-testid={`ts-metric-${m.key}`}>
                 {m.label}
               </button>
             ))}

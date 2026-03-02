@@ -11,7 +11,8 @@ import {
   Tooltip,
   Cell,
 } from 'recharts';
-import { background, text, border, violet, chartColors } from '../../../design/tokens/colors';
+import { violet } from '../../../design/tokens/colors';
+import { useThemeColors } from '../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
 import { radius, space } from '../../../design/tokens/spacing';
 
@@ -31,19 +32,20 @@ function CustomTooltip({ active, payload, formatValue }: {
   payload?: Array<{ name: string; value: number; payload: { color?: string } }>;
   formatValue: (v: number) => string;
 }) {
+  const tc = useThemeColors();
   if (!active || !payload?.length) return null;
   const entry = payload[0];
   return (
     <div style={{
-      backgroundColor: background.surface,
-      border: `1px solid ${border.default}`,
+      backgroundColor: tc.background.surface,
+      border: `1px solid ${tc.border.default}`,
       borderRadius: radius.lg,
       padding: `${space['2']} ${space['3']}`,
       fontFamily: fontFamily.body,
       fontSize: fontSize.sm,
     }}>
-      <div style={{ color: text.secondary }}>{entry.name}</div>
-      <div style={{ fontWeight: fontWeight.semibold, color: text.primary, marginTop: 2 }}>{formatValue(entry.value)}</div>
+      <div style={{ color: tc.text.secondary }}>{entry.name}</div>
+      <div style={{ fontWeight: fontWeight.semibold, color: tc.text.primary, marginTop: 2 }}>{formatValue(entry.value)}</div>
     </div>
   );
 }
@@ -58,9 +60,11 @@ export function BarChart({
   dataKey = 'value',
   nameKey = 'name',
 }: BarChartProps) {
+  const tc = useThemeColors();
+
   if (!data.length) {
     return (
-      <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: text.muted, fontFamily: fontFamily.body }}>
+      <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>
         No data available
       </div>
     );
@@ -71,22 +75,22 @@ export function BarChart({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RechartsBarChart data={data} layout={layout} margin={{ top: 8, right: 16, left: isHorizontal ? 0 : 80, bottom: 0 }}>
-        {showGrid && <CartesianGrid strokeDasharray="3 3" stroke={border.subtle} horizontal={isHorizontal} vertical={!isHorizontal} />}
+        {showGrid && <CartesianGrid strokeDasharray="3 3" stroke={tc.border.subtle} horizontal={isHorizontal} vertical={!isHorizontal} />}
         {isHorizontal ? (
           <>
-            <XAxis dataKey={nameKey} tick={{ fill: text.muted, fontSize: 11, fontFamily: fontFamily.body }} tickLine={false} axisLine={{ stroke: border.default }} />
-            <YAxis tick={{ fill: text.muted, fontSize: 11, fontFamily: fontFamily.body }} tickLine={false} axisLine={false} tickFormatter={formatValue} />
+            <XAxis dataKey={nameKey} tick={{ fill: tc.text.muted, fontSize: 11, fontFamily: fontFamily.body }} tickLine={false} axisLine={{ stroke: tc.border.default }} />
+            <YAxis tick={{ fill: tc.text.muted, fontSize: 11, fontFamily: fontFamily.body }} tickLine={false} axisLine={false} tickFormatter={formatValue} />
           </>
         ) : (
           <>
-            <XAxis type="number" tick={{ fill: text.muted, fontSize: 11, fontFamily: fontFamily.body }} tickLine={false} axisLine={false} tickFormatter={formatValue} />
-            <YAxis dataKey={nameKey} type="category" tick={{ fill: text.secondary, fontSize: 12, fontFamily: fontFamily.body }} tickLine={false} axisLine={false} width={80} />
+            <XAxis type="number" tick={{ fill: tc.text.muted, fontSize: 11, fontFamily: fontFamily.body }} tickLine={false} axisLine={false} tickFormatter={formatValue} />
+            <YAxis dataKey={nameKey} type="category" tick={{ fill: tc.text.secondary, fontSize: 12, fontFamily: fontFamily.body }} tickLine={false} axisLine={false} width={80} />
           </>
         )}
         <Tooltip content={<CustomTooltip formatValue={formatValue} />} cursor={{ fill: `${violet[50]}66` }} />
         <Bar dataKey={dataKey} barSize={barSize} radius={[4, 4, 4, 4]}>
           {data.map((entry, i) => (
-            <Cell key={`${entry[nameKey]}`} fill={entry.color ?? chartColors[i % chartColors.length]} />
+            <Cell key={`${entry[nameKey]}`} fill={entry.color ?? tc.chartColors[i % tc.chartColors.length]} />
           ))}
         </Bar>
       </RechartsBarChart>

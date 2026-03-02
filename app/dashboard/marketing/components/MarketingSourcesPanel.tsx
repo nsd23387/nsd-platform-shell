@@ -6,7 +6,7 @@ import { DashboardGrid, DashboardSection, EmptyStateCard } from '../../../../com
 import { SkeletonCard } from '../../../../components/dashboard';
 import { BarChart } from '../../../../components/dashboard/charts';
 import { formatCurrency, formatNumber } from '../lib/format';
-import { chartColors, text, border, background } from '../../../../design/tokens/colors';
+import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 
@@ -17,6 +17,8 @@ interface Props {
 }
 
 export function MarketingSourcesPanel({ sources, loading, error }: Props) {
+  const tc = useThemeColors();
+
   if (loading) {
     return (
       <DashboardSection title="Sources" description="Submission sources ranked by pipeline value.">
@@ -48,20 +50,20 @@ export function MarketingSourcesPanel({ sources, loading, error }: Props) {
     );
   }
 
-  const pipelineData = entries.map(([name, d], i) => ({ name, value: d.pipeline, color: chartColors[i % chartColors.length] }));
-  const submissionData = entries.map(([name, d], i) => ({ name, value: d.submissions, color: chartColors[i % chartColors.length] }));
+  const pipelineData = entries.map(([name, d], i) => ({ name, value: d.pipeline, color: tc.chartColors[i % tc.chartColors.length] }));
+  const submissionData = entries.map(([name, d], i) => ({ name, value: d.submissions, color: tc.chartColors[i % tc.chartColors.length] }));
 
   return (
     <DashboardSection title="Sources" description="Submission sources ranked by pipeline value.">
       <DashboardGrid columns={{ sm: 1, md: 2, lg: 2 }}>
-        <div style={{ backgroundColor: background.surface, border: `1px solid ${border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="chart-pipeline-by-source">
-          <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: text.primary, marginBottom: space['3'] }}>
+        <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="chart-pipeline-by-source">
+          <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['3'] }}>
             Pipeline by Source
           </h4>
           <BarChart data={pipelineData} height={220} layout="vertical" formatValue={formatCurrency} barSize={16} />
         </div>
-        <div style={{ backgroundColor: background.surface, border: `1px solid ${border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="chart-submissions-by-source">
-          <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: text.primary, marginBottom: space['3'] }}>
+        <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="chart-submissions-by-source">
+          <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['3'] }}>
             Submissions by Source
           </h4>
           <BarChart data={submissionData} height={220} layout="vertical" formatValue={formatNumber} barSize={16} />
