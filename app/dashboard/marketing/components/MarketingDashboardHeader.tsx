@@ -6,7 +6,7 @@ import { useThemeColors } from '../../../../hooks/useThemeColors';
 import type { ThemeColors } from '../../../../design/tokens/theme-colors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../../design/tokens/spacing';
-import type { PeriodState, UIPreset } from '../lib/period';
+import type { PeriodState, UIPreset, DashboardView } from '../lib/period';
 
 interface Props {
   state: PeriodState;
@@ -19,6 +19,11 @@ const PRESETS: { value: UIPreset; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
   { value: 'quarterly', label: 'Quarterly' },
   { value: 'yearly', label: 'Yearly' },
+];
+
+const VIEWS: { value: DashboardView; label: string }[] = [
+  { value: 'operator', label: 'Operator' },
+  { value: 'executive', label: 'Executive' },
 ];
 
 function pillStyle(active: boolean, tc: ThemeColors): React.CSSProperties {
@@ -100,6 +105,27 @@ export function MarketingDashboardHeader({ state, onChange }: Props) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: space['3'], flexWrap: 'wrap', marginTop: space['5'] }}>
+        <div style={{
+          display: 'inline-flex',
+          backgroundColor: tc.background.muted,
+          borderRadius: radius.full,
+          padding: space['0.5'],
+          gap: space['0.5'],
+        }}>
+          {VIEWS.map((v) => (
+            <button
+              key={v.value}
+              onClick={() => onChange({ ...state, view: v.value })}
+              style={pillStyle(state.view === v.value, tc)}
+              data-testid={`view-${v.value}`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ width: 1, height: 24, backgroundColor: tc.border.default }} />
+
         <div style={{
           display: 'inline-flex',
           backgroundColor: tc.background.muted,

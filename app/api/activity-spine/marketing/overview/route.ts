@@ -221,6 +221,8 @@ export async function GET(request: NextRequest) {
         seo_movers: [],
         funnel: [],
         pipeline_health: [],
+        channel_performance: [],
+        ga4_funnel: { view_item: 0, add_to_cart: 0, begin_checkout: 0, purchase: 0, form_start: 0, form_submit: 0 },
       },
       timestamp: new Date().toISOString(),
       orgId: 'unconfigured',
@@ -265,6 +267,8 @@ export async function GET(request: NextRequest) {
       seo_movers: result.seo_movers,
       funnel: result.funnel,
       pipeline_health: result.pipeline_health,
+      channel_performance: result.channel_performance,
+      ga4_funnel: result.ga4_funnel,
     };
 
     if (result.timeseries) {

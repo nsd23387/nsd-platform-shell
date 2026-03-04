@@ -32,6 +32,7 @@ import {
   syncPageEngagement,
   syncGA4Events,
   syncDeviceCountry,
+  syncChannelSessions,
   createIngestionRun,
   completeIngestionRun,
 } from '../ga4Sync';
@@ -309,6 +310,68 @@ describe('GA4 Sync Service', () => {
 
       expect(result.rows).toBe(0);
       expect(result.errors).toHaveLength(0);
+    });
+  });
+
+  describe('syncChannelSessions', () => {
+    it('should map channel session response to raw_ga4_events with channel_session_summary event_name', async () => {
+      const { pool, mockDbClient } = makeMockPool();
+      const mockClient = new BetaAnalyticsDataClient();
+
+      __mockRunReport.mockResolvedValueOnce([
+        {
+          rows: [
+            makeGA4Row(['Organic Search', '20260301'], ['1500', '3200', '8', '150.50']),
+            makeGA4Row(['Paid Search', '20260301'], ['400', '800', '3', '75.00']),
+          ],
+        },
+      ]);
+
+      const result = await syncChannelSessions(pool, '2026-03-01', '2026-03-01', 'run-ch1', mockClient);
+
+      expect(result.rows).toBe(2);
+      expect(result.errors).toHaveLength(0);
+
+      const insertCalls = mockDbClient.query.mock.calls.filter(
+        (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('raw_ga4_events') && (c[0] as string).includes('INSERT'),
+      );
+      expect(insertCalls).toHaveLength(2);
+
+      const firstPayload = JSON.parse(insertCalls[0][1][3]);
+      expect(firstPayload.channel).toBe('Organic Search');
+      expect(firstPayload.sessions).toBe(1500);
+      expect(firstPayload.page_views).toBe(3200);
+      expect(firstPayload.conversions).toBe(8);
+      expect(firstPayload.revenue).toBe(150.50);
+
+      expect(insertCalls[0][1][1]).toBe('channel_session_summary');
+      expect(insertCalls[0][1][0]).toBe('ga4-api');
+    });
+
+    it('should handle empty channel response', async () => {
+      const { pool } = makeMockPool();
+      const mockClient = new BetaAnalyticsDataClient();
+
+      __mockRunReport.mockResolvedValueOnce([{ rows: [] }]);
+
+      const result = await syncChannelSessions(pool, '2026-03-01', '2026-03-01', 'run-ch2', mockClient);
+
+      expect(result.rows).toBe(0);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should request sessionDefaultChannelGroup dimension', async () => {
+      const { pool } = makeMockPool();
+      const mockClient = new BetaAnalyticsDataClient();
+
+      __mockRunReport.mockResolvedValueOnce([{ rows: [] }]);
+
+      await syncChannelSessions(pool, '2026-03-01', '2026-03-01', 'run-ch3', mockClient);
+
+      const reportCall = __mockRunReport.mock.calls[0][0];
+      const dimNames = reportCall.dimensions.map((d: { name: string }) => d.name);
+      expect(dimNames).toContain('sessionDefaultChannelGroup');
+      expect(dimNames).toContain('date');
     });
   });
 

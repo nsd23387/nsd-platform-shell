@@ -211,7 +211,7 @@ export async function syncGA4Events(
     await dbClient.query(
       `DELETE FROM analytics.raw_ga4_events
        WHERE source_system = 'ga4-api'
-         AND event_name != 'session_summary'
+         AND event_name NOT IN ('session_summary', 'channel_session_summary')
          AND occurred_at::date BETWEEN $1::date AND $2::date`,
       [startDate, endDate],
     );
@@ -351,6 +351,109 @@ export async function syncDeviceCountry(
         inserted++;
       } catch (err) {
         errors.push(`Device/country row error: ${(err as Error).message}`);
+      }
+    }
+
+    await dbClient.query('COMMIT');
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    throw err;
+  } finally {
+    dbClient.release();
+  }
+
+  return { rows: inserted, errors };
+}
+
+/**
+ * Sync channel-level session summaries from GA4 into raw_ga4_events.
+ *
+ * Uses GA4 `sessionDefaultChannelGroup` dimension to group sessions by
+ * acquisition channel (Organic Search, Paid Search, Direct, Referral, etc.).
+ * event_name='channel_session_summary' distinguishes from device/country rows.
+ */
+export async function syncChannelSessions(
+  pool: Pool,
+  startDate: string,
+  endDate: string,
+  ingestionRunId: string,
+  clientOverride?: BetaAnalyticsDataClient,
+): Promise<SyncResult> {
+  const client = clientOverride ?? getClient();
+  const propertyId = getPropertyId();
+
+  const [response] = await client.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [
+      { name: 'sessionDefaultChannelGroup' },
+      { name: 'date' },
+    ],
+    metrics: [
+      { name: 'sessions' },
+      { name: 'screenPageViews' },
+      { name: 'conversions' },
+      { name: 'totalRevenue' },
+    ],
+    limit: 10000,
+  });
+
+  const rows = response.rows ?? [];
+  if (rows.length === 0) {
+    return { rows: 0, errors: [] };
+  }
+
+  const errors: string[] = [];
+  let inserted = 0;
+
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+
+    await dbClient.query(
+      `DELETE FROM analytics.raw_ga4_events
+       WHERE source_system = 'ga4-api'
+         AND event_name = 'channel_session_summary'
+         AND occurred_at::date BETWEEN $1::date AND $2::date`,
+      [startDate, endDate],
+    );
+
+    const INSERT_SQL = `
+      INSERT INTO analytics.raw_ga4_events
+        (source_system, event_name, occurred_at, payload, ingestion_run_id)
+      VALUES ($1, $2, $3, $4, $5)
+    `;
+
+    for (const row of rows) {
+      try {
+        const channel = row.dimensionValues?.[0]?.value ?? 'Unknown';
+        const dateRaw = row.dimensionValues?.[1]?.value ?? '';
+        const sessions = parseInt(row.metricValues?.[0]?.value ?? '0', 10);
+        const pageViews = parseInt(row.metricValues?.[1]?.value ?? '0', 10);
+        const conversions = parseInt(row.metricValues?.[2]?.value ?? '0', 10);
+        const revenue = parseFloat(row.metricValues?.[3]?.value ?? '0');
+
+        const occurredAt = `${dateRaw.slice(0, 4)}-${dateRaw.slice(4, 6)}-${dateRaw.slice(6, 8)}T00:00:00Z`;
+
+        const payload = {
+          channel,
+          sessions,
+          page_views: pageViews,
+          conversions,
+          revenue,
+          date: `${dateRaw.slice(0, 4)}-${dateRaw.slice(4, 6)}-${dateRaw.slice(6, 8)}`,
+        };
+
+        await dbClient.query(INSERT_SQL, [
+          'ga4-api',
+          'channel_session_summary',
+          occurredAt,
+          JSON.stringify(payload),
+          ingestionRunId,
+        ]);
+        inserted++;
+      } catch (err) {
+        errors.push(`Channel session row error: ${(err as Error).message}`);
       }
     }
 

@@ -16,6 +16,7 @@ import {
   syncPageEngagement,
   syncGA4Events,
   syncDeviceCountry,
+  syncChannelSessions,
   createIngestionRun,
   completeIngestionRun,
 } from '../../../../services/ga4Sync';
@@ -66,12 +67,15 @@ export async function GET(req: NextRequest) {
       syncDeviceCountry(pool, startDate, endDate, runId),
     ]);
 
+    const channelResult = await syncChannelSessions(pool, startDate, endDate, runId);
+
     const totalRows =
-      engagementResult.rows + eventsResult.rows + deviceResult.rows;
+      engagementResult.rows + eventsResult.rows + deviceResult.rows + channelResult.rows;
     const allErrors = [
       ...engagementResult.errors,
       ...eventsResult.errors,
       ...deviceResult.errors,
+      ...channelResult.errors,
     ];
 
     const durationMs = Date.now() - startTime;
@@ -93,6 +97,7 @@ export async function GET(req: NextRequest) {
       page_engagement_rows: engagementResult.rows,
       ga4_event_rows: eventsResult.rows,
       device_country_rows: deviceResult.rows,
+      channel_session_rows: channelResult.rows,
       errors: allErrors,
       duration_ms: durationMs,
     });
