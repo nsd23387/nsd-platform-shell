@@ -18,6 +18,27 @@ import { Pool } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { normalizeLandingPage } from '../../../../lib/normalize-landing-page';
 
+const ALLOWED_ORIGINS = [
+  'https://quote.neonsignsdepot.com',
+  'https://neonsignsdepot.com',
+  'https://www.neonsignsdepot.com',
+];
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  return new NextResponse(null, { status: 204, headers: corsHeaders(origin) });
+}
+
 let pool: Pool | null = null;
 
 function getPool(): Pool {
@@ -73,11 +94,14 @@ function validatePayload(body: unknown): { valid: true; data: WebEventPayload } 
 }
 
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  const cors = corsHeaders(origin);
+
   try {
     const body = await request.json();
     const validation = validatePayload(body);
     if (!validation.valid) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
+      return NextResponse.json({ error: validation.error }, { status: 400, headers: cors });
     }
 
     const data = validation.data;
@@ -97,7 +121,7 @@ export async function POST(request: NextRequest) {
 
     const occurredAt = data.occurred_at ? new Date(data.occurred_at) : new Date();
     if (isNaN(occurredAt.getTime())) {
-      return NextResponse.json({ error: 'Invalid occurred_at timestamp' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid occurred_at timestamp' }, { status: 400, headers: cors });
     }
 
     const ingestionRunId = randomUUID();
@@ -149,13 +173,13 @@ export async function POST(request: NextRequest) {
         id: insertedId,
         landing_page: resolvedLandingPage,
       },
-      { status: 201 },
+      { status: 201, headers: cors },
     );
   } catch (err) {
     console.error('[ingest/web-event] Error:', err);
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 },
+      { status: 500, headers: cors },
     );
   }
 }
