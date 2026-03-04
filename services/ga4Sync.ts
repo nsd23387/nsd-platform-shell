@@ -16,8 +16,43 @@
  */
 
 import { BetaAnalyticsDataClient } from '@google-analytics/data';
+import type { protos } from '@google-analytics/data';
 import { normalizeToPath } from '../lib/normalize-landing-page';
 import type { Pool } from 'pg';
+
+type GA4Row = protos.google.analytics.data.v1beta.IRow;
+type GA4ReportRequest = protos.google.analytics.data.v1beta.IRunReportRequest;
+
+const GA4_PAGE_SIZE = 100000;
+
+async function fetchAllGA4Rows(
+  client: BetaAnalyticsDataClient,
+  request: GA4ReportRequest,
+): Promise<GA4Row[]> {
+  const allRows: GA4Row[] = [];
+  let offset = 0;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const [response] = await client.runReport({
+      ...request,
+      limit: GA4_PAGE_SIZE,
+      offset,
+    });
+
+    const rows = response.rows ?? [];
+    allRows.push(...rows);
+
+    const rowCount = response.rowCount ?? 0;
+    offset += rows.length;
+
+    if (rows.length < GA4_PAGE_SIZE || offset >= rowCount) {
+      break;
+    }
+  }
+
+  return allRows;
+}
 
 const ACTIONABLE_EVENTS = [
   'add_to_cart',
@@ -77,7 +112,7 @@ export async function syncPageEngagement(
   const client = clientOverride ?? getClient();
   const propertyId = getPropertyId();
 
-  const [response] = await client.runReport({
+  const rows = await fetchAllGA4Rows(client, {
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: 'pagePath' }, { name: 'date' }],
@@ -88,10 +123,8 @@ export async function syncPageEngagement(
       { name: 'averageSessionDuration' },
       { name: 'scrolledUsers' },
     ],
-    limit: 10000,
   });
 
-  const rows = response.rows ?? [];
   if (rows.length === 0) {
     return { rows: 0, errors: [] };
   }
@@ -174,7 +207,7 @@ export async function syncGA4Events(
   const client = clientOverride ?? getClient();
   const propertyId = getPropertyId();
 
-  const [response] = await client.runReport({
+  const rows = await fetchAllGA4Rows(client, {
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [
@@ -193,10 +226,8 @@ export async function syncGA4Events(
         },
       },
     },
-    limit: 10000,
   });
 
-  const rows = response.rows ?? [];
   if (rows.length === 0) {
     return { rows: 0, errors: [] };
   }
@@ -285,7 +316,7 @@ export async function syncDeviceCountry(
   const client = clientOverride ?? getClient();
   const propertyId = getPropertyId();
 
-  const [response] = await client.runReport({
+  const rows = await fetchAllGA4Rows(client, {
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [
@@ -294,10 +325,8 @@ export async function syncDeviceCountry(
       { name: 'date' },
     ],
     metrics: [{ name: 'sessions' }, { name: 'screenPageViews' }],
-    limit: 10000,
   });
 
-  const rows = response.rows ?? [];
   if (rows.length === 0) {
     return { rows: 0, errors: [] };
   }
@@ -382,7 +411,7 @@ export async function syncChannelSessions(
   const client = clientOverride ?? getClient();
   const propertyId = getPropertyId();
 
-  const [response] = await client.runReport({
+  const rows = await fetchAllGA4Rows(client, {
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [
@@ -395,10 +424,8 @@ export async function syncChannelSessions(
       { name: 'conversions' },
       { name: 'totalRevenue' },
     ],
-    limit: 10000,
   });
 
-  const rows = response.rows ?? [];
   if (rows.length === 0) {
     return { rows: 0, errors: [] };
   }
