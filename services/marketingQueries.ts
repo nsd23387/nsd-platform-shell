@@ -108,10 +108,30 @@ const KPI_SEARCH_SQL = `
 // SQL — Page-level join
 // ============================================
 
+/**
+ * PAGES_SQL — Path-Based Attribution
+ *
+ * All CTEs normalize to a canonical PATH (domain stripped, query params
+ * stripped, trailing slash enforced). This ensures:
+ *
+ * 1. Search Console data (neonsignsdepot.com) joins correctly with
+ *    conversion events fired on quote.neonsignsdepot.com.
+ * 2. Conversions are attributed to the originating SEO landing page
+ *    via COALESCE(event_data->>'landing_page', path-from-page_url).
+ *    When the ingestion endpoint populates landing_page (as a path),
+ *    revenue credits the originating page, not the quote subdomain.
+ * 3. The conv_attributed CTE replaces the old dashboard_norm CTE
+ *    (which read from analytics.dashboard_pages VIEW grouped by
+ *    literal page_url, collapsing all revenue under the quote domain).
+ */
 const PAGES_SQL = `
   WITH engagement AS (
     SELECT
-      RTRIM(split_part(page_path, '?', 1), '/') || '/' AS canon_url,
+      RTRIM(split_part(
+        CASE WHEN page_path ~ '^https?://'
+          THEN regexp_replace(page_path, '^https?://[^/]*', '')
+          ELSE page_path END,
+        '?', 1), '/') || '/' AS canon_path,
       SUM(sessions)    AS sessions,
       SUM(page_views)  AS page_views,
       CASE WHEN SUM(sessions) > 0
@@ -126,7 +146,9 @@ const PAGES_SQL = `
   ),
   web_page_views AS (
     SELECT
-      RTRIM(split_part(page_url, '?', 1), '/') || '/' AS canon_url,
+      RTRIM(split_part(
+        regexp_replace(page_url, '^https?://[^/]*', ''),
+        '?', 1), '/') || '/' AS canon_path,
       COUNT(*) AS page_views
     FROM analytics.raw_web_events
     WHERE event_type = 'page_view'
@@ -135,7 +157,9 @@ const PAGES_SQL = `
   ),
   search_console_norm AS (
     SELECT
-      RTRIM(split_part(page_url, '?', 1), '/') || '/' AS canon_url,
+      RTRIM(split_part(
+        regexp_replace(page_url, '^https?://[^/]*', ''),
+        '?', 1), '/') || '/' AS canon_path,
       SUM(clicks::int)       AS clicks,
       SUM(impressions::int)  AS impressions,
       CASE WHEN SUM(impressions::int) > 0
@@ -144,38 +168,44 @@ const PAGES_SQL = `
     FROM analytics.metrics_search_console_page
     GROUP BY 1
   ),
-  dashboard_norm AS (
+  conv_attributed AS (
     SELECT
-      RTRIM(split_part(page_url, '?', 1), '/') || '/' AS canon_url,
-      SUM(COALESCE(page_views, 0))           AS page_views,
-      SUM(COALESCE(submissions, 0))          AS submissions,
-      SUM(COALESCE(pipeline_value_usd, 0))   AS pipeline_value_usd
-    FROM analytics.dashboard_pages
+      RTRIM(split_part(
+        COALESCE(
+          NULLIF(event_data->>'landing_page', ''),
+          regexp_replace(page_url, '^https?://[^/]*', '')
+        ),
+        '?', 1), '/') || '/' AS canon_path,
+      COUNT(*)  AS submissions,
+      COALESCE(SUM((event_data->>'preliminary_price')::numeric) / 100.0, 0)
+                AS pipeline_value_usd
+    FROM analytics.raw_web_events
+    WHERE event_type = 'conversion'
     GROUP BY 1
   )
   SELECT
-    COALESCE(e.canon_url, s.canon_url, d.canon_url) AS page_url,
+    COALESCE(e.canon_path, s.canon_path, c.canon_path, w.canon_path) AS page_url,
     COALESCE(e.sessions, 0)                          AS sessions,
-    COALESCE(e.page_views, w.page_views, d.page_views, 0) AS page_views,
+    COALESCE(e.page_views, w.page_views, 0)          AS page_views,
     COALESCE(e.bounce_rate, 0)                       AS bounce_rate,
     COALESCE(e.avg_time_on_page_seconds, 0)          AS avg_time_on_page_seconds,
     COALESCE(s.clicks, 0)                            AS clicks,
     COALESCE(s.impressions, 0)                       AS impressions,
     COALESCE(s.ctr, 0)                               AS ctr,
-    COALESCE(d.submissions, 0)                       AS submissions,
-    COALESCE(d.pipeline_value_usd, 0)                AS pipeline_value_usd
+    COALESCE(c.submissions, 0)                       AS submissions,
+    COALESCE(c.pipeline_value_usd, 0)                AS pipeline_value_usd
   FROM engagement e
   FULL OUTER JOIN search_console_norm s
-    ON e.canon_url = s.canon_url
-  FULL OUTER JOIN dashboard_norm d
-    ON COALESCE(e.canon_url, s.canon_url) = d.canon_url
+    ON e.canon_path = s.canon_path
+  FULL OUTER JOIN conv_attributed c
+    ON COALESCE(e.canon_path, s.canon_path) = c.canon_path
   LEFT JOIN web_page_views w
-    ON COALESCE(e.canon_url, s.canon_url, d.canon_url) = w.canon_url
+    ON COALESCE(e.canon_path, s.canon_path, c.canon_path) = w.canon_path
   ORDER BY
-    COALESCE(d.pipeline_value_usd, 0)
+    COALESCE(c.pipeline_value_usd, 0)
     + COALESCE(s.clicks, 0) * 10
     + COALESCE(s.impressions, 0) * 0.01
-    + COALESCE(e.page_views, w.page_views, d.page_views, 0)
+    + COALESCE(e.page_views, w.page_views, 0)
     + COALESCE(e.sessions, 0) * 5
     DESC
   LIMIT 100

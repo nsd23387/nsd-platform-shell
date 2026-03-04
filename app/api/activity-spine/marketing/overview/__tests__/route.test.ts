@@ -946,3 +946,124 @@ describe('new fields: empty state defaults', () => {
     expect(Array.isArray(data.pipeline_health)).toBe(true);
   });
 });
+
+// ============================================
+// T009: SEO Revenue Attribution (cross-domain fix)
+// ============================================
+
+describe('T009: SEO Revenue Attribution — path-based join', () => {
+  it('PAGES_SQL uses conv_attributed CTE (not dashboard_pages VIEW)', async () => {
+    let capturedPagesSql = '';
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('FULL OUTER JOIN') && sql.includes('metrics_page_engagement_daily')) {
+        capturedPagesSql = sql;
+        return Promise.resolve({ rows: [] });
+      }
+      if (sql.includes('dashboard_sources') || sql.includes('generate_series') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+
+    await GET(req('/o'));
+
+    expect(capturedPagesSql).toContain('conv_attributed');
+    expect(capturedPagesSql).not.toContain('dashboard_pages');
+    expect(capturedPagesSql).toContain("event_data->>'landing_page'");
+    expect(capturedPagesSql).toContain("regexp_replace(page_url, '^https?://[^/]*', '')");
+  });
+
+  it('PAGES_SQL uses canon_path (not canon_url) for path-based normalization', async () => {
+    let capturedPagesSql = '';
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('FULL OUTER JOIN') && sql.includes('metrics_page_engagement_daily')) {
+        capturedPagesSql = sql;
+        return Promise.resolve({ rows: [] });
+      }
+      if (sql.includes('dashboard_sources') || sql.includes('generate_series') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+
+    await GET(req('/o'));
+
+    expect(capturedPagesSql).toContain('canon_path');
+  });
+
+  it('pages are returned with path-based page_url when stub returns paths', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('FULL OUTER JOIN') && sql.includes('metrics_page_engagement_daily')) {
+        return Promise.resolve({ rows: [
+          { page_url: '/custom-neon-signs/', sessions: '50', page_views: '120', bounce_rate: '0.3', avg_time_on_page_seconds: '40', clicks: '200', impressions: '3000', ctr: '0.067', submissions: '3', pipeline_value_usd: '2819' },
+        ] });
+      }
+      if (sql.includes('dashboard_sources') || sql.includes('generate_series') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+
+    const { data } = await (await GET(req('/o'))).json();
+
+    expect(data.pages).toHaveLength(1);
+    expect(data.pages[0].page_url).toBe('/custom-neon-signs/');
+    expect(data.pages[0].submissions).toBe(3);
+    expect(data.pages[0].pipeline_value_usd).toBe(2819);
+    expect(data.pages[0].clicks).toBe(200);
+  });
+
+  it('search_console_norm CTE strips domain from page_url via regexp_replace', async () => {
+    let capturedPagesSql = '';
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('FULL OUTER JOIN') && sql.includes('metrics_page_engagement_daily')) {
+        capturedPagesSql = sql;
+        return Promise.resolve({ rows: [] });
+      }
+      if (sql.includes('dashboard_sources') || sql.includes('generate_series') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+
+    await GET(req('/o'));
+
+    expect(capturedPagesSql).toContain('search_console_norm');
+    expect(capturedPagesSql).toContain('regexp_replace');
+    expect(capturedPagesSql).toContain('metrics_search_console_page');
+  });
+
+  it('conv_attributed CTE uses COALESCE(landing_page, path-from-page_url)', async () => {
+    let capturedPagesSql = '';
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('FULL OUTER JOIN') && sql.includes('metrics_page_engagement_daily')) {
+        capturedPagesSql = sql;
+        return Promise.resolve({ rows: [] });
+      }
+      if (sql.includes('dashboard_sources') || sql.includes('generate_series') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+      if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
+      if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
+      if (sql.includes('STDDEV')) return Promise.resolve({ rows: [{ n: 0, mean: 0, stddev: 0, latest_val: 0 }] });
+      return Promise.resolve({ rows: [{}] });
+    });
+
+    await GET(req('/o'));
+
+    const convMatch = capturedPagesSql.match(/conv_attributed AS \(([\s\S]*?)\n  \)/);
+    expect(convMatch).not.toBeNull();
+    const convBody = convMatch![1];
+    expect(convBody).toContain("COALESCE");
+    expect(convBody).toContain("NULLIF(event_data->>'landing_page', '')");
+    expect(convBody).toContain("regexp_replace(page_url, '^https?://[^/]*', '')");
+    expect(convBody).toContain("event_type = 'conversion'");
+  });
+});

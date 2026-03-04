@@ -41,7 +41,7 @@ The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics vi
 - `raw_search_console` (SEO queries, pages, device/country) — active, 7-day window
 - `raw_ga4_events`, `raw_google_ads`, `raw_clarity_sessions` — empty (pipelines not connected)
 - `metrics_page_engagement_daily` — empty (GA4 session aggregation pipeline not connected); Pages query falls back to `raw_web_events` page_view counts
-- `dashboard_pages` — 617 rows, URLs normalized (query params stripped) before joining with Search Console data
+- `dashboard_pages` — 617 rows, VIEW groups by raw `page_url`; **no longer used by PAGES_SQL** (replaced by `conv_attributed` CTE for path-based attribution)
 - `metrics_search_console_page` — 98 rows, lifetime aggregated (no date column), provides clicks/impressions per page
 
 **Panels:**
@@ -87,9 +87,17 @@ The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics vi
 - `app/globals.css` — CSS overrides for `[data-theme="dark"]` (body, headings, scrollbars).
 - All shared dashboard components (`DashboardCard`, `DashboardSection`, `EmptyStateCard`, `SkeletonCard`), chart components (`AreaLineChart`, `DonutChart`, `BarChart`), and all 13 marketing panel components use `useThemeColors()`.
 
+**SEO Revenue Attribution (Cross-Domain Fix):**
+- **Problem**: Conversions on `quote.neonsignsdepot.com` had `landing_page=null`, `referrer=null`. The `dashboard_pages` VIEW grouped by raw `page_url`, attributing all $2,819 pipeline to the quote subdomain instead of originating SEO pages. Search Console join produced clicks=0 due to domain mismatch.
+- **Solution**: Path-based normalization across all PAGES_SQL CTEs. All URLs are stripped to canonical paths (e.g., `/custom-neon-signs/`) via `regexp_replace(page_url, '^https?://[^/]*', '')`. The `dashboard_norm` CTE (from `dashboard_pages` VIEW) was replaced by `conv_attributed` CTE that reads `raw_web_events` directly and uses `COALESCE(NULLIF(event_data->>'landing_page', ''), path-from-page_url)` for attribution.
+- **Ingestion Endpoint**: `POST /api/ingest/web-event` — Accepts `origin_page`, `origin_url`, or `landing_page` fields, normalizes to a canonical path, and stores in `event_data.landing_page`. This is the only write-path for `analytics.raw_web_events` in this repo.
+- **Normalization Utility**: `lib/normalize-landing-page.ts` — `normalizeLandingPage()` and `normalizeToPath()` functions. Priority: `origin_page > landing_page > origin_url`. Strips protocol+domain, query params; ensures trailing slash.
+
 **Key Files:**
-- `services/marketingQueries.ts` — All SQL queries and data mapping
+- `services/marketingQueries.ts` — All SQL queries and data mapping (PAGES_SQL uses path-based attribution)
 - `app/api/activity-spine/marketing/overview/route.ts` — API route handler
+- `app/api/ingest/web-event/route.ts` — Event ingestion endpoint with landing page normalization
+- `lib/normalize-landing-page.ts` — URL-to-path normalization utility
 - `app/dashboard/marketing/page.tsx` — Page orchestrator (max-width container, per-panel loading)
 - `app/dashboard/marketing/components/` — All panel components (modernized with charts, animations, responsive grids)
 - `types/activity-spine.ts` — Type definitions
@@ -98,7 +106,9 @@ The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics vi
 - **Test runner**: vitest 3.x with vite 5.x (pinned for Node.js 18 CJS compatibility)
 - **Test environment**: `node` (API route tests don't need jsdom)
 - **Test files**:
-  - `app/api/activity-spine/marketing/overview/__tests__/route.test.ts` — 104 tests covering T001-T008 marketing panel improvements
+  - `app/api/activity-spine/marketing/overview/__tests__/route.test.ts` — 109 tests covering T001-T009 (T009: SEO Revenue Attribution path-based join)
+  - `app/api/ingest/web-event/__tests__/route.test.ts` — 13 tests for event ingestion endpoint (validation, landing page resolution, database write)
+  - `lib/__tests__/normalize-landing-page.test.ts` — 25 tests for URL-to-path normalization
   - `app/sales-engine/lib/__tests__/read-only-guard.test.ts` — 29 tests for read-only guard
 - **Run tests**: `npx vitest run`
 - **Note**: vitest uses `// @vitest-environment node` directive in API test files; vitest.config.ts defaults to `environment: 'node'`
