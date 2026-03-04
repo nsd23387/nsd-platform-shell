@@ -46,11 +46,18 @@ const SOURCE_TAXONOMY: Record<string, string> = {
   email: 'email',
   newsletter: 'email',
   referral: 'referral',
+  'quote.neonsignsdepot.com': 'Quote Form',
+  'neonsignsdepot.com': 'Website',
+  'www.neonsignsdepot.com': 'Website',
 };
 
 export function canonicalSource(raw: string | null | undefined): string {
   if (raw == null) return 'other';
-  return SOURCE_TAXONOMY[raw.toLowerCase().trim()] ?? 'other';
+  let normalized = raw.toLowerCase().trim();
+  normalized = normalized.replace(/^https?:\/\//, '');
+  normalized = normalized.replace(/\/.*$/, '');
+  normalized = normalized.replace(/^www\./, '');
+  return SOURCE_TAXONOMY[normalized] ?? 'other';
 }
 
 // ============================================
@@ -831,17 +838,23 @@ export async function executeMarketingQueries(
         .filter((r: Row) => r.device != null)
         .map((r: Row) => ({
           device: String(r.device),
-          impressions: nonNegative(toNumber(r.sessions)),
-          clicks: nonNegative(toNumber(r.page_views)),
+          sessions: nonNegative(toNumber(r.sessions)),
+          page_views: nonNegative(toNumber(r.page_views)),
+          impressions: 0,
+          clicks: 0,
           ctr: 0,
+          source: 'ga4' as const,
         }))
     : scDeviceRows
         .filter((r: Row) => r.device != null)
         .map((r: Row) => ({
           device: String(r.device),
+          sessions: 0,
+          page_views: 0,
           impressions: nonNegative(toNumber(r.impressions)),
           clicks: nonNegative(toNumber(r.clicks)),
           ctr: clamp(toNumber(r.ctr), 0, 1),
+          source: 'search_console' as const,
         }));
 
   const ga4CountryRows = results[15].rows ?? [];
@@ -853,17 +866,23 @@ export async function executeMarketingQueries(
         .filter((r: Row) => r.country != null)
         .map((r: Row) => ({
           country: String(r.country),
-          impressions: nonNegative(toNumber(r.sessions)),
-          clicks: nonNegative(toNumber(r.page_views)),
+          sessions: nonNegative(toNumber(r.sessions)),
+          page_views: nonNegative(toNumber(r.page_views)),
+          impressions: 0,
+          clicks: 0,
           ctr: 0,
+          source: 'ga4' as const,
         }))
     : scCountryRows
         .filter((r: Row) => r.country != null)
         .map((r: Row) => ({
           country: String(r.country),
+          sessions: 0,
+          page_views: 0,
           impressions: nonNegative(toNumber(r.impressions)),
           clicks: nonNegative(toNumber(r.clicks)),
           ctr: clamp(toNumber(r.ctr), 0, 1),
+          source: 'search_console' as const,
         }));
 
   // T004: Pipeline categories (index shifted +2 due to GA4 fallback queries)
