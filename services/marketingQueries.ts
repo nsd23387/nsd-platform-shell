@@ -400,10 +400,25 @@ const ANOMALY_PIPELINE_SQL = `
 `;
 
 // ============================================
-// T003: Device & Country breakdown from raw_search_console payload
+// T003: Device & Country breakdown
+// Prefers GA4 session_summary data when available (more accurate sessions/pageviews).
+// Falls back to Search Console data (impressions/clicks) when GA4 is empty.
 // ============================================
 
-const DEVICE_BREAKDOWN_SQL = `
+const DEVICE_BREAKDOWN_GA4_SQL = `
+  SELECT
+    INITCAP(payload->>'device_category') AS device,
+    SUM((payload->>'sessions')::int) AS sessions,
+    SUM((payload->>'page_views')::int) AS page_views
+  FROM analytics.raw_ga4_events
+  WHERE event_name = 'session_summary'
+    AND source_system = 'ga4-api'
+    AND occurred_at::date BETWEEN $1 AND $2
+  GROUP BY payload->>'device_category'
+  ORDER BY sessions DESC
+`;
+
+const DEVICE_BREAKDOWN_SC_SQL = `
   SELECT
     payload->>'device' AS device,
     SUM((payload->>'impressions')::int) AS impressions,
@@ -418,7 +433,21 @@ const DEVICE_BREAKDOWN_SQL = `
   ORDER BY impressions DESC
 `;
 
-const COUNTRY_BREAKDOWN_SQL = `
+const COUNTRY_BREAKDOWN_GA4_SQL = `
+  SELECT
+    UPPER(payload->>'country') AS country,
+    SUM((payload->>'sessions')::int) AS sessions,
+    SUM((payload->>'page_views')::int) AS page_views
+  FROM analytics.raw_ga4_events
+  WHERE event_name = 'session_summary'
+    AND source_system = 'ga4-api'
+    AND occurred_at::date BETWEEN $1 AND $2
+  GROUP BY payload->>'country'
+  ORDER BY sessions DESC
+  LIMIT 10
+`;
+
+const COUNTRY_BREAKDOWN_SC_SQL = `
   SELECT
     UPPER(payload->>'country') AS country,
     SUM((payload->>'impressions')::int) AS impressions,
@@ -688,22 +717,24 @@ export async function executeMarketingQueries(
     /* 11 */ db.query(ANOMALY_PIPELINE_SQL, curParams),
     /* 12 */ db.query(KPI_FUNNEL_FALLBACK_SQL, curParams),
     /* 13 */ db.query(KPI_FUNNEL_FALLBACK_SQL, prevParams),
-    /* 14 */ db.query(DEVICE_BREAKDOWN_SQL, curParams),
-    /* 15 */ db.query(COUNTRY_BREAKDOWN_SQL, curParams),
-    /* 16 */ db.query(PIPELINE_CATEGORY_SQL),
-    /* 17 */ db.query(RECENT_CONVERSIONS_SQL),
-    /* 18 */ db.query(SEO_MOVERS_SQL, curParams),
-    /* 19 */ db.query(FUNNEL_SQL),
-    /* 20 */ db.query(PIPELINE_HEALTH_SQL),
+    /* 14 */ db.query(DEVICE_BREAKDOWN_GA4_SQL, curParams),
+    /* 15 */ db.query(COUNTRY_BREAKDOWN_GA4_SQL, curParams),
+    /* 16 */ db.query(DEVICE_BREAKDOWN_SC_SQL, curParams),
+    /* 17 */ db.query(COUNTRY_BREAKDOWN_SC_SQL, curParams),
+    /* 18 */ db.query(PIPELINE_CATEGORY_SQL),
+    /* 19 */ db.query(RECENT_CONVERSIONS_SQL),
+    /* 20 */ db.query(SEO_MOVERS_SQL, curParams),
+    /* 21 */ db.query(FUNNEL_SQL),
+    /* 22 */ db.query(PIPELINE_HEALTH_SQL),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 21 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
-      /* 22 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
-      /* 23 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
-      /* 24 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
-      /* 25 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
+      /* 23 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
+      /* 24 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
+      /* 25 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
+      /* 26 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
+      /* 27 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
     );
   }
 
@@ -790,27 +821,53 @@ export async function executeMarketingQueries(
     pipeline_spike: detectSpike(results[11].rows[0] ?? {}),
   };
 
-  // T003: Device & Country
-  const device_breakdown: MarketingDeviceBreakdown[] = (results[14].rows ?? [])
-    .filter((r: Row) => r.device != null)
-    .map((r: Row) => ({
-      device: String(r.device),
-      impressions: nonNegative(toNumber(r.impressions)),
-      clicks: nonNegative(toNumber(r.clicks)),
-      ctr: clamp(toNumber(r.ctr), 0, 1),
-    }));
+  // T003: Device & Country — prefer GA4 data (sessions/page_views), fall back to Search Console (impressions/clicks)
+  const ga4DeviceRows = results[14].rows ?? [];
+  const scDeviceRows = results[16].rows ?? [];
+  const useGA4Device = ga4DeviceRows.length > 0;
 
-  const country_breakdown: MarketingCountryBreakdown[] = (results[15].rows ?? [])
-    .filter((r: Row) => r.country != null)
-    .map((r: Row) => ({
-      country: String(r.country),
-      impressions: nonNegative(toNumber(r.impressions)),
-      clicks: nonNegative(toNumber(r.clicks)),
-      ctr: clamp(toNumber(r.ctr), 0, 1),
-    }));
+  const device_breakdown: MarketingDeviceBreakdown[] = useGA4Device
+    ? ga4DeviceRows
+        .filter((r: Row) => r.device != null)
+        .map((r: Row) => ({
+          device: String(r.device),
+          impressions: nonNegative(toNumber(r.sessions)),
+          clicks: nonNegative(toNumber(r.page_views)),
+          ctr: 0,
+        }))
+    : scDeviceRows
+        .filter((r: Row) => r.device != null)
+        .map((r: Row) => ({
+          device: String(r.device),
+          impressions: nonNegative(toNumber(r.impressions)),
+          clicks: nonNegative(toNumber(r.clicks)),
+          ctr: clamp(toNumber(r.ctr), 0, 1),
+        }));
 
-  // T004: Pipeline categories
-  const pipeline_categories: MarketingPipelineCategory[] = (results[16].rows ?? [])
+  const ga4CountryRows = results[15].rows ?? [];
+  const scCountryRows = results[17].rows ?? [];
+  const useGA4Country = ga4CountryRows.length > 0;
+
+  const country_breakdown: MarketingCountryBreakdown[] = useGA4Country
+    ? ga4CountryRows
+        .filter((r: Row) => r.country != null)
+        .map((r: Row) => ({
+          country: String(r.country),
+          impressions: nonNegative(toNumber(r.sessions)),
+          clicks: nonNegative(toNumber(r.page_views)),
+          ctr: 0,
+        }))
+    : scCountryRows
+        .filter((r: Row) => r.country != null)
+        .map((r: Row) => ({
+          country: String(r.country),
+          impressions: nonNegative(toNumber(r.impressions)),
+          clicks: nonNegative(toNumber(r.clicks)),
+          ctr: clamp(toNumber(r.ctr), 0, 1),
+        }));
+
+  // T004: Pipeline categories (index shifted +2 due to GA4 fallback queries)
+  const pipeline_categories: MarketingPipelineCategory[] = (results[18].rows ?? [])
     .filter((r: Row) => r.product_category != null)
     .map((r: Row) => ({
       product_category: String(r.product_category),
@@ -819,7 +876,7 @@ export async function executeMarketingQueries(
     }));
 
   // T005: Recent conversions
-  const recent_conversions: MarketingConversionEvent[] = (results[17].rows ?? [])
+  const recent_conversions: MarketingConversionEvent[] = (results[19].rows ?? [])
     .map((r: Row) => ({
       created_at: String(r.created_at ?? ''),
       product_category: String(r.product_category ?? 'Unknown'),
@@ -828,7 +885,7 @@ export async function executeMarketingQueries(
     }));
 
   // T006: SEO movers
-  const seo_movers: MarketingSEOQueryMover[] = (results[18].rows ?? [])
+  const seo_movers: MarketingSEOQueryMover[] = (results[20].rows ?? [])
     .filter((r: Row) => r.query != null)
     .map((r: Row) => ({
       query: String(r.query),
@@ -839,7 +896,7 @@ export async function executeMarketingQueries(
     }));
 
   // T007: Funnel
-  const funnel: MarketingFunnelStep[] = (results[19].rows ?? [])
+  const funnel: MarketingFunnelStep[] = (results[21].rows ?? [])
     .map((r: Row) => ({
       date: String(r.date ?? ''),
       page_views: nonNegative(toNumber(r.page_views)),
@@ -848,8 +905,8 @@ export async function executeMarketingQueries(
       pipeline_value_usd: nonNegative(toNumber(r.pipeline_value_usd)),
     }));
 
-  // T008: Pipeline health
-  const pipeline_health: MarketingPipelineHealth[] = (results[20].rows ?? [])
+  // T008: Pipeline health (index shifted +2 due to GA4 fallback queries)
+  const pipeline_health: MarketingPipelineHealth[] = (results[22].rows ?? [])
     .map((r: Row) => {
       const lastSuccess = r.last_success ? String(r.last_success) : null;
       const failureRate = clamp(toNumber(r.failure_rate_24h), 0, 1);
@@ -874,15 +931,15 @@ export async function executeMarketingQueries(
       };
     });
 
-  // Timeseries
+  // Timeseries (indices shifted +2 due to GA4 fallback queries)
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 21) {
+  if (opts.includeTimeseries && results.length > 23) {
     timeseries = {
-      sessions: mapTimeseries(results[21].rows),
-      submissions: mapTimeseries(results[22].rows),
-      pipeline_value_usd: mapTimeseries(results[23].rows),
-      impressions: mapTimeseries(results[24].rows),
-      clicks: mapTimeseries(results[25].rows),
+      sessions: mapTimeseries(results[23].rows),
+      submissions: mapTimeseries(results[24].rows),
+      pipeline_value_usd: mapTimeseries(results[25].rows),
+      impressions: mapTimeseries(results[26].rows),
+      clicks: mapTimeseries(results[27].rows),
     };
   }
 

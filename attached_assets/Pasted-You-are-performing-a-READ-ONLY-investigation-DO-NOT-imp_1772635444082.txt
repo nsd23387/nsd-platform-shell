@@ -1,0 +1,223 @@
+You are performing a READ-ONLY investigation.
+
+DO NOT implement fixes.
+DO NOT modify files.
+DO NOT create migrations.
+
+Your task is to determine why the SEO Revenue Intelligence dashboard is showing submissions and revenue for page "/" instead of the actual landing pages.
+
+We suspect the issue is related to cross-domain attribution between:
+
+Main website:
+https://neonsignsdepot.com
+
+Quote system:
+https://quotes.neonsignsdepot.com
+
+The dashboard screenshot indicates:
+
+SEO Revenue Intelligence
+Top Organic Revenue Page: /
+Submissions: 3
+Pipeline: $2,819
+Organic Clicks: 0
+
+This suggests that conversions are being recorded but the originating landing page is not being captured.
+
+Your goal is to determine exactly where attribution is being lost.
+
+--------------------------------
+
+INVESTIGATION AREAS
+
+--------------------------------
+
+1. Event Collection
+
+Locate where quote submission events are created.
+
+Search for:
+
+custom_quote_submit
+wholesale_quote_submit
+contact_submit
+generate_lead
+purchase
+
+Determine:
+
+• what payload fields are recorded
+• whether page_path is included
+• whether origin_page exists
+• whether referrer is captured
+• whether UTM parameters are captured
+
+Output example event payloads.
+
+--------------------------------
+
+2. raw_web_events Table
+
+Inspect the schema of:
+
+analytics.raw_web_events
+
+Report columns such as:
+
+page_path
+page_url
+referrer
+event_type
+event_data
+session_id
+traffic_source
+traffic_medium
+
+Run queries to inspect recent quote submissions.
+
+Example:
+
+SELECT
+  event_type,
+  page_path,
+  page_url,
+  event_data
+FROM analytics.raw_web_events
+WHERE event_type IN (
+  'custom_quote_submit',
+  'wholesale_quote_submit'
+)
+ORDER BY timestamp DESC
+LIMIT 20;
+
+Determine:
+
+• what page_path is stored
+• whether the page belongs to quotes.neonsignsdepot.com
+• whether the original page is preserved anywhere.
+
+--------------------------------
+
+3. Cross Domain Attribution
+
+Investigate whether any of the following mechanisms exist:
+
+• origin_page parameter
+• landing_page parameter
+• referrer capture
+• UTM propagation
+• first-touch cookie
+• session_id bridging
+
+Specifically determine whether the system passes context when navigating from:
+
+neonsignsdepot.com
+→
+quotes.neonsignsdepot.com
+
+If not, identify where that context is lost.
+
+--------------------------------
+
+4. Dashboard Query Logic
+
+Locate the SQL used for the SEO Revenue Intelligence dashboard.
+
+Likely candidates:
+
+analytics.metrics_page_engagement
+analytics.dashboard_pages
+analytics.pipeline_by_page
+analytics.metrics_search_console_page
+
+Determine how pipeline revenue is attributed to pages.
+
+Check whether the logic:
+
+• joins conversions to page_path
+• aggregates by landing page
+• uses fallback "/" when page_path is null
+
+--------------------------------
+
+5. Search Console Join
+
+Inspect:
+
+analytics.raw_search_console
+analytics.metrics_search_console_page
+analytics.metrics_search_console_query
+
+Confirm:
+
+• how organic clicks are tied to page URLs
+• whether joins rely on page_path matching.
+
+Determine if page mismatch (domain vs subdomain) prevents joins.
+
+--------------------------------
+
+6. Domain Normalization
+
+Check whether the system normalizes URLs such as:
+
+neonsignsdepot.com/page
+quotes.neonsignsdepot.com/page
+
+Determine if the analytics pipeline treats them as different domains.
+
+--------------------------------
+
+7. Evidence of Attribution Loss
+
+Produce examples showing:
+
+Landing page (SEO):
+/custom-neon-signs
+
+Conversion page recorded:
+quotes.neonsignsdepot.com
+
+Show a concrete example where:
+
+• organic click occurred
+• quote submission occurred
+• but attribution was not preserved.
+
+--------------------------------
+
+OUTPUT FORMAT
+
+Return a structured investigation report:
+
+1. Root Cause Analysis
+2. Where Attribution is Lost
+3. Evidence Queries
+4. Event Payload Examples
+5. SQL View Logic
+6. Domain Mismatch Findings
+7. Recommended Fix Approach (high level only, no implementation)
+
+--------------------------------
+
+CONSTRAINTS
+
+• Investigation only
+• No code changes
+• No migrations
+• No schema modifications
+• No new tables
+
+--------------------------------
+
+GOAL
+
+Identify precisely why SEO landing pages are collapsing to "/" in the SEO Revenue dashboard and whether the root cause is:
+
+A) Cross-domain navigation to quotes.neonsignsdepot.com  
+B) Missing origin_page context in events  
+C) SQL attribution fallback logic  
+D) Domain mismatch between search console and web events  
+E) Combination of the above
+
+Return the full diagnostic report.
