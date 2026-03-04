@@ -1,0 +1,166 @@
+<script>
+/**
+ * NSD Universal Event Tracker — GTM Custom HTML Tag
+ *
+ * Attach to ALL relevant triggers. This single tag handles every event type
+ * and sends it to the NSD analytics ingestion endpoint with origin_page
+ * attribution and ecommerce data when available.
+ *
+ * Triggers to attach (use existing triggers — do NOT create new ones):
+ *   - neon form submission
+ *   - contact form
+ *   - become a partner form submit
+ *   - get a channel letter quote
+ *   - wholesale quote form submit
+ *   - purchase
+ *   - add to cart
+ *   - begin checkout
+ *   - view cart
+ *   - view item
+ *   - click on mail
+ *   - click on ph
+ */
+(function () {
+  var INGEST_URL = 'https://analytics.neonsignsdepot.com/api/ingest/web-event';
+
+  var EVENT_MAP = {
+    'custom-neon-quote_submit': 'conversion',
+    'add_to_cart':              'add_to_cart',
+    'begin_checkout':           'begin_checkout',
+    'purchase':                 'purchase',
+    'view_item':                'view_item',
+    'view_cart':                'view_cart',
+    'form_submit':              'form_submit',
+    'gtm.linkClick':            'click'
+  };
+
+  function getParam(name) {
+    try {
+      return new URL(window.location.href).searchParams.get(name) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getSessionId() {
+    var key = '_nsd_sid';
+    var sid = sessionStorage.getItem(key);
+    if (!sid) {
+      sid = 'ses_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+      sessionStorage.setItem(key, sid);
+    }
+    return sid;
+  }
+
+  function getVisitorId() {
+    var key = '_nsd_vid';
+    var vid = localStorage.getItem(key);
+    if (!vid) {
+      vid = 'vis_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+      localStorage.setItem(key, vid);
+    }
+    return vid;
+  }
+
+  function getDLModel() {
+    try {
+      var ids = Object.keys(window.google_tag_manager || {});
+      for (var i = 0; i < ids.length; i++) {
+        if (ids[i].indexOf('GTM-') === 0) {
+          var gtm = window.google_tag_manager[ids[i]];
+          if (gtm && gtm.dataLayer) return gtm.dataLayer;
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function getFromModel(model, key) {
+    try { return model ? model.get(key) : null; } catch(e) { return null; }
+  }
+
+  var model = getDLModel();
+  var rawEvent = getFromModel(model, 'event') || '';
+  var eventType = EVENT_MAP[rawEvent] || rawEvent || 'unknown';
+
+  var formId = getFromModel(model, 'form id') || getFromModel(model, 'gtm.elementId') || null;
+  if (eventType === 'form_submit' && formId) {
+    var formMap = {
+      '4157671': 'partner_form_submit',
+      '4157710': 'channel_letter_quote',
+      '4157680': 'wholesale_quote_submit'
+    };
+    eventType = formMap[String(formId)] || 'form_submit';
+  }
+  if (eventType === 'form_submit' && window.location.pathname.indexOf('/contact') === 0) {
+    eventType = 'contact_form_submit';
+  }
+
+  var clickUrl = getFromModel(model, 'gtm.elementUrl') || '';
+  if (eventType === 'click') {
+    if (clickUrl.indexOf('mailto:') === 0) eventType = 'click_email';
+    else if (clickUrl.indexOf('tel:') === 0) eventType = 'click_phone';
+  }
+
+  if (eventType === 'conversion') return;
+
+  var originPage = getParam('origin_page');
+  var ecommerce = getFromModel(model, 'ecommerce') || {};
+  var items = ecommerce.items || [];
+  var firstItem = items[0] || {};
+
+  var eventData = {
+    submission_source: window.location.hostname,
+    raw_event: rawEvent
+  };
+
+  if (eventType === 'purchase') {
+    eventData.transaction_id = ecommerce.transaction_id || null;
+    eventData.preliminary_price = Math.round((ecommerce.value || 0) * 100);
+    eventData.currency = ecommerce.currency || 'USD';
+    eventData.item_count = items.length;
+    eventData.product_category = firstItem.item_category || firstItem.item_name || 'Unknown';
+  } else if (eventType === 'add_to_cart' || eventType === 'view_item' || eventType === 'view_cart' || eventType === 'begin_checkout') {
+    eventData.preliminary_price = Math.round((ecommerce.value || firstItem.price || 0) * 100);
+    eventData.currency = ecommerce.currency || 'USD';
+    eventData.item_count = items.length;
+    eventData.item_name = firstItem.item_name || null;
+    eventData.item_id = firstItem.item_id || null;
+    eventData.product_category = firstItem.item_category || 'Unknown';
+  } else if (eventType === 'click_email') {
+    eventData.click_target = clickUrl.replace('mailto:', '');
+  } else if (eventType === 'click_phone') {
+    eventData.click_target = clickUrl.replace('tel:', '');
+  } else if (eventType.indexOf('form') >= 0 || eventType.indexOf('quote') >= 0 || eventType.indexOf('partner') >= 0) {
+    eventData.form_id = formId;
+    var quoteId = getFromModel(model, 'quote_id');
+    var quoteType = getFromModel(model, 'quote_type');
+    var quoteValue = getFromModel(model, 'quote_value');
+    if (quoteId) eventData.quote_id = quoteId;
+    if (quoteType) {
+      eventData.quote_type = quoteType;
+      eventData.product_category = quoteType;
+    }
+    if (quoteValue) eventData.preliminary_price = Math.round(quoteValue * 100);
+  }
+
+  var payload = {
+    event_type: eventType,
+    page_url: window.location.origin + window.location.pathname,
+    visitor_id: getVisitorId(),
+    session_id: getSessionId(),
+    origin_page: originPage,
+    referrer: document.referrer || null,
+    user_agent: navigator.userAgent,
+    event_data: eventData
+  };
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', INGEST_URL, true);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.onerror = function() {
+    if (window.console) console.warn('[NSD Analytics] XHR failed for', eventType);
+  };
+  xhr.send(JSON.stringify(payload));
+})();
+</script>
