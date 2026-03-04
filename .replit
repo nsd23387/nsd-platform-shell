@@ -42,3 +42,8 @@ build = ["npm", "run", "build"]
 
 [userenv.development]
 SYNC_SECRET = "dev-sync-secret"
+
+[userenv.shared]
+GOOGLE_ADS_BQ_PROJECT_ID = "nsd-marketing-analytics"
+GOOGLE_ADS_BQ_DATASET = "google_ads_data"
+GOOGLE_ADS_BQ_CUSTOMER_ID = "6999519966"
