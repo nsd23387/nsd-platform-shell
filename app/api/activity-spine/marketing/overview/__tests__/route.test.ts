@@ -31,6 +31,7 @@ function stubEmpty() {
     if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('generate_series') || sql.includes('metrics_search_console_query')) {
       return Promise.resolve({ rows: [] });
     }
+    if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
     if (sql.includes('raw_search_console')) return Promise.resolve({ rows: [] });
     if (sql.includes('pipeline_by_category')) return Promise.resolve({ rows: [] });
     if (sql.includes('conversion_events')) return Promise.resolve({ rows: [] });
@@ -44,6 +45,7 @@ function stubEmpty() {
 
 function stubWithData() {
   mockQuery.mockImplementation((sql: string, params?: unknown[]) => {
+    if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
     if (sql.includes('MAX(') && sql.includes('engagement_last_date')) return Promise.resolve({ rows: [{ engagement_last_date: '2026-02-28', search_console_last_date: '2026-02-27', conversion_last_date: '2026-02-28' }] });
     if (sql.includes('generate_series') && sql.includes('sessions')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '100' }, { date: '2026-02-27', value: '90' }] });
     if (sql.includes('generate_series') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '5' }] });
@@ -106,6 +108,7 @@ function stubWithData() {
 
 function stubAnomalySpike() {
   mockQuery.mockImplementation((sql: string) => {
+    if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
     if (sql.includes('STDDEV') && sql.includes('sessions')) return Promise.resolve({ rows: [{ n: 10, mean: 100, stddev: 10, latest_val: 250 }] });
     if (sql.includes('STDDEV') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ n: 10, mean: 5, stddev: 1, latest_val: 20 }] });
     if (sql.includes('STDDEV') && sql.includes('total_pipeline_value_usd')) return Promise.resolve({ rows: [{ n: 10, mean: 1000, stddev: 100, latest_val: 5000 }] });
@@ -119,6 +122,7 @@ function stubAnomalySpike() {
 
 function stubNegativeAndNaN() {
   mockQuery.mockImplementation((sql: string) => {
+    if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
     if (sql.includes('metrics_page_engagement_daily') && !sql.includes('FULL OUTER') && !sql.includes('STDDEV') && !sql.includes('generate_series')) return Promise.resolve({ rows: [{ sessions: '-5', page_views: 'NaN', bounce_rate: '1.5', avg_time_on_page_seconds: '-10' }] });
     if (sql.includes('conversion_metrics_daily') && !sql.includes('STDDEV') && !sql.includes('generate_series')) return Promise.resolve({ rows: [{ total_submissions: 'Infinity', total_pipeline_value_usd: null }] });
     if (sql.includes('metrics_search_console_page') && !sql.includes('FULL OUTER') && !sql.includes('STDDEV')) return Promise.resolve({ rows: [{ organic_clicks: '-1', impressions: undefined, avg_position: '-3' }] });
@@ -611,6 +615,7 @@ describe('T003: device & country breakdown', () => {
 
   it('filters null device rows', async () => {
     mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
       if (sql.includes('raw_search_console') && sql.includes('device')) return Promise.resolve({ rows: [{ device: null, impressions: '10', clicks: '0', ctr: '0' }, { device: 'DESKTOP', impressions: '100', clicks: '1', ctr: '0.01' }] });
       if (sql.includes('raw_search_console')) return Promise.resolve({ rows: [] });
       if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
@@ -627,6 +632,7 @@ describe('T003: device & country breakdown', () => {
 
   it('clamps CTR values to [0, 1]', async () => {
     mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
       if (sql.includes('raw_search_console') && sql.includes('device')) return Promise.resolve({ rows: [{ device: 'DESKTOP', impressions: '100', clicks: '5', ctr: '1.5' }] });
       if (sql.includes('raw_search_console')) return Promise.resolve({ rows: [] });
       if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });

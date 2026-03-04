@@ -93,14 +93,28 @@ The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics vi
 - **Ingestion Endpoint**: `POST /api/ingest/web-event` — Accepts `origin_page`, `origin_url`, or `landing_page` fields, normalizes to a canonical path, and stores in `event_data.landing_page`. This is the only write-path for `analytics.raw_web_events` in this repo.
 - **Normalization Utility**: `lib/normalize-landing-page.ts` — `normalizeLandingPage()` and `normalizeToPath()` functions. Priority: `origin_page > landing_page > origin_url`. Strips protocol+domain, query params; ensures trailing slash.
 
+**GA4 Data API Integration:**
+- **Purpose**: Populates `analytics.metrics_page_engagement_daily` (sessions, page_views, bounce_rate, avg_time_on_page, scroll_depth) and `analytics.raw_ga4_events` (funnel events, device/country summaries) by pulling from the GA4 Data API.
+- **Sync Service**: `services/ga4Sync.ts` — Three sync functions: `syncPageEngagement()` (upsert to engagement table), `syncGA4Events()` (actionable events like purchase, add_to_cart, form submissions), `syncDeviceCountry()` (session summaries by device/country for Audience panel).
+- **Manual Trigger**: `POST /api/sync/ga4` — Protected by `SYNC_SECRET` bearer token. Accepts optional `{startDate, endDate}`, defaults to last 30 days.
+- **Daily Cron**: `GET /api/cron/ga4-sync` — Vercel Cron endpoint, runs daily at 06:00 UTC, syncs last 3 days. Protected by `CRON_SECRET`.
+- **Vercel Config**: `vercel.json` — Cron schedule configuration.
+- **Audience Panel Fallback**: Device/country queries prefer GA4 `session_summary` events when available, falling back to Search Console data.
+- **Required Env Vars**: `GOOGLE_APPLICATION_CREDENTIALS_JSON` (service account JSON string), `GA4_PROPERTY_ID` (numeric GA4 property ID), `SYNC_SECRET` (for manual trigger auth), `CRON_SECRET` (for Vercel cron auth).
+- **GOVERNANCE**: Both sync endpoints are WRITE operations. They modify `analytics.metrics_page_engagement_daily`, `analytics.raw_ga4_events`, and `analytics.ingestion_runs`.
+
 **Key Files:**
-- `services/marketingQueries.ts` — All SQL queries and data mapping (PAGES_SQL uses path-based attribution)
+- `services/ga4Sync.ts` — GA4 Data API sync service (page engagement, events, device/country)
+- `services/marketingQueries.ts` — All SQL queries and data mapping (PAGES_SQL uses path-based attribution; device/country prefers GA4 with SC fallback)
+- `app/api/sync/ga4/route.ts` — Manual GA4 sync trigger endpoint
+- `app/api/cron/ga4-sync/route.ts` — Daily Vercel Cron sync endpoint
 - `app/api/activity-spine/marketing/overview/route.ts` — API route handler
 - `app/api/ingest/web-event/route.ts` — Event ingestion endpoint with landing page normalization
 - `lib/normalize-landing-page.ts` — URL-to-path normalization utility
 - `app/dashboard/marketing/page.tsx` — Page orchestrator (max-width container, per-panel loading)
 - `app/dashboard/marketing/components/` — All panel components (modernized with charts, animations, responsive grids)
 - `types/activity-spine.ts` — Type definitions
+- `vercel.json` — Vercel cron schedule configuration
 
 ## Testing
 - **Test runner**: vitest 3.x with vite 5.x (pinned for Node.js 18 CJS compatibility)
@@ -110,6 +124,7 @@ The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics vi
   - `app/api/ingest/web-event/__tests__/route.test.ts` — 13 tests for event ingestion endpoint (validation, landing page resolution, database write)
   - `lib/__tests__/normalize-landing-page.test.ts` — 25 tests for URL-to-path normalization
   - `app/sales-engine/lib/__tests__/read-only-guard.test.ts` — 29 tests for read-only guard
+  - `services/__tests__/ga4Sync.test.ts` — 16 tests for GA4 Data API sync service (page engagement, events, device/country, ingestion runs)
 - **Run tests**: `npx vitest run`
 - **Note**: vitest uses `// @vitest-environment node` directive in API test files; vitest.config.ts defaults to `environment: 'node'`
 
