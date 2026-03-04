@@ -1,0 +1,79 @@
+<script>
+/**
+ * NSD Quote Attribution — GTM Custom HTML Tag
+ *
+ * Trigger: Custom Event — custom-neon-quote_submit
+ *
+ * Reads origin_page from the URL query string (set by the main site linker)
+ * and sends a conversion event to the NSD Sales Engine ingestion endpoint
+ * so revenue is attributed to the originating SEO landing page.
+ */
+(function () {
+  var INGEST_URL = 'https://nsd-platform-shell.replit.app/api/ingest/web-event';
+
+  function getParam(name) {
+    try {
+      var url = new URL(window.location.href);
+      return url.searchParams.get(name) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getSessionId() {
+    var key = '_nsd_sid';
+    var sid = sessionStorage.getItem(key);
+    if (!sid) {
+      sid = 'ses_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+      sessionStorage.setItem(key, sid);
+    }
+    return sid;
+  }
+
+  function getVisitorId() {
+    var key = '_nsd_vid';
+    var vid = localStorage.getItem(key);
+    if (!vid) {
+      vid = 'vis_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+      localStorage.setItem(key, vid);
+    }
+    return vid;
+  }
+
+  var dl = window.dataLayer || [];
+  var lastEvent = null;
+  for (var i = dl.length - 1; i >= 0; i--) {
+    if (dl[i] && dl[i].event === 'custom-neon-quote_submit') {
+      lastEvent = dl[i];
+      break;
+    }
+  }
+
+  if (!lastEvent) return;
+
+  var originPage = getParam('origin_page');
+
+  var payload = {
+    event_type: 'conversion',
+    page_url: window.location.origin + window.location.pathname,
+    visitor_id: getVisitorId(),
+    session_id: getSessionId(),
+    origin_page: originPage,
+    referrer: document.referrer || null,
+    user_agent: navigator.userAgent,
+    event_data: {
+      quote_id: lastEvent.quote_id || null,
+      quote_type: lastEvent.quote_type || null,
+      preliminary_price: Math.round((lastEvent.quote_value || 0) * 100),
+      product_category: lastEvent.quote_type || 'Unknown',
+      submission_source: 'quote.neonsignsdepot.com',
+      is_free_campaign: lastEvent.is_free_campaign || false
+    }
+  };
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', INGEST_URL, true);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.send(JSON.stringify(payload));
+})();
+</script>
