@@ -225,16 +225,22 @@ export interface MarketingAnomalies {
 
 export interface MarketingDeviceBreakdown {
   device: string;
+  sessions: number;
+  page_views: number;
   impressions: number;
   clicks: number;
   ctr: number;
+  source: 'ga4' | 'search_console';
 }
 
 export interface MarketingCountryBreakdown {
   country: string;
+  sessions: number;
+  page_views: number;
   impressions: number;
   clicks: number;
   ctr: number;
+  source: 'ga4' | 'search_console';
 }
 
 export interface MarketingPipelineCategory {

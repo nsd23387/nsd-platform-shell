@@ -1,7 +1,7 @@
 # M67 Sales Engine UI
 
 ## Overview
-The Sales Engine UI is a governed, read-only interface for campaign observability and approval. Its primary goal is to provide situational awareness regarding campaign lifecycles, readiness, and outcomes by observing the M60 Campaign Management APIs. The UI focuses on displaying information and explicitly avoids initiating execution, approval, sourcing, or governance transitions. The only exception is campaign creation, where campaigns are initialized in a `DRAFT` governance state. The project emphasizes a governance-first architecture, ensuring truthfulness, explicit handling of `UNKNOWN` states, and providing clear, outcome-oriented execution transparency to users.
+The Sales Engine UI is a governed, read-only interface designed for campaign observability and approval within the M60 Campaign Management system. Its core purpose is to provide situational awareness regarding campaign lifecycles, readiness, and outcomes by observing the M60 Campaign Management APIs. While primarily read-only, it allows for campaign creation, initializing them in a `DRAFT` governance state. The project emphasizes a governance-first architecture, focusing on data truthfulness, explicit handling of `UNKNOWN` states, and transparent, outcome-oriented execution.
 
 ## User Preferences
 I prefer detailed explanations.
@@ -9,126 +9,43 @@ Do not make changes to the folder `docs/`.
 Do not remove governance lock comments.
 
 ## System Architecture
-The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, running on Node.js 20 with npm. It utilizes NSD Brand Tokens for its design system.
-
-The architecture enforces a read-only principle, prioritizing observation over control. All API interactions, except for the `campaign-create` endpoint, are read-only proxies to the M60 API.
+The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, running on Node.js 20 with npm. It integrates NSD Brand Tokens for its design system. The architecture is fundamentally read-only, with all API interactions, except for campaign creation, acting as read-only proxies to the M60 API.
 
 **UI/UX Design:**
-- **Color Scheme**: Adheres strictly to Neon Signs Depot brand colors (magenta, indigo, violet), avoiding yellow, green, or red.
-- **Campaign Creation Wizard**: Features a mandatory vertical left-hand navigation stepper for visibility and independent navigation.
-- **Form Fields Governance**: Strictly defines required fields and forbids others to maintain data integrity.
-- **Governance Components**: Includes `ReadOnlyBanner`, `CampaignStateBadge`, `ExecutionReadinessPanel`, `ConfidenceBadge`, `ProvenancePill`, and `LearningSignalsPanel` for visual communication of governance and data quality.
-- **Execution Explainability Components**: Features `ExecutionConfidenceBadge`, `ExecutionTimeline`, `NextStepCard`, `ExecutionTooltip`, and `ExecutionExplainabilityPanel` for outcome-oriented execution transparency.
+- **Color Scheme**: Adheres to Neon Signs Depot brand colors (magenta, indigo, violet).
+- **Campaign Creation Wizard**: Features a mandatory vertical left-hand navigation stepper.
+- **Form Fields Governance**: Enforces required fields for data integrity.
+- **Governance Components**: Includes `ReadOnlyBanner`, `CampaignStateBadge`, `ExecutionReadinessPanel`, `ConfidenceBadge`, `ProvenancePill`, and `LearningSignalsPanel` for clear communication of governance and data quality.
+- **Execution Explainability**: Features `ExecutionConfidenceBadge`, `ExecutionTimeline`, `NextStepCard`, `ExecutionTooltip`, and `ExecutionExplainabilityPanel` for transparent execution outcomes.
 
 **Technical Implementations:**
-- **Environment Variables**: Uses `NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL` (client-side), `SALES_ENGINE_API_BASE_URL` (server-side proxy), and `NEXT_PUBLIC_ODS_API_URL`.
-- **Governance States**: UI-level governance states (`DRAFT`, `PENDING_REVIEW`, `APPROVED_READY`, `BLOCKED`, `EXECUTED_READ_ONLY`, `ARCHIVED`) represent the human approval lifecycle, distinct from backend runtime states.
-- **Campaign Creation API (`/api/campaign-create`)**: This is a control-plane write operation that persists a new campaign in a `draft` status to Supabase.
-- **Read-Only Mode**: Deployments can operate in a strict read-only mode, disabling all API calls and modifications, indicated by a global banner.
-- **Execution Explainability**: Replaces ambiguous execution indicators with clear, outcome-oriented states, mapping backend conditions to UI meanings without inference.
+- **Environment Variables**: Uses `NEXT_PUBLIC_SALES_ENGINE_API_BASE_URL`, `SALES_ENGINE_API_BASE_URL`, and `NEXT_PUBLIC_ODS_API_URL`.
+- **Governance States**: UI-level governance states (`DRAFT`, `PENDING_REVIEW`, `APPROVED_READY`, `BLOCKED`, `EXECUTED_READ_ONLY`, `ARCHIVED`) reflect the human approval lifecycle.
+- **Campaign Creation API (`/api/campaign-create`)**: This is a control-plane write operation that persists new campaigns in a `draft` status to Supabase.
+- **Read-Only Mode**: Deployments can operate in a strict read-only mode, disabling all modifications, indicated by a global banner.
+- **Execution Explainability**: Replaces ambiguous execution indicators with clear, outcome-oriented states.
 - **Run State Reconciliation**: A centralized `resolveCanonicalRunState()` function provides a single source of truth for execution states.
-- **Run Staleness & Active Run Resolution**: A `resolveActiveRun.ts` utility handles run selection logic, considering staleness thresholds to prevent "Running" status for stalled executions.
-- **Live Execution Observability**: Utilizes a `useExecutionPolling` hook for live updates during active execution, stopping automatically on terminal states.
-- **UI Hardening for Future Execution Stages**: Uses `CANONICAL_STAGE_CONFIG` for all execution stages, ensuring components are stage-agnostic and handle unknown stages gracefully for extensibility.
-- **ENM Governance Lock**: The Execution Narrative Mapper (ENM) is the sole interpreter of execution state. All execution-aware UI components must consume `ExecutionNarrative` output only.
-- **Canonical Execution Narrative Mapper (ENM) Implementation**: Implements truthful, event-driven execution storytelling with canonical mapping rules for states like `IDLE`, `QUEUED`, `RUNNING`, `STALLED`, `COMPLETED`, `FAILED`.
+- **Run Staleness & Active Run Resolution**: A `resolveActiveRun.ts` utility handles run selection logic, including staleness thresholds.
+- **Live Execution Observability**: Utilizes a `useExecutionPolling` hook for live updates during active execution.
+- **UI Hardening for Future Execution Stages**: Uses `CANONICAL_STAGE_CONFIG` for all execution stages, ensuring components are stage-agnostic and handle unknown stages gracefully.
+- **ENM Governance Lock**: The Execution Narrative Mapper (ENM) is the sole interpreter of execution state, ensuring all execution-aware UI components consume `ExecutionNarrative` output only.
+- **Canonical Execution Narrative Mapper (ENM) Implementation**: Provides truthful, event-driven execution storytelling with canonical mapping rules for states like `IDLE`, `QUEUED`, `RUNNING`, `STALLED`, `COMPLETED`, `FAILED`.
 
-## Marketing Dashboard
-The Marketing Dashboard (`/dashboard/marketing`) is a comprehensive analytics view powered by live data from the Supabase `analytics` schema. It renders 8 panel categories:
-
-**Data Sources:**
-- `raw_web_events` (page views, conversions) — active, 1,039 page_view events, used as fallback for page-level view counts
-- `raw_search_console` (SEO queries, pages, device/country) — active, 7-day window
-- `raw_ga4_events`, `raw_google_ads`, `raw_clarity_sessions` — empty (pipelines not connected)
-- `metrics_page_engagement_daily` — empty (GA4 session aggregation pipeline not connected); Pages query falls back to `raw_web_events` page_view counts
-- `dashboard_pages` — 617 rows, VIEW groups by raw `page_url`; **no longer used by PAGES_SQL** (replaced by `conv_attributed` CTE for path-based attribution)
-- `metrics_search_console_page` — 98 rows, lifetime aggregated (no date column), provides clicks/impressions per page
-
-**Panels:**
-1. **KPI Overview** — Pipeline Value, Submissions, Organic Clicks, Impressions, Sessions, Page Views (with funnel fallback)
-2. **Conversion Funnel** — Page Views → Submissions → Pipeline Value with daily breakdown
-3. **Sources** — Pipeline and submissions by canonical source
-4. **Pipeline by Category** — Product type breakdown (from `pipeline_by_category` view)
-5. **Recent Conversions** — Chronological feed of quote submissions (from `conversion_events`)
-6. **Audience** — Device breakdown (Desktop/Mobile/Tablet) and Top Countries (from `raw_search_console` payload)
-7. **SEO Intelligence** — Top queries with Rising/Falling movers detection (from `metrics_search_console_query_daily`)
-8. **Data Pipeline Health** — Ingestion status per source (from `ingestion_runs`)
-9. **Timeseries** — Sessions, Submissions, Pipeline, Impressions, Clicks (toggle-enabled)
-
-**Database Connection:** Uses `SUPABASE_DATABASE_URL || DATABASE_URL` with always-on SSL (`rejectUnauthorized: false`). All queries are date-range filtered via `$1/$2` params.
-
-**Chart Library (Recharts):**
-- `components/dashboard/charts/` — Shared chart wrappers: `AreaLineChart`, `DonutChart`, `BarChart`, `Sparkline`
-- All charts use NSD brand color tokens, `ResponsiveContainer`, custom tooltips
-- Timeseries panel uses `AreaLineChart` (replaced hand-rolled SVG)
-- Audience panel uses `DonutChart` for device breakdown
-- Sources + Pipeline Category panels use `BarChart` + `DonutChart`
-
-**Responsive & Animation System:**
-- `design/tokens/breakpoints.ts` — Breakpoint constants (sm: 640, md: 768, lg: 1024, xl: 1280)
-- `design/tokens/animations.ts` — Keyframe definitions (shimmer, fadeIn, pulse, growWidth, countUp)
-- `hooks/useMediaQuery.ts` — `useMediaQuery` + `useBreakpoint` hooks
-- `components/dashboard/DashboardGrid.tsx` — Supports responsive column objects `{sm, md, lg}`
-- `components/dashboard/SkeletonCard.tsx` — Per-panel shimmer skeleton loading
-
-**DataTable (shared):**
-- `app/sales-engine/components/ui/DataTable.tsx` — Theme-aware data table with built-in pagination and column sorting
-- Uses `useThemeColors()` for dark mode compatibility (backgrounds, text, borders)
-- Pagination: configurable `pageSize` (default 10), shows "X–Y of Z" info and page buttons when data exceeds page size
-- Sorting: columns are sortable by default if their `key` exists in row data; use `sortable: false` to opt out; `defaultSortKey` and `defaultSortDir` props set initial sort
-- Used by: MarketingPagesPerformancePanel (sort: pipeline_value_usd desc), MarketingSeoIntelligencePanel (sort: impressions desc), MarketingSeoRevenuePanel (sort: pipeline_value_usd desc)
-
-**Dark Mode:**
-- `contexts/ThemeContext.tsx` — `ThemeProvider` with `useTheme()` hook (mode, toggle, setMode). Persists to localStorage (`nsd-theme-mode`). Sets `data-theme` attribute on `<html>` element.
-- `design/tokens/theme-colors.ts` — `getThemeColors(mode)` returns `ThemeColors` object with light/dark variants of functional tokens (background, text, border, semantic, trendColors, statusColors, cardVariants, chartColors).
-- `hooks/useThemeColors.ts` — `useThemeColors()` hook combining `useTheme()` + `getThemeColors()`. Used by all dashboard components.
-- Brand colors (`violet`, `indigo`, `magenta` from `design/tokens/colors.ts`) are NOT theme-dependent and remain as direct imports.
-- Theme toggle button in sidebar (`app/dashboard/layout.tsx`), data-testid: `button-theme-toggle`.
-- `app/globals.css` — CSS overrides for `[data-theme="dark"]` (body, headings, scrollbars).
-- All shared dashboard components (`DashboardCard`, `DashboardSection`, `EmptyStateCard`, `SkeletonCard`), chart components (`AreaLineChart`, `DonutChart`, `BarChart`), and all 13 marketing panel components use `useThemeColors()`.
-
-**SEO Revenue Attribution (Cross-Domain Fix):**
-- **Problem**: Conversions on `quote.neonsignsdepot.com` had `landing_page=null`, `referrer=null`. The `dashboard_pages` VIEW grouped by raw `page_url`, attributing all $2,819 pipeline to the quote subdomain instead of originating SEO pages. Search Console join produced clicks=0 due to domain mismatch.
-- **Solution**: Path-based normalization across all PAGES_SQL CTEs. All URLs are stripped to canonical paths (e.g., `/custom-neon-signs/`) via `regexp_replace(page_url, '^https?://[^/]*', '')`. The `dashboard_norm` CTE (from `dashboard_pages` VIEW) was replaced by `conv_attributed` CTE that reads `raw_web_events` directly and uses `COALESCE(NULLIF(event_data->>'landing_page', ''), path-from-page_url)` for attribution.
-- **Ingestion Endpoint**: `POST /api/ingest/web-event` — Accepts `origin_page`, `origin_url`, or `landing_page` fields, normalizes to a canonical path, and stores in `event_data.landing_page`. This is the only write-path for `analytics.raw_web_events` in this repo.
-- **Normalization Utility**: `lib/normalize-landing-page.ts` — `normalizeLandingPage()` and `normalizeToPath()` functions. Priority: `origin_page > landing_page > origin_url`. Strips protocol+domain, query params; ensures trailing slash.
-
-**GA4 Data API Integration:**
-- **Purpose**: Populates `analytics.metrics_page_engagement_daily` (sessions, page_views, bounce_rate, avg_time_on_page, scroll_depth) and `analytics.raw_ga4_events` (funnel events, device/country summaries) by pulling from the GA4 Data API.
-- **Sync Service**: `services/ga4Sync.ts` — Three sync functions: `syncPageEngagement()` (upsert to engagement table), `syncGA4Events()` (actionable events like purchase, add_to_cart, form submissions), `syncDeviceCountry()` (session summaries by device/country for Audience panel).
-- **Manual Trigger**: `POST /api/sync/ga4` — Protected by `SYNC_SECRET` bearer token. Accepts optional `{startDate, endDate}`, defaults to last 30 days.
-- **Daily Cron**: `GET /api/cron/ga4-sync` — Vercel Cron endpoint, runs daily at 06:00 UTC, syncs last 3 days. Protected by `CRON_SECRET`.
-- **Vercel Config**: `vercel.json` — Cron schedule configuration.
-- **Audience Panel Fallback**: Device/country queries prefer GA4 `session_summary` events when available, falling back to Search Console data.
-- **Required Env Vars**: `GOOGLE_APPLICATION_CREDENTIALS_JSON` (service account JSON string), `GA4_PROPERTY_ID` (numeric GA4 property ID), `SYNC_SECRET` (for manual trigger auth), `CRON_SECRET` (for Vercel cron auth).
-- **GOVERNANCE**: Both sync endpoints are WRITE operations. They modify `analytics.metrics_page_engagement_daily`, `analytics.raw_ga4_events`, and `analytics.ingestion_runs`.
-
-**Key Files:**
-- `services/ga4Sync.ts` — GA4 Data API sync service (page engagement, events, device/country)
-- `services/marketingQueries.ts` — All SQL queries and data mapping (PAGES_SQL uses path-based attribution; device/country prefers GA4 with SC fallback)
-- `app/api/sync/ga4/route.ts` — Manual GA4 sync trigger endpoint
-- `app/api/cron/ga4-sync/route.ts` — Daily Vercel Cron sync endpoint
-- `app/api/activity-spine/marketing/overview/route.ts` — API route handler
-- `app/api/ingest/web-event/route.ts` — Event ingestion endpoint with landing page normalization
-- `lib/normalize-landing-page.ts` — URL-to-path normalization utility
-- `app/dashboard/marketing/page.tsx` — Page orchestrator (max-width container, per-panel loading)
-- `app/dashboard/marketing/components/` — All panel components (modernized with charts, animations, responsive grids)
-- `types/activity-spine.ts` — Type definitions
-- `vercel.json` — Vercel cron schedule configuration
-
-## Testing
-- **Test runner**: vitest 3.x with vite 5.x (pinned for Node.js 18 CJS compatibility)
-- **Test environment**: `node` (API route tests don't need jsdom)
-- **Test files**:
-  - `app/api/activity-spine/marketing/overview/__tests__/route.test.ts` — 109 tests covering T001-T009 (T009: SEO Revenue Attribution path-based join)
-  - `app/api/ingest/web-event/__tests__/route.test.ts` — 13 tests for event ingestion endpoint (validation, landing page resolution, database write)
-  - `lib/__tests__/normalize-landing-page.test.ts` — 25 tests for URL-to-path normalization
-  - `app/sales-engine/lib/__tests__/read-only-guard.test.ts` — 29 tests for read-only guard
-  - `services/__tests__/ga4Sync.test.ts` — 16 tests for GA4 Data API sync service (page engagement, events, device/country, ingestion runs)
-- **Run tests**: `npx vitest run`
-- **Note**: vitest uses `// @vitest-environment node` directive in API test files; vitest.config.ts defaults to `environment: 'node'`
+**Marketing Dashboard (`/dashboard/marketing`):**
+- **Purpose**: Comprehensive analytics view powered by live data from the Supabase `analytics` schema.
+- **Data Sources**: Primarily `raw_web_events`, `raw_search_console`, `raw_ga4_events`, `metrics_page_engagement_daily`.
+- **Panels**: Includes KPI Overview, Conversion Funnel, Sources, Pipeline by Category, Recent Conversions, Audience, SEO Intelligence, Data Pipeline Health, and Timeseries.
+- **Database Connection**: Uses `SUPABASE_DATABASE_URL || DATABASE_URL` with SSL.
+- **Chart Library**: Uses Recharts with NSD brand color tokens, `ResponsiveContainer`, and custom tooltips.
+- **Responsive Design**: Utilizes breakpoint constants, animation keyframe definitions, `useMediaQuery` hooks, and a responsive `DashboardGrid`.
+- **DataTable**: A shared, theme-aware data table component with pagination and column sorting.
+- **Dark Mode**: Implemented via `ThemeContext`, persisting preferences to localStorage, and using `data-theme` attribute on `<html>`. All dashboard components use `useThemeColors()` for theme compatibility.
+- **SEO Revenue Attribution (Cross-Domain Fix)**: Implements path-based normalization for URLs across all PAGES_SQL CTEs and in the `POST /api/ingest/web-event` endpoint to correctly attribute conversions.
+- **GA4 Data API Integration**: Populates `analytics.metrics_page_engagement_daily` and `analytics.raw_ga4_events` via `services/ga4Sync.ts`.
+  - **Sync Functions**: `syncPageEngagement()`, `syncGA4Events()`, `syncDeviceCountry()`.
+  - **Triggers**: Manual `POST /api/sync/ga4` and daily Vercel Cron `GET /api/cron/ga4-sync`. Both are write operations.
 
 ## External Dependencies
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.
 - **ODS API**: Used for bootstrap and identity services.
-- **Supabase**: Utilized for persistence of new `DRAFT` campaigns via the `/api/campaign-create` endpoint, campaign editing/duplication, and Marketing Dashboard analytics (via `analytics` schema).
+- **Supabase**: Utilized for persistence of new `DRAFT` campaigns, campaign editing/duplication, and Marketing Dashboard analytics via its `analytics` schema.
