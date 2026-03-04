@@ -1,0 +1,389 @@
+🧠 REPLIT PROMPT
+🎯 OBJECTIVE
+
+We are redesigning the /marketing dashboard inside Platform Shell to support two views:
+
+Operator View (tactical)
+
+Executive View (strategic)
+
+Before building anything new, perform a structured investigation of:
+
+Existing Supabase analytics schema
+
+Existing API endpoints
+
+Existing UI components
+
+Existing views/materialized views
+
+Data completeness for attribution (sessions → quotes → revenue)
+
+Then:
+
+Propose a redesigned modular dashboard architecture
+
+Identify missing data joins
+
+Identify missing metrics
+
+Propose new SQL views required
+
+Implement the dashboard in a dynamic, drill-down capable way
+
+This must follow governance-first architecture.
+
+🔎 PHASE 1 — INVESTIGATION (READ-ONLY)
+1️⃣ Inventory Existing Analytics Tables
+
+Run SQL to list all analytics-related tables and views:
+
+analytics.*
+
+public.*
+
+core.*
+
+activity.*
+
+Specifically look for:
+
+raw_web_events
+
+conversion_events
+
+campaign tables
+
+quotes table
+
+any attribution-related tables
+
+spend-related tables
+
+Produce:
+
+Inventory Report:
+- Table name
+- Schema
+- Row count
+- Key columns
+- Date column
+- Channel column (if exists)
+2️⃣ Identify Current Funnel Capability
+
+Determine whether we can currently derive:
+
+Sessions by channel
+
+Clicks by channel
+
+Quotes by channel
+
+Closed deals by channel
+
+Revenue by channel
+
+Spend by channel
+
+For each metric, answer:
+
+Available? (Yes/No)
+Source Table:
+Join Required?
+Missing Fields?
+3️⃣ Validate Attribution Chain
+
+We need to confirm the existence and integrity of:
+
+Session → Form Submit → Quote → Closed → Revenue
+
+Check:
+
+Does raw_web_events store session_id?
+
+Does quote record store source_channel?
+
+Is there a reliable join key?
+(email, session_id, utm, campaign_id, etc.)
+
+Produce:
+
+Attribution Integrity Assessment:
+- Fully linked
+- Partially linked
+- Broken
+
+Highlight gaps clearly.
+
+🧱 PHASE 2 — DATA MODEL DESIGN
+
+Based on investigation, design canonical read-only analytics views:
+
+Propose SQL definitions (do NOT execute yet):
+
+Required Views
+
+analytics.funnel_blended_view
+
+sessions
+
+clicks
+
+quotes
+
+closed_deals
+
+revenue
+
+click_to_quote
+
+close_rate
+
+revenue_per_quote
+
+analytics.channel_performance_view
+
+channel
+
+sessions
+
+clicks
+
+quotes
+
+closed
+
+revenue
+
+spend
+
+cac
+
+roas
+
+analytics.unit_economics_view
+
+gross_profit_per_sale
+
+break_even_cac
+
+blended_cac
+
+contribution_margin
+
+analytics.scale_forecast_view
+
+target_revenue_input
+
+required_quotes
+
+required_clicks
+
+required_spend
+
+Each must be:
+
+Read-only
+
+Derived only
+
+No writebacks
+
+Append-only safe
+
+Schema-aligned
+
+🖥 PHASE 3 — DASHBOARD REDESIGN
+
+Inside Platform Shell:
+
+Route:
+
+/marketing
+
+Tabs:
+
+Operator | Executive
+
+Must be:
+
+Fully dynamic
+
+Filterable by date range
+
+Filterable by channel
+
+Modular components
+
+Drill-down capable
+
+🔷 OPERATOR VIEW COMPONENTS
+
+Modules:
+
+Market Control Module
+
+Impression share
+
+Lost IS (budget)
+
+Lost IS (rank)
+
+CPC trend
+
+Funnel Module
+
+Visual funnel component
+
+Click → Quote
+
+Cost per Quote
+
+Close Rate
+
+Channel Contribution Table
+
+Sortable
+
+Expandable rows
+
+Drill into channel detail
+
+Unit Economics Panel
+
+CAC vs Break-even gauge
+
+Contribution margin
+
+Scale Readiness Panel
+
+Revenue target slider
+
+Auto-calc required quotes/clicks/spend
+
+🔷 EXECUTIVE VIEW COMPONENTS
+
+Modules:
+
+Revenue Summary
+
+Growth Trends
+
+Revenue by Channel
+
+CAC Trend
+
+Forecast Projection
+
+No impression share or CPC here.
+
+🧩 PHASE 4 — MODULAR ARCHITECTURE REQUIREMENTS
+
+Build UI using:
+
+Modular React components
+
+No hard-coded metrics
+
+All metrics pulled from analytics views
+
+Dynamic filter state (context provider)
+
+Query-driven rendering
+
+Component guidelines:
+
+Each module = isolated component
+
+Accepts filter props
+
+No direct DB queries inside components
+
+Use central data hook
+
+🛑 PHASE 5 — GAP REPORT
+
+After investigation, produce:
+
+DATA GAP REPORT
+
+Missing:
+- Spend by channel?
+- Reliable quote source?
+- Session-to-quote join?
+- Campaign-to-quote join?
+- Gross margin storage?
+- Closed timestamp?
+
+For each gap, propose:
+
+Required schema change
+
+Required migration
+
+Required data collection update
+
+Risk level
+
+Do NOT apply changes yet.
+Only propose.
+
+📊 PHASE 6 — PERFORMANCE & GOVERNANCE
+
+Ensure:
+
+No writes
+
+No lifecycle logic
+
+No duplication of business logic
+
+All calculations happen in SQL views
+
+UI remains presentation-only
+
+Adheres to read-model architecture
+
+🧠 FINAL DELIVERABLES REQUIRED
+
+Full investigation report
+
+Proposed SQL view definitions
+
+Gap analysis
+
+Proposed UI component tree
+
+Implementation plan (phased)
+
+Risk assessment
+
+Estimated implementation complexity
+
+Do not implement blindly.
+Investigate first.
+Report findings.
+Then propose architecture.
+Then implement modular dashboard.
+
+🎯 SUCCESS CRITERIA
+
+The final dashboard must:
+
+Support Operator and Executive modes
+
+Allow drill-down by channel
+
+Allow date filtering
+
+Allow scale modeling
+
+Be fully modular
+
+Be extensible for Meta/LinkedIn future
+
+Be attribution-safe
+
+Be performance-safe
+
+END PROMPT
