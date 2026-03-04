@@ -1,0 +1,54 @@
+You are Codex working in the NSD Marketing Data repo.
+
+Goal: Fix SEO Revenue Intelligence attribution by ensuring conversions on quote.neonsignsdepot.com are attributed to the originating neonsignsdepot.com landing page.
+
+Context (confirmed via investigation):
+- analytics.raw_web_events conversion events have:
+  - page_url = https://quote.neonsignsdepot.com
+  - event_data.landing_page = null
+  - event_data.utm_* = null
+  - event_data.referrer = null
+  - session_id has no continuity with main site
+- analytics.dashboard_pages groups by raw page_url, so all revenue collapses under quote.neonsignsdepot.com and Search Console joins show clicks = 0.
+
+Constraints:
+- Single PR / single commit if possible.
+- Keep schema stable (no migrations unless absolutely necessary).
+- Keep views read-only. No runtime write-backs.
+- Prefer path-based normalization for Search Console joins (domain-agnostic).
+- Do NOT weaken existing governance rules.
+
+Work items:
+
+1) Identify where the quote submission "conversion" web event is created/ingested.
+   - Find the code path that writes conversion events into analytics.raw_web_events.
+   - Confirm whether it reads request headers, query params, or event payload fields.
+
+2) Update conversion ingestion so that if the request contains any of:
+   - origin_page (path like /custom-neon-signs/)
+   - origin_url (full url)
+   - landing_page (existing field)
+   then event_data.landing_page is populated.
+   Rules:
+   - landing_page should be stored as a PATH (e.g. /custom-neon-signs/), not a full URL.
+   - If origin_url is provided, extract pathname + trailing slash normalization.
+   - If nothing is provided, keep it null (do not fabricate).
+
+3) Update analytics.dashboard_pages (or the SQL that powers the SEO Revenue Intelligence page aggregation)
+   so that:
+   - page views still aggregate by normalized page_url (or path)
+   - conversions aggregate by COALESCE(event_data->>'landing_page', page_url)
+   - expose a canonical page dimension that is PATH-based for joining to Search Console.
+   - Ensure the Search Console join uses path-only (e.g. /custom-neon-signs/) to avoid domain mismatch.
+
+4) Add tests:
+   - A unit/integration test that inserts a conversion event with origin_url or origin_page and verifies the stored event_data.landing_page is populated as path.
+   - A test that analytics.dashboard_pages (or equivalent view query) attributes conversion pipeline to landing_page path (not quote subdomain page_url) when present.
+   - A test that Search Console page rows join correctly when domains differ but paths match.
+
+Deliverables:
+- Code changes (ingestion + SQL view updates)
+- Tests passing
+- Short explanation in PR summary: why attribution was broken and how it is now preserved.
+
+Do not touch UI code. UI propagation will be done later in Cursor after backend correctness.
