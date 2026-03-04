@@ -5,8 +5,11 @@
  * Trigger: Custom Event — custom-neon-quote_submit
  *
  * Reads origin_page from the URL query string (set by the main site linker)
- * and sends a conversion event to the NSD Sales Engine ingestion endpoint
- * so revenue is attributed to the originating SEO landing page.
+ * and sends a conversion event to the NSD ingestion endpoint so revenue is
+ * attributed to the originating SEO landing page.
+ *
+ * Uses google_tag_manager event model to access dataLayer event properties
+ * reliably when the tag fires.
  */
 (function () {
   var INGEST_URL = 'https://analytics.neonsignsdepot.com/api/ingest/web-event';
@@ -40,16 +43,36 @@
     return vid;
   }
 
-  var dl = window.dataLayer || [];
-  var lastEvent = null;
-  for (var i = dl.length - 1; i >= 0; i--) {
-    if (dl[i] && dl[i].event === 'custom-neon-quote_submit') {
-      lastEvent = dl[i];
-      break;
+  var quoteId = null;
+  var quoteType = null;
+  var quoteValue = 0;
+  var isFreeCampaign = false;
+
+  try {
+    var gtmId = Object.keys(window.google_tag_manager || {}).filter(function(k) {
+      return k.indexOf('GTM-') === 0;
+    })[0];
+    if (gtmId && window.google_tag_manager[gtmId] && window.google_tag_manager[gtmId].dataLayer) {
+      var dlModel = window.google_tag_manager[gtmId].dataLayer;
+      quoteId = dlModel.get('quote_id') || null;
+      quoteType = dlModel.get('quote_type') || null;
+      quoteValue = dlModel.get('quote_value') || 0;
+      isFreeCampaign = dlModel.get('is_free_campaign') || false;
+    }
+  } catch (e) {}
+
+  if (!quoteId) {
+    var dl = window.dataLayer || [];
+    for (var i = dl.length - 1; i >= 0; i--) {
+      if (dl[i] && dl[i].event === 'custom-neon-quote_submit') {
+        quoteId = dl[i].quote_id || null;
+        quoteType = dl[i].quote_type || null;
+        quoteValue = dl[i].quote_value || 0;
+        isFreeCampaign = dl[i].is_free_campaign || false;
+        break;
+      }
     }
   }
-
-  if (!lastEvent) return;
 
   var originPage = getParam('origin_page');
 
@@ -62,18 +85,21 @@
     referrer: document.referrer || null,
     user_agent: navigator.userAgent,
     event_data: {
-      quote_id: lastEvent.quote_id || null,
-      quote_type: lastEvent.quote_type || null,
-      preliminary_price: Math.round((lastEvent.quote_value || 0) * 100),
-      product_category: lastEvent.quote_type || 'Unknown',
+      quote_id: quoteId,
+      quote_type: quoteType,
+      preliminary_price: Math.round((quoteValue || 0) * 100),
+      product_category: quoteType || 'Unknown',
       submission_source: 'quote.neonsignsdepot.com',
-      is_free_campaign: lastEvent.is_free_campaign || false
+      is_free_campaign: isFreeCampaign
     }
   };
 
   var xhr = new XMLHttpRequest();
   xhr.open('POST', INGEST_URL, true);
   xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.onerror = function() {
+    if (window.console) console.warn('[NSD Attribution] XHR failed');
+  };
   xhr.send(JSON.stringify(payload));
 })();
 </script>
