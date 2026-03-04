@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
     await completeIngestionRun(
       pool,
       runId,
-      allErrors.length > 0 ? 'failed' : 'success',
+      allErrors.length > 0 ? 'failed' : 'completed',
       totalRows,
       allErrors.length,
       durationMs,

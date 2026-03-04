@@ -330,11 +330,11 @@ describe('GA4 Sync Service', () => {
     it('should update the ingestion run with completion data', async () => {
       const { pool, queryLog } = makeMockPool();
 
-      await completeIngestionRun(pool, 'run-789', 'success', 100, 2, 1500);
+      await completeIngestionRun(pool, 'run-789', 'completed', 100, 2, 1500);
 
       const updateQuery = queryLog.find((q) => q.text.includes('UPDATE'));
       expect(updateQuery).toBeDefined();
-      expect(updateQuery!.values).toContain('success');
+      expect(updateQuery!.values).toContain('completed');
       expect(updateQuery!.values).toContain(100);
       expect(updateQuery!.values).toContain(2);
       expect(updateQuery!.values).toContain(1500);

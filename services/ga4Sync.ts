@@ -376,7 +376,7 @@ export async function createIngestionRun(
 ): Promise<string> {
   const result = await pool.query(
     `INSERT INTO analytics.ingestion_runs (source, status, started_at, data_type)
-     VALUES ($1, 'running', NOW(), $2)
+     VALUES ($1, 'started', NOW(), $2)
      RETURNING id`,
     [source, dataType],
   );
@@ -384,12 +384,13 @@ export async function createIngestionRun(
 }
 
 /**
- * Mark an ingestion run as completed (success or failure).
+ * Mark an ingestion run as completed or failed.
+ * Allowed status values: 'completed', 'failed' (per ingestion_runs_status_check constraint).
  */
 export async function completeIngestionRun(
   pool: Pool,
   runId: string,
-  status: 'success' | 'failed',
+  status: 'completed' | 'failed',
   recordsProcessed: number,
   recordsFailed: number,
   durationMs: number,
