@@ -28,6 +28,8 @@ import type {
   MarketingPipelineHealth,
   MarketingChannelPerformance,
   MarketingGA4Funnel,
+  MarketingGoogleAdsOverview,
+  MarketingGoogleAdsCampaign,
 } from '../types/activity-spine';
 
 // ============================================
@@ -644,6 +646,60 @@ const GA4_FUNNEL_SQL = `
 `;
 
 // ============================================
+// T011: Google Ads overview from raw_google_ads
+// ============================================
+
+const GOOGLE_ADS_OVERVIEW_SQL = `
+  SELECT
+    COALESCE(SUM((payload->>'cost')::numeric), 0) AS spend,
+    COALESCE(SUM((payload->>'impressions')::int), 0) AS impressions,
+    COALESCE(SUM((payload->>'clicks')::int), 0) AS clicks,
+    COALESCE(SUM((payload->>'conversions')::numeric), 0) AS conversions,
+    CASE WHEN COALESCE(SUM((payload->>'clicks')::int), 0) > 0
+      THEN COALESCE(SUM((payload->>'cost')::numeric), 0) / SUM((payload->>'clicks')::int)
+      ELSE 0 END AS cpc,
+    CASE WHEN COALESCE(SUM((payload->>'impressions')::int), 0) > 0
+      THEN COALESCE(SUM((payload->>'clicks')::int), 0)::numeric / SUM((payload->>'impressions')::int)
+      ELSE 0 END AS ctr,
+    CASE WHEN COALESCE(SUM((payload->>'cost')::numeric), 0) > 0
+      THEN COALESCE(SUM((payload->>'conversion_value')::numeric), 0) / SUM((payload->>'cost')::numeric)
+      ELSE 0 END AS roas
+  FROM analytics.raw_google_ads
+  WHERE source_system = 'google-ads-bq'
+    AND event_name = 'campaign_performance'
+    AND occurred_at::date BETWEEN $1 AND $2
+`;
+
+// ============================================
+// T012: Google Ads campaigns from raw_google_ads
+// ============================================
+
+const GOOGLE_ADS_CAMPAIGNS_SQL = `
+  SELECT
+    payload->>'campaign_name' AS campaign_name,
+    payload->>'campaign_id' AS campaign_id,
+    SUM((payload->>'cost')::numeric) AS spend,
+    SUM((payload->>'impressions')::int) AS impressions,
+    SUM((payload->>'clicks')::int) AS clicks,
+    SUM((payload->>'conversions')::numeric) AS conversions,
+    CASE WHEN SUM((payload->>'clicks')::int) > 0
+      THEN SUM((payload->>'cost')::numeric) / SUM((payload->>'clicks')::int)
+      ELSE 0 END AS cpc,
+    CASE WHEN SUM((payload->>'impressions')::int) > 0
+      THEN SUM((payload->>'clicks')::int)::numeric / SUM((payload->>'impressions')::int)
+      ELSE 0 END AS ctr,
+    CASE WHEN SUM((payload->>'cost')::numeric) > 0
+      THEN SUM((payload->>'conversion_value')::numeric) / SUM((payload->>'cost')::numeric)
+      ELSE 0 END AS roas
+  FROM analytics.raw_google_ads
+  WHERE source_system = 'google-ads-bq'
+    AND event_name = 'campaign_performance'
+    AND occurred_at::date BETWEEN $1 AND $2
+  GROUP BY payload->>'campaign_name', payload->>'campaign_id'
+  ORDER BY SUM((payload->>'cost')::numeric) DESC
+`;
+
+// ============================================
 // Row helpers
 // ============================================
 
@@ -738,6 +794,8 @@ export interface MarketingQueryResult {
   pipeline_health: MarketingPipelineHealth[];
   channel_performance: MarketingChannelPerformance[];
   ga4_funnel: MarketingGA4Funnel;
+  google_ads_overview: MarketingGoogleAdsOverview;
+  google_ads_campaigns: MarketingGoogleAdsCampaign[];
 }
 
 export async function executeMarketingQueries(
@@ -773,15 +831,17 @@ export async function executeMarketingQueries(
     /* 22 */ db.query(PIPELINE_HEALTH_SQL),
     /* 23 */ db.query(CHANNEL_PERFORMANCE_SQL, curParams),
     /* 24 */ db.query(GA4_FUNNEL_SQL, curParams),
+    /* 25 */ db.query(GOOGLE_ADS_OVERVIEW_SQL, curParams),
+    /* 26 */ db.query(GOOGLE_ADS_CAMPAIGNS_SQL, curParams),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 25 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
-      /* 26 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
-      /* 27 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
-      /* 28 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
-      /* 29 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
+      /* 27 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
+      /* 28 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
+      /* 29 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
+      /* 30 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
+      /* 31 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
     );
   }
 
@@ -1022,15 +1082,41 @@ export async function executeMarketingQueries(
     form_submit: formSubmitTotal,
   };
 
-  // Timeseries (indices shifted due to channel_performance + ga4_funnel queries)
+  // T011/T012: Google Ads overview + campaigns
+  const adsOverviewRow = results[25].rows[0] ?? {};
+  const google_ads_overview: MarketingGoogleAdsOverview = {
+    spend: nonNegative(toNumber(adsOverviewRow.spend)),
+    impressions: nonNegative(toNumber(adsOverviewRow.impressions)),
+    clicks: nonNegative(toNumber(adsOverviewRow.clicks)),
+    conversions: nonNegative(toNumber(adsOverviewRow.conversions)),
+    cpc: nonNegative(toNumber(adsOverviewRow.cpc)),
+    ctr: clamp(toNumber(adsOverviewRow.ctr), 0, 1),
+    roas: nonNegative(toNumber(adsOverviewRow.roas)),
+  };
+
+  const google_ads_campaigns: MarketingGoogleAdsCampaign[] = (results[26].rows ?? [])
+    .filter((r: Row) => r.campaign_name != null)
+    .map((r: Row) => ({
+      campaign_name: String(r.campaign_name),
+      campaign_id: String(r.campaign_id ?? ''),
+      spend: nonNegative(toNumber(r.spend)),
+      impressions: nonNegative(toNumber(r.impressions)),
+      clicks: nonNegative(toNumber(r.clicks)),
+      conversions: nonNegative(toNumber(r.conversions)),
+      cpc: nonNegative(toNumber(r.cpc)),
+      ctr: clamp(toNumber(r.ctr), 0, 1),
+      roas: nonNegative(toNumber(r.roas)),
+    }));
+
+  // Timeseries (indices shifted due to channel_performance + ga4_funnel + google_ads queries)
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 25) {
+  if (opts.includeTimeseries && results.length > 27) {
     timeseries = {
-      sessions: mapTimeseries(results[25].rows),
-      submissions: mapTimeseries(results[26].rows),
-      pipeline_value_usd: mapTimeseries(results[27].rows),
-      impressions: mapTimeseries(results[28].rows),
-      clicks: mapTimeseries(results[29].rows),
+      sessions: mapTimeseries(results[27].rows),
+      submissions: mapTimeseries(results[28].rows),
+      pipeline_value_usd: mapTimeseries(results[29].rows),
+      impressions: mapTimeseries(results[30].rows),
+      clicks: mapTimeseries(results[31].rows),
     };
   }
 
@@ -1052,5 +1138,7 @@ export async function executeMarketingQueries(
     pipeline_health,
     channel_performance,
     ga4_funnel,
+    google_ads_overview,
+    google_ads_campaigns,
   };
 }

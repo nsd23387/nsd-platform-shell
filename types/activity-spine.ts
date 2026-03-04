@@ -296,6 +296,28 @@ export interface MarketingGA4Funnel {
   form_submit: number;
 }
 
+export interface MarketingGoogleAdsOverview {
+  spend: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  cpc: number;
+  ctr: number;
+  roas: number;
+}
+
+export interface MarketingGoogleAdsCampaign {
+  campaign_name: string;
+  campaign_id: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  cpc: number;
+  ctr: number;
+  roas: number;
+}
+
 export type MarketingPeriod = '7d' | '30d' | '90d';
 
 export type MarketingPreset = 'last_7d' | 'last_30d' | 'last_90d' | 'mtd' | 'qtd' | 'ytd';
@@ -341,6 +363,8 @@ export interface MarketingOverviewResponse {
   pipeline_health: MarketingPipelineHealth[];
   channel_performance: MarketingChannelPerformance[];
   ga4_funnel: MarketingGA4Funnel;
+  google_ads_overview: MarketingGoogleAdsOverview;
+  google_ads_campaigns: MarketingGoogleAdsCampaign[];
 }
 
 // ============================================

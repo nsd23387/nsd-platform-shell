@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { MarketingKPIs, MarketingKPIComparisons } from '../../../../types/activity-spine';
+import type { MarketingKPIs, MarketingKPIComparisons, MarketingGoogleAdsOverview } from '../../../../types/activity-spine';
 import { SkeletonCard } from '../../../../components/dashboard';
 import { formatCurrency, formatNumber, formatPercent, safeDivideUI } from '../lib/format';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
@@ -11,6 +11,7 @@ import { space, radius } from '../../../../design/tokens/spacing';
 interface Props {
   kpis?: MarketingKPIs;
   comparisons?: MarketingKPIComparisons;
+  googleAdsOverview?: MarketingGoogleAdsOverview;
   loading: boolean;
 }
 
@@ -39,7 +40,7 @@ function DeltaBadge({ delta, tc }: { delta: number | null; tc: ReturnType<typeof
   );
 }
 
-export function MarketingExecutiveKPIs({ kpis, comparisons, loading }: Props) {
+export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, loading }: Props) {
   const tc = useThemeColors();
 
   if (loading || !kpis) {
@@ -79,6 +80,24 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, loading }: Props) {
       testId: 'exec-kpi-avg-deal',
     },
   ];
+
+  const hasAds = googleAdsOverview && (googleAdsOverview.spend > 0 || googleAdsOverview.impressions > 0);
+  if (hasAds) {
+    cards.push(
+      {
+        label: 'Ad Spend',
+        value: formatCurrency(googleAdsOverview.spend),
+        delta: null,
+        testId: 'exec-kpi-spend',
+      },
+      {
+        label: 'ROAS',
+        value: googleAdsOverview.roas.toFixed(2) + 'x',
+        delta: null,
+        testId: 'exec-kpi-roas',
+      },
+    );
+  }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: space['4'], marginBottom: space['6'] }} data-testid="panel-executive-kpis">
