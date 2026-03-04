@@ -279,6 +279,23 @@ export interface MarketingPipelineHealth {
   status: 'healthy' | 'warning' | 'stale';
 }
 
+export interface MarketingChannelPerformance {
+  channel: string;
+  sessions: number;
+  page_views: number;
+  conversions: number;
+  revenue: number;
+}
+
+export interface MarketingGA4Funnel {
+  view_item: number;
+  add_to_cart: number;
+  begin_checkout: number;
+  purchase: number;
+  form_start: number;
+  form_submit: number;
+}
+
 export type MarketingPeriod = '7d' | '30d' | '90d';
 
 export type MarketingPreset = 'last_7d' | 'last_30d' | 'last_90d' | 'mtd' | 'qtd' | 'ytd';
@@ -322,6 +339,8 @@ export interface MarketingOverviewResponse {
   seo_movers: MarketingSEOQueryMover[];
   funnel: MarketingFunnelStep[];
   pipeline_health: MarketingPipelineHealth[];
+  channel_performance: MarketingChannelPerformance[];
+  ga4_funnel: MarketingGA4Funnel;
 }
 
 // ============================================

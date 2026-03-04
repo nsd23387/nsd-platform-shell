@@ -26,6 +26,8 @@ import type {
   MarketingSEOQueryMover,
   MarketingFunnelStep,
   MarketingPipelineHealth,
+  MarketingChannelPerformance,
+  MarketingGA4Funnel,
 } from '../types/activity-spine';
 
 // ============================================
@@ -608,6 +610,40 @@ const PIPELINE_HEALTH_SQL = `
 `;
 
 // ============================================
+// T009: Channel performance from GA4 channel_session_summary
+// ============================================
+
+const CHANNEL_PERFORMANCE_SQL = `
+  SELECT
+    payload->>'channel' AS channel,
+    SUM((payload->>'sessions')::int) AS sessions,
+    SUM((payload->>'page_views')::int) AS page_views,
+    SUM((payload->>'conversions')::int) AS conversions,
+    SUM((payload->>'revenue')::numeric) AS revenue
+  FROM analytics.raw_ga4_events
+  WHERE event_name = 'channel_session_summary'
+    AND source_system = 'ga4-api'
+    AND occurred_at::date BETWEEN $1 AND $2
+  GROUP BY payload->>'channel'
+  ORDER BY SUM((payload->>'sessions')::int) DESC
+`;
+
+// ============================================
+// T010: GA4 funnel aggregation from raw_ga4_events
+// ============================================
+
+const GA4_FUNNEL_SQL = `
+  SELECT
+    event_name,
+    SUM((payload->>'event_count')::int) AS event_count
+  FROM analytics.raw_ga4_events
+  WHERE source_system = 'ga4-api'
+    AND event_name IN ('view_item', 'add_to_cart', 'begin_checkout', 'purchase', 'form_start', 'neon_form_submit', 'contact_form_submit', 'wholesale_quote_form_submit', 'become_a_partner_form_submit', 'channel_letter_quote_form_submit')
+    AND occurred_at::date BETWEEN $1 AND $2
+  GROUP BY event_name
+`;
+
+// ============================================
 // Row helpers
 // ============================================
 
@@ -700,6 +736,8 @@ export interface MarketingQueryResult {
   seo_movers: MarketingSEOQueryMover[];
   funnel: MarketingFunnelStep[];
   pipeline_health: MarketingPipelineHealth[];
+  channel_performance: MarketingChannelPerformance[];
+  ga4_funnel: MarketingGA4Funnel;
 }
 
 export async function executeMarketingQueries(
@@ -733,15 +771,17 @@ export async function executeMarketingQueries(
     /* 20 */ db.query(SEO_MOVERS_SQL, curParams),
     /* 21 */ db.query(FUNNEL_SQL),
     /* 22 */ db.query(PIPELINE_HEALTH_SQL),
+    /* 23 */ db.query(CHANNEL_PERFORMANCE_SQL, curParams),
+    /* 24 */ db.query(GA4_FUNNEL_SQL, curParams),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 23 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
-      /* 24 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
-      /* 25 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
-      /* 26 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
-      /* 27 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
+      /* 25 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
+      /* 26 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
+      /* 27 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
+      /* 28 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
+      /* 29 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
     );
   }
 
@@ -950,15 +990,47 @@ export async function executeMarketingQueries(
       };
     });
 
-  // Timeseries (indices shifted +2 due to GA4 fallback queries)
+  // T009: Channel performance
+  const channel_performance: MarketingChannelPerformance[] = (results[23].rows ?? [])
+    .filter((r: Row) => r.channel != null)
+    .map((r: Row) => ({
+      channel: String(r.channel),
+      sessions: nonNegative(toNumber(r.sessions)),
+      page_views: nonNegative(toNumber(r.page_views)),
+      conversions: nonNegative(toNumber(r.conversions)),
+      revenue: nonNegative(toNumber(r.revenue)),
+    }));
+
+  // T010: GA4 funnel
+  const ga4FunnelRows = results[24].rows ?? [];
+  const funnelMap: Record<string, number> = {};
+  for (const r of ga4FunnelRows) {
+    funnelMap[String(r.event_name)] = nonNegative(toNumber(r.event_count));
+  }
+  const FORM_SUBMIT_EVENTS = [
+    'neon_form_submit', 'contact_form_submit',
+    'wholesale_quote_form_submit', 'become_a_partner_form_submit',
+    'channel_letter_quote_form_submit',
+  ];
+  const formSubmitTotal = FORM_SUBMIT_EVENTS.reduce((s, e) => s + (funnelMap[e] ?? 0), 0);
+  const ga4_funnel: MarketingGA4Funnel = {
+    view_item: funnelMap['view_item'] ?? 0,
+    add_to_cart: funnelMap['add_to_cart'] ?? 0,
+    begin_checkout: funnelMap['begin_checkout'] ?? 0,
+    purchase: funnelMap['purchase'] ?? 0,
+    form_start: funnelMap['form_start'] ?? 0,
+    form_submit: formSubmitTotal,
+  };
+
+  // Timeseries (indices shifted due to channel_performance + ga4_funnel queries)
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 23) {
+  if (opts.includeTimeseries && results.length > 25) {
     timeseries = {
-      sessions: mapTimeseries(results[23].rows),
-      submissions: mapTimeseries(results[24].rows),
-      pipeline_value_usd: mapTimeseries(results[25].rows),
-      impressions: mapTimeseries(results[26].rows),
-      clicks: mapTimeseries(results[27].rows),
+      sessions: mapTimeseries(results[25].rows),
+      submissions: mapTimeseries(results[26].rows),
+      pipeline_value_usd: mapTimeseries(results[27].rows),
+      impressions: mapTimeseries(results[28].rows),
+      clicks: mapTimeseries(results[29].rows),
     };
   }
 
@@ -978,5 +1050,7 @@ export async function executeMarketingQueries(
     seo_movers,
     funnel,
     pipeline_health,
+    channel_performance,
+    ga4_funnel,
   };
 }

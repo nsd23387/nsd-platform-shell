@@ -34,7 +34,9 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 **Marketing Dashboard (`/dashboard/marketing`):**
 - **Purpose**: Comprehensive analytics view powered by live data from the Supabase `analytics` schema.
 - **Data Sources**: Primarily `raw_web_events`, `raw_search_console`, `raw_ga4_events`, `metrics_page_engagement_daily`.
-- **Panels**: Includes KPI Overview, Conversion Funnel, Sources, Pipeline by Category, Recent Conversions, Audience, SEO Intelligence, Data Pipeline Health, and Timeseries.
+- **Views**: Supports Operator (full operational detail) and Executive (strategic summary) tabs, persisted via URL `?view=operator|executive`.
+- **Operator Panels**: KPI Overview, Conversion Funnel, GA4 Event Funnel, Channel Performance, Anomalies, Sources, Pipeline by Category, Recent Conversions, Audience, SEO Revenue, Timeseries, SEO Intelligence, Pages Performance, Pipeline Health.
+- **Executive Panels**: Performance Score, Executive KPIs (Pipeline, Sessions, Conversion Rate, Avg Deal), Channel Breakdown, Timeseries, Conversion Funnel, GA4 Event Funnel.
 - **Database Connection**: Uses `SUPABASE_DATABASE_URL || DATABASE_URL` with SSL.
 - **Chart Library**: Uses Recharts with NSD brand color tokens, `ResponsiveContainer`, and custom tooltips.
 - **Responsive Design**: Utilizes breakpoint constants, animation keyframe definitions, `useMediaQuery` hooks, and a responsive `DashboardGrid`.
@@ -42,8 +44,10 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 - **Dark Mode**: Implemented via `ThemeContext`, persisting preferences to localStorage, and using `data-theme` attribute on `<html>`. All dashboard components use `useThemeColors()` for theme compatibility.
 - **SEO Revenue Attribution (Cross-Domain Fix)**: Implements path-based normalization for URLs across all PAGES_SQL CTEs and in the `POST /api/ingest/web-event` endpoint to correctly attribute conversions.
 - **GA4 Data API Integration**: Populates `analytics.metrics_page_engagement_daily` and `analytics.raw_ga4_events` via `services/ga4Sync.ts`.
-  - **Sync Functions**: `syncPageEngagement()`, `syncGA4Events()`, `syncDeviceCountry()`.
+  - **Sync Functions**: `syncPageEngagement()`, `syncGA4Events()`, `syncDeviceCountry()`, `syncChannelSessions()`.
+  - **Channel Sync**: `syncChannelSessions()` pulls `sessionDefaultChannelGroup` from GA4, storing as `channel_session_summary` events in `raw_ga4_events` with payload: `{channel, sessions, page_views, conversions, revenue}`.
   - **Triggers**: Manual `POST /api/sync/ga4` and daily Vercel Cron `GET /api/cron/ga4-sync`. Both are write operations.
+- **Query Index Map**: engagement=0, conversion=1, search=2, pages=3, sources=4, freshness=5, prev_eng=6, prev_conv=7, seo_queries=8, anomaly_sessions=9, anomaly_subs=10, anomaly_pipeline=11, funnel_fallback=12, prev_funnel_fallback=13, GA4_device=14, GA4_country=15, SC_device=16, SC_country=17, pipeline_categories=18, recent_conversions=19, seo_movers=20, funnel=21, pipeline_health=22, channel_performance=23, ga4_funnel=24, timeseries=25-29.
 
 ## External Dependencies
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.

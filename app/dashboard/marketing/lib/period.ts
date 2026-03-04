@@ -9,6 +9,8 @@ export type UIPreset =
   | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
   | 'last_7d' | 'last_30d' | 'last_90d' | 'mtd' | 'qtd' | 'ytd';
 
+export type DashboardView = 'operator' | 'executive';
+
 export interface PeriodState {
   mode: UIMode;
   preset: UIPreset;
@@ -16,6 +18,7 @@ export interface PeriodState {
   end: string;
   includeTimeseries: boolean;
   compare: boolean;
+  view: DashboardView;
 }
 
 const LEGACY_MAP: Record<string, UIPreset> = {
@@ -45,6 +48,7 @@ export const DEFAULT_STATE: PeriodState = {
   end: '',
   includeTimeseries: false,
   compare: true,
+  view: 'operator',
 };
 
 export function parsePeriodState(): PeriodState {
@@ -57,20 +61,22 @@ export function parsePeriodState(): PeriodState {
   const legacyPeriod = sp.get('period');
   const includeTimeseries = sp.get('include_timeseries') === 'true';
   const compare = sp.get('compare') !== 'false';
+  const viewParam = sp.get('view');
+  const view: DashboardView = viewParam === 'executive' ? 'executive' : 'operator';
 
   if (start && end) {
-    return { mode: 'range', preset: 'monthly', start, end, includeTimeseries, compare };
+    return { mode: 'range', preset: 'monthly', start, end, includeTimeseries, compare, view };
   }
 
   if (presetParam && presetParam in BACKEND_PRESET_MAP) {
-    return { mode: 'preset', preset: presetParam as UIPreset, start: '', end: '', includeTimeseries, compare };
+    return { mode: 'preset', preset: presetParam as UIPreset, start: '', end: '', includeTimeseries, compare, view };
   }
 
   if (legacyPeriod && legacyPeriod in LEGACY_MAP) {
-    return { mode: 'preset', preset: LEGACY_MAP[legacyPeriod], start: '', end: '', includeTimeseries, compare };
+    return { mode: 'preset', preset: LEGACY_MAP[legacyPeriod], start: '', end: '', includeTimeseries, compare, view };
   }
 
-  return { ...DEFAULT_STATE, includeTimeseries, compare };
+  return { ...DEFAULT_STATE, includeTimeseries, compare, view };
 }
 
 export function toBackendParams(state: PeriodState): Record<string, string> {
@@ -104,6 +110,7 @@ export function updateUrl(state: PeriodState): void {
 
   if (state.includeTimeseries) url.searchParams.set('include_timeseries', 'true');
   if (!state.compare) url.searchParams.set('compare', 'false');
+  if (state.view === 'executive') url.searchParams.set('view', 'executive');
 
   window.history.replaceState({}, '', url.toString());
 }
