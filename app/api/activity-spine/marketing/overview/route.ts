@@ -223,6 +223,8 @@ export async function GET(request: NextRequest) {
         pipeline_health: [],
         channel_performance: [],
         ga4_funnel: { view_item: 0, add_to_cart: 0, begin_checkout: 0, purchase: 0, form_start: 0, form_submit: 0 },
+        google_ads_overview: { spend: 0, impressions: 0, clicks: 0, conversions: 0, cpc: 0, ctr: 0, roas: 0 },
+        google_ads_campaigns: [],
       },
       timestamp: new Date().toISOString(),
       orgId: 'unconfigured',
@@ -269,6 +271,8 @@ export async function GET(request: NextRequest) {
       pipeline_health: result.pipeline_health,
       channel_performance: result.channel_performance,
       ga4_funnel: result.ga4_funnel,
+      google_ads_overview: result.google_ads_overview,
+      google_ads_campaigns: result.google_ads_campaigns,
     };
 
     if (result.timeseries) {

@@ -35,6 +35,8 @@ import { MarketingChannelPerformancePanel } from './components/MarketingChannelP
 import { MarketingGA4FunnelPanel } from './components/MarketingGA4FunnelPanel';
 import { MarketingExecutiveKPIs } from './components/MarketingExecutiveKPIs';
 import { MarketingChannelBreakdownPanel } from './components/MarketingChannelBreakdownPanel';
+import { MarketingGoogleAdsOverviewPanel } from './components/MarketingGoogleAdsOverviewPanel';
+import { MarketingGoogleAdsCampaignsPanel } from './components/MarketingGoogleAdsCampaignsPanel';
 import { space } from '../../../design/tokens/spacing';
 
 const EMPTY_GA4_FUNNEL = { view_item: 0, add_to_cart: 0, begin_checkout: 0, purchase: 0, form_start: 0, form_submit: 0 };
@@ -76,6 +78,7 @@ export default function MarketingDashboard() {
             <MarketingExecutiveKPIs
               kpis={data?.kpis}
               comparisons={data?.comparisons}
+              googleAdsOverview={data?.google_ads_overview}
               loading={loading}
             />
 
@@ -129,6 +132,18 @@ export default function MarketingDashboard() {
 
             <MarketingChannelPerformancePanel
               channels={data?.channel_performance ?? []}
+              loading={loading}
+              error={error}
+            />
+
+            <MarketingGoogleAdsOverviewPanel
+              overview={data?.google_ads_overview ?? { spend: 0, impressions: 0, clicks: 0, conversions: 0, cpc: 0, ctr: 0, roas: 0 }}
+              loading={loading}
+              error={error}
+            />
+
+            <MarketingGoogleAdsCampaignsPanel
+              campaigns={data?.google_ads_campaigns ?? []}
               loading={loading}
               error={error}
             />
