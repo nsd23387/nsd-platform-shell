@@ -1,0 +1,64 @@
+< 
+* Connection #0 to host analytics.neonsignsdepot.com left intact
+aabebe@mac nsd-quotes-custom % curl -v -X POST https://analytics.neonsignsdepot.com/api/sync/google-ads \
+  -H "Authorization: Bearer sgpGM+y5d42KqD6zv+2PZp1wQ8h0bwYnPTI=" \
+  -H "Content-Type: application/json" \
+  -d '{"startDate":"2026-02-25","endDate":"2026-03-05"}'
+Note: Unnecessary use of -X or --request, POST is already inferred.
+* Host analytics.neonsignsdepot.com:443 was resolved.
+* IPv6: (none)
+* IPv4: 216.150.16.1, 216.150.1.1
+*   Trying 216.150.16.1:443...
+* Connected to analytics.neonsignsdepot.com (216.150.16.1) port 443
+* ALPN: curl offers h2,http/1.1
+* (304) (OUT), TLS handshake, Client hello (1):
+*  CAfile: /etc/ssl/cert.pem
+*  CApath: none
+* (304) (IN), TLS handshake, Server hello (2):
+* (304) (IN), TLS handshake, Unknown (8):
+* (304) (IN), TLS handshake, Certificate (11):
+* (304) (IN), TLS handshake, CERT verify (15):
+* (304) (IN), TLS handshake, Finished (20):
+* (304) (OUT), TLS handshake, Finished (20):
+* SSL connection using TLSv1.3 / AEAD-CHACHA20-POLY1305-SHA256 / [blank] / UNDEF
+* ALPN: server accepted h2
+* Server certificate:
+*  subject: CN=analytics.neonsignsdepot.com
+*  start date: Mar  1 18:23:16 2026 GMT
+*  expire date: May 30 18:23:15 2026 GMT
+*  subjectAltName: host "analytics.neonsignsdepot.com" matched cert's "analytics.neonsignsdepot.com"
+*  issuer: C=US; O=Let's Encrypt; CN=R12
+*  SSL certificate verify ok.
+* using HTTP/2
+* [HTTP/2] [1] OPENED stream for https://analytics.neonsignsdepot.com/api/sync/google-ads
+* [HTTP/2] [1] [:method: POST]
+* [HTTP/2] [1] [:scheme: https]
+* [HTTP/2] [1] [:authority: analytics.neonsignsdepot.com]
+* [HTTP/2] [1] [:path: /api/sync/google-ads]
+* [HTTP/2] [1] [user-agent: curl/8.7.1]
+* [HTTP/2] [1] [accept: */*]
+* [HTTP/2] [1] [authorization: Bearer sgpGM+y5d42KqD6zv+2PZp1wQ8h0bwYnPTI=]
+* [HTTP/2] [1] [content-type: application/json]
+* [HTTP/2] [1] [content-length: 49]
+> POST /api/sync/google-ads HTTP/2
+> Host: analytics.neonsignsdepot.com
+> User-Agent: curl/8.7.1
+> Accept: */*
+> Authorization: Bearer sgpGM+y5d42KqD6zv+2PZp1wQ8h0bwYnPTI=
+> Content-Type: application/json
+> Content-Length: 49
+> 
+* upload completely sent off: 49 bytes
+< HTTP/2 500 
+< cache-control: public, max-age=0, must-revalidate
+< content-type: application/json
+< date: Thu, 05 Mar 2026 18:36:18 GMT
+< server: Vercel
+< strict-transport-security: max-age=63072000
+< vary: RSC, Next-Router-State-Tree, Next-Router-Prefetch
+< x-matched-path: /api/sync/google-ads
+< x-vercel-cache: MISS
+< x-vercel-id: iad1::iad1::42zsr-1772735776783-092461454a4d
+< 
+* Connection #0 to host analytics.neonsignsdepot.com left intact
+{"error":"Google Ads sync failed","duration_ms":1128}%                                                                            aabebe@mac nsd-quotes-custom % 

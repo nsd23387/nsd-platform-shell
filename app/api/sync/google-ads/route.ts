@@ -135,10 +135,12 @@ export async function POST(req: NextRequest) {
     } catch { /* best-effort */ }
 
     const errMsg = (err as Error).message ?? 'Unknown error';
-    console.error('[google-ads-sync] Sync failed:', errMsg);
+    const errStack = (err as Error).stack ?? '';
+    console.error('[google-ads-sync] Sync failed:', errMsg, errStack);
     return NextResponse.json(
       {
         error: 'Google Ads sync failed',
+        detail: errMsg,
         duration_ms: Date.now() - startTime,
       },
       { status: 500 },
