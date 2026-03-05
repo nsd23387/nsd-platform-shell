@@ -756,8 +756,8 @@ const POST_FREE_CONTENT_CONVERSIONS_SQL = `
   FROM analytics.raw_web_events
   WHERE event_type = 'conversion'
     AND (
-      referrer_source IN ('google', 'bing', 'duckduckgo', 'yahoo')
-      OR referrer_source IS NULL
+      source IN ('google', 'bing', 'duckduckgo', 'yahoo')
+      OR source IS NULL
     )
     AND occurred_at >= $1::date AND occurred_at < ($2::date + INTERVAL '1 day')
 `;
