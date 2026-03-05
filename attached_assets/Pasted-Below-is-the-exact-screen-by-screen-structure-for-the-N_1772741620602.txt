@@ -1,0 +1,580 @@
+Below is the exact screen-by-screen structure for the NSD Marketing Command Center, aligned to Hormozi’s Core 4 and designed to support two perspectives (Operator and Executive) while still allowing deep drill-down into SEO and Google Ads.
+
+No fluff. This is the blueprint.
+
+Global Navigation
+
+Marketing Command Center (top-level)
+
+Executive Overview
+
+Operator Hub
+
+Core 4
+
+Warm Outreach
+
+Cold Outreach
+
+Post Free Content
+
+Run Paid Ads
+
+SEO Command Center
+
+Google Ads War Room
+
+Attribution & Data Health
+
+Experiments & Learnings
+
+Forecasting & Targets
+
+Each screen uses the same interaction model:
+
+Date range selector
+
+Comparison toggle (previous period, WoW, MoM)
+
+Channel filter (all, SEO, Google Ads, direct, referral, email, other)
+
+Drilldown breadcrumb (Core 4 → Channel → Campaign → Asset)
+
+Screen 1: Executive Overview (CEO View)
+Purpose
+
+“Are we growing profitably, and which engine is driving it?”
+
+Layout
+
+Top KPI Bar
+
+Revenue (actual)
+
+Pipeline value (quotes)
+
+Marketing spend
+
+CAC (blended)
+
+ROAS / MER
+
+Orders (or wins)
+
+Quote close rate
+
+Avg order value
+
+Core 4 Performance Tiles (4 cards)
+Each tile shows:
+
+Spend (if applicable)
+
+Leads/quotes
+
+Revenue/pipeline
+
+CAC / cost per quote
+
+Trend arrow (7d, 30d)
+
+Revenue by Engine (stacked trend)
+
+Warm outreach
+
+Cold outreach
+
+Free content
+
+Paid ads
+
+What changed? (Insights feed)
+Auto-generated alerts:
+
+CPC up/down
+
+Impression share loss
+
+SEO top query moved from pos 11 → 8
+
+Quote-to-close rate shifted
+
+Budget capped early
+
+Drilldown
+
+Click any Core 4 tile → goes to that engine screen.
+
+Screen 2: Operator Hub (Daily Control Room)
+Purpose
+
+“What should we do today to improve performance?”
+
+Layout
+
+Today KPIs
+
+Spend today vs budget pacing
+
+Quotes today
+
+CPA / cost per quote today
+
+Top converting keyword/query today
+
+Lead quality proxy (avg quote value, business vs personal)
+
+Action Queue (priority list)
+
+Add negatives (from search terms)
+
+Raise budget (if Lost IS budget > threshold)
+
+Adjust bids (if Lost IS rank > threshold)
+
+SEO: update titles/meta for high impressions low CTR
+
+SEO: publish content for pos 8–20 opportunities
+
+Watchlist
+
+Campaigns capped by budget
+
+Keywords with high spend, zero conversions
+
+Landing pages with high traffic, low quote rate
+
+Screen 3: Core 4 Overview (All Engines in One Table)
+Purpose
+
+A single table that ranks engines by ROI.
+
+Table
+
+Columns:
+
+Engine
+
+Sessions / reach
+
+Clicks
+
+Quotes
+
+Quote rate
+
+Pipeline value
+
+Revenue
+
+Spend
+
+CAC / CPA
+
+MER / ROAS
+
+Sorting defaults to:
+
+Revenue
+
+Pipeline value
+
+ROI
+
+Screen 4: Warm Outreach Dashboard
+Purpose
+
+“How well are we converting existing interest into sales?”
+
+KPIs
+
+Follow-up volume
+
+Quote aging buckets (0–2, 3–7, 8–14, 15+ days)
+
+Quote-to-close rate
+
+Average time to close
+
+Revenue from returning visitors
+
+Discount usage rate (if used)
+
+Visuals
+
+Quote pipeline by stage (funnel)
+
+Close rate trend
+
+Aging heatmap
+
+Screen 5: Cold Outreach Dashboard (Sales Engine)
+Purpose
+
+“Is outreach producing qualified pipeline?”
+
+KPIs
+
+Contacts sourced
+
+Emails sent
+
+Deliverability rate
+
+Reply rate
+
+Positive reply rate
+
+Meetings booked
+
+Pipeline created
+
+CAC equivalent (cost per meeting/lead)
+
+Visuals
+
+Sequence performance table
+
+Reply trends over time
+
+ICP performance comparison
+
+Screen 6: Post Free Content Dashboard (Top-Level SEO + Social)
+Purpose
+
+“Is content creating demand and pipeline?”
+
+KPIs
+
+Organic sessions
+
+Organic clicks (GSC)
+
+Organic quotes
+
+SEO click-to-quote rate
+
+Pipeline from SEO
+
+Top query cluster movement (pos changes)
+
+Visuals
+
+Organic clicks trend
+
+Top landing pages by pipeline
+
+Query clusters table
+
+Screen 7: SEO Command Center (SEO Operator Screen)
+Purpose
+
+“What should we fix or publish next?”
+
+Sections
+
+A) Query Opportunity Table
+Columns:
+
+Query
+
+Impressions
+
+Clicks
+
+CTR
+
+Avg position
+
+Quotes attributed (where possible)
+
+Pipeline value
+
+Opportunity tag
+
+Opportunity tags:
+
+High impressions, low CTR (snippet fix)
+
+Position 8–20 (ranking push)
+
+High value per click (content expansion)
+
+New rising query (publish fast)
+
+B) Page Opportunity Table
+Columns:
+
+Page
+
+Organic sessions
+
+Scroll depth / engagement
+
+Quote rate
+
+Pipeline value
+
+Top queries driving it
+
+C) Technical Health
+
+Index coverage summary
+
+Top pages with SEO errors (from RankMath or crawl data)
+
+Core Web Vitals snapshot (if available)
+
+Screen 8: Run Paid Ads Dashboard (Paid Overview)
+Purpose
+
+“Are paid campaigns profitable and scalable?”
+
+KPIs
+
+Spend
+
+Clicks
+
+CPC
+
+Quotes
+
+Click-to-quote rate
+
+CPA / cost per quote
+
+Pipeline value
+
+ROAS / MER
+
+Search impression share
+
+Lost IS (budget)
+
+Lost IS (rank)
+
+Visuals
+
+Spend vs pipeline trend
+
+Campaign performance table
+
+Budget pacing chart
+
+Screen 9: Google Ads War Room (Paid Operator Screen)
+Purpose
+
+Make bid/budget decisions confidently.
+
+Sections
+
+A) Budget & Coverage
+
+Lost IS (budget) trend
+
+Search impression share trend
+
+“Budget exhausted by” time (pacing)
+
+B) Campaign Table
+Columns:
+
+Campaign
+
+Spend
+
+CPC
+
+Clicks
+
+Quotes
+
+CPA
+
+Pipeline
+
+IS
+
+Lost IS (budget)
+
+Lost IS (rank)
+
+C) Ad Group Table
+Same metrics, plus:
+
+Search terms quality score proxy (high/med/low intent)
+
+D) Keyword Table
+Columns:
+
+Keyword
+
+Match type
+
+Clicks
+
+CPC
+
+Spend
+
+Quotes
+
+CPA
+
+Quality score (if available)
+
+Bid vs first page estimate (if available)
+
+E) Search Terms Triage
+This is your daily cleanup list:
+
+Add negatives
+
+Promote term to exact
+
+Keep as phrase test
+
+Remove term cluster
+
+Screen 10: Attribution & Data Health (Non-Negotiable)
+Purpose
+
+Prevent making decisions on broken data.
+
+KPIs
+
+% sessions with channel source
+
+% conversions with landing page
+
+% conversions with gclid/utm
+
+Cross-domain join health (site → quote)
+
+Spend ingestion freshness (Google Ads)
+
+Event ingestion freshness (web events)
+
+Visuals
+
+Data completeness trend lines
+
+“Red flag” alerts when attribution drops
+
+Screen 11: Experiments & Learnings (Growth System Memory)
+Purpose
+
+Turn actions into repeatable knowledge.
+
+Table
+
+Columns:
+
+Experiment name
+
+Engine (Core 4)
+
+Hypothesis
+
+Change made
+
+Dates
+
+Result (lift %)
+
+Decision (keep/revert/iterate)
+
+Notes
+
+Examples:
+
+“Moved phrase to exact for custom neon logo sign”
+
+“Added negatives: open/bar/cheap”
+
+“Split campaigns into logo vs business”
+
+Screen 12: Forecasting & Targets (Commitment Screen)
+Purpose
+
+“Given current conversion rates, what happens if we spend X?”
+
+Inputs (editable)
+
+Budget per day
+
+CPC (rolling avg)
+
+Click-to-quote rate
+
+Quote close rate
+
+Avg deal size
+
+Margin %
+
+Outputs (auto)
+
+Quotes/day
+
+Sales/day
+
+Revenue/month
+
+Gross profit/month
+
+Break-even CPA
+
+Recommended budget band
+
+Dynamic Requirements (What the Dashboard Must Support)
+Universal Controls
+
+Date range (7/30/90/custom)
+
+Compare (prev period, WoW, MoM)
+
+Channel filter
+
+Device filter
+
+Geo filter
+
+Campaign filter
+
+Landing page filter
+
+Interaction Requirements
+
+Drilldowns (Core 4 → engine → campaign → ad group → keyword → term)
+
+Trend lines for every KPI (not single numbers)
+
+Table sorting + column filters
+
+Saved views (Operator vs Executive presets)
+
+Alerts/flags (budget capped, rank loss, CTR drops)
+
+Visualization Requirements
+
+KPI cards (with delta)
+
+Time-series charts
+
+Stacked trends (engine contribution)
+
+Funnels (click → quote → close)
+
+Opportunity tables (queries/pages)
+
+Pacing charts (spend by hour)
+
+Where SEO and Google Ads Fit in Core 4
+
+SEO is the primary engine inside Post Free Content
+
+Google Ads is the primary engine inside Run Paid Ads
+
+Both have their own operator screens, but roll up into Executive/Core 4 summaries.
