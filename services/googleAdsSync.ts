@@ -1,7 +1,7 @@
 /**
  * Google Ads Sync Service (via BigQuery)
  *
- * Reads Google Ads data from BigQuery (auto-exported from Google Ads)
+ * Reads Google Ads data from BigQuery (Data Transfer Service export)
  * and writes it to Supabase analytics.raw_google_ads.
  *
  * GOVERNANCE: This module performs WRITE operations to:
@@ -11,13 +11,9 @@
  * Auth: Reuses GOOGLE_APPLICATION_CREDENTIALS_JSON (same service account as GA4)
  *        plus GOOGLE_ADS_BQ_PROJECT_ID and GOOGLE_ADS_BQ_DATASET.
  *
- * BigQuery table naming:
- *   Google Ads auto-export creates tables like:
- *     p_CampaignStats_<customer_id>
- *     p_AdGroupStats_<customer_id>
- *     p_SearchQueryStats_<customer_id>
- *   Or in some configurations:
- *     ads_CampaignStats_<customer_id>
+ * BigQuery table naming (Data Transfer Service):
+ *   ads_CampaignBasicStats_<customer_id>  — campaign-level metrics
+ *   ads_Campaign_<customer_id>            — campaign metadata (name, status, etc.)
  *   The GOOGLE_ADS_BQ_CUSTOMER_ID env var identifies which table suffix to use.
  */
 
@@ -63,13 +59,12 @@ function getBQConfig(): { projectId: string; dataset: string; customerId: string
 /**
  * Sync campaign-level performance from BigQuery into raw_google_ads.
  *
- * Reads from p_CampaignStats_<customer_id> table, which Google Ads
- * auto-exports daily to BigQuery.
+ * JOINs ads_CampaignBasicStats with ads_Campaign to get campaign names.
  *
- * Columns expected from BigQuery:
- *   campaign_id, campaign_name, segments_date, metrics_impressions,
- *   metrics_clicks, metrics_cost_micros, metrics_conversions,
- *   metrics_conversions_value
+ * BigQuery columns used:
+ *   Stats: campaign_id, segments_date, metrics_impressions, metrics_clicks,
+ *          metrics_cost_micros, metrics_conversions, metrics_conversions_value
+ *   Campaign: campaign_name
  */
 export async function syncCampaignPerformance(
   pool: Pool,
@@ -81,21 +76,25 @@ export async function syncCampaignPerformance(
   const bq = bqClientOverride ?? getBigQueryClient();
   const { projectId, dataset, customerId } = getBQConfig();
 
-  const tableName = `${projectId}.${dataset}.p_CampaignStats_${customerId}`;
+  const statsTable = `${projectId}.${dataset}.ads_CampaignBasicStats_${customerId}`;
+  const campaignTable = `${projectId}.${dataset}.ads_Campaign_${customerId}`;
 
   const query = `
     SELECT
-      campaign_id,
-      campaign_name,
-      segments_date,
-      IFNULL(metrics_impressions, 0) AS impressions,
-      IFNULL(metrics_clicks, 0) AS clicks,
-      IFNULL(metrics_cost_micros, 0) AS cost_micros,
-      IFNULL(metrics_conversions, 0) AS conversions,
-      IFNULL(metrics_conversions_value, 0) AS conversion_value
-    FROM \`${tableName}\`
-    WHERE segments_date BETWEEN @startDate AND @endDate
-    ORDER BY segments_date, campaign_name
+      s.campaign_id,
+      c.campaign_name,
+      s.segments_date,
+      IFNULL(s.metrics_impressions, 0) AS impressions,
+      IFNULL(s.metrics_clicks, 0) AS clicks,
+      IFNULL(s.metrics_cost_micros, 0) AS cost_micros,
+      IFNULL(s.metrics_conversions, 0) AS conversions,
+      IFNULL(s.metrics_conversions_value, 0) AS conversion_value
+    FROM \`${statsTable}\` s
+    LEFT JOIN \`${campaignTable}\` c
+      ON s.campaign_id = c.campaign_id
+      AND c._DATA_DATE = c._LATEST_DATE
+    WHERE s._DATA_DATE BETWEEN @startDate AND @endDate
+    ORDER BY s.segments_date, c.campaign_name
   `;
 
   const [rows] = await bq.query({
@@ -141,7 +140,13 @@ export async function syncCampaignPerformance(
       const ctr = impressions > 0 ? clicks / impressions : 0;
       const roas = cost > 0 ? conversionValue / cost : 0;
 
-      const dateStr = String(row.segments_date ?? '');
+      const dateVal = row.segments_date;
+      let dateStr: string;
+      if (dateVal && typeof dateVal === 'object' && dateVal.value) {
+        dateStr = String(dateVal.value);
+      } else {
+        dateStr = String(dateVal ?? '');
+      }
       const occurredAt = `${dateStr}T00:00:00Z`;
 
       const payload = {
@@ -183,7 +188,8 @@ export async function syncCampaignPerformance(
 /**
  * Sync search term performance from BigQuery into raw_google_ads.
  *
- * Reads from p_SearchQueryStats_<customer_id> table.
+ * Note: Search term tables may not exist in all Data Transfer configurations.
+ * This function gracefully returns 0 rows if the table is not found.
  */
 export async function syncSearchTerms(
   pool: Pool,
@@ -195,98 +201,119 @@ export async function syncSearchTerms(
   const bq = bqClientOverride ?? getBigQueryClient();
   const { projectId, dataset, customerId } = getBQConfig();
 
-  const tableName = `${projectId}.${dataset}.p_SearchQueryStats_${customerId}`;
+  const possibleTables = [
+    `${projectId}.${dataset}.ads_SearchQueryStats_${customerId}`,
+    `${projectId}.${dataset}.ads_SearchTermStats_${customerId}`,
+    `${projectId}.${dataset}.p_SearchQueryStats_${customerId}`,
+  ];
 
-  const query = `
-    SELECT
-      search_term,
-      campaign_name,
-      segments_date,
-      IFNULL(metrics_impressions, 0) AS impressions,
-      IFNULL(metrics_clicks, 0) AS clicks,
-      IFNULL(metrics_cost_micros, 0) AS cost_micros,
-      IFNULL(metrics_conversions, 0) AS conversions,
-      IFNULL(metrics_conversions_value, 0) AS conversion_value
-    FROM \`${tableName}\`
-    WHERE segments_date BETWEEN @startDate AND @endDate
-    ORDER BY segments_date, metrics_impressions DESC
-  `;
+  for (const tableName of possibleTables) {
+    try {
+      const checkQuery = `SELECT 1 FROM \`${tableName}\` LIMIT 1`;
+      await bq.query({ query: checkQuery, location: 'US' });
 
-  const [rows] = await bq.query({
-    query,
-    params: { startDate, endDate },
-    location: 'US',
-  });
+      const query = `
+        SELECT
+          search_term,
+          campaign_name,
+          segments_date,
+          IFNULL(metrics_impressions, 0) AS impressions,
+          IFNULL(metrics_clicks, 0) AS clicks,
+          IFNULL(metrics_cost_micros, 0) AS cost_micros,
+          IFNULL(metrics_conversions, 0) AS conversions,
+          IFNULL(metrics_conversions_value, 0) AS conversion_value
+        FROM \`${tableName}\`
+        WHERE _DATA_DATE BETWEEN @startDate AND @endDate
+        ORDER BY segments_date, metrics_impressions DESC
+      `;
 
-  if (!rows || rows.length === 0) {
-    return { rows: 0, errors: [] };
-  }
+      const [rows] = await bq.query({
+        query,
+        params: { startDate, endDate },
+        location: 'US',
+      });
 
-  const errors: string[] = [];
-  let inserted = 0;
+      if (!rows || rows.length === 0) {
+        return { rows: 0, errors: [] };
+      }
 
-  const dbClient = await pool.connect();
-  try {
-    await dbClient.query('BEGIN');
+      const errors: string[] = [];
+      let inserted = 0;
 
-    await dbClient.query(
-      `DELETE FROM analytics.raw_google_ads
-       WHERE source_system = 'google-ads-bq'
-         AND event_name = 'search_term_performance'
-         AND occurred_at::date BETWEEN $1::date AND $2::date`,
-      [startDate, endDate],
-    );
+      const dbClient = await pool.connect();
+      try {
+        await dbClient.query('BEGIN');
 
-    const INSERT_SQL = `
-      INSERT INTO analytics.raw_google_ads
-        (source_system, event_name, occurred_at, payload, ingestion_run_id)
-      VALUES ($1, $2, $3, $4, $5)
-    `;
+        await dbClient.query(
+          `DELETE FROM analytics.raw_google_ads
+           WHERE source_system = 'google-ads-bq'
+             AND event_name = 'search_term_performance'
+             AND occurred_at::date BETWEEN $1::date AND $2::date`,
+          [startDate, endDate],
+        );
 
-    for (const row of rows) {
-      const costMicros = Number(row.cost_micros ?? 0);
-      const cost = costMicros / 1_000_000;
-      const clicks = Number(row.clicks ?? 0);
-      const impressions = Number(row.impressions ?? 0);
-      const conversions = Number(row.conversions ?? 0);
-      const conversionValue = Number(row.conversion_value ?? 0);
+        const INSERT_SQL = `
+          INSERT INTO analytics.raw_google_ads
+            (source_system, event_name, occurred_at, payload, ingestion_run_id)
+          VALUES ($1, $2, $3, $4, $5)
+        `;
 
-      const cpc = clicks > 0 ? cost / clicks : 0;
-      const ctr = impressions > 0 ? clicks / impressions : 0;
+        for (const row of rows) {
+          const costMicros = Number(row.cost_micros ?? 0);
+          const cost = costMicros / 1_000_000;
+          const clicks = Number(row.clicks ?? 0);
+          const impressions = Number(row.impressions ?? 0);
+          const conversions = Number(row.conversions ?? 0);
+          const conversionValue = Number(row.conversion_value ?? 0);
 
-      const dateStr = String(row.segments_date ?? '');
-      const occurredAt = `${dateStr}T00:00:00Z`;
+          const cpc = clicks > 0 ? cost / clicks : 0;
+          const ctr = impressions > 0 ? clicks / impressions : 0;
 
-      const payload = {
-        search_term: String(row.search_term ?? ''),
-        campaign_name: String(row.campaign_name ?? ''),
-        impressions,
-        clicks,
-        cost,
-        conversions,
-        conversion_value: conversionValue,
-        cpc,
-        ctr,
-        date: dateStr,
-      };
+          const dateVal = row.segments_date;
+          let dateStr: string;
+          if (dateVal && typeof dateVal === 'object' && dateVal.value) {
+            dateStr = String(dateVal.value);
+          } else {
+            dateStr = String(dateVal ?? '');
+          }
+          const occurredAt = `${dateStr}T00:00:00Z`;
 
-      await dbClient.query(INSERT_SQL, [
-        'google-ads-bq',
-        'search_term_performance',
-        occurredAt,
-        JSON.stringify(payload),
-        ingestionRunId,
-      ]);
-      inserted++;
+          const payload = {
+            search_term: String(row.search_term ?? ''),
+            campaign_name: String(row.campaign_name ?? ''),
+            impressions,
+            clicks,
+            cost,
+            conversions,
+            conversion_value: conversionValue,
+            cpc,
+            ctr,
+            date: dateStr,
+          };
+
+          await dbClient.query(INSERT_SQL, [
+            'google-ads-bq',
+            'search_term_performance',
+            occurredAt,
+            JSON.stringify(payload),
+            ingestionRunId,
+          ]);
+          inserted++;
+        }
+
+        await dbClient.query('COMMIT');
+      } catch (err) {
+        await dbClient.query('ROLLBACK');
+        throw err;
+      } finally {
+        dbClient.release();
+      }
+
+      return { rows: inserted, errors };
+    } catch {
+      continue;
     }
-
-    await dbClient.query('COMMIT');
-  } catch (err) {
-    await dbClient.query('ROLLBACK');
-    throw err;
-  } finally {
-    dbClient.release();
   }
 
-  return { rows: inserted, errors };
+  return { rows: 0, errors: ['No search term table found in BigQuery — skipped'] };
 }

@@ -120,10 +120,10 @@ describe('syncCampaignPerformance', () => {
 });
 
 describe('syncSearchTerms', () => {
-  it('returns 0 rows when BigQuery returns empty result', async () => {
+  it('returns no-table message when all table probes fail', async () => {
     const { BigQuery } = await import('@google-cloud/bigquery');
     const bqClient = new BigQuery();
-    (bqClient.query as any).mockResolvedValue([[]]);
+    (bqClient.query as any).mockRejectedValue(new Error('Not found'));
 
     const { syncSearchTerms } = await import('../googleAdsSync');
     const result = await syncSearchTerms(
@@ -135,26 +135,32 @@ describe('syncSearchTerms', () => {
     );
 
     expect(result.rows).toBe(0);
-    expect(result.errors).toHaveLength(0);
+    expect(result.errors[0]).toContain('No search term table found');
   });
 
-  it('inserts search term rows with correct payload', async () => {
+  it('inserts search term rows when table exists', async () => {
     const { BigQuery } = await import('@google-cloud/bigquery');
     const bqClient = new BigQuery();
 
-    const mockRows = [
-      {
-        search_term: 'neon signs custom',
-        campaign_name: 'Brand Campaign',
-        segments_date: '2025-01-15',
-        impressions: 200,
-        clicks: 20,
-        cost_micros: 10000000,
-        conversions: 2,
-        conversion_value: 200,
-      },
-    ];
-    (bqClient.query as any).mockResolvedValue([mockRows]);
+    let callCount = 0;
+    (bqClient.query as any).mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve([[{ f0_: 1 }]]);
+      }
+      return Promise.resolve([[
+        {
+          search_term: 'neon signs custom',
+          campaign_name: 'Brand Campaign',
+          segments_date: '2025-01-15',
+          impressions: 200,
+          clicks: 20,
+          cost_micros: 10000000,
+          conversions: 2,
+          conversion_value: 200,
+        },
+      ]]);
+    });
     mockQuery.mockResolvedValue({ rows: [] });
 
     const { syncSearchTerms } = await import('../googleAdsSync');
