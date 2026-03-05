@@ -1,0 +1,54 @@
+neya@cloudshell:~ (nsd-marketing-analytics)$ bq ls google_ads_data
+                       tableId                        Type   Labels   Time Partitioning   Clustered Fields  
+ --------------------------------------------------- ------ -------- ------------------- ------------------ 
+  ads_AccountBasicStats_6999519966                    VIEW                                                  
+  ads_AccountConversionStats_6999519966               VIEW                                                  
+  ads_AccountNonClickStats_6999519966                 VIEW                                                  
+  ads_AccountStats_6999519966                         VIEW                                                  
+  ads_AdBasicStats_6999519966                         VIEW                                                  
+  ads_AdConversionStats_6999519966                    VIEW                                                  
+  ads_AdCrossDeviceConversionStats_6999519966         VIEW                                                  
+  ads_AdCrossDeviceStats_6999519966                   VIEW                                                  
+  ads_AdGroupAdLabel_6999519966                       VIEW                                                  
+  ads_AdGroupAudienceBasicStats_6999519966            VIEW                                                  
+  ads_AdGroupAudienceConversionStats_6999519966       VIEW                                                  
+  ads_AdGroupAudienceNonClickStats_6999519966         VIEW                                                  
+  ads_AdGroupAudienceStats_6999519966                 VIEW                                                  
+  ads_AdGroupAudience_6999519966                      VIEW                                                  
+  ads_AdGroupBasicStats_6999519966                    VIEW                                                  
+  ads_AdGroupBidModifier_6999519966                   VIEW                                                  
+  ads_AdGroupConversionStats_6999519966               VIEW                                                  
+  ads_AdGroupCriterionLabel_6999519966                VIEW                                                  
+  ads_AdGroupCriterion_6999519966                     VIEW                                                  
+  ads_AdGroupCrossDeviceConversionStats_6999519966    VIEW                                                  
+  ads_AdGroupCrossDeviceStats_6999519966              VIEW                                                  
+  ads_AdGroupLabel_6999519966                         VIEW                                                  
+  ads_AdGroupStats_6999519966                         VIEW                                                  
+  ads_AdGroup_6999519966                              VIEW                                                  
+  ads_AdStats_6999519966                              VIEW                                                  
+  ads_Ad_6999519966                                   VIEW                                                  
+  ads_AgeRangeBasicStats_6999519966                   VIEW                                                  
+  ads_AgeRangeConversionStats_6999519966              VIEW                                                  
+  ads_AgeRangeNonClickStats_6999519966                VIEW                                                  
+  ads_AgeRangeStats_6999519966                        VIEW                                                  
+  ads_AgeRange_6999519966                             VIEW                                                  
+  ads_BidGoalConversionStats_6999519966               VIEW                                                  
+  ads_BidGoalStats_6999519966                         VIEW                                                  
+  ads_BidGoal_6999519966                              VIEW                                                  
+  ads_BudgetStats_6999519966                          VIEW                                                  
+  ads_Budget_6999519966                               VIEW                                                  
+  ads_CampaignAudienceBasicStats_6999519966           VIEW                                                  
+  ads_CampaignAudienceConversionStats_6999519966      VIEW                                                  
+  ads_CampaignAudienceNonClickStats_6999519966        VIEW                                                  
+  ads_CampaignAudienceStats_6999519966                VIEW                                                  
+  ads_CampaignAudience_6999519966                     VIEW                                                  
+  ads_CampaignBasicStats_6999519966                   VIEW                                                  
+  ads_CampaignConversionStats_6999519966              VIEW                                                  
+  ads_CampaignCookieStats_6999519966                  VIEW                                                  
+  ads_CampaignCriterion_6999519966                    VIEW                                                  
+  ads_CampaignCrossDeviceConversionStats_6999519966   VIEW                                                  
+  ads_CampaignCrossDeviceStats_6999519966             VIEW                                                  
+  ads_CampaignLabel_6999519966                        VIEW                                                  
+  ads_CampaignLocationTargetStats_6999519966          VIEW                                                  
+  ads_CampaignStats_6999519966                        VIEW                                                  
+neya@cloudshell:~ (nsd-marketing-analytics)$ 
