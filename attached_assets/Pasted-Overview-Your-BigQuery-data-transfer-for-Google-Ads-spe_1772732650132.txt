@@ -1,0 +1,13 @@
+Overview:
+Your BigQuery data transfer for Google Ads, specifically for the account ID 624-791-0899 and transfer configuration 69c8aeea-0000-2bb3-ad83-f4f5e804a8b8 in project nsd-marketing-analytics, is failing due to an authentication issue. The error message "Request is missing required authentication credential" along with "The Google account that generated the OAuth access tokens is not associated with any Ads accounts" indicates that the Google account used for authentication with the BigQuery Data Transfer Service is not linked to the specified Google Ads account. This means the OAuth access token provided lacks the necessary permissions to access data from the Google Ads account.
+
+Recommended fixes:
+Verify Google Account association with Google Ads: Ensure that the Google account used to set up the BigQuery Google Ads transfer has access to the Google Ads account 624-791-0899. If it's a new account, you'll need to link it to your existing Google Ads account.
+Re-authenticate the transfer: You may need to re-authorize the BigQuery Google Ads transfer to generate a new OAuth access token. This can often resolve issues where tokens have expired or been revoked.
+Use a service account with appropriate permissions: It's a best practice to use a service account for BigQuery data transfers instead of individual user credentials, especially for production environments. Ensure the service account has the necessary permissions to access the Google Ads account. You can update the transfer configuration to use a service account.
+Navigate to the Data transfers page in the Google Cloud console.
+Select the failing transfer.
+Click EDIT to update the transfer configuration.
+In the Service Account field, enter the service account name that has access to the Google Ads account.
+Click Save.
+Check for Advanced Protection or 2-Step Verification requirements: If the Google Ads account has Advanced Protection or 2-Step Verification enabled, ensure the Google account used for authentication also meets these requirements..
