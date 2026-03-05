@@ -1,0 +1,306 @@
+Replit Prompt
+NSD Marketing Command Center Architecture Audit
+
+You are acting as a Senior Analytics Architect and Dashboard Systems Engineer.
+
+Your task is to investigate the existing Neon Signs Depot analytics and dashboard infrastructure and determine how to restructure it into a Marketing Command Center aligned with Alex Hormozi’s Core 4 Growth Framework.
+
+DO NOT implement changes yet.
+
+This task is investigation, documentation, and architectural planning only.
+
+Objective
+
+Design a Marketing Command Center that organizes all marketing performance data around Hormozi’s Core 4 Growth Levers:
+
+Warm Outreach
+
+Cold Outreach
+
+Post Free Content
+
+Run Paid Ads
+
+The dashboard must serve two audiences simultaneously:
+
+Operator view (daily marketing execution)
+
+Executive view (strategic performance)
+
+Required Investigation
+
+Perform a full investigation of the current system.
+
+You must determine:
+
+What marketing data currently exists
+
+Where the data is stored
+
+How dashboards currently access the data
+
+What must be added or modified to support the new structure
+
+Step 1 — Inventory the Current Analytics Architecture
+
+Identify and document:
+
+Supabase Analytics Schema
+
+Inspect and document the following:
+
+analytics.raw_web_events
+analytics.conversion_events
+analytics.dashboard_* views
+analytics.metrics_* tables
+analytics.ingestion_runs
+
+Determine:
+
+• event sources
+• schema grain
+• attribution logic
+• derived metrics
+
+Identify what metrics currently power:
+
+dashboard_pages
+dashboard_sources
+dashboard_categories
+dashboard_funnel_daily
+
+Data Sources Currently Feeding the System
+
+Determine which of these are integrated:
+
+GA4
+GTM
+Search Console
+Google Ads
+Meta Ads
+Clarity
+Web events ingestion endpoint
+Quote system events
+
+Document exactly what data each source contributes.
+
+Current Marketing KPIs
+
+List every KPI currently derived from the system, including:
+
+traffic
+sessions
+conversion rate
+pipeline value
+lead submissions
+page engagement
+source attribution
+
+Step 2 — Map Current Metrics to Hormozi Core 4
+
+Create a mapping of existing data to:
+
+Warm Outreach
+
+Examples:
+
+Email follow-ups
+Quote follow-ups
+Customer pipeline conversions
+
+Metrics needed:
+
+lead → quote conversion
+quote → sale conversion
+average deal value
+pipeline value
+
+Cold Outreach
+
+Apollo campaigns
+Sales Engine outreach
+
+Metrics needed:
+
+contacts sourced
+emails sent
+reply rate
+positive reply rate
+meetings booked
+deals closed
+
+Post Free Content
+
+SEO
+Organic search
+Social media
+
+Metrics needed:
+
+organic traffic
+ranking keywords
+search impressions
+search CTR
+blog conversions
+content-assisted conversions
+
+Run Paid Ads
+
+Google Ads
+Meta Ads
+
+Metrics needed:
+
+impressions
+CPC
+CPA
+ROAS
+conversion value
+pipeline value
+
+Step 3 — Identify Missing Metrics
+
+Determine which metrics do not currently exist but are required.
+
+Examples likely missing:
+
+true CAC
+pipeline value by source
+revenue attribution
+keyword-level ROI
+campaign ROI
+content-assisted conversions
+sales cycle length
+
+Document how each metric should be computed using existing data where possible.
+
+Step 4 — Define the Command Center Dashboard Structure
+
+Design a four-pillar marketing command center.
+
+The structure must be:
+
+Marketing Command Center
+
+Section 1
+Warm Outreach
+
+Section 2
+Cold Outreach
+
+Section 3
+Post Free Content
+
+Section 4
+Run Paid Ads
+
+Each section must include:
+
+Executive KPI tiles
+Operator diagnostic panels
+Trend charts
+Funnel breakdowns
+
+Step 5 — Define Dashboard Interaction Requirements
+
+Specify dynamic dashboard features required:
+
+Filters:
+
+date range
+channel
+campaign
+keyword
+landing page
+
+Visualization Types:
+
+time series trend lines
+conversion funnels
+source comparison tables
+keyword opportunity tables
+campaign performance charts
+
+Step 6 — Use the Adminto Figma Template
+
+You MUST adapt the dashboard layout to the existing Adminto admin template provided in Figma.
+
+Requirements:
+
+Do NOT design a new UI.
+
+Use the Adminto dashboard components including:
+
+KPI cards
+metric tiles
+trend charts
+tables
+filters
+side navigation
+
+Design the Marketing Command Center layout using these components.
+
+Step 7 — Identify Required Backend Changes
+
+Determine if we need:
+
+new views
+new metrics tables
+new ingestion pipelines
+new attribution logic
+
+Provide exact SQL examples if necessary.
+
+Step 8 — Deliverables
+
+Produce a structured report with the following sections.
+
+1. Current Analytics System Architecture
+
+Tables
+Views
+Data sources
+Event pipelines
+
+2. Current Metrics Inventory
+
+All KPIs currently computed.
+
+3. Hormozi Core 4 Mapping
+
+Mapping of existing metrics to:
+
+Warm Outreach
+Cold Outreach
+Post Free Content
+Run Paid Ads
+
+4. Missing Metrics
+
+List of required metrics not currently available.
+
+5. Marketing Command Center Dashboard Design
+
+Full layout specification using Adminto components.
+
+6. Required Backend Changes
+
+Exact data model changes required.
+
+Important Constraints
+
+Do NOT modify the database.
+
+Do NOT create migrations.
+
+Do NOT implement dashboards yet.
+
+This phase is strictly investigation and architecture planning.
+
+Goal
+
+Produce a clear blueprint that will allow us to build a Marketing Command Center capable of running the entire growth system for Neon Signs Depot.
+
+This system should support the long-term strategy of scaling the business through AI-assisted marketing intelligence and performance tracking, consistent with the company’s growth strategy. 
+
+Comprehensive-Business-Plan-for…
