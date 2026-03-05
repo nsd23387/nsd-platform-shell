@@ -223,7 +223,7 @@ export default function ExperimentsPage() {
           {experiments.length === 0 ? (
             <div style={{ padding: space['8'], textAlign: 'center' as const, border: `1px dashed ${tc.border.default}`, borderRadius: radius.lg, backgroundColor: tc.background.muted }}>
               <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
-                No experiments yet. Click "Add Experiment" to start tracking.
+                No experiments yet. Click &ldquo;Add Experiment&rdquo; to start tracking.
               </p>
             </div>
           ) : (
