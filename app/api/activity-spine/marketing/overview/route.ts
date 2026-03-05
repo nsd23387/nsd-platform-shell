@@ -9,6 +9,10 @@
  *   (default: last_30d)
  *
  * Optional: ?include_timeseries=true
+ * Optional: ?comparison=prev_period|wow|mom (default: prev_period)
+ *   - prev_period: compare against the immediately preceding period of equal duration
+ *   - wow: compare against the same date range shifted back 7 days (week-over-week)
+ *   - mom: compare against the same date range shifted back 1 month (month-over-month)
  * Legacy compat: ?period=7d|30d|90d still accepted.
  *
  * Thin handler — all SQL lives in services/marketingQueries.ts.
@@ -20,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import type {
   MarketingPreset,
+  MarketingComparisonMode,
   MarketingPeriodBlock,
   MarketingOverviewResponse,
   MarketingMeta,
@@ -27,8 +32,10 @@ import type {
   MarketingKPIComparisons,
   MarketingAnomalies,
   ActivitySpineResponse,
+  Core4Summary,
 } from '../../../../../types/activity-spine';
 import { executeMarketingQueries } from '../../../../../services/marketingQueries';
+import type { MarketingFilters } from '../../../../../services/marketingQueries';
 
 // ============================================
 // Connection pool
@@ -110,16 +117,48 @@ function resolvePreset(preset: MarketingPreset): { start: string; end: string } 
   }
 }
 
-function computePreviousPeriod(start: string, end: string): { prevStart: string; prevEnd: string } {
-  const startMs = new Date(start + 'T00:00:00Z').getTime();
-  const endMs = new Date(end + 'T00:00:00Z').getTime();
-  const durationMs = endMs - startMs;
-  const prevEndMs = startMs - MS_PER_DAY;
-  const prevStartMs = prevEndMs - durationMs;
-  return {
-    prevStart: formatUTCDate(new Date(prevStartMs)),
-    prevEnd: formatUTCDate(new Date(prevEndMs)),
-  };
+const VALID_COMPARISON_MODES: MarketingComparisonMode[] = ['prev_period', 'wow', 'mom'];
+
+function computeComparisonPeriod(
+  start: string,
+  end: string,
+  mode: MarketingComparisonMode
+): { prevStart: string; prevEnd: string } {
+  const startDate = new Date(start + 'T00:00:00Z');
+  const endDate = new Date(end + 'T00:00:00Z');
+
+  switch (mode) {
+    case 'wow': {
+      const prevStart = new Date(startDate);
+      prevStart.setUTCDate(prevStart.getUTCDate() - 7);
+      const prevEnd = new Date(endDate);
+      prevEnd.setUTCDate(prevEnd.getUTCDate() - 7);
+      return {
+        prevStart: formatUTCDate(prevStart),
+        prevEnd: formatUTCDate(prevEnd),
+      };
+    }
+    case 'mom': {
+      const prevStart = new Date(startDate);
+      prevStart.setUTCMonth(prevStart.getUTCMonth() - 1);
+      const prevEnd = new Date(endDate);
+      prevEnd.setUTCMonth(prevEnd.getUTCMonth() - 1);
+      return {
+        prevStart: formatUTCDate(prevStart),
+        prevEnd: formatUTCDate(prevEnd),
+      };
+    }
+    case 'prev_period':
+    default: {
+      const durationMs = endDate.getTime() - startDate.getTime();
+      const prevEndMs = startDate.getTime() - MS_PER_DAY;
+      const prevStartMs = prevEndMs - durationMs;
+      return {
+        prevStart: formatUTCDate(new Date(prevStartMs)),
+        prevEnd: formatUTCDate(new Date(prevEndMs)),
+      };
+    }
+  }
 }
 
 interface DateRange { start: string; end: string }
@@ -155,6 +194,21 @@ function parseDateParams(searchParams: URLSearchParams): DateRange | { error: st
   if (hasLegacy) return { error: `Invalid period "${legacyPeriod}". Must be one of: 7d, 30d, 90d` };
 
   return resolvePreset('last_30d');
+}
+
+const VALID_FILTER_KEYS: (keyof MarketingFilters)[] = ['channel', 'campaign', 'device', 'geo', 'landing_page'];
+
+function parseFilters(searchParams: URLSearchParams): MarketingFilters | undefined {
+  const filters: MarketingFilters = {};
+  let hasAny = false;
+  for (const key of VALID_FILTER_KEYS) {
+    const val = searchParams.get(key);
+    if (val != null && val.trim() !== '') {
+      (filters as Record<string, string>)[key] = val.trim();
+      hasAny = true;
+    }
+  }
+  return hasAny ? filters : undefined;
 }
 
 // ============================================
@@ -198,9 +252,27 @@ export async function GET(request: NextRequest) {
   }
 
   const { start, end } = parsed;
-  const { prevStart, prevEnd } = computePreviousPeriod(start, end);
+  const comparisonParam = request.nextUrl.searchParams.get('comparison');
+  let comparisonMode: MarketingComparisonMode = 'prev_period';
+  if (comparisonParam) {
+    if (!VALID_COMPARISON_MODES.includes(comparisonParam as MarketingComparisonMode)) {
+      return NextResponse.json(
+        { error: `Invalid comparison mode "${comparisonParam}". Must be one of: ${VALID_COMPARISON_MODES.join(', ')}` },
+        { status: 400 }
+      );
+    }
+    comparisonMode = comparisonParam as MarketingComparisonMode;
+  }
+  const { prevStart, prevEnd } = computeComparisonPeriod(start, end, comparisonMode);
   const includeTimeseries = request.nextUrl.searchParams.get('include_timeseries') === 'true';
-  const periodBlock: MarketingPeriodBlock = { start, end, granularity: 'day' };
+  const periodBlock: MarketingPeriodBlock = {
+    start,
+    end,
+    granularity: 'day',
+    comparison_mode: comparisonMode,
+    comparison_start: prevStart,
+    comparison_end: prevEnd,
+  };
 
   if (!isDatabaseConfigured()) {
     const body: ActivitySpineResponse<MarketingOverviewResponse> = {
@@ -225,6 +297,12 @@ export async function GET(request: NextRequest) {
         ga4_funnel: { view_item: 0, add_to_cart: 0, begin_checkout: 0, purchase: 0, form_start: 0, form_submit: 0 },
         google_ads_overview: { spend: 0, impressions: 0, clicks: 0, conversions: 0, cpc: 0, ctr: 0, roas: 0 },
         google_ads_campaigns: [],
+        core4_summary: {
+          warm_outreach: { current: { engine: 'warm_outreach', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, previous: { engine: 'warm_outreach', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, deltas: { sessions_pct: 0, clicks_pct: 0, quotes_pct: 0, pipeline_value_usd_pct: 0, spend_pct: 0, cac_pct: 0, roas_pct: 0, quote_rate_pct: 0 } },
+          cold_outreach: { current: { engine: 'cold_outreach', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, previous: { engine: 'cold_outreach', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, deltas: { sessions_pct: 0, clicks_pct: 0, quotes_pct: 0, pipeline_value_usd_pct: 0, spend_pct: 0, cac_pct: 0, roas_pct: 0, quote_rate_pct: 0 } },
+          post_free_content: { current: { engine: 'post_free_content', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, previous: { engine: 'post_free_content', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, deltas: { sessions_pct: 0, clicks_pct: 0, quotes_pct: 0, pipeline_value_usd_pct: 0, spend_pct: 0, cac_pct: 0, roas_pct: 0, quote_rate_pct: 0 } },
+          run_paid_ads: { current: { engine: 'run_paid_ads', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, previous: { engine: 'run_paid_ads', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, deltas: { sessions_pct: 0, clicks_pct: 0, quotes_pct: 0, pipeline_value_usd_pct: 0, spend_pct: 0, cac_pct: 0, roas_pct: 0, quote_rate_pct: 0 } },
+        },
       },
       timestamp: new Date().toISOString(),
       orgId: 'unconfigured',
@@ -236,12 +314,15 @@ export async function GET(request: NextRequest) {
     const db = getPool();
     const t0 = performance.now();
 
+    const filters = parseFilters(request.nextUrl.searchParams);
+
     const result = await executeMarketingQueries(db, {
       startDate: start,
       endDate: end,
       prevStartDate: prevStart,
       prevEndDate: prevEnd,
       includeTimeseries,
+      filters,
     });
 
     const queryMs = Math.round(performance.now() - t0);
@@ -273,6 +354,7 @@ export async function GET(request: NextRequest) {
       ga4_funnel: result.ga4_funnel,
       google_ads_overview: result.google_ads_overview,
       google_ads_campaigns: result.google_ads_campaigns,
+      core4_summary: result.core4_summary,
     };
 
     if (result.timeseries) {

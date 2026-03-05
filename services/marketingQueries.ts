@@ -30,6 +30,10 @@ import type {
   MarketingGA4Funnel,
   MarketingGoogleAdsOverview,
   MarketingGoogleAdsCampaign,
+  Core4EngineMetrics,
+  Core4EngineComparison,
+  Core4Summary,
+  Core4Engine,
 } from '../types/activity-spine';
 
 // ============================================
@@ -700,6 +704,88 @@ const GOOGLE_ADS_CAMPAIGNS_SQL = `
 `;
 
 // ============================================
+// T015: Core 4 Engine Aggregate Queries
+// ============================================
+
+const WARM_OUTREACH_SQL = `
+  SELECT
+    COALESCE(SUM(
+      CASE WHEN submission_source IN ('direct', 'email', 'newsletter', 'quote.neonsignsdepot.com')
+        THEN submissions ELSE 0 END
+    ), 0) AS quotes,
+    COALESCE(SUM(
+      CASE WHEN submission_source IN ('direct', 'email', 'newsletter', 'quote.neonsignsdepot.com')
+        THEN pipeline_value_usd ELSE 0 END
+    ), 0) AS pipeline_value_usd
+  FROM analytics.dashboard_sources
+`;
+
+const WARM_OUTREACH_SESSIONS_SQL = `
+  SELECT
+    COALESCE(SUM((payload->>'sessions')::int), 0) AS sessions
+  FROM analytics.raw_ga4_events
+  WHERE event_name = 'channel_session_summary'
+    AND source_system = 'ga4-api'
+    AND payload->>'channel' IN ('Direct', 'Email', 'Referral')
+    AND occurred_at::date BETWEEN $1 AND $2
+`;
+
+const POST_FREE_CONTENT_SQL = `
+  SELECT
+    COALESCE(SUM(clicks), 0) AS clicks,
+    COALESCE(SUM(impressions), 0) AS impressions
+  FROM analytics.metrics_search_console_page
+`;
+
+const POST_FREE_CONTENT_SESSIONS_SQL = `
+  SELECT
+    COALESCE(SUM((payload->>'sessions')::int), 0) AS sessions,
+    COALESCE(SUM((payload->>'conversions')::int), 0) AS conversions,
+    COALESCE(SUM((payload->>'revenue')::numeric), 0) AS revenue
+  FROM analytics.raw_ga4_events
+  WHERE event_name = 'channel_session_summary'
+    AND source_system = 'ga4-api'
+    AND payload->>'channel' IN ('Organic Search', 'Organic Social', 'Organic Video')
+    AND occurred_at::date BETWEEN $1 AND $2
+`;
+
+const POST_FREE_CONTENT_CONVERSIONS_SQL = `
+  SELECT
+    COUNT(*) AS quotes,
+    COALESCE(SUM((event_data->>'preliminary_price')::numeric) / 100.0, 0) AS pipeline_value_usd
+  FROM analytics.raw_web_events
+  WHERE event_type = 'conversion'
+    AND (
+      referrer_source IN ('google', 'bing', 'duckduckgo', 'yahoo')
+      OR referrer_source IS NULL
+    )
+    AND occurred_at >= $1::date AND occurred_at < ($2::date + INTERVAL '1 day')
+`;
+
+const RUN_PAID_ADS_SQL = `
+  SELECT
+    COALESCE(SUM((payload->>'cost')::numeric), 0) AS spend,
+    COALESCE(SUM((payload->>'impressions')::int), 0) AS impressions,
+    COALESCE(SUM((payload->>'clicks')::int), 0) AS clicks,
+    COALESCE(SUM((payload->>'conversions')::numeric), 0) AS conversions,
+    COALESCE(SUM((payload->>'conversion_value')::numeric), 0) AS pipeline_value_usd
+  FROM analytics.raw_google_ads
+  WHERE source_system = 'google-ads-bq'
+    AND event_name = 'campaign_performance'
+    AND occurred_at::date BETWEEN $1 AND $2
+`;
+
+const RUN_PAID_ADS_SESSIONS_SQL = `
+  SELECT
+    COALESCE(SUM((payload->>'sessions')::int), 0) AS sessions
+  FROM analytics.raw_ga4_events
+  WHERE event_name = 'channel_session_summary'
+    AND source_system = 'ga4-api'
+    AND payload->>'channel' IN ('Paid Search', 'Paid Social', 'Paid Video', 'Display')
+    AND occurred_at::date BETWEEN $1 AND $2
+`;
+
+// ============================================
 // Row helpers
 // ============================================
 
@@ -748,6 +834,41 @@ function buildComparison(current: number, previous: number): MarketingKPICompari
   };
 }
 
+function buildCore4EngineMetrics(engine: Core4Engine, data: { sessions: number; clicks: number; quotes: number; pipeline_value_usd: number; spend: number }): Core4EngineMetrics {
+  return {
+    engine,
+    sessions: data.sessions,
+    clicks: data.clicks,
+    quotes: data.quotes,
+    pipeline_value_usd: data.pipeline_value_usd,
+    spend: data.spend,
+    cac: safeDivide(data.spend, data.quotes),
+    roas: safeDivide(data.pipeline_value_usd, data.spend),
+    quote_rate: safeDivide(data.quotes, data.sessions),
+  };
+}
+
+function buildCore4Comparison(current: Core4EngineMetrics, previous: Core4EngineMetrics): Core4EngineComparison {
+  return {
+    current,
+    previous,
+    deltas: {
+      sessions_pct: safeDivide(current.sessions - previous.sessions, previous.sessions),
+      clicks_pct: safeDivide(current.clicks - previous.clicks, previous.clicks),
+      quotes_pct: safeDivide(current.quotes - previous.quotes, previous.quotes),
+      pipeline_value_usd_pct: safeDivide(current.pipeline_value_usd - previous.pipeline_value_usd, previous.pipeline_value_usd),
+      spend_pct: safeDivide(current.spend - previous.spend, previous.spend),
+      cac_pct: safeDivide(current.cac - previous.cac, previous.cac),
+      roas_pct: safeDivide(current.roas - previous.roas, previous.roas),
+      quote_rate_pct: safeDivide(current.quote_rate - previous.quote_rate, previous.quote_rate),
+    },
+  };
+}
+
+function zeroCore4Metrics(engine: Core4Engine): Core4EngineMetrics {
+  return { engine, sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 };
+}
+
 function detectSpike(row: Row): boolean {
   const n = toNumber(row.n);
   const mean = toNumber(row.mean);
@@ -768,12 +889,118 @@ function mapTimeseries(rows: Row[]): MarketingTimeseriesPoint[] {
 // Public interface
 // ============================================
 
+export interface MarketingFilters {
+  channel?: string;
+  campaign?: string;
+  device?: string;
+  geo?: string;
+  landing_page?: string;
+}
+
 export interface MarketingQueryOptions {
   startDate: string;
   endDate: string;
   prevStartDate: string;
   prevEndDate: string;
   includeTimeseries: boolean;
+  filters?: MarketingFilters;
+}
+
+interface FilterFragment {
+  clause: string;
+  params: string[];
+}
+
+function buildFilterFragment(
+  filters: MarketingFilters | undefined,
+  tableType: 'engagement' | 'conversion_daily' | 'web_events' | 'ga4' | 'search_console' | 'google_ads',
+  paramOffset: number,
+): FilterFragment {
+  if (!filters) return { clause: '', params: [] };
+  const clauses: string[] = [];
+  const params: string[] = [];
+  let idx = paramOffset;
+
+  if (filters.landing_page) {
+    switch (tableType) {
+      case 'engagement':
+        idx++;
+        clauses.push(`page_path ILIKE $${idx}`);
+        params.push(`%${filters.landing_page}%`);
+        break;
+      case 'web_events':
+        idx++;
+        clauses.push(`page_url ILIKE $${idx}`);
+        params.push(`%${filters.landing_page}%`);
+        break;
+    }
+  }
+
+  if (filters.channel) {
+    if (tableType === 'ga4') {
+      idx++;
+      clauses.push(`payload->>'channel' ILIKE $${idx}`);
+      params.push(`%${filters.channel}%`);
+    }
+  }
+
+  if (filters.campaign) {
+    if (tableType === 'google_ads') {
+      idx++;
+      clauses.push(`payload->>'campaign_name' ILIKE $${idx}`);
+      params.push(`%${filters.campaign}%`);
+    }
+  }
+
+  if (filters.device) {
+    switch (tableType) {
+      case 'ga4':
+        idx++;
+        clauses.push(`payload->>'device_category' ILIKE $${idx}`);
+        params.push(`%${filters.device}%`);
+        break;
+      case 'search_console':
+        idx++;
+        clauses.push(`payload->>'device' ILIKE $${idx}`);
+        params.push(`%${filters.device}%`);
+        break;
+    }
+  }
+
+  if (filters.geo) {
+    switch (tableType) {
+      case 'ga4':
+        idx++;
+        clauses.push(`payload->>'country' ILIKE $${idx}`);
+        params.push(`%${filters.geo}%`);
+        break;
+      case 'search_console':
+        idx++;
+        clauses.push(`payload->>'country' ILIKE $${idx}`);
+        params.push(`%${filters.geo}%`);
+        break;
+    }
+  }
+
+  return {
+    clause: clauses.length > 0 ? ' AND ' + clauses.join(' AND ') : '',
+    params,
+  };
+}
+
+function appendFilter(sql: string, fragment: FilterFragment): string {
+  if (!fragment.clause) return sql;
+  const lastWhereIdx = sql.lastIndexOf('WHERE');
+  if (lastWhereIdx === -1) return sql;
+  const insertionKeywords = ['GROUP BY', 'ORDER BY', 'LIMIT', 'UNION'];
+  let insertPos = sql.length;
+  for (const kw of insertionKeywords) {
+    const kwIdx = sql.indexOf(kw, lastWhereIdx);
+    if (kwIdx !== -1 && kwIdx < insertPos) {
+      insertPos = kwIdx;
+    }
+  }
+  return sql.slice(0, insertPos) + fragment.clause + '\n  ' + sql.slice(insertPos);
 }
 
 export interface MarketingQueryResult {
@@ -796,52 +1023,110 @@ export interface MarketingQueryResult {
   ga4_funnel: MarketingGA4Funnel;
   google_ads_overview: MarketingGoogleAdsOverview;
   google_ads_campaigns: MarketingGoogleAdsCampaign[];
+  core4_summary: Core4Summary;
 }
 
 export async function executeMarketingQueries(
   db: Pool,
   opts: MarketingQueryOptions
 ): Promise<MarketingQueryResult> {
+  const filters = opts.filters;
+  const hasFilters = filters != null && Object.values(filters).some(Boolean);
+
+  const engFilter = buildFilterFragment(filters, 'engagement', 2);
+  const convFilter = buildFilterFragment(filters, 'conversion_daily', 2);
+  const ga4Filter = buildFilterFragment(filters, 'ga4', 2);
+  const scFilter = buildFilterFragment(filters, 'search_console', 2);
+  const adsFilter = buildFilterFragment(filters, 'google_ads', 2);
+  const webFilter = buildFilterFragment(filters, 'web_events', 2);
+
   const curParams = [opts.startDate, opts.endDate];
   const prevParams = [opts.prevStartDate, opts.prevEndDate];
 
+  const curEngP = [...curParams, ...engFilter.params];
+  const prevEngP = [...prevParams, ...engFilter.params];
+  const curConvP = [...curParams, ...convFilter.params];
+  const prevConvP = [...prevParams, ...convFilter.params];
+  const curGa4P = [...curParams, ...ga4Filter.params];
+  const prevGa4P = [...prevParams, ...ga4Filter.params];
+  const curScP = [...curParams, ...scFilter.params];
+  const curAdsP = [...curParams, ...adsFilter.params];
+  const prevAdsP = [...prevParams, ...adsFilter.params];
+  const curWebP = [...curParams, ...webFilter.params];
+  const prevWebP = [...prevParams, ...webFilter.params];
+
+  const fEngSql = hasFilters ? appendFilter(KPI_ENGAGEMENT_SQL, engFilter) : KPI_ENGAGEMENT_SQL;
+  const fConvSql = hasFilters ? appendFilter(KPI_CONVERSION_SQL, convFilter) : KPI_CONVERSION_SQL;
+  const fFunnelFbSql = hasFilters ? appendFilter(KPI_FUNNEL_FALLBACK_SQL, engFilter) : KPI_FUNNEL_FALLBACK_SQL;
+  const fAnomSessSql = hasFilters ? appendFilter(ANOMALY_SESSIONS_SQL, engFilter) : ANOMALY_SESSIONS_SQL;
+  const fAnomSubSql = hasFilters ? appendFilter(ANOMALY_SUBMISSIONS_SQL, convFilter) : ANOMALY_SUBMISSIONS_SQL;
+  const fAnomPipeSql = hasFilters ? appendFilter(ANOMALY_PIPELINE_SQL, convFilter) : ANOMALY_PIPELINE_SQL;
+  const fDevGa4Sql = hasFilters ? appendFilter(DEVICE_BREAKDOWN_GA4_SQL, ga4Filter) : DEVICE_BREAKDOWN_GA4_SQL;
+  const fCntGa4Sql = hasFilters ? appendFilter(COUNTRY_BREAKDOWN_GA4_SQL, ga4Filter) : COUNTRY_BREAKDOWN_GA4_SQL;
+  const fDevScSql = hasFilters ? appendFilter(DEVICE_BREAKDOWN_SC_SQL, scFilter) : DEVICE_BREAKDOWN_SC_SQL;
+  const fCntScSql = hasFilters ? appendFilter(COUNTRY_BREAKDOWN_SC_SQL, scFilter) : COUNTRY_BREAKDOWN_SC_SQL;
+  const fChanPerfSql = hasFilters ? appendFilter(CHANNEL_PERFORMANCE_SQL, ga4Filter) : CHANNEL_PERFORMANCE_SQL;
+  const fGa4FunnelSql = hasFilters ? appendFilter(GA4_FUNNEL_SQL, ga4Filter) : GA4_FUNNEL_SQL;
+  const fAdsOverSql = hasFilters ? appendFilter(GOOGLE_ADS_OVERVIEW_SQL, adsFilter) : GOOGLE_ADS_OVERVIEW_SQL;
+  const fAdsCampSql = hasFilters ? appendFilter(GOOGLE_ADS_CAMPAIGNS_SQL, adsFilter) : GOOGLE_ADS_CAMPAIGNS_SQL;
+  const fWarmSessSql = hasFilters ? appendFilter(WARM_OUTREACH_SESSIONS_SQL, ga4Filter) : WARM_OUTREACH_SESSIONS_SQL;
+  const fPfcSessSql = hasFilters ? appendFilter(POST_FREE_CONTENT_SESSIONS_SQL, ga4Filter) : POST_FREE_CONTENT_SESSIONS_SQL;
+  const fPfcConvSql = hasFilters ? appendFilter(POST_FREE_CONTENT_CONVERSIONS_SQL, webFilter) : POST_FREE_CONTENT_CONVERSIONS_SQL;
+  const fPaidAdsSql = hasFilters ? appendFilter(RUN_PAID_ADS_SQL, adsFilter) : RUN_PAID_ADS_SQL;
+  const fPaidSessSql = hasFilters ? appendFilter(RUN_PAID_ADS_SESSIONS_SQL, ga4Filter) : RUN_PAID_ADS_SESSIONS_SQL;
+  const fTsSessSql = hasFilters ? appendFilter(TIMESERIES_SESSIONS_SQL, engFilter) : TIMESERIES_SESSIONS_SQL;
+  const fTsSubSql = hasFilters ? appendFilter(TIMESERIES_SUBMISSIONS_SQL, convFilter) : TIMESERIES_SUBMISSIONS_SQL;
+  const fTsPipeSql = hasFilters ? appendFilter(TIMESERIES_PIPELINE_SQL, convFilter) : TIMESERIES_PIPELINE_SQL;
+
   const queries: Promise<{ rows: Row[] }>[] = [
-    /* 0  */ db.query(KPI_ENGAGEMENT_SQL, curParams),
-    /* 1  */ db.query(KPI_CONVERSION_SQL, curParams),
+    /* 0  */ db.query(fEngSql, curEngP),
+    /* 1  */ db.query(fConvSql, curConvP),
     /* 2  */ db.query(KPI_SEARCH_SQL),
     /* 3  */ db.query(PAGES_SQL, curParams),
     /* 4  */ db.query(SOURCES_SQL),
     /* 5  */ db.query(FRESHNESS_SQL),
-    /* 6  */ db.query(KPI_ENGAGEMENT_SQL, prevParams),
-    /* 7  */ db.query(KPI_CONVERSION_SQL, prevParams),
+    /* 6  */ db.query(fEngSql, prevEngP),
+    /* 7  */ db.query(fConvSql, prevConvP),
     /* 8  */ db.query(SEO_QUERIES_SQL),
-    /* 9  */ db.query(ANOMALY_SESSIONS_SQL, curParams),
-    /* 10 */ db.query(ANOMALY_SUBMISSIONS_SQL, curParams),
-    /* 11 */ db.query(ANOMALY_PIPELINE_SQL, curParams),
-    /* 12 */ db.query(KPI_FUNNEL_FALLBACK_SQL, curParams),
-    /* 13 */ db.query(KPI_FUNNEL_FALLBACK_SQL, prevParams),
-    /* 14 */ db.query(DEVICE_BREAKDOWN_GA4_SQL, curParams),
-    /* 15 */ db.query(COUNTRY_BREAKDOWN_GA4_SQL, curParams),
-    /* 16 */ db.query(DEVICE_BREAKDOWN_SC_SQL, curParams),
-    /* 17 */ db.query(COUNTRY_BREAKDOWN_SC_SQL, curParams),
+    /* 9  */ db.query(fAnomSessSql, curEngP),
+    /* 10 */ db.query(fAnomSubSql, curConvP),
+    /* 11 */ db.query(fAnomPipeSql, curConvP),
+    /* 12 */ db.query(fFunnelFbSql, curEngP),
+    /* 13 */ db.query(fFunnelFbSql, prevEngP),
+    /* 14 */ db.query(fDevGa4Sql, curGa4P),
+    /* 15 */ db.query(fCntGa4Sql, curGa4P),
+    /* 16 */ db.query(fDevScSql, curScP),
+    /* 17 */ db.query(fCntScSql, curScP),
     /* 18 */ db.query(PIPELINE_CATEGORY_SQL),
     /* 19 */ db.query(RECENT_CONVERSIONS_SQL),
     /* 20 */ db.query(SEO_MOVERS_SQL, curParams),
     /* 21 */ db.query(FUNNEL_SQL),
     /* 22 */ db.query(PIPELINE_HEALTH_SQL),
-    /* 23 */ db.query(CHANNEL_PERFORMANCE_SQL, curParams),
-    /* 24 */ db.query(GA4_FUNNEL_SQL, curParams),
-    /* 25 */ db.query(GOOGLE_ADS_OVERVIEW_SQL, curParams),
-    /* 26 */ db.query(GOOGLE_ADS_CAMPAIGNS_SQL, curParams),
+    /* 23 */ db.query(fChanPerfSql, curGa4P),
+    /* 24 */ db.query(fGa4FunnelSql, curGa4P),
+    /* 25 */ db.query(fAdsOverSql, curAdsP),
+    /* 26 */ db.query(fAdsCampSql, curAdsP),
+    /* 27 */ db.query(WARM_OUTREACH_SQL),
+    /* 28 */ db.query(fWarmSessSql, curGa4P),
+    /* 29 */ db.query(fWarmSessSql, prevGa4P),
+    /* 30 */ db.query(POST_FREE_CONTENT_SQL),
+    /* 31 */ db.query(fPfcSessSql, curGa4P),
+    /* 32 */ db.query(fPfcSessSql, prevGa4P),
+    /* 33 */ db.query(fPfcConvSql, curWebP),
+    /* 34 */ db.query(fPfcConvSql, prevWebP),
+    /* 35 */ db.query(fPaidAdsSql, curAdsP),
+    /* 36 */ db.query(fPaidAdsSql, prevAdsP),
+    /* 37 */ db.query(fPaidSessSql, curGa4P),
+    /* 38 */ db.query(fPaidSessSql, prevGa4P),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 27 */ db.query(TIMESERIES_SESSIONS_SQL, curParams),
-      /* 28 */ db.query(TIMESERIES_SUBMISSIONS_SQL, curParams),
-      /* 29 */ db.query(TIMESERIES_PIPELINE_SQL, curParams),
-      /* 30 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
-      /* 31 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
+      /* 39 */ db.query(fTsSessSql, curEngP),
+      /* 40 */ db.query(fTsSubSql, curConvP),
+      /* 41 */ db.query(fTsPipeSql, curConvP),
+      /* 42 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
+      /* 43 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
     );
   }
 
@@ -1108,17 +1393,91 @@ export async function executeMarketingQueries(
       roas: nonNegative(toNumber(r.roas)),
     }));
 
-  // Timeseries (indices shifted due to channel_performance + ga4_funnel + google_ads queries)
+  // Timeseries (indices shifted due to Core 4 queries)
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 27) {
+  if (opts.includeTimeseries && results.length > 39) {
     timeseries = {
-      sessions: mapTimeseries(results[27].rows),
-      submissions: mapTimeseries(results[28].rows),
-      pipeline_value_usd: mapTimeseries(results[29].rows),
-      impressions: mapTimeseries(results[30].rows),
-      clicks: mapTimeseries(results[31].rows),
+      sessions: mapTimeseries(results[39].rows),
+      submissions: mapTimeseries(results[40].rows),
+      pipeline_value_usd: mapTimeseries(results[41].rows),
+      impressions: mapTimeseries(results[42].rows),
+      clicks: mapTimeseries(results[43].rows),
     };
   }
+
+  // T015: Core 4 engine aggregation
+  // Note: WARM_OUTREACH_SQL queries dashboard_sources (lifetime view, no date column).
+  // Quotes/pipeline are identical for current and previous — deltas will be 0%.
+  // Sessions ARE date-filtered via GA4 channel_session_summary (indices 28/29).
+  const warmRow = results[27].rows[0] ?? {};
+  const warmSessionsCur = results[28].rows[0] ?? {};
+  const warmSessionsPrev = results[29].rows[0] ?? {};
+  const warmCurrent = buildCore4EngineMetrics('warm_outreach', {
+    sessions: nonNegative(toNumber(warmSessionsCur.sessions)),
+    clicks: 0,
+    quotes: nonNegative(toNumber(warmRow.quotes)),
+    pipeline_value_usd: nonNegative(toNumber(warmRow.pipeline_value_usd)),
+    spend: 0,
+  });
+  const warmPrevious = buildCore4EngineMetrics('warm_outreach', {
+    sessions: nonNegative(toNumber(warmSessionsPrev.sessions)),
+    clicks: 0,
+    quotes: nonNegative(toNumber(warmRow.quotes)),
+    pipeline_value_usd: nonNegative(toNumber(warmRow.pipeline_value_usd)),
+    spend: 0,
+  });
+
+  // Note: POST_FREE_CONTENT_SQL queries metrics_search_console_page (lifetime view, no date column).
+  // Clicks/impressions are identical for current and previous — deltas will be 0%.
+  // Sessions and conversions ARE date-filtered (indices 31-34).
+  const contentSearchRow = results[30].rows[0] ?? {};
+  const contentSessionsCur = results[31].rows[0] ?? {};
+  const contentSessionsPrev = results[32].rows[0] ?? {};
+  const contentConvCur = results[33].rows[0] ?? {};
+  const contentConvPrev = results[34].rows[0] ?? {};
+  const contentCurrent = buildCore4EngineMetrics('post_free_content', {
+    sessions: nonNegative(toNumber(contentSessionsCur.sessions)),
+    clicks: nonNegative(toNumber(contentSearchRow.clicks)),
+    quotes: nonNegative(toNumber(contentConvCur.quotes)),
+    pipeline_value_usd: nonNegative(toNumber(contentConvCur.pipeline_value_usd)),
+    spend: 0,
+  });
+  const contentPrevious = buildCore4EngineMetrics('post_free_content', {
+    sessions: nonNegative(toNumber(contentSessionsPrev.sessions)),
+    clicks: nonNegative(toNumber(contentSearchRow.clicks)),
+    quotes: nonNegative(toNumber(contentConvPrev.quotes)),
+    pipeline_value_usd: nonNegative(toNumber(contentConvPrev.pipeline_value_usd)),
+    spend: 0,
+  });
+
+  const paidAdsCurRow = results[35].rows[0] ?? {};
+  const paidAdsPrevRow = results[36].rows[0] ?? {};
+  const paidAdsSessionsCur = results[37].rows[0] ?? {};
+  const paidAdsSessionsPrev = results[38].rows[0] ?? {};
+  const paidAdsCurrent = buildCore4EngineMetrics('run_paid_ads', {
+    sessions: nonNegative(toNumber(paidAdsSessionsCur.sessions)),
+    clicks: nonNegative(toNumber(paidAdsCurRow.clicks)),
+    quotes: nonNegative(toNumber(paidAdsCurRow.conversions)),
+    pipeline_value_usd: nonNegative(toNumber(paidAdsCurRow.pipeline_value_usd)),
+    spend: nonNegative(toNumber(paidAdsCurRow.spend)),
+  });
+  const paidAdsPrevious = buildCore4EngineMetrics('run_paid_ads', {
+    sessions: nonNegative(toNumber(paidAdsSessionsPrev.sessions)),
+    clicks: nonNegative(toNumber(paidAdsPrevRow.clicks)),
+    quotes: nonNegative(toNumber(paidAdsPrevRow.conversions)),
+    pipeline_value_usd: nonNegative(toNumber(paidAdsPrevRow.pipeline_value_usd)),
+    spend: nonNegative(toNumber(paidAdsPrevRow.spend)),
+  });
+
+  const coldCurrent = zeroCore4Metrics('cold_outreach');
+  const coldPrevious = zeroCore4Metrics('cold_outreach');
+
+  const core4_summary: Core4Summary = {
+    warm_outreach: buildCore4Comparison(warmCurrent, warmPrevious),
+    cold_outreach: buildCore4Comparison(coldCurrent, coldPrevious),
+    post_free_content: buildCore4Comparison(contentCurrent, contentPrevious),
+    run_paid_ads: buildCore4Comparison(paidAdsCurrent, paidAdsPrevious),
+  };
 
   return {
     kpis,
@@ -1140,5 +1499,6 @@ export async function executeMarketingQueries(
     ga4_funnel,
     google_ads_overview,
     google_ads_campaigns,
+    core4_summary,
   };
 }

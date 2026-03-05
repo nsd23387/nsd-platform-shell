@@ -100,7 +100,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         <nav>
           {navItems.map((item) => {
-            const isActive = currentPath === item.href;
+            const isActive = currentPath === item.href || currentPath.startsWith(item.href + '/');
             return (
               <a
                 key={item.href}
