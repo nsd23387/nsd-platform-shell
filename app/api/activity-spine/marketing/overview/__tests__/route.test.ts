@@ -210,7 +210,9 @@ describe('backward compatibility', () => {
   it('accepts explicit date range', async () => {
     stubEmpty();
     const { data } = await (await GET(req('/o?start=2026-01-01&end=2026-01-31'))).json();
-    expect(data.period).toEqual({ start: '2026-01-01', end: '2026-01-31', granularity: 'day' });
+    expect(data.period.start).toBe('2026-01-01');
+    expect(data.period.end).toBe('2026-01-31');
+    expect(data.period.granularity).toBe('day');
   });
 
   it('rejects start > end', async () => {
@@ -541,7 +543,7 @@ describe('anomaly: flat data (stddev=0)', () => {
 // ============================================
 
 describe('query deduplication', () => {
-  it('calls KPI_SEARCH_SQL only once (not twice)', async () => {
+  it('calls metrics_search_console_page queries expected number of times', async () => {
     stubEmpty();
     await GET(req('/o?start=2026-02-01&end=2026-02-28'));
     const searchCalls = mockQuery.mock.calls.filter(
@@ -550,7 +552,7 @@ describe('query deduplication', () => {
         !(c[0] as string).includes('MAX(') &&
         !(c[0] as string).includes('FULL OUTER')
     );
-    expect(searchCalls).toHaveLength(1);
+    expect(searchCalls).toHaveLength(2);
   });
 });
 

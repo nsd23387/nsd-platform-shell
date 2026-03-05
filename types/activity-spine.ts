@@ -322,10 +322,15 @@ export type MarketingPeriod = '7d' | '30d' | '90d';
 
 export type MarketingPreset = 'last_7d' | 'last_30d' | 'last_90d' | 'mtd' | 'qtd' | 'ytd';
 
+export type MarketingComparisonMode = 'prev_period' | 'wow' | 'mom';
+
 export interface MarketingPeriodBlock {
   start: string;
   end: string;
   granularity: 'day';
+  comparison_mode?: MarketingComparisonMode;
+  comparison_start?: string;
+  comparison_end?: string;
 }
 
 export interface MarketingDataFreshness {
@@ -341,6 +346,42 @@ export interface MarketingMeta {
     sources: number;
   };
   data_freshness: MarketingDataFreshness;
+}
+
+export type Core4Engine = 'warm_outreach' | 'cold_outreach' | 'post_free_content' | 'run_paid_ads';
+
+export interface Core4EngineMetrics {
+  engine: Core4Engine;
+  sessions: number;
+  clicks: number;
+  quotes: number;
+  pipeline_value_usd: number;
+  spend: number;
+  cac: number;
+  roas: number;
+  quote_rate: number;
+}
+
+export interface Core4EngineComparison {
+  current: Core4EngineMetrics;
+  previous: Core4EngineMetrics;
+  deltas: {
+    sessions_pct: number;
+    clicks_pct: number;
+    quotes_pct: number;
+    pipeline_value_usd_pct: number;
+    spend_pct: number;
+    cac_pct: number;
+    roas_pct: number;
+    quote_rate_pct: number;
+  };
+}
+
+export interface Core4Summary {
+  warm_outreach: Core4EngineComparison;
+  cold_outreach: Core4EngineComparison;
+  post_free_content: Core4EngineComparison;
+  run_paid_ads: Core4EngineComparison;
 }
 
 export interface MarketingOverviewResponse {
@@ -365,6 +406,7 @@ export interface MarketingOverviewResponse {
   ga4_funnel: MarketingGA4Funnel;
   google_ads_overview: MarketingGoogleAdsOverview;
   google_ads_campaigns: MarketingGoogleAdsCampaign[];
+  core4_summary?: Core4Summary;
 }
 
 // ============================================
