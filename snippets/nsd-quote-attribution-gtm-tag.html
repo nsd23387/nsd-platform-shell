@@ -1,18 +1,23 @@
 <script>
 /**
- * NSD Quote Attribution — GTM Custom HTML Tag
+ * NSD Quote Attribution — GTM Custom HTML Tag (v2)
  *
  * Trigger: Custom Event — custom-neon-quote_submit
  *
- * Reads origin_page from the URL query string (set by the main site linker)
- * and sends a conversion event to the NSD ingestion endpoint so revenue is
- * attributed to the originating SEO landing page.
+ * Captures:
+ *   - origin_page (SEO landing page attribution)
+ *   - utm_source, utm_medium, utm_campaign, utm_content, utm_term (channel attribution)
+ *   - gclid (Google Ads click-level attribution, from URL or _gcl_aw cookie)
+ *   - referrer, visitor_id, session_id
  *
- * Uses google_tag_manager event model to access dataLayer event properties
- * reliably when the tag fires.
+ * UTM parameters are persisted in sessionStorage on first landing so they
+ * survive navigation across pages before the quote form is submitted.
+ *
+ * Sends conversion event to the NSD Sales Engine ingestion endpoint.
  */
 (function () {
   var INGEST_URL = 'https://analytics.neonsignsdepot.com/api/ingest/web-event';
+  var UTM_STORAGE_KEY = '_nsd_utm';
 
   function getParam(name) {
     try {
@@ -21,6 +26,69 @@
     } catch (e) {
       return null;
     }
+  }
+
+  function getCookie(name) {
+    try {
+      var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+      return match ? decodeURIComponent(match[2]) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getGclid() {
+    var gclid = getParam('gclid');
+    if (gclid) return gclid;
+    try {
+      var gclAw = getCookie('_gcl_aw');
+      if (gclAw) {
+        var parts = gclAw.split('.');
+        return parts.length >= 3 ? parts[2] : null;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function captureAndPersistUtm() {
+    var stored = null;
+    try {
+      stored = JSON.parse(sessionStorage.getItem(UTM_STORAGE_KEY));
+    } catch (e) {}
+
+    var freshSource = getParam('utm_source');
+    if (freshSource) {
+      var utm = {
+        utm_source: freshSource,
+        utm_medium: getParam('utm_medium'),
+        utm_campaign: getParam('utm_campaign'),
+        utm_content: getParam('utm_content'),
+        utm_term: getParam('utm_term'),
+        gclid: getGclid(),
+        landing_page: window.location.href
+      };
+      try { sessionStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(utm)); } catch (e) {}
+      return utm;
+    }
+
+    if (stored && stored.utm_source) return stored;
+
+    var gclid = getGclid();
+    if (gclid) {
+      var gclidUtm = {
+        utm_source: 'google',
+        utm_medium: 'cpc',
+        utm_campaign: null,
+        utm_content: null,
+        utm_term: null,
+        gclid: gclid,
+        landing_page: window.location.href
+      };
+      try { sessionStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(gclidUtm)); } catch (e) {}
+      return gclidUtm;
+    }
+
+    return stored || {};
   }
 
   function getSessionId() {
@@ -75,6 +143,7 @@
   }
 
   var originPage = getParam('origin_page');
+  var utm = captureAndPersistUtm();
 
   var payload = {
     event_type: 'conversion',
@@ -84,13 +153,21 @@
     origin_page: originPage,
     referrer: document.referrer || null,
     user_agent: navigator.userAgent,
+    source: utm.utm_source || null,
     event_data: {
       quote_id: quoteId,
       quote_type: quoteType,
       preliminary_price: Math.round((quoteValue || 0) * 100),
       product_category: quoteType || 'Unknown',
       submission_source: 'quote.neonsignsdepot.com',
-      is_free_campaign: isFreeCampaign
+      is_free_campaign: isFreeCampaign,
+      utm_source: utm.utm_source || null,
+      utm_medium: utm.utm_medium || null,
+      utm_campaign: utm.utm_campaign || null,
+      utm_content: utm.utm_content || null,
+      utm_term: utm.utm_term || null,
+      gclid: utm.gclid || null,
+      landing_page: utm.landing_page || null
     }
   };
 
