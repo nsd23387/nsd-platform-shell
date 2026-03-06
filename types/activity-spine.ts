@@ -319,6 +319,7 @@ export interface MarketingGoogleAdsCampaign {
   cpc: number;
   ctr: number;
   roas: number;
+  daily_budget: number;
 }
 
 export type MarketingPeriod = '7d' | '30d' | '90d';

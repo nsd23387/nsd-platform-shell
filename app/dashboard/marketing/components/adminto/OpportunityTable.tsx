@@ -220,7 +220,7 @@ export function OpportunityTable<T extends Record<string, any>>({
                           padding: isMobile ? '10px 8px' : `${space['3']} ${space['4']}`,
                           textAlign: col.align || 'left',
                           fontFamily: fontFamily.body,
-                          fontSize: fontSize.xs,
+                          fontSize: fontSize.sm,
                           fontWeight: fontWeight.medium,
                           letterSpacing: '0.06em',
                           textTransform: 'uppercase' as const,
@@ -247,7 +247,7 @@ export function OpportunityTable<T extends Record<string, any>>({
                         padding: `${space['3']} ${space['4']}`,
                         textAlign: 'left',
                         fontFamily: fontFamily.body,
-                        fontSize: fontSize.xs,
+                        fontSize: fontSize.sm,
                         fontWeight: fontWeight.medium,
                         letterSpacing: '0.06em',
                         textTransform: 'uppercase' as const,
@@ -291,7 +291,7 @@ export function OpportunityTable<T extends Record<string, any>>({
                             padding: isMobile ? '10px 8px' : `${space['3']} ${space['4']}`,
                             textAlign: col.align || 'left',
                             fontFamily: fontFamily.body,
-                            fontSize: fontSize.md,
+                            fontSize: fontSize.base,
                             fontWeight: fontWeight.normal,
                             lineHeight: 1.5,
                             color: tc.text.primary,
@@ -314,7 +314,7 @@ export function OpportunityTable<T extends Record<string, any>>({
                                 key={idx}
                                 style={{
                                   fontFamily: fontFamily.body,
-                                  fontSize: fontSize.xs,
+                                  fontSize: fontSize.sm,
                                   fontWeight: fontWeight.medium,
                                   padding: `${space['0.5']} ${space['2']}`,
                                   borderRadius: radius.full,
@@ -345,7 +345,7 @@ export function OpportunityTable<T extends Record<string, any>>({
                 padding: `${space['3']} ${space['4']}`,
                 borderTop: `1px solid ${tc.border.default}`,
                 fontFamily: fontFamily.body,
-                fontSize: fontSize.sm,
+                fontSize: fontSize.base,
                 color: tc.text.muted,
                 gap: space['2'],
               }}
@@ -395,7 +395,7 @@ function PageBtn({
       style={{
         padding: `${space['1']} ${space['2.5']}`,
         fontFamily: fontFamily.body,
-        fontSize: fontSize.sm,
+        fontSize: fontSize.base,
         fontWeight: fontWeight.medium,
         color: disabled ? tc.text.disabled : tc.text.secondary,
         backgroundColor: 'transparent',

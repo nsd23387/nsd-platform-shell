@@ -83,7 +83,7 @@ export default function ColdOutreachPage() {
           </p>
         </div>
 
-        <DashboardSection title="Integration Required" description="Connect a sales engagement platform to populate this dashboard.">
+        <DashboardSection title="Integration Required" description="Connect a sales engagement platform to populate this dashboard." index={0}>
           <DashboardGrid columns={{ sm: 1, md: 2, lg: 2 }}>
             <ConnectCard
               title="Sales Engine Integration"
@@ -98,7 +98,7 @@ export default function ColdOutreachPage() {
           </DashboardGrid>
         </DashboardSection>
 
-        <DashboardSection title="KPIs Available After Integration" description="These metrics will populate once a data source is connected.">
+        <DashboardSection title="KPIs Available After Integration" description="These metrics will populate once a data source is connected." index={1}>
           <DashboardGrid columns={{ sm: 2, md: 4, lg: 4 }}>
             {KPIS.map((kpi) => (
               <div
@@ -111,7 +111,7 @@ export default function ColdOutreachPage() {
                 }}
               >
                 <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: tc.text.disabled }}>—</p>
-                <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['1'] }}>{kpi}</p>
+                <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['1'] }}>{kpi}</p>
               </div>
             ))}
           </DashboardGrid>

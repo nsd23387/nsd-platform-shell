@@ -43,7 +43,7 @@ function getOpportunityTag(r: MarketingSEOQuery): OpportunityTag | null {
 
 function OpportunityBadge({ row }: { row: MarketingSEOQuery }) {
   const tag = getOpportunityTag(row);
-  if (!tag) return <span style={{ color: neutral[400], fontFamily: fontFamily.body, fontSize: fontSize.xs }}>—</span>;
+  if (!tag) return <span style={{ color: neutral[400], fontFamily: fontFamily.body, fontSize: fontSize.sm }}>—</span>;
   return (
     <span
       data-testid={`badge-opportunity-${tag.label.toLowerCase().replace(/\s+/g, '-')}`}
@@ -55,7 +55,7 @@ function OpportunityBadge({ row }: { row: MarketingSEOQuery }) {
         backgroundColor: tag.bg,
         color: tag.text,
         fontFamily: fontFamily.body,
-        fontSize: fontSize.xs,
+        fontSize: fontSize.sm,
         fontWeight: fontWeight.medium,
         whiteSpace: 'nowrap',
         lineHeight: 1.4,
@@ -155,7 +155,7 @@ function MoversCard({ movers, direction }: { movers: MarketingSEOQueryMover[]; d
           >
             <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary, flex: 1 }}>{m.query}</span>
             <span style={{
-              fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium,
+              fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
               color: badgeColor, backgroundColor: badgeBg,
               padding: `${space['0.5']} ${space['2']}`, borderRadius: radius.full, whiteSpace: 'nowrap',
             }}>

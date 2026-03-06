@@ -54,6 +54,12 @@ export function PacingChart({
     return targets.length > 0 ? targets.reduce((a, b) => a + b, 0) / targets.length : undefined;
   }, [data]);
 
+  const hasPerItemTargets = useMemo(() => {
+    const withTargets = data.filter((d) => d.target != null && d.target > 0);
+    const uniqueTargets = new Set(withTargets.map((d) => d.target));
+    return withTargets.length > 1 && uniqueTargets.size > 1;
+  }, [data]);
+
   const chartData = useMemo(
     () =>
       data.map((d) => ({
@@ -181,8 +187,19 @@ export function PacingChart({
                 fill={barColor}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={40}
+                name="Actual Spend"
               />
-              {avgTarget != null && (
+              {hasPerItemTargets && (
+                <Bar
+                  dataKey="target"
+                  fill={indigo[200]}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={40}
+                  name={targetLabel}
+                  opacity={0.5}
+                />
+              )}
+              {!hasPerItemTargets && avgTarget != null && (
                 <ReferenceLine
                   y={avgTarget}
                   stroke={targetLineColor}
@@ -204,7 +221,7 @@ export function PacingChart({
         )}
       </div>
 
-      {avgTarget != null && (
+      {(avgTarget != null || hasPerItemTargets) && (
         <div
           style={{
             display: 'flex',
@@ -213,7 +230,7 @@ export function PacingChart({
             padding: `${space['3']} ${space['5']}`,
             borderTop: `1px solid ${tc.border.default}`,
             fontFamily: fontFamily.body,
-            fontSize: fontSize.xs,
+            fontSize: fontSize.sm,
             color: tc.text.muted,
             flexWrap: 'wrap',
           }}
@@ -230,18 +247,34 @@ export function PacingChart({
             />
             Actual Spend
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
-            <span
-              style={{
-                width: '12px',
-                height: '2px',
-                backgroundColor: targetLineColor,
-                display: 'inline-block',
-                borderTop: `2px dashed ${targetLineColor}`,
-              }}
-            />
-            {targetLabel} ({currencyPrefix}{avgTarget.toLocaleString()})
-          </span>
+          {hasPerItemTargets ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
+              <span
+                style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: radius.sm,
+                  backgroundColor: indigo[200],
+                  opacity: 0.5,
+                  display: 'inline-block',
+                }}
+              />
+              {targetLabel}
+            </span>
+          ) : (
+            <span style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
+              <span
+                style={{
+                  width: '12px',
+                  height: '2px',
+                  backgroundColor: targetLineColor,
+                  display: 'inline-block',
+                  borderTop: `2px dashed ${targetLineColor}`,
+                }}
+              />
+              {targetLabel} ({currencyPrefix}{(avgTarget ?? 0).toLocaleString()})
+            </span>
+          )}
         </div>
       )}
     </div>

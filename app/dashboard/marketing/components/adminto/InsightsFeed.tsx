@@ -144,7 +144,7 @@ export function InsightsFeed({
                         gap: space['2'],
                         marginTop: space['1'],
                         fontFamily: fontFamily.body,
-                        fontSize: fontSize.xs,
+                        fontSize: fontSize.sm,
                         color: tc.text.muted,
                         flexWrap: 'wrap',
                       }}
@@ -171,7 +171,7 @@ export function InsightsFeed({
           <span
             style={{
               fontFamily: fontFamily.body,
-              fontSize: fontSize.sm,
+              fontSize: fontSize.base,
               color: tc.text.muted,
             }}
           >

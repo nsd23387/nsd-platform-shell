@@ -34,7 +34,7 @@ function KPICard({ label, value, testId }: KPICardProps) {
       }}
       data-testid={testId}
     >
-      <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: tc.text.muted, marginBottom: space['1'] }}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.muted, marginBottom: space['1'] }}>
         {label}
       </div>
       <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary }}>

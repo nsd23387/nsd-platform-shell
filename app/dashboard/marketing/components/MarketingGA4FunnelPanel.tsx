@@ -68,7 +68,7 @@ export function MarketingGA4FunnelPanel({ funnel, loading, error }: Props) {
                 {i > 0 && prevValue > 0 && (
                   <div style={{
                     fontFamily: fontFamily.body,
-                    fontSize: fontSize.xs,
+                    fontSize: fontSize.sm,
                     color: tc.text.muted,
                     marginBottom: space['1'],
                     paddingLeft: space['2'],

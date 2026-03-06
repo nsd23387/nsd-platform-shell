@@ -108,7 +108,7 @@ function KPICard({ cfg, kpis, comparisons, compareEnabled, loading, index }: {
       <div style={{ fontFamily: fontFamily.body, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary, lineHeight: 1.2 }}>
         <AnimatedValue value={cfg.format(val)} delay={index * 0.05} />
       </div>
-      <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['1'] }}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['1'] }}>
         {cfg.subtitle}
       </div>
       {comp && (
@@ -121,7 +121,7 @@ function KPICard({ cfg, kpis, comparisons, compareEnabled, loading, index }: {
           borderRadius: radius.full,
           backgroundColor: isUp ? tc.trendColors.up.bg : tc.trendColors.down.bg,
           fontFamily: fontFamily.body,
-          fontSize: fontSize.xs,
+          fontSize: fontSize.sm,
           fontWeight: fontWeight.medium,
           color: isUp ? tc.trendColors.up.text : tc.trendColors.down.text,
         }} data-testid={`kpi-delta-${cfg.key}`}>

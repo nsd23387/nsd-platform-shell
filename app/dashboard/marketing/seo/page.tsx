@@ -131,7 +131,7 @@ export default function SeoCommandCenterPage() {
           <DashboardCard title="Error" error={error} />
         )}
 
-        <DashboardSection title="Search Performance Trend" description="Daily clicks and impressions from Google Search Console.">
+        <DashboardSection title="Search Performance Trend" description="Daily clicks and impressions from Google Search Console." index={0}>
           {(() => {
             const clicks = data?.timeseries?.clicks ?? [];
             const impressions = data?.timeseries?.impressions ?? [];
@@ -158,7 +158,7 @@ export default function SeoCommandCenterPage() {
           })()}
         </DashboardSection>
 
-        <DashboardSection title="Query Opportunities" description="Search queries with opportunity tags for optimization.">
+        <DashboardSection title="Query Opportunities" description="Search queries with opportunity tags for optimization." index={1}>
           <MarketingSeoIntelligencePanel
             seoQueries={data?.seo_queries ?? []}
             seoMovers={data?.seo_movers ?? []}
@@ -167,7 +167,7 @@ export default function SeoCommandCenterPage() {
           />
         </DashboardSection>
 
-        <DashboardSection title="Page Performance" description="Organic page engagement and pipeline attribution.">
+        <DashboardSection title="Page Performance" description="Organic page engagement and pipeline attribution." index={2}>
           <MarketingSeoRevenuePanel
             pages={data?.pages ?? []}
             loading={loading}
@@ -180,7 +180,7 @@ export default function SeoCommandCenterPage() {
           />
         </DashboardSection>
 
-        <DashboardSection title="Technical Health">
+        <DashboardSection title="Technical Health" index={3}>
           <TechnicalHealthPlaceholder />
         </DashboardSection>
       </div>

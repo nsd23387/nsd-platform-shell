@@ -73,7 +73,7 @@ export default function DataHealthPage() {
           <DashboardCard title="Error" error={error} />
         )}
 
-        <DashboardSection title="Pipeline Health" description="Ingestion freshness, attribution coverage, and data quality signals.">
+        <DashboardSection title="Pipeline Health" description="Ingestion freshness, attribution coverage, and data quality signals." index={0}>
           <MarketingPipelineHealthPanel
             health={data?.pipeline_health ?? []}
             loading={loading}
