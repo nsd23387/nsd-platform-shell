@@ -1,0 +1,98 @@
+<script>
+/**
+ * NSD UTM Persistence — GTM Custom HTML Tag
+ *
+ * Trigger: All Pages (Page View)
+ *
+ * Captures UTM parameters (utm_source, utm_medium, utm_campaign, utm_content,
+ * utm_term) and gclid from the URL on first landing and persists them in
+ * sessionStorage. This ensures they are available later when the quote
+ * attribution tag fires, even if the user navigates away from the landing page.
+ *
+ * Also captures the initial landing page URL and referrer.
+ *
+ * This tag should fire on ALL pages, before the quote attribution tag.
+ * Priority: higher than default (e.g., Tag Firing Priority = 100).
+ */
+(function () {
+  var UTM_STORAGE_KEY = '_nsd_utm';
+  var LANDING_KEY = '_nsd_landing';
+
+  function getParam(name) {
+    try {
+      var url = new URL(window.location.href);
+      return url.searchParams.get(name) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getCookie(name) {
+    try {
+      var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+      return match ? decodeURIComponent(match[2]) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getGclid() {
+    var gclid = getParam('gclid');
+    if (gclid) return gclid;
+    try {
+      var gclAw = getCookie('_gcl_aw');
+      if (gclAw) {
+        var parts = gclAw.split('.');
+        return parts.length >= 3 ? parts[2] : null;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  if (!sessionStorage.getItem(LANDING_KEY)) {
+    try {
+      sessionStorage.setItem(LANDING_KEY, JSON.stringify({
+        url: window.location.href,
+        referrer: document.referrer || null,
+        ts: Date.now()
+      }));
+    } catch (e) {}
+  }
+
+  var existingUtm = null;
+  try {
+    existingUtm = JSON.parse(sessionStorage.getItem(UTM_STORAGE_KEY));
+  } catch (e) {}
+
+  var freshSource = getParam('utm_source');
+  var gclid = getGclid();
+
+  if (freshSource) {
+    var utm = {
+      utm_source: freshSource,
+      utm_medium: getParam('utm_medium'),
+      utm_campaign: getParam('utm_campaign'),
+      utm_content: getParam('utm_content'),
+      utm_term: getParam('utm_term'),
+      gclid: gclid,
+      landing_page: window.location.href,
+      referrer: document.referrer || null,
+      captured_at: Date.now()
+    };
+    try { sessionStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(utm)); } catch (e) {}
+  } else if (!existingUtm && gclid) {
+    var gclidUtm = {
+      utm_source: 'google',
+      utm_medium: 'cpc',
+      utm_campaign: null,
+      utm_content: null,
+      utm_term: null,
+      gclid: gclid,
+      landing_page: window.location.href,
+      referrer: document.referrer || null,
+      captured_at: Date.now()
+    };
+    try { sessionStorage.setItem(UTM_STORAGE_KEY, JSON.stringify(gclidUtm)); } catch (e) {}
+  }
+})();
+</script>
