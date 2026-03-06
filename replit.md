@@ -33,7 +33,7 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 
 **Marketing Command Center (`/dashboard/marketing/*`):**
 - **Purpose**: Multi-screen analytics command center organized around Hormozi's Core 4 Growth Framework, powered by live data from the Supabase `analytics` schema.
-- **Data Sources**: `raw_web_events`, `raw_search_console`, `raw_ga4_events`, `raw_google_ads`, `metrics_page_engagement_daily`.
+- **Data Sources**: `raw_web_events`, `raw_search_console`, `raw_ga4_events`, `raw_google_ads`, `raw_qms_deals`, `metrics_page_engagement_daily`.
 - **Architecture**: 12 routed screens with shared marketing sub-navigation sidebar and global filters bar (date range, comparison mode, channel filter).
 - **Navigation Structure**:
   - OVERVIEW: Executive Overview (`/dashboard/marketing`), Operator Hub (`/dashboard/marketing/operator`), Core 4 Comparison (`/dashboard/marketing/core4`)
@@ -43,7 +43,7 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 - **Shared Layout**: `app/dashboard/marketing/layout.tsx` provides `MarketingContext` with period state, comparison mode, channel filter, computed query params, and shared API data (`data/loading/error/refetch`) to all child routes. Single `useMarketingDashboard` call at layout level; sub-screens consume context.
 - **Collapsible Sidebar**: `MarketingNav` supports `collapsed`/`onToggleCollapse` props; auto-collapses below 1024px; persists to localStorage (`marketing-nav-collapsed`). Collapsed = 48px, icons only with tooltip titles.
 - **Adminto Component Library**: `app/dashboard/marketing/components/adminto/` provides `StatTile`, `EngineCard`, `OpportunityTable`, `InsightsFeed`, `ForecastCalculator`, `ExperimentLog`, `PacingChart`, `DrilldownBreadcrumb`.
-- **Core 4 Engine Aggregation**: Backend computes per-engine metrics (Warm=direct/email sources, Post Free Content=organic/SEO, Run Paid Ads=Google Ads, Cold Outreach=placeholder).
+- **Core 4 Engine Aggregation**: Backend computes per-engine metrics (Warm=QMS `raw_qms_deals` with date-filtered current/previous comparison, Post Free Content=organic/SEO, Run Paid Ads=Google Ads, Cold Outreach=placeholder).
 - **Global Filters**: Channel, campaign, device, geo, landing page filters supported via parameterized SQL.
 - **Comparison Modes**: Previous period (default), WoW (week-over-week), MoM (month-over-month).
 - **Experiments**: CRUD via localStorage (no DB migration required).
@@ -71,7 +71,7 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
   - **Env Vars**: `GOOGLE_ADS_BQ_PROJECT_ID`, `GOOGLE_ADS_BQ_DATASET`, `GOOGLE_ADS_BQ_CUSTOMER_ID` (plus shared `GOOGLE_APPLICATION_CREDENTIALS_JSON`).
   - **Triggers**: Manual `POST /api/sync/google-ads` (SYNC_SECRET, last 30 days) and daily Vercel Cron `GET /api/cron/google-ads-sync` (CRON_SECRET, last 3 days, 7 AM UTC).
   - **Event Names**: `campaign_performance`, `search_term_performance` in `raw_google_ads` with `source_system = 'google-ads-bq'`.
-- **Query Index Map**: engagement=0, conversion=1, search=2, pages=3, sources=4, freshness=5, prev_eng=6, prev_conv=7, seo_queries=8, anomaly_sessions=9, anomaly_subs=10, anomaly_pipeline=11, funnel_fallback=12, prev_funnel_fallback=13, GA4_device=14, GA4_country=15, SC_device=16, SC_country=17, pipeline_categories=18, recent_conversions=19, seo_movers=20, funnel=21, pipeline_health=22, channel_performance=23, ga4_funnel=24, google_ads_overview=25, google_ads_campaigns=26, timeseries=27-31, core4_warm=32-33, core4_content=34-36, core4_paid=37-38.
+- **Query Index Map**: engagement=0, conversion=1, search=2, pages=3, sources=4, freshness=5, prev_eng=6, prev_conv=7, seo_queries=8, anomaly_sessions=9, anomaly_subs=10, anomaly_pipeline(QMS)=11, funnel_fallback=12, prev_funnel_fallback=13, GA4_device=14, GA4_country=15, SC_device=16, SC_country=17, pipeline_categories(QMS)=18, recent_conversions(QMS)=19, seo_movers=20, funnel=21, pipeline_health=22, channel_performance=23, ga4_funnel=24, google_ads_overview=25, google_ads_campaigns=26, warm_outreach_cur(QMS)=27, warm_sessions_cur=28, warm_sessions_prev=29, content_search=30, content_sessions_cur=31, content_sessions_prev=32, content_conv_cur=33, content_conv_prev=34, paid_ads_cur=35, paid_ads_prev=36, paid_sessions_cur=37, paid_sessions_prev=38, warm_outreach_prev(QMS)=39, qms_kpi_cur=40, qms_kpi_prev=41, timeseries=42-46.
 - **QMS (Quote Management System) Integration**: Ingests Convex quote lifecycle events into `analytics.raw_qms_deals` via webhook.
   - **Table**: `analytics.raw_qms_deals` — snapshot table (one row per quote, upserted on each lifecycle event).
   - **Ingest Endpoint**: `POST /api/ingest/qms-deal` — receives lifecycle events from Convex, authenticated via `SYNC_SECRET` Bearer token. Auto-creates table on first use.
@@ -79,6 +79,7 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
   - **Key Columns**: `convex_quote_id` (unique), `quote_number`, `quote_activity` (lifecycle stage), `total_price_cents`, `customer_name/email/company`, `sign_text/type`, UTM/attribution fields, `deposit_paid_at`, `quote_paid_at`, `followup_*`, `discount_*`, `production_*`, `shipping_*`.
   - **Lifecycle Stages**: Quote Submitted, Awaiting Response, Quote Approved, Awaiting Deposit, Deposit Paid, Pending Management Review, Admin Review Changes Requested, Mockups In Review, Revisions Requested, Revisions Adjusted, Design Approved, Quote Paid, Not Interested.
   - **Warm Outreach Screen**: `app/dashboard/marketing/warm-outreach/page.tsx` displays live QMS data (pipeline, aging, close rate, velocity, status breakdown, source attribution, discount usage, recent deals table) with graceful fallback to empty state cards when QMS data is unavailable.
+  - **Overview Integration**: The marketing overview API (`services/marketingQueries.ts`) now sources 5 key metrics from `raw_qms_deals` instead of proxy web-event tables: (1) Warm Outreach Core 4 engine card (quotes + pipeline, date-filtered for current/previous), (2) KPI Pipeline Value (QMS total over web-event fallback), (3) Pipeline Categories (by `sign_type` instead of `product_category`), (4) Recent Conversions (QMS deals with `quote_number`, `customer_name`, `status`), (5) Pipeline Timeseries (daily `created_at` from QMS). Anomaly detection for pipeline also uses QMS.
   - **Types**: `QMSAnalytics`, `QMSPipelineSummary`, `QMSAgingBuckets`, `QMSCloseRate`, `QMSVelocity`, `QMSStatusBreakdown`, `QMSRecentDeal`, `QMSAttribution`, `QMSDiscountUsage` in `types/activity-spine.ts`.
 
 ## External Dependencies

@@ -254,6 +254,9 @@ export interface MarketingConversionEvent {
   product_category: string;
   preliminary_price_usd: number;
   submission_source: string;
+  quote_number?: string;
+  customer_name?: string | null;
+  status?: string;
 }
 
 export interface MarketingSEOQueryMover {
@@ -337,6 +340,7 @@ export interface MarketingDataFreshness {
   engagement_last_date: string | null;
   search_console_last_date: string | null;
   conversion_last_date: string | null;
+  qms_last_date?: string | null;
 }
 
 export interface MarketingMeta {

@@ -103,6 +103,17 @@ const KPI_CONVERSION_SQL = `
   WHERE metric_date BETWEEN $1 AND $2
 `;
 
+const QMS_KPI_PIPELINE_SQL = `
+  SELECT
+    COALESCE(SUM(total_price_cents), 0) AS pipeline_cents,
+    COUNT(*) FILTER (WHERE quote_active AND quote_activity NOT IN ('Quote Paid', 'Not Interested')) AS active_deals,
+    COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid') AS won_deals,
+    COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) AS won_cents,
+    COUNT(*) AS total_deals
+  FROM analytics.raw_qms_deals
+  WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
+`;
+
 /**
  * LIFETIME VIEW — metrics_search_console_page has no date column.
  * This query returns lifetime totals, not period-filtered values.
@@ -251,7 +262,8 @@ const FRESHNESS_SQL = `
   SELECT
     (SELECT MAX(metric_date)::text     FROM analytics.metrics_page_engagement_daily) AS engagement_last_date,
     (SELECT MAX(metric_date)::text     FROM analytics.metrics_search_console_page_daily) AS search_console_last_date,
-    (SELECT MAX(metric_date)::text FROM analytics.conversion_metrics_daily)      AS conversion_last_date
+    (SELECT MAX(metric_date)::text FROM analytics.conversion_metrics_daily)      AS conversion_last_date,
+    (SELECT MAX(updated_at)::text FROM analytics.raw_qms_deals) AS qms_last_date
 `;
 
 // ============================================
@@ -323,10 +335,10 @@ const TIMESERIES_PIPELINE_SQL = `
     SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
   ),
   daily AS (
-    SELECT metric_date, SUM(total_pipeline_value_usd) AS val
-    FROM analytics.conversion_metrics_daily
-    WHERE metric_date BETWEEN $1 AND $2
-    GROUP BY metric_date
+    SELECT created_at::date AS metric_date, SUM(total_price_cents) / 100.0 AS val
+    FROM analytics.raw_qms_deals
+    WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
+    GROUP BY created_at::date
   )
   SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
   FROM date_range dr
@@ -401,10 +413,10 @@ const ANOMALY_SUBMISSIONS_SQL = `
 
 const ANOMALY_PIPELINE_SQL = `
   WITH daily AS (
-    SELECT metric_date, SUM(total_pipeline_value_usd) AS val
-    FROM analytics.conversion_metrics_daily
-    WHERE metric_date BETWEEN $1 AND $2
-    GROUP BY metric_date
+    SELECT created_at::date AS metric_date, SUM(total_price_cents) / 100.0 AS val
+    FROM analytics.raw_qms_deals
+    WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
+    GROUP BY created_at::date
   )
   SELECT
     COUNT(*)::int AS n,
@@ -484,10 +496,12 @@ const COUNTRY_BREAKDOWN_SC_SQL = `
 
 const PIPELINE_CATEGORY_SQL = `
   SELECT
-    product_category,
-    COALESCE(submissions, 0) AS submissions,
-    COALESCE(pipeline_value_usd, 0) AS pipeline_value_usd
-  FROM analytics.pipeline_by_category
+    COALESCE(NULLIF(sign_type, ''), 'Unknown') AS product_category,
+    COUNT(*) AS submissions,
+    COALESCE(SUM(total_price_cents), 0) / 100.0 AS pipeline_value_usd
+  FROM analytics.raw_qms_deals
+  WHERE quote_active
+  GROUP BY COALESCE(NULLIF(sign_type, ''), 'Unknown')
   ORDER BY pipeline_value_usd DESC
 `;
 
@@ -498,10 +512,13 @@ const PIPELINE_CATEGORY_SQL = `
 const RECENT_CONVERSIONS_SQL = `
   SELECT
     created_at,
-    COALESCE(product_category, 'Unknown') AS product_category,
-    COALESCE(preliminary_price_usd, 0) AS preliminary_price_usd,
-    COALESCE(submission_source, 'Unknown') AS submission_source
-  FROM analytics.conversion_events
+    COALESCE(NULLIF(sign_type, ''), 'Unknown') AS product_category,
+    COALESCE(total_price_cents, 0) / 100.0 AS preliminary_price_usd,
+    COALESCE(NULLIF(utm_source, ''), NULLIF(referrer, ''), 'direct') AS submission_source,
+    quote_number,
+    customer_name,
+    quote_activity AS status
+  FROM analytics.raw_qms_deals
   ORDER BY created_at DESC
   LIMIT 20
 `;
@@ -709,15 +726,12 @@ const GOOGLE_ADS_CAMPAIGNS_SQL = `
 
 const WARM_OUTREACH_SQL = `
   SELECT
-    COALESCE(SUM(
-      CASE WHEN submission_source IN ('direct', 'email', 'newsletter', 'quote.neonsignsdepot.com')
-        THEN submissions ELSE 0 END
-    ), 0) AS quotes,
-    COALESCE(SUM(
-      CASE WHEN submission_source IN ('direct', 'email', 'newsletter', 'quote.neonsignsdepot.com')
-        THEN pipeline_value_usd ELSE 0 END
-    ), 0) AS pipeline_value_usd
-  FROM analytics.dashboard_sources
+    COUNT(*) AS quotes,
+    COALESCE(SUM(total_price_cents), 0) / 100.0 AS pipeline_value_usd,
+    COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid') AS won_deals,
+    COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) / 100.0 AS won_revenue_usd
+  FROM analytics.raw_qms_deals
+  WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
 `;
 
 const WARM_OUTREACH_SESSIONS_SQL = `
@@ -1060,7 +1074,7 @@ export async function executeMarketingQueries(
   const fFunnelFbSql = hasFilters ? appendFilter(KPI_FUNNEL_FALLBACK_SQL, engFilter) : KPI_FUNNEL_FALLBACK_SQL;
   const fAnomSessSql = hasFilters ? appendFilter(ANOMALY_SESSIONS_SQL, engFilter) : ANOMALY_SESSIONS_SQL;
   const fAnomSubSql = hasFilters ? appendFilter(ANOMALY_SUBMISSIONS_SQL, convFilter) : ANOMALY_SUBMISSIONS_SQL;
-  const fAnomPipeSql = hasFilters ? appendFilter(ANOMALY_PIPELINE_SQL, convFilter) : ANOMALY_PIPELINE_SQL;
+  const fAnomPipeSql = ANOMALY_PIPELINE_SQL;
   const fDevGa4Sql = hasFilters ? appendFilter(DEVICE_BREAKDOWN_GA4_SQL, ga4Filter) : DEVICE_BREAKDOWN_GA4_SQL;
   const fCntGa4Sql = hasFilters ? appendFilter(COUNTRY_BREAKDOWN_GA4_SQL, ga4Filter) : COUNTRY_BREAKDOWN_GA4_SQL;
   const fDevScSql = hasFilters ? appendFilter(DEVICE_BREAKDOWN_SC_SQL, scFilter) : DEVICE_BREAKDOWN_SC_SQL;
@@ -1076,7 +1090,7 @@ export async function executeMarketingQueries(
   const fPaidSessSql = hasFilters ? appendFilter(RUN_PAID_ADS_SESSIONS_SQL, ga4Filter) : RUN_PAID_ADS_SESSIONS_SQL;
   const fTsSessSql = hasFilters ? appendFilter(TIMESERIES_SESSIONS_SQL, engFilter) : TIMESERIES_SESSIONS_SQL;
   const fTsSubSql = hasFilters ? appendFilter(TIMESERIES_SUBMISSIONS_SQL, convFilter) : TIMESERIES_SUBMISSIONS_SQL;
-  const fTsPipeSql = hasFilters ? appendFilter(TIMESERIES_PIPELINE_SQL, convFilter) : TIMESERIES_PIPELINE_SQL;
+  const fTsPipeSql = TIMESERIES_PIPELINE_SQL;
 
   const queries: Promise<{ rows: Row[] }>[] = [
     /* 0  */ db.query(fEngSql, curEngP),
@@ -1090,7 +1104,7 @@ export async function executeMarketingQueries(
     /* 8  */ db.query(SEO_QUERIES_SQL),
     /* 9  */ db.query(fAnomSessSql, curEngP),
     /* 10 */ db.query(fAnomSubSql, curConvP),
-    /* 11 */ db.query(fAnomPipeSql, curConvP),
+    /* 11 */ db.query(fAnomPipeSql, curParams),
     /* 12 */ db.query(fFunnelFbSql, curEngP),
     /* 13 */ db.query(fFunnelFbSql, prevEngP),
     /* 14 */ db.query(fDevGa4Sql, curGa4P),
@@ -1106,7 +1120,7 @@ export async function executeMarketingQueries(
     /* 24 */ db.query(fGa4FunnelSql, curGa4P),
     /* 25 */ db.query(fAdsOverSql, curAdsP),
     /* 26 */ db.query(fAdsCampSql, curAdsP),
-    /* 27 */ db.query(WARM_OUTREACH_SQL),
+    /* 27 */ db.query(WARM_OUTREACH_SQL, curParams),
     /* 28 */ db.query(fWarmSessSql, curGa4P),
     /* 29 */ db.query(fWarmSessSql, prevGa4P),
     /* 30 */ db.query(POST_FREE_CONTENT_SQL),
@@ -1118,15 +1132,18 @@ export async function executeMarketingQueries(
     /* 36 */ db.query(fPaidAdsSql, prevAdsP),
     /* 37 */ db.query(fPaidSessSql, curGa4P),
     /* 38 */ db.query(fPaidSessSql, prevGa4P),
+    /* 39 */ db.query(WARM_OUTREACH_SQL, prevParams),
+    /* 40 */ db.query(QMS_KPI_PIPELINE_SQL, curParams),
+    /* 41 */ db.query(QMS_KPI_PIPELINE_SQL, prevParams),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 39 */ db.query(fTsSessSql, curEngP),
-      /* 40 */ db.query(fTsSubSql, curConvP),
-      /* 41 */ db.query(fTsPipeSql, curConvP),
-      /* 42 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
-      /* 43 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
+      /* 42 */ db.query(fTsSessSql, curEngP),
+      /* 43 */ db.query(fTsSubSql, curConvP),
+      /* 44 */ db.query(fTsPipeSql, curParams),
+      /* 45 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
+      /* 46 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
     );
   }
 
@@ -1149,6 +1166,14 @@ export async function executeMarketingQueries(
     searchRow,
     prevFunnelFallback,
   );
+
+  const qmsKpiCur = results[40].rows[0] ?? {};
+  const qmsKpiPrev = results[41].rows[0] ?? {};
+  const qmsPipelineCur = nonNegative(toNumber(qmsKpiCur.pipeline_cents)) / 100;
+  const qmsPipelinePrev = nonNegative(toNumber(qmsKpiPrev.pipeline_cents)) / 100;
+
+  kpis.total_pipeline_value_usd = qmsPipelineCur > 0 ? qmsPipelineCur : kpis.total_pipeline_value_usd;
+  prevKpis.total_pipeline_value_usd = qmsPipelinePrev > 0 ? qmsPipelinePrev : prevKpis.total_pipeline_value_usd;
 
   const comparisons: MarketingKPIComparisons = {
     sessions: buildComparison(kpis.sessions, prevKpis.sessions),
@@ -1188,6 +1213,7 @@ export async function executeMarketingQueries(
     engagement_last_date: (fresh.engagement_last_date as string) ?? null,
     search_console_last_date: (fresh.search_console_last_date as string) ?? null,
     conversion_last_date: (fresh.conversion_last_date as string) ?? null,
+    qms_last_date: (fresh.qms_last_date as string) ?? null,
   };
 
   const seo_queries: MarketingSEOQuery[] = (results[8].rows ?? [])
@@ -1279,13 +1305,15 @@ export async function executeMarketingQueries(
       pipeline_value_usd: nonNegative(toNumber(r.pipeline_value_usd)),
     }));
 
-  // T005: Recent conversions
   const recent_conversions: MarketingConversionEvent[] = (results[19].rows ?? [])
     .map((r: Row) => ({
       created_at: String(r.created_at ?? ''),
       product_category: String(r.product_category ?? 'Unknown'),
       preliminary_price_usd: nonNegative(toNumber(r.preliminary_price_usd)),
       submission_source: String(r.submission_source ?? 'Unknown'),
+      quote_number: r.quote_number ? String(r.quote_number) : undefined,
+      customer_name: r.customer_name ? String(r.customer_name) : null,
+      status: r.status ? String(r.status) : undefined,
     }));
 
   // T006: SEO movers
@@ -1393,37 +1421,33 @@ export async function executeMarketingQueries(
       roas: nonNegative(toNumber(r.roas)),
     }));
 
-  // Timeseries (indices shifted due to Core 4 queries)
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 39) {
+  if (opts.includeTimeseries && results.length > 42) {
     timeseries = {
-      sessions: mapTimeseries(results[39].rows),
-      submissions: mapTimeseries(results[40].rows),
-      pipeline_value_usd: mapTimeseries(results[41].rows),
-      impressions: mapTimeseries(results[42].rows),
-      clicks: mapTimeseries(results[43].rows),
+      sessions: mapTimeseries(results[42].rows),
+      submissions: mapTimeseries(results[43].rows),
+      pipeline_value_usd: mapTimeseries(results[44].rows),
+      impressions: mapTimeseries(results[45].rows),
+      clicks: mapTimeseries(results[46].rows),
     };
   }
 
-  // T015: Core 4 engine aggregation
-  // Note: WARM_OUTREACH_SQL queries dashboard_sources (lifetime view, no date column).
-  // Quotes/pipeline are identical for current and previous — deltas will be 0%.
-  // Sessions ARE date-filtered via GA4 channel_session_summary (indices 28/29).
-  const warmRow = results[27].rows[0] ?? {};
+  const warmRowCur = results[27].rows[0] ?? {};
+  const warmRowPrev = results[39].rows[0] ?? {};
   const warmSessionsCur = results[28].rows[0] ?? {};
   const warmSessionsPrev = results[29].rows[0] ?? {};
   const warmCurrent = buildCore4EngineMetrics('warm_outreach', {
     sessions: nonNegative(toNumber(warmSessionsCur.sessions)),
     clicks: 0,
-    quotes: nonNegative(toNumber(warmRow.quotes)),
-    pipeline_value_usd: nonNegative(toNumber(warmRow.pipeline_value_usd)),
+    quotes: nonNegative(toNumber(warmRowCur.quotes)),
+    pipeline_value_usd: nonNegative(toNumber(warmRowCur.pipeline_value_usd)),
     spend: 0,
   });
   const warmPrevious = buildCore4EngineMetrics('warm_outreach', {
     sessions: nonNegative(toNumber(warmSessionsPrev.sessions)),
     clicks: 0,
-    quotes: nonNegative(toNumber(warmRow.quotes)),
-    pipeline_value_usd: nonNegative(toNumber(warmRow.pipeline_value_usd)),
+    quotes: nonNegative(toNumber(warmRowPrev.quotes)),
+    pipeline_value_usd: nonNegative(toNumber(warmRowPrev.pipeline_value_usd)),
     spend: 0,
   });
 
