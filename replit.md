@@ -72,9 +72,18 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
   - **Triggers**: Manual `POST /api/sync/google-ads` (SYNC_SECRET, last 30 days) and daily Vercel Cron `GET /api/cron/google-ads-sync` (CRON_SECRET, last 3 days, 7 AM UTC).
   - **Event Names**: `campaign_performance`, `search_term_performance` in `raw_google_ads` with `source_system = 'google-ads-bq'`.
 - **Query Index Map**: engagement=0, conversion=1, search=2, pages=3, sources=4, freshness=5, prev_eng=6, prev_conv=7, seo_queries=8, anomaly_sessions=9, anomaly_subs=10, anomaly_pipeline=11, funnel_fallback=12, prev_funnel_fallback=13, GA4_device=14, GA4_country=15, SC_device=16, SC_country=17, pipeline_categories=18, recent_conversions=19, seo_movers=20, funnel=21, pipeline_health=22, channel_performance=23, ga4_funnel=24, google_ads_overview=25, google_ads_campaigns=26, timeseries=27-31, core4_warm=32-33, core4_content=34-36, core4_paid=37-38.
+- **QMS (Quote Management System) Integration**: Ingests Convex quote lifecycle events into `analytics.raw_qms_deals` via webhook.
+  - **Table**: `analytics.raw_qms_deals` — snapshot table (one row per quote, upserted on each lifecycle event).
+  - **Ingest Endpoint**: `POST /api/ingest/qms-deal` — receives lifecycle events from Convex, authenticated via `SYNC_SECRET` Bearer token. Auto-creates table on first use.
+  - **Analytics Endpoint**: `GET /api/activity-spine/marketing/qms` — returns pipeline summary, aging buckets, close rate, deal velocity, status breakdown, recent deals, attribution, and discount usage.
+  - **Key Columns**: `convex_quote_id` (unique), `quote_number`, `quote_activity` (lifecycle stage), `total_price_cents`, `customer_name/email/company`, `sign_text/type`, UTM/attribution fields, `deposit_paid_at`, `quote_paid_at`, `followup_*`, `discount_*`, `production_*`, `shipping_*`.
+  - **Lifecycle Stages**: Quote Submitted, Awaiting Response, Quote Approved, Awaiting Deposit, Deposit Paid, Pending Management Review, Admin Review Changes Requested, Mockups In Review, Revisions Requested, Revisions Adjusted, Design Approved, Quote Paid, Not Interested.
+  - **Warm Outreach Screen**: `app/dashboard/marketing/warm-outreach/page.tsx` displays live QMS data (pipeline, aging, close rate, velocity, status breakdown, source attribution, discount usage, recent deals table) with graceful fallback to empty state cards when QMS data is unavailable.
+  - **Types**: `QMSAnalytics`, `QMSPipelineSummary`, `QMSAgingBuckets`, `QMSCloseRate`, `QMSVelocity`, `QMSStatusBreakdown`, `QMSRecentDeal`, `QMSAttribution`, `QMSDiscountUsage` in `types/activity-spine.ts`.
 
 ## External Dependencies
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.
 - **ODS API**: Used for bootstrap and identity services.
 - **Supabase**: Utilized for persistence of new `DRAFT` campaigns, campaign editing/duplication, and Marketing Dashboard analytics via its `analytics` schema.
 - **Google BigQuery**: Used as a read-only source for Google Ads data (auto-exported from Google Ads). Accessed via `@google-cloud/bigquery` SDK with the shared service account.
+- **Convex QMS**: Quote Management System running on Convex. Pushes lifecycle events to `POST /api/ingest/qms-deal` for analytics. Data stored in `analytics.raw_qms_deals`.

@@ -410,6 +410,91 @@ export interface MarketingOverviewResponse {
 }
 
 // ============================================
+// QMS (Quote Management System) Metrics
+// ============================================
+
+export interface QMSPipelineSummary {
+  active_deals: number;
+  pipeline_value_usd: number;
+  avg_deal_value_usd: number;
+  won_deals: number;
+  won_revenue_usd: number;
+  total_deals: number;
+}
+
+export interface QMSAgingBuckets {
+  bucket_0_2d: number;
+  bucket_3_7d: number;
+  bucket_8_14d: number;
+  bucket_15_plus: number;
+}
+
+export interface QMSCloseRate {
+  won: number;
+  lost: number;
+  total: number;
+  rate: number;
+  won_revenue_usd: number;
+  lost_revenue_usd: number;
+}
+
+export interface QMSVelocity {
+  avg_days_to_close: number;
+  avg_days_to_deposit: number;
+  sample_size: number;
+}
+
+export interface QMSStatusBreakdown {
+  status: string;
+  count: number;
+  value_usd: number;
+}
+
+export interface QMSRecentDeal {
+  quote_number: string;
+  customer_name: string | null;
+  status: string;
+  total_price_usd: number;
+  sign_type: string | null;
+  sign_text: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  utm_source: string | null;
+  landing_page: string | null;
+  deposit_paid_at: string | null;
+  quote_paid_at: string | null;
+  followup_count: number;
+  revision_round: number;
+  discount_code: string | null;
+}
+
+export interface QMSAttribution {
+  source: string;
+  count: number;
+  value_usd: number;
+  won: number;
+}
+
+export interface QMSDiscountUsage {
+  with_discount: number;
+  total: number;
+  discount_redeemed: number;
+  avg_discount_pct: number;
+}
+
+export interface QMSAnalytics {
+  available: boolean;
+  pipeline: QMSPipelineSummary | null;
+  aging: QMSAgingBuckets | null;
+  close_rate: QMSCloseRate | null;
+  velocity: QMSVelocity | null;
+  status_breakdown: QMSStatusBreakdown[];
+  recent_deals: QMSRecentDeal[];
+  attribution: QMSAttribution[];
+  discount_usage: QMSDiscountUsage | null;
+}
+
+// ============================================
 // Time Period Options
 // ============================================
 export type TimePeriod = '7d' | '30d';
