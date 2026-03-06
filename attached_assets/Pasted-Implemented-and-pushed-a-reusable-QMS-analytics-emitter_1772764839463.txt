@@ -1,0 +1,91 @@
+Implemented and pushed ✅ a reusable QMS analytics emitter for quote lifecycle syncs.
+
+What I changed
+1) New reusable emitter action
+Created: convex/actions/analyticsQMS.ts
+
+Added internal action: emitQuoteLifecycle
+
+Args: { id: Id<"quotes"> }
+Fetches quote via ctx.runQuery(internal.quotes.getById, { id })
+POSTs to:
+https://analytics.neonsignsdepot.com/api/ingest/qms-deal
+Authorization: Bearer <ANALYTICS_SYNC_SECRET>
+Content-Type: application/json
+Sends payload fields you requested (required + lifecycle/customer/followup/revision/production/shipping fields + last_event: "status_changed").
+Wrapped in try/catch
+Non-blocking error handling (console.error, no throw)
+Added one-time action: backfillAnalytics
+
+Paginates quote IDs via internal query
+Schedules emitQuoteLifecycle for each quote with configurable delay/batch size
+Intended for one manual run, then removal
+2) Added internal quote queries required by emitter/backfill
+Updated: convex/quotes.ts
+
+Added internal query getById with args { id: v.id("quotes") }
+Added internal query listQuoteIdsForAnalyticsBackfill (paginated IDs for backfill job)
+3) Wired emitter scheduling at lifecycle transitions
+Used: ctx.scheduler.runAfter(0, internal.actions.analyticsQMS.emitQuoteLifecycle, { id: quoteId })
+
+in all relevant status/lifecycle update points:
+
+convex/quotes.ts
+initial quote creation mutation flow
+all key mutations changing quote_activity
+payment transitions (deposit_paid_at, quote_paid_at)
+cancel/loss flows (cancel_reason)
+revision open/restore flows
+mockup approval status transitions
+convex/actions/quote.ts
+initial creation path (alongside existing analytics/custom event flow)
+convex/mockupReviews.ts
+management review status transitions
+convex/quoteVariations.ts
+variation payment finalization (Quote Paid)
+convex/productionAssignments.ts
+production assignment/update/clear
+convex/shipmentTracking.ts
+shipment add/update/transit updates
+convex/fulfillment.ts
+delivery mark (production.delivered_at)
+I did not alter existing custom_quote_submit or ODS emissions.
+
+Validation
+✅ npx tsc --noEmit passed
+⚠️ npm run lint failed due existing local ESLint module issue (safe-emitter)
+⚠️ npm run build failed because bun is not installed in this environment (sh: 1: bun: not found)
+Git
+Commit: bc50ab1d
+Branch pushed: cursor/engagement-metrics-accuracy-3a2f
+Manual steps you still need
+In Convex env vars, add:
+ANALYTICS_SYNC_SECRET=<value matching analytics platform SYNC_SECRET>
+Deploy and run backfill once:
+npx convex run api.actions.analyticsQMS.backfillAnalytics '{"batchSize":50,"delayMs":120}'
+After successful one-time run, remove backfillAnalytics in a cleanup PR (as requested).
+
+10 Files Changed
+analyticsQMS.ts
++188
+quote.ts
++15
+dashboard.ts
++165
+-168
+fulfillment.ts
++12
+-1
+mockupReviews.ts
++30
+-1
+productionAssignments.ts
++18
+-1
+quoteEngagement.ts
++5
+-36
+quoteVariations.ts
++11
+quotes.ts
++91

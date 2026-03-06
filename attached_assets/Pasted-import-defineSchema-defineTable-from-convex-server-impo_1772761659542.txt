@@ -1,0 +1,412 @@
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  // Other tables here...
+
+  quotes: defineTable({
+    active_revision_id: v.optional(v.id("quoteRevisions")),
+    address_info: v.object({
+      city: v.string(),
+      country: v.string(),
+      state: v.string(),
+      street1: v.string(),
+      street2: v.optional(v.string()),
+      zip: v.string(),
+    }),
+    admin_images: v.optional(
+      v.array(
+        v.object({
+          fileId: v.id("_storage"),
+          isMockup: v.optional(v.boolean()),
+          mockupApprovedAt: v.optional(v.float64()),
+          mockupApprovedBy: v.optional(v.string()),
+          mockupNumber: v.optional(v.float64()),
+          mockupReplacedAt: v.optional(v.float64()),
+          mockupRevisionNotes: v.optional(v.string()),
+          mockupStatus: v.optional(
+            v.union(
+              v.literal("pending"),
+              v.literal("approved"),
+              v.literal("revision_requested")
+            )
+          ),
+          name: v.string(),
+          size: v.float64(),
+          type: v.string(),
+          uploadedAt: v.float64(),
+          uploadedBy: v.string(),
+          url: v.string(),
+        })
+      )
+    ),
+    analytics_emitted: v.optional(v.boolean()),
+    automation_disabled: v.optional(v.boolean()),
+    campaign_info: v.optional(
+      v.object({
+        campaign_name: v.string(),
+        campaign_param: v.optional(v.string()),
+        campaign_type: v.string(),
+        created_at: v.float64(),
+        is_free: v.boolean(),
+      })
+    ),
+    cancel_reason: v.optional(
+      v.object({
+        details: v.optional(v.string()),
+        reason: v.string(),
+      })
+    ),
+    deleting_at: v.optional(v.float64()),
+    deposit_paid_at: v.optional(v.float64()),
+    deposit_payment_id: v.optional(v.string()),
+    email_logs: v.optional(
+      v.object({
+        delivery: v.optional(v.string()),
+        delivery_sent_at: v.optional(v.float64()),
+        deposit: v.optional(v.string()),
+        missing_image: v.optional(v.string()),
+        missing_image_sent_at: v.optional(v.float64()),
+        mockups_ready: v.optional(v.string()),
+        mockups_ready_sent_at: v.optional(v.float64()),
+        production_started: v.optional(v.string()),
+        production_started_sent_at: v.optional(v.float64()),
+        quote_payment: v.optional(v.string()),
+        quote_payment_sent_at: v.optional(v.float64()),
+        revisions_completed: v.optional(v.string()),
+        revisions_completed_sent_at: v.optional(
+          v.float64()
+        ),
+        shipment: v.optional(v.string()),
+        shipment_sent_at: v.optional(v.float64()),
+      })
+    ),
+    followup: v.optional(
+      v.object({
+        active: v.boolean(),
+        cancelled_at: v.optional(v.float64()),
+        cancelled_reason: v.optional(v.string()),
+        count: v.float64(),
+        lane: v.union(
+          v.literal("mockups"),
+          v.literal("payment")
+        ),
+        last_email_id: v.optional(v.string()),
+        last_sent_at: v.optional(v.float64()),
+        next_due_at: v.optional(v.float64()),
+        version: v.optional(v.float64()),
+      })
+    ),
+    followup_discount: v.optional(
+      v.object({
+        appliedDiscountCents: v.optional(v.float64()),
+        code: v.string(),
+        everUnlocked: v.boolean(),
+        expiresAt: v.float64(),
+        lane: v.union(
+          v.literal("mockups"),
+          v.literal("payment")
+        ),
+        percentage: v.float64(),
+        sequence: v.float64(),
+        unlocked: v.boolean(),
+        unlockedAt: v.float64(),
+        usedAt: v.optional(v.float64()),
+        usedPaymentId: v.optional(v.string()),
+      })
+    ),
+    full_name: v.string(),
+    hasVariations: v.optional(v.boolean()),
+    high_value_escalation_active: v.optional(v.boolean()),
+    high_value_started_at: v.optional(v.float64()),
+    human_last_contact_at: v.optional(v.float64()),
+    human_last_engagement_at: v.optional(v.float64()),
+    landing_page: v.optional(v.string()),
+    notes_for_customer: v.optional(v.string()),
+    paidVariationId: v.optional(v.id("quoteVariations")),
+    pre_revision_quote_activity: v.optional(v.string()),
+    prevent_deletion: v.optional(v.boolean()),
+    production: v.optional(
+      v.object({
+        assigned_at: v.float64(),
+        assigned_by: v.id("team"),
+        costs: v.optional(
+          v.object({
+            currency: v.string(),
+            entered_at: v.float64(),
+            entered_by: v.id("team"),
+            factory_cost_cents: v.float64(),
+            invoice_reference: v.optional(v.string()),
+            misc_cost_cents: v.optional(v.float64()),
+            notes: v.optional(v.string()),
+            shipping_cost_cents: v.optional(v.float64()),
+            updated_at: v.optional(v.float64()),
+          })
+        ),
+        delivered_at: v.optional(v.float64()),
+        delivered_by: v.optional(v.id("team")),
+        internal_notes: v.optional(v.string()),
+        shipment: v.optional(
+          v.object({
+            carrier: v.union(
+              v.literal("UPS"),
+              v.literal("FedEx"),
+              v.literal("USPS"),
+              v.literal("DHL")
+            ),
+            entered_at: v.float64(),
+            entered_by: v.id("team"),
+            shipped_at: v.float64(),
+            tracking_number: v.string(),
+            tracking_url: v.optional(v.string()),
+            transit_status: v.optional(
+              v.union(
+                v.literal("shipped"),
+                v.literal("in_transit"),
+                v.literal("arrived_at_facility"),
+                v.literal("out_for_delivery")
+              )
+            ),
+            transit_status_updated_at: v.optional(
+              v.float64()
+            ),
+            transit_status_updated_by: v.optional(
+              v.id("team")
+            ),
+          })
+        ),
+        supplier_id: v.id("suppliers"),
+        supplier_variant_id: v.id("supplierVariants"),
+      })
+    ),
+    project_info: v.object({
+      customerInfo: v.object({
+        city: v.string(),
+        companyName: v.optional(v.string()),
+        country: v.string(),
+        email: v.string(),
+        firstName: v.string(),
+        lastName: v.string(),
+        phone: v.string(),
+        state: v.string(),
+        street1: v.string(),
+        street2: v.optional(v.string()),
+        zip: v.string(),
+      }),
+      projectDetails: v.object({
+        additionalNotes: v.optional(v.string()),
+        backColor: v.string(),
+        backShape: v.string(),
+        estimatedBudget: v.optional(v.string()),
+        fontChoice: v.string(),
+        hasImage: v.optional(v.boolean()),
+        industry: v.optional(v.string()),
+        installation: v.string(),
+        isCustomFont: v.optional(v.boolean()),
+        knowMeasurements: v.optional(v.string()),
+        length: v.optional(v.string()),
+        manualOverridePriceCents: v.optional(v.float64()),
+        manualPriceCents: v.optional(v.float64()),
+        maxSize: v.string(),
+        multiColorDescription: v.optional(v.string()),
+        neonMaterial: v.string(),
+        quantity: v.float64(),
+        rgbLighting: v.optional(v.boolean()),
+        rushOrder: v.optional(v.boolean()),
+        signColors: v.array(v.string()),
+        signText: v.string(),
+        signType: v.string(),
+        uploadedFiles: v.optional(
+          v.array(
+            v.object({
+              data: v.string(),
+              name: v.string(),
+              size: v.float64(),
+              type: v.string(),
+            })
+          )
+        ),
+        useType: v.string(),
+        waterproofing: v.optional(v.boolean()),
+        width: v.optional(v.string()),
+      }),
+    }),
+    public_token: v.string(),
+    quote_active: v.boolean(),
+    quote_activity: v.union(
+      v.literal("Quote Submitted"),
+      v.literal("Awaiting Response"),
+      v.literal("Quote Approved"),
+      v.literal("Awaiting Deposit"),
+      v.literal("Deposit Paid"),
+      v.literal("Pending Management Review"),
+      v.literal("Admin Review Changes Requested"),
+      v.literal("Mockups In Review"),
+      v.literal("Revisions Requested"),
+      v.literal("Revisions Adjusted"),
+      v.literal("Design Approved"),
+      v.literal("Quote Paid"),
+      v.literal("Not Interested")
+    ),
+    quote_design: v.optional(
+      v.array(
+        v.object({
+          fileId: v.optional(v.id("_storage")),
+          name: v.string(),
+          url: v.string(),
+        })
+      )
+    ),
+    quote_number: v.string(),
+    quote_paid_at: v.optional(v.float64()),
+    quote_payment_id: v.optional(v.string()),
+    quote_result: v.object({
+      breakdown: v.optional(
+        v.object({
+          addOnFees: v.optional(v.float64()),
+          additionalCosts: v.optional(
+            v.array(
+              v.object({
+                amount: v.float64(),
+                name: v.string(),
+              })
+            )
+          ),
+          basePrice: v.optional(v.float64()),
+          colorCost: v.optional(v.float64()),
+          complexityScore: v.optional(v.float64()),
+          complexityTier: v.optional(v.string()),
+          installationCost: v.optional(v.float64()),
+          markupMultiplier: v.optional(v.float64()),
+          materialCost: v.optional(v.float64()),
+          neonMaterialMultiplier: v.optional(v.float64()),
+          quantity: v.optional(v.float64()),
+          rushCharge: v.optional(v.float64()),
+          sizeCost: v.optional(v.float64()),
+          sizeTier: v.optional(v.string()),
+          subtotal: v.optional(v.float64()),
+          total: v.optional(v.float64()),
+        })
+      ),
+      factors: v.optional(v.array(v.string())),
+      manualOverride: v.optional(v.boolean()),
+      manualPricingRequired: v.optional(v.boolean()),
+      price: v.optional(v.float64()),
+      timeframe: v.optional(v.string()),
+      type: v.string(),
+    }),
+    quote_type: v.string(),
+    referrer: v.optional(v.string()),
+    revision_open: v.optional(v.boolean()),
+    revision_owner: v.optional(
+      v.union(
+        v.literal("design"),
+        v.literal("management"),
+        v.literal("both")
+      )
+    ),
+    revision_round: v.optional(v.float64()),
+    revision_type: v.optional(
+      v.union(
+        v.literal("design"),
+        v.literal("pricing"),
+        v.literal("scope"),
+        v.literal("mixed")
+      )
+    ),
+    sceneRender: v.optional(
+      v.object({
+        createdAt: v.float64(),
+        enabled: v.boolean(),
+        migratedAt: v.optional(v.float64()),
+        status: v.union(
+          v.literal("idle"),
+          v.literal("queued"),
+          v.literal("rendering"),
+          v.literal("complete"),
+          v.literal("failed")
+        ),
+        updatedAt: v.optional(v.float64()),
+        version: v.float64(),
+      })
+    ),
+    scene_render: v.optional(
+      v.object({
+        attempts: v.float64(),
+        betaEnabled: v.boolean(),
+        defaultPreview: v.optional(
+          v.object({
+            backgroundId: v.string(),
+            fileId: v.optional(v.id("_storage")),
+            generatedAt: v.float64(),
+            url: v.string(),
+          })
+        ),
+        input: v.optional(
+          v.object({
+            backgroundFileId: v.id("_storage"),
+            mockupFileId: v.id("_storage"),
+            transform: v.object({
+              rotation: v.float64(),
+              scale: v.float64(),
+              x: v.float64(),
+              y: v.float64(),
+            }),
+          })
+        ),
+        jobId: v.optional(v.string()),
+        lastError: v.optional(v.string()),
+        output: v.optional(
+          v.object({
+            previewFileId: v.id("_storage"),
+            previewUrl: v.string(),
+            videoFileId: v.optional(v.id("_storage")),
+            videoUrl: v.optional(v.string()),
+          })
+        ),
+        status: v.union(
+          v.literal("idle"),
+          v.literal("queued"),
+          v.literal("rendering"),
+          v.literal("complete"),
+          v.literal("failed")
+        ),
+        updatedAt: v.float64(),
+      })
+    ),
+    total_price_cents: v.float64(),
+    trello_card_id: v.optional(v.string()),
+    trello_card_missing_since: v.optional(v.float64()),
+    trello_card_url: v.optional(v.string()),
+    trello_deletion_marked: v.optional(v.boolean()),
+    trello_meta: v.optional(
+      v.object({
+        boardId: v.string(),
+        createdAt: v.string(),
+        listId: v.string(),
+        listName: v.string(),
+      })
+    ),
+    trello_status: v.optional(v.string()),
+    updated_at: v.float64(),
+    utm_campaign: v.optional(v.string()),
+    utm_medium: v.optional(v.string()),
+    utm_source: v.optional(v.string()),
+    variationCount: v.optional(v.float64()),
+    viewed_at: v.optional(v.float64()),
+  })
+    .index("by_deleting_at", ["deleting_at"])
+    .index("by_has_costs", [
+      "production.costs.factory_cost_cents",
+    ])
+    .index("by_production_supplier", [
+      "production.supplier_id",
+    ])
+    .index("by_quote_number", ["quote_number"])
+    .index("by_sceneRender", ["sceneRender"])
+    .index("by_shipment_carrier", [
+      "production.shipment.carrier",
+    ])
+    .index("by_token", ["public_token"])
+    .index("by_trello_card", ["trello_card_id"]),
+});
