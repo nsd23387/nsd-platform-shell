@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
+import { PageExportBar } from '../../../../components/dashboard/PageExportBar';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { MarketingContext } from '../lib/MarketingContext';
 import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
+import type { ExportSection } from '../../../../lib/exportUtils';
 
 function fmt(n: number | undefined, prefix = '') {
   if (n === undefined || !isFinite(n) || isNaN(n)) return '—';
@@ -80,6 +82,27 @@ export default function Core4OverviewPage() {
     });
   }, [data]);
 
+  const exportSections: ExportSection[] = useMemo(() => {
+    return [
+      {
+        type: 'table' as const,
+        title: 'Core 4 Engine Comparison',
+        columns: [
+          { key: 'name', label: 'Engine' },
+          { key: 'sessions', label: 'Sessions' },
+          { key: 'clicks', label: 'Clicks' },
+          { key: 'quotes', label: 'Quotes' },
+          { key: 'quoteRate', label: 'Quote Rate' },
+          { key: 'pipeline', label: 'Pipeline' },
+          { key: 'spend', label: 'Spend' },
+          { key: 'cac', label: 'CAC/CPA' },
+          { key: 'roas', label: 'ROAS/MER' },
+        ],
+        rows: engines.map(({ href, ...rest }) => rest),
+      },
+    ];
+  }, [engines]);
+
   const thStyle: React.CSSProperties = {
     padding: `${space['3']} ${space['4']}`,
     fontFamily: fontFamily.body,
@@ -121,6 +144,14 @@ export default function Core4OverviewPage() {
           <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
             Compare all four growth engines side-by-side, ranked by ROI.
           </p>
+          <div style={{ marginTop: space['3'] }}>
+            <PageExportBar
+              filename="core4-comparison"
+              pdfTitle="Core 4 Engine Comparison"
+              sections={exportSections}
+              loading={loading}
+            />
+          </div>
         </div>
 
         <DashboardSection title="Engine Comparison" description="Click a row to drill into that engine.">

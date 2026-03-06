@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
 import { DashboardGrid } from '../../../../components/dashboard/DashboardGrid';
 import { DashboardCard } from '../../../../components/dashboard/DashboardCard';
+import { PageExportBar } from '../../../../components/dashboard/PageExportBar';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
@@ -15,6 +16,7 @@ import { StatTile } from '../components/adminto/StatTile';
 import { AreaLineChart } from '../../../../components/dashboard/charts/AreaLineChart';
 import { magenta, indigo, violet } from '../../../../design/tokens/colors';
 import { getTargetForMetric } from '../lib/marketingTargets';
+import type { ExportSection } from '../../../../lib/exportUtils';
 import type {
   QMSAnalytics,
   QMSRecentDeal,
@@ -216,6 +218,149 @@ export default function WarmOutreachPage() {
     : 0;
   const maxStatusCount = qmsStatusBreakdown.reduce((m, s) => Math.max(m, s.count), 0);
 
+  const exportSections = useMemo<ExportSection[]>(() => {
+    const sections: ExportSection[] = [];
+
+    if (qmsAvailable && qmsPipeline) {
+      sections.push({
+        type: 'kpis',
+        title: 'QMS Pipeline Summary',
+        items: [
+          { label: 'Active Pipeline', value: formatUSD(qmsPipeline.pipeline_value_usd) },
+          { label: 'Active Deals', value: qmsPipeline.active_deals },
+          { label: 'Won Revenue', value: formatUSD(qmsPipeline.won_revenue_usd) },
+          { label: 'Avg Deal Size', value: formatUSD(qmsPipeline.avg_deal_value_usd) },
+        ],
+      });
+    }
+
+    if (qmsAvailable && qmsCloseRate) {
+      sections.push({
+        type: 'kpis',
+        title: 'Close Rate (90d)',
+        items: [
+          { label: 'Close Rate', value: `${(qmsCloseRate.rate * 100).toFixed(1)}%` },
+          { label: 'Won', value: qmsCloseRate.won },
+          { label: 'Lost', value: qmsCloseRate.lost },
+          { label: 'Open', value: qmsCloseRate.open },
+          { label: 'Total', value: qmsCloseRate.total },
+          { label: 'Won Revenue', value: formatUSD(qmsCloseRate.won_revenue_usd) },
+          { label: 'Lost Revenue', value: formatUSD(qmsCloseRate.lost_revenue_usd) },
+          ...(qmsCloseRate.decision_rate > 0 ? [{ label: 'Decision Win Rate', value: `${(qmsCloseRate.decision_rate * 100).toFixed(0)}%` }] : []),
+        ],
+      });
+    }
+
+    if (qmsAvailable && qmsVelocity) {
+      sections.push({
+        type: 'kpis',
+        title: 'Deal Velocity (90d)',
+        items: [
+          { label: 'Avg Days to Close', value: qmsVelocity.avg_days_to_close },
+          { label: 'Avg Days to Deposit', value: qmsVelocity.avg_days_to_deposit },
+          { label: 'Sample Size', value: qmsVelocity.sample_size },
+        ],
+      });
+    }
+
+    if (qmsAvailable && qmsAging) {
+      sections.push({
+        type: 'kpis',
+        title: 'Quote Aging',
+        items: [
+          { label: '0-2 Days', value: qmsAging.bucket_0_2d },
+          { label: '3-7 Days', value: qmsAging.bucket_3_7d },
+          { label: '8-14 Days', value: qmsAging.bucket_8_14d },
+          { label: '15+ Days', value: qmsAging.bucket_15_plus },
+        ],
+      });
+    }
+
+    if (qmsStatusBreakdown.length > 0) {
+      sections.push({
+        type: 'table',
+        title: 'Status Breakdown',
+        columns: [
+          { key: 'status', label: 'Status' },
+          { key: 'count', label: 'Count', format: 'number' },
+          { key: 'value_usd', label: 'Value', format: 'currency' },
+        ],
+        rows: qmsStatusBreakdown.map((s) => ({ status: s.status, count: s.count, value_usd: s.value_usd })),
+      });
+    }
+
+    if (qmsAvailable && qms.data?.click_to_quote) {
+      const ctq = qms.data.click_to_quote;
+      sections.push({
+        type: 'kpis',
+        title: 'Click-to-Quote Rate (90d)',
+        items: [
+          { label: 'Blended Rate', value: `${(ctq.blended_rate * 100).toFixed(2)}%` },
+          { label: 'Total Quotes', value: ctq.total_quotes },
+          { label: 'Organic Rate', value: `${(ctq.organic_rate * 100).toFixed(2)}%` },
+          { label: 'Organic Clicks', value: ctq.organic_clicks },
+          { label: 'Organic Quotes', value: ctq.organic_quotes },
+          { label: 'Paid Rate', value: `${(ctq.paid_rate * 100).toFixed(2)}%` },
+          { label: 'Paid Clicks', value: ctq.paid_clicks },
+          { label: 'Paid Quotes', value: ctq.paid_quotes },
+        ],
+      });
+    }
+
+    if (qmsAvailable && qmsDiscount) {
+      sections.push({
+        type: 'kpis',
+        title: 'Discount Usage (90d)',
+        items: [
+          { label: 'With Discount', value: qmsDiscount.with_discount },
+          { label: 'Redeemed', value: qmsDiscount.discount_redeemed },
+          { label: 'Total', value: qmsDiscount.total },
+          { label: 'Offer Rate', value: qmsDiscount.total > 0 ? `${((qmsDiscount.with_discount / qmsDiscount.total) * 100).toFixed(0)}%` : '0%' },
+          ...(qmsDiscount.avg_discount_pct > 0 ? [{ label: 'Avg Discount', value: `${qmsDiscount.avg_discount_pct}%` }] : []),
+        ],
+      });
+    }
+
+    if (qmsAttribution.length > 0) {
+      sections.push({
+        type: 'table',
+        title: 'Source Attribution',
+        columns: [
+          { key: 'source', label: 'Source' },
+          { key: 'count', label: 'Quotes', format: 'number' },
+          { key: 'value_usd', label: 'Pipeline', format: 'currency' },
+          { key: 'won', label: 'Won', format: 'number' },
+        ],
+        rows: qmsAttribution.map((a) => ({ source: a.source, count: a.count, value_usd: a.value_usd, won: a.won })),
+      });
+    }
+
+    if (qmsRecentDeals.length > 0) {
+      sections.push({
+        type: 'table',
+        title: 'Recent Deals',
+        columns: [
+          { key: 'quote_number', label: 'Quote #' },
+          { key: 'customer_name', label: 'Customer' },
+          { key: 'status', label: 'Status' },
+          { key: 'total_price_usd', label: 'Value', format: 'currency' },
+          { key: 'sign_type', label: 'Type' },
+          { key: 'updated_at', label: 'Updated' },
+        ],
+        rows: qmsRecentDeals.map((d) => ({
+          quote_number: d.quote_number,
+          customer_name: d.customer_name ?? '',
+          status: d.status,
+          total_price_usd: d.total_price_usd,
+          sign_type: d.sign_type ?? '',
+          updated_at: d.updated_at ? formatDate(d.updated_at) : '',
+        })),
+      });
+    }
+
+    return sections;
+  }, [qmsAvailable, qmsPipeline, qmsCloseRate, qmsVelocity, qmsAging, qmsStatusBreakdown, qmsDiscount, qms.data?.click_to_quote, qmsAttribution, qmsRecentDeals]);
+
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
@@ -237,6 +382,14 @@ export default function WarmOutreachPage() {
           <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
             Quote follow-ups, close rates, and returning visitor revenue.
           </p>
+          <div style={{ marginTop: space['3'] }}>
+            <PageExportBar
+              filename="warm-outreach"
+              pdfTitle="Warm Outreach Report"
+              sections={exportSections}
+              loading={loading || qms.loading}
+            />
+          </div>
         </div>
 
         {qmsAvailable && qms.data?.timeseries && (

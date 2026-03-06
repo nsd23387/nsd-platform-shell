@@ -4,6 +4,8 @@ import React, { useContext, useMemo } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../hooks/useRBAC';
 import { DashboardCard, AccessDenied, MarketingPerformanceScore } from '../../../components/dashboard';
+import { PageExportBar } from '../../../components/dashboard/PageExportBar';
+import type { ExportSection } from '../../../lib/exportUtils';
 import { MarketingKPIOverview } from './components/MarketingKPIOverview';
 import { MarketingExecutiveKPIs } from './components/MarketingExecutiveKPIs';
 import { MarketingChannelBreakdownPanel } from './components/MarketingChannelBreakdownPanel';
@@ -77,6 +79,121 @@ export default function MarketingExecutiveOverview() {
     return ts?.length ?? 30;
   }, [data]);
 
+  const exportSections = useMemo<ExportSection[]>(() => {
+    if (!data) return [];
+    const sections: ExportSection[] = [];
+
+    if (data.kpis) {
+      const k = data.kpis;
+      const comp = data.comparisons;
+      sections.push({
+        type: 'kpis',
+        title: 'Executive KPIs',
+        items: [
+          { label: 'Sessions', value: k.sessions ?? 0 },
+          { label: 'Sessions Delta %', value: comp?.sessions?.delta_pct != null ? `${comp.sessions.delta_pct.toFixed(1)}%` : '—' },
+          { label: 'Organic Clicks', value: k.organic_clicks ?? 0 },
+          { label: 'Total Submissions', value: k.total_submissions ?? 0 },
+          { label: 'Pipeline Value (USD)', value: k.total_pipeline_value_usd != null ? `$${Number(k.total_pipeline_value_usd).toLocaleString()}` : '—' },
+          { label: 'Pipeline Delta %', value: comp?.total_pipeline_value_usd?.delta_pct != null ? `${comp.total_pipeline_value_usd.delta_pct.toFixed(1)}%` : '—' },
+          { label: 'Impressions', value: k.impressions ?? 0 },
+          { label: 'Avg Position', value: k.avg_position != null ? k.avg_position.toFixed(1) : '—' },
+          { label: 'Revenue per Session', value: k.revenue_per_session != null ? `$${k.revenue_per_session.toFixed(2)}` : '—' },
+        ],
+      });
+    }
+
+    if (core4) {
+      const engines = ['warm_outreach', 'cold_outreach', 'post_free_content', 'run_paid_ads'] as const;
+      const engineLabels: Record<string, string> = {
+        warm_outreach: 'Warm Outreach',
+        cold_outreach: 'Cold Outreach',
+        post_free_content: 'Post Free Content',
+        run_paid_ads: 'Run Paid Ads',
+      };
+      sections.push({
+        type: 'table',
+        title: 'Core 4 Growth Engines',
+        columns: [
+          { key: 'engine', label: 'Engine' },
+          { key: 'sessions', label: 'Sessions', format: 'number' },
+          { key: 'quotes', label: 'Quotes', format: 'number' },
+          { key: 'pipeline', label: 'Pipeline (USD)', format: 'currency' },
+          { key: 'spend', label: 'Spend (USD)', format: 'currency' },
+          { key: 'roas', label: 'ROAS' },
+          { key: 'sessions_delta', label: 'Sessions Delta %', format: 'percent' },
+        ],
+        rows: engines.map(e => {
+          const cur = (core4 as any)[e]?.current ?? {};
+          const deltas = (core4 as any)[e]?.deltas ?? {};
+          return {
+            engine: engineLabels[e],
+            sessions: cur.sessions ?? 0,
+            quotes: cur.quotes ?? 0,
+            pipeline: cur.pipeline_value_usd ?? 0,
+            spend: cur.spend ?? 0,
+            roas: cur.roas != null ? `${cur.roas.toFixed(1)}x` : '—',
+            sessions_delta: deltas.sessions_pct ?? 0,
+          };
+        }),
+      });
+    }
+
+    if (data.channel_performance?.length) {
+      sections.push({
+        type: 'table',
+        title: 'Channel Breakdown',
+        columns: [
+          { key: 'channel', label: 'Channel' },
+          { key: 'sessions', label: 'Sessions', format: 'number' },
+          { key: 'clicks', label: 'Clicks', format: 'number' },
+          { key: 'quotes', label: 'Quotes', format: 'number' },
+          { key: 'pipeline_value_usd', label: 'Pipeline (USD)', format: 'currency' },
+        ],
+        rows: data.channel_performance.map((ch: any) => ({
+          channel: ch.channel ?? '',
+          sessions: ch.sessions ?? 0,
+          clicks: ch.clicks ?? 0,
+          quotes: ch.quotes ?? 0,
+          pipeline_value_usd: ch.pipeline_value_usd ?? 0,
+        })),
+      });
+    }
+
+    if (data.funnel?.length) {
+      sections.push({
+        type: 'table',
+        title: 'Marketing Funnel',
+        columns: [
+          { key: 'stage', label: 'Stage' },
+          { key: 'count', label: 'Count', format: 'number' },
+        ],
+        rows: data.funnel.map((f: any) => ({
+          stage: f.stage ?? f.label ?? '',
+          count: f.count ?? f.value ?? 0,
+        })),
+      });
+    }
+
+    const ga4 = data.ga4_funnel;
+    if (ga4) {
+      sections.push({
+        type: 'kpis',
+        title: 'GA4 Funnel',
+        items: [
+          { label: 'View Item', value: ga4.view_item ?? 0 },
+          { label: 'Add to Cart', value: ga4.add_to_cart ?? 0 },
+          { label: 'Begin Checkout', value: ga4.begin_checkout ?? 0 },
+          { label: 'Purchase', value: ga4.purchase ?? 0 },
+          { label: 'Form Start', value: ga4.form_start ?? 0 },
+          { label: 'Form Submit', value: ga4.form_submit ?? 0 },
+        ],
+      });
+    }
+
+    return sections;
+  }, [data, core4]);
+
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
@@ -104,6 +221,14 @@ export default function MarketingExecutiveOverview() {
           >
             Strategic marketing performance summary with Core 4 engine insights.
           </p>
+          <div style={{ marginTop: space['3'] }}>
+            <PageExportBar
+              filename="executive-overview"
+              pdfTitle="Executive Overview"
+              sections={exportSections}
+              loading={loading}
+            />
+          </div>
         </div>
 
         {error && !loading && (

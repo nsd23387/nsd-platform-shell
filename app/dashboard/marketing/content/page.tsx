@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useContext } from 'react';
+import React, { useContext, useMemo } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied, DashboardCard } from '../../../../components/dashboard';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
+import { PageExportBar } from '../../../../components/dashboard/PageExportBar';
 import { MarketingSeoRevenuePanel } from '../components/MarketingSeoRevenuePanel';
 import { MarketingSeoIntelligencePanel } from '../components/MarketingSeoIntelligencePanel';
 import { MarketingPagesPerformancePanel } from '../components/MarketingPagesPerformancePanel';
@@ -16,10 +17,73 @@ import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
 import { AreaLineChart } from '../../../../components/dashboard/charts/AreaLineChart';
 import { violet } from '../../../../design/tokens/colors';
 import { getTargetForMetric } from '../lib/marketingTargets';
+import type { ExportSection } from '../../../../lib/exportUtils';
 
 export default function PostFreeContentPage() {
   const tc = useThemeColors();
   const { data, loading, error } = useContext(MarketingContext);
+
+  const exportSections: ExportSection[] = useMemo(() => {
+    const sections: ExportSection[] = [];
+
+    const seoQueries = data?.seo_queries ?? [];
+    if (seoQueries.length) {
+      sections.push({
+        type: 'table' as const,
+        title: 'SEO Queries',
+        columns: [
+          { key: 'query', label: 'Query' },
+          { key: 'clicks', label: 'Clicks', format: 'number' },
+          { key: 'impressions', label: 'Impressions', format: 'number' },
+          { key: 'ctr', label: 'CTR', format: 'percent' },
+          { key: 'avg_position', label: 'Avg Position', format: 'number' },
+          { key: 'submissions', label: 'Submissions', format: 'number' },
+          { key: 'pipeline_value_usd', label: 'Pipeline Value', format: 'currency' },
+          { key: 'revenue_per_click', label: 'Rev/Click', format: 'currency' },
+        ],
+        rows: seoQueries as unknown as Record<string, unknown>[],
+      });
+    }
+
+    const pages = data?.pages ?? [];
+    if (pages.length) {
+      sections.push({
+        type: 'table' as const,
+        title: 'Pages Performance',
+        columns: [
+          { key: 'page_url', label: 'Page URL' },
+          { key: 'sessions', label: 'Sessions', format: 'number' },
+          { key: 'page_views', label: 'Page Views', format: 'number' },
+          { key: 'bounce_rate', label: 'Bounce Rate', format: 'percent' },
+          { key: 'avg_time_on_page_seconds', label: 'Avg Time (s)', format: 'number' },
+          { key: 'clicks', label: 'Clicks', format: 'number' },
+          { key: 'impressions', label: 'Impressions', format: 'number' },
+          { key: 'ctr', label: 'CTR', format: 'percent' },
+          { key: 'submissions', label: 'Submissions', format: 'number' },
+          { key: 'pipeline_value_usd', label: 'Pipeline Value', format: 'currency' },
+        ],
+        rows: pages as unknown as Record<string, unknown>[],
+      });
+    }
+
+    const seoMovers = data?.seo_movers ?? [];
+    if (seoMovers.length) {
+      sections.push({
+        type: 'table' as const,
+        title: 'SEO Movers',
+        columns: [
+          { key: 'query', label: 'Query' },
+          { key: 'impressions_first_half', label: 'Impressions (1st Half)', format: 'number' },
+          { key: 'impressions_second_half', label: 'Impressions (2nd Half)', format: 'number' },
+          { key: 'delta_pct', label: 'Delta %', format: 'percent' },
+          { key: 'direction', label: 'Direction' },
+        ],
+        rows: seoMovers as unknown as Record<string, unknown>[],
+      });
+    }
+
+    return sections;
+  }, [data?.seo_queries, data?.pages, data?.seo_movers]);
 
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
@@ -42,6 +106,14 @@ export default function PostFreeContentPage() {
           <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
             Organic search performance, content attribution, and SEO pipeline.
           </p>
+          <div style={{ marginTop: space['3'] }}>
+            <PageExportBar
+              filename="seo-content"
+              pdfTitle="SEO Content Performance"
+              sections={exportSections}
+              loading={loading}
+            />
+          </div>
         </div>
 
         {error && !loading && (
