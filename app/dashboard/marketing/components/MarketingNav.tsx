@@ -34,7 +34,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/marketing/warm-outreach', label: 'Warm Outreach', icon: 'users' },
       { href: '/dashboard/marketing/cold-outreach', label: 'Cold Outreach', icon: 'send' },
-      { href: '/dashboard/marketing/content', label: 'Post Free Content', icon: 'draft' },
+      { href: '/dashboard/marketing/content', label: 'SEO', icon: 'search' },
       { href: '/dashboard/marketing/paid-ads', label: 'Run Paid Ads', icon: 'campaign' },
     ],
   },

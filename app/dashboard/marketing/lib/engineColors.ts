@@ -13,7 +13,7 @@ export const ENGINE_COLORS = {
   },
   post_free_content: {
     accent: violet[500],
-    label: 'Post Free Content',
+    label: 'SEO',
     href: '/dashboard/marketing/content',
   },
   run_paid_ads: {

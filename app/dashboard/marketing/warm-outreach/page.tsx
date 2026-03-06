@@ -239,6 +239,60 @@ export default function WarmOutreachPage() {
           </p>
         </div>
 
+        {qmsAvailable && qms.data?.timeseries && (
+          <DashboardSection title="Pipeline Trend (90d)" description="Daily pipeline value from new quotes created.">
+            {(() => {
+              const ts = qms.data.timeseries.pipeline ?? [];
+              if (!ts.length) return null;
+              const chartData = ts.map((s) => ({ date: s.date, pipeline: s.value }));
+              return (
+                <AreaLineChart
+                  data={chartData}
+                  series={[{ dataKey: 'pipeline', label: 'Pipeline ($)', color: magenta[500] }]}
+                  height={220}
+                  formatXAxis={(d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                />
+              );
+            })()}
+          </DashboardSection>
+        )}
+
+        {qmsAvailable && qms.data?.timeseries && (
+          <DashboardSection title="Quotes Trend (90d)" description="Daily new quotes created.">
+            {(() => {
+              const ts = qms.data.timeseries.quotes ?? [];
+              if (!ts.length) return null;
+              const chartData = ts.map((s) => ({ date: s.date, quotes: s.value }));
+              return (
+                <AreaLineChart
+                  data={chartData}
+                  series={[{ dataKey: 'quotes', label: 'Quotes', color: indigo[600] }]}
+                  height={220}
+                  formatXAxis={(d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                />
+              );
+            })()}
+          </DashboardSection>
+        )}
+
+        {qmsAvailable && qms.data?.timeseries && (
+          <DashboardSection title="Won Revenue Trend (90d)" description="Daily revenue from closed-won deals.">
+            {(() => {
+              const ts = qms.data.timeseries.won_revenue ?? [];
+              if (!ts.length) return null;
+              const chartData = ts.map((s) => ({ date: s.date, won: s.value }));
+              return (
+                <AreaLineChart
+                  data={chartData}
+                  series={[{ dataKey: 'won', label: 'Won Revenue ($)', color: violet[500] }]}
+                  height={220}
+                  formatXAxis={(d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                />
+              );
+            })()}
+          </DashboardSection>
+        )}
+
         <DashboardSection title="Submissions Trend" description="Daily form submissions and conversion events.">
           {(() => {
             const submissions = data?.timeseries?.submissions ?? [];
@@ -300,6 +354,9 @@ export default function WarmOutreachPage() {
                       <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['2'] }}>
                         {(qmsCloseRate.rate * 100).toFixed(1)}%
                       </p>
+                      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginBottom: space['3'] }}>
+                        {qmsCloseRate.won} won out of {qmsCloseRate.total} total quotes
+                      </p>
                       <div style={{ display: 'flex', gap: space['4'], marginBottom: space['2'] }}>
                         <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
                           Won: {qmsCloseRate.won}
@@ -308,10 +365,10 @@ export default function WarmOutreachPage() {
                           Lost: {qmsCloseRate.lost}
                         </span>
                         <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
-                          Total: {qmsCloseRate.total}
+                          Open: {qmsCloseRate.open}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', gap: space['4'] }}>
+                      <div style={{ display: 'flex', gap: space['4'], marginBottom: space['2'] }}>
                         <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
                           Won: {formatUSD(qmsCloseRate.won_revenue_usd)}
                         </span>
@@ -319,6 +376,11 @@ export default function WarmOutreachPage() {
                           Lost: {formatUSD(qmsCloseRate.lost_revenue_usd)}
                         </span>
                       </div>
+                      {qmsCloseRate.decision_rate > 0 && (
+                        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['2'] }}>
+                          Decision win rate: {(qmsCloseRate.decision_rate * 100).toFixed(0)}% ({qmsCloseRate.won} of {qmsCloseRate.won + qmsCloseRate.lost} decided)
+                        </p>
+                      )}
                     </div>
                   )}
                 </DashboardCard>
@@ -396,6 +458,37 @@ export default function WarmOutreachPage() {
                             Avg discount: {qmsDiscount.avg_discount_pct}%
                           </p>
                         )}
+                      </div>
+                    </DashboardCard>
+                  )}
+
+                  {qms.data?.click_to_quote && (
+                    <DashboardCard title="Click-to-Quote Rate (90d)" loading={qms.loading}>
+                      <div data-testid="card-click-to-quote">
+                        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['2'] }}>
+                          {(qms.data.click_to_quote.blended_rate * 100).toFixed(2)}%
+                        </p>
+                        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginBottom: space['3'] }}>
+                          {qms.data.click_to_quote.total_quotes} quotes from {(qms.data.click_to_quote.organic_clicks + qms.data.click_to_quote.paid_clicks).toLocaleString()} clicks
+                        </p>
+                        <div style={{ display: 'flex', gap: space['6'], marginBottom: space['2'] }}>
+                          <div>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
+                              {(qms.data.click_to_quote.organic_rate * 100).toFixed(2)}%
+                            </p>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+                              Organic ({qms.data.click_to_quote.organic_quotes} / {qms.data.click_to_quote.organic_clicks.toLocaleString()})
+                            </p>
+                          </div>
+                          <div>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
+                              {(qms.data.click_to_quote.paid_rate * 100).toFixed(2)}%
+                            </p>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+                              Paid ({qms.data.click_to_quote.paid_quotes} / {qms.data.click_to_quote.paid_clicks.toLocaleString()})
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </DashboardCard>
                   )}
