@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useContext } from 'react';
-import { useMarketingDashboard } from '../../../../hooks/useActivitySpine';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
@@ -11,6 +11,10 @@ import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { MarketingContext } from '../lib/MarketingContext';
+import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
+import { AreaLineChart } from '../../../../components/dashboard/charts/AreaLineChart';
+import { magenta } from '../../../../design/tokens/colors';
+import { getTargetForMetric } from '../lib/marketingTargets';
 
 function EmptyDataCard({ title, description }: { title: string; description: string }) {
   const tc = useThemeColors();
@@ -36,8 +40,7 @@ function EmptyDataCard({ title, description }: { title: string; description: str
 
 export default function WarmOutreachPage() {
   const tc = useThemeColors();
-  const { queryParams } = useContext(MarketingContext);
-  const { data, loading, error } = useMarketingDashboard(queryParams);
+  const { data, loading, error } = useContext(MarketingContext);
 
   const conversions = data?.recent_conversions ?? [];
   const pipeline = data?.pipeline_categories ?? [];
@@ -45,6 +48,7 @@ export default function WarmOutreachPage() {
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Core 4 Engines'}, {label:'Warm Outreach'}]} />
         <div style={{ marginBottom: space['6'] }}>
           <h1
             style={{
@@ -63,6 +67,25 @@ export default function WarmOutreachPage() {
             Quote follow-ups, close rates, and returning visitor revenue.
           </p>
         </div>
+
+        <DashboardSection title="Submissions Trend" description="Daily form submissions and conversion events.">
+          {(() => {
+            const submissions = data?.timeseries?.submissions ?? [];
+            if (!submissions.length && !loading) return null;
+            const chartData = submissions.map((s) => ({ date: s.date, submissions: s.value }));
+            const target = getTargetForMetric('submissions', chartData.length || 30);
+            return (
+              <AreaLineChart
+                data={chartData}
+                series={[{ dataKey: 'submissions', label: 'Submissions', color: magenta[500] }]}
+                height={220}
+                targetValue={target?.daily}
+                targetLabel={target?.label}
+                formatXAxis={(d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              />
+            );
+          })()}
+        </DashboardSection>
 
         <DashboardSection title="Available Data" description="Conversion events and pipeline from existing sources.">
           <DashboardGrid columns={{ sm: 1, md: 2, lg: 3 }}>

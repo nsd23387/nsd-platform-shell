@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Sun, Moon } from 'lucide-react';
 import { Icon } from '../../design/components/Icon';
 import { violet } from '../../design/tokens/colors';
@@ -54,7 +56,7 @@ function ThemeToggle() {
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  const currentPath = usePathname() ?? '';
   const tc = useThemeColors();
 
   return (
@@ -102,7 +104,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {navItems.map((item) => {
             const isActive = currentPath === item.href || currentPath.startsWith(item.href + '/');
             return (
-              <a
+              <Link
                 key={item.href}
                 href={item.href}
                 style={{
@@ -122,7 +124,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               >
                 <Icon name={item.icon as any} size={18} />
                 <span>{item.label}</span>
-              </a>
+              </Link>
             );
           })}
         </nav>

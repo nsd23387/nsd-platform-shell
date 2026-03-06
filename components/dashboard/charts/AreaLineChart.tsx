@@ -10,8 +10,10 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  ReferenceLine,
 } from 'recharts';
 import { useThemeColors } from '../../../hooks/useThemeColors';
+import { magenta } from '../../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
 import { radius, space } from '../../../design/tokens/spacing';
 
@@ -31,6 +33,8 @@ export interface AreaLineChartProps {
   formatXAxis?: (v: string) => string;
   showGrid?: boolean;
   showLegend?: boolean;
+  targetValue?: number;
+  targetLabel?: string;
 }
 
 function CustomTooltip({ active, payload, label, formatValue }: {
@@ -71,6 +75,8 @@ export function AreaLineChart({
   formatXAxis,
   showGrid = true,
   showLegend = true,
+  targetValue,
+  targetLabel = 'Target',
 }: AreaLineChartProps) {
   const tc = useThemeColors();
 
@@ -106,6 +112,23 @@ export function AreaLineChart({
             iconType="circle"
             iconSize={8}
             wrapperStyle={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, paddingTop: 8 }}
+          />
+        )}
+        {targetValue != null && (
+          <ReferenceLine
+            y={targetValue}
+            stroke={magenta[300]}
+            strokeDasharray="6 3"
+            strokeWidth={2}
+            label={{
+              value: targetLabel,
+              position: 'right',
+              style: {
+                fontFamily: fontFamily.body,
+                fontSize: 11,
+                fill: magenta[700],
+              },
+            }}
           />
         )}
         {series.map((s, i) => {

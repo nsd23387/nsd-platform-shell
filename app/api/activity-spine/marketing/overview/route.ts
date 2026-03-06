@@ -53,7 +53,8 @@ function getPool(): Pool {
     pool = new Pool({
       connectionString,
       ssl: { rejectUnauthorized: false },
-      max: 5,
+      max: 15,
+      statement_timeout: 10000,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     });

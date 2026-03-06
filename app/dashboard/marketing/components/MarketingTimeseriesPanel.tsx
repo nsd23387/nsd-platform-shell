@@ -6,27 +6,29 @@ import { DashboardSection, DashboardCard } from '../../../../components/dashboar
 import { SkeletonCard } from '../../../../components/dashboard';
 import { AreaLineChart } from '../../../../components/dashboard/charts';
 import { formatNumber, formatCurrency } from '../lib/format';
-import { indigo, violet } from '../../../../design/tokens/colors';
+import { indigo, violet, magenta } from '../../../../design/tokens/colors';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import type { ThemeColors } from '../../../../design/tokens/theme-colors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../../design/tokens/spacing';
+import { getTargetForMetric } from '../lib/marketingTargets';
 
 interface Props {
   timeseries: MarketingTimeseries | undefined;
   enabled: boolean;
   loading: boolean;
   error: string | null;
+  daysInPeriod?: number;
 }
 
 type MetricKey = 'sessions' | 'submissions' | 'pipeline_value_usd' | 'impressions' | 'clicks';
 
 const METRICS: { key: MetricKey; label: string; format: (v: number) => string; color: string }[] = [
-  { key: 'sessions', label: 'Sessions', format: formatNumber, color: violet[500] },
-  { key: 'submissions', label: 'Submissions', format: formatNumber, color: '#10b981' },
-  { key: 'pipeline_value_usd', label: 'Pipeline', format: formatCurrency, color: '#0ea5e9' },
-  { key: 'impressions', label: 'Impressions', format: formatNumber, color: indigo[500] },
-  { key: 'clicks', label: 'Clicks', format: formatNumber, color: '#f59e0b' },
+  { key: 'sessions', label: 'Sessions', format: formatNumber, color: indigo[600] },
+  { key: 'submissions', label: 'Submissions', format: formatNumber, color: violet[700] },
+  { key: 'pipeline_value_usd', label: 'Pipeline', format: formatCurrency, color: magenta[500] },
+  { key: 'impressions', label: 'Impressions', format: formatNumber, color: violet[500] },
+  { key: 'clicks', label: 'Clicks', format: formatNumber, color: indigo[800] },
 ];
 
 function pillStyle(active: boolean, tc: ThemeColors): React.CSSProperties {
@@ -44,7 +46,7 @@ function pillStyle(active: boolean, tc: ThemeColors): React.CSSProperties {
   };
 }
 
-export function MarketingTimeseriesPanel({ timeseries, enabled, loading, error }: Props) {
+export function MarketingTimeseriesPanel({ timeseries, enabled, loading, error, daysInPeriod = 30 }: Props) {
   const tc = useThemeColors();
   const [metric, setMetric] = useState<MetricKey>('sessions');
 
@@ -69,6 +71,7 @@ export function MarketingTimeseriesPanel({ timeseries, enabled, loading, error }
   const selected = METRICS.find((m) => m.key === metric) ?? METRICS[0];
   const rawData = timeseries?.[metric] ?? [];
   const chartData = rawData.map((d) => ({ date: d.date, [selected.label]: d.value }));
+  const target = getTargetForMetric(metric, daysInPeriod);
 
   const formatXAxis = (d: string) => {
     const parts = d.split('-');
@@ -94,6 +97,8 @@ export function MarketingTimeseriesPanel({ timeseries, enabled, loading, error }
           formatValue={selected.format}
           formatXAxis={formatXAxis}
           showLegend={false}
+          targetValue={target?.daily}
+          targetLabel={target?.label}
         />
       </div>
     </DashboardSection>

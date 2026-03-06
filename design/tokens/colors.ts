@@ -243,12 +243,12 @@ export const trendColors = {
  * Ordered for optimal distinction
  */
 export const chartColors = [
-  '#8b5cf6', // violet
-  '#10b981', // green
-  '#0ea5e9', // sky
-  '#f59e0b', // amber
-  '#ef4444', // red
-  '#06b6d4', // cyan
+  '#6b6bd4', // indigo-600
+  '#8b5cf6', // violet-500
+  '#ec4899', // magenta-500
+  '#3d3d8f', // indigo-800
+  '#6d28d9', // violet-700
+  '#be185d', // magenta-700
 ] as const;
 
 // ============================================

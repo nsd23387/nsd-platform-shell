@@ -126,7 +126,7 @@ const lightColors: ThemeColors = {
     warning: '#eab308',
     danger: '#ef4444',
   },
-  chartColors: ['#8b5cf6', '#10b981', '#0ea5e9', '#f59e0b', '#ef4444', '#06b6d4'],
+  chartColors: ['#6b6bd4', '#8b5cf6', '#ec4899', '#3d3d8f', '#6d28d9', '#be185d'],
 };
 
 const darkColors: ThemeColors = {
@@ -175,7 +175,7 @@ const darkColors: ThemeColors = {
     warning: '#fbbf24',
     danger: '#f87171',
   },
-  chartColors: ['#a78bfa', '#34d399', '#38bdf8', '#fbbf24', '#f87171', '#22d3ee'],
+  chartColors: ['#a8a8f5', '#a78bfa', '#f472b6', '#c4c4fc', '#c4b5fd', '#f9a8d4'],
 };
 
 export function getThemeColors(mode: ThemeMode): ThemeColors {

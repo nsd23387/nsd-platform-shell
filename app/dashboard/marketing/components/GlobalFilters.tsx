@@ -22,6 +22,7 @@ interface Props {
   onComparisonModeChange?: (mode: ComparisonMode) => void;
   channel?: string;
   onChannelChange?: (channel: string) => void;
+  comparisonLabel?: string;
 }
 
 const PRESETS: { value: UIPreset; label: string }[] = [
@@ -55,6 +56,7 @@ export function GlobalFilters({
   onComparisonModeChange,
   channel = '',
   onChannelChange,
+  comparisonLabel,
 }: Props) {
   const tc = useThemeColors();
   const [rangeStart, setRangeStart] = useState(state.start);
@@ -222,6 +224,25 @@ export function GlobalFilters({
         ))}
       </select>
 
+      {channel && (
+        <button
+          onClick={() => onChannelChange?.('')}
+          style={{
+            ...pillBase,
+            backgroundColor: violet[100],
+            color: violet[700],
+            border: `1px solid ${violet[200]}`,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: space['1'],
+          }}
+          data-testid="filter-channel-badge"
+        >
+          {CHANNELS.find(c => c.value === channel)?.label ?? channel}
+          <span style={{ fontWeight: fontWeight.semibold, marginLeft: space['0.5'] }}>x</span>
+        </button>
+      )}
+
       <button
         onClick={() => onChange({ ...state, compare: !state.compare })}
         style={{
@@ -245,6 +266,20 @@ export function GlobalFilters({
         />
         Compare
       </button>
+
+      {comparisonLabel && (
+        <span
+          style={{
+            fontFamily: fontFamily.body,
+            fontSize: fontSize.xs,
+            color: indigo[600],
+            fontWeight: fontWeight.medium,
+          }}
+          data-testid="text-comparison-label"
+        >
+          {comparisonLabel}
+        </span>
+      )}
     </div>
   );
 }

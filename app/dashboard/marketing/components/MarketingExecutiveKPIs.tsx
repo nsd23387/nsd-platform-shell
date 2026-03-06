@@ -1,10 +1,12 @@
 'use client';
 
 import React from 'react';
-import type { MarketingKPIs, MarketingKPIComparisons, MarketingGoogleAdsOverview } from '../../../../types/activity-spine';
+import type { MarketingKPIs, MarketingKPIComparisons, MarketingGoogleAdsOverview, MarketingTimeseries } from '../../../../types/activity-spine';
 import { SkeletonCard } from '../../../../components/dashboard';
+import { Sparkline } from '../../../../components/dashboard/charts/Sparkline';
 import { formatCurrency, formatNumber, formatPercent, safeDivideUI } from '../lib/format';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
+import { indigo, violet, magenta } from '../../../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 
@@ -13,6 +15,7 @@ interface Props {
   comparisons?: MarketingKPIComparisons;
   googleAdsOverview?: MarketingGoogleAdsOverview;
   loading: boolean;
+  timeseries?: MarketingTimeseries;
 }
 
 interface KPICard {
@@ -20,6 +23,8 @@ interface KPICard {
   value: string;
   delta: number | null;
   testId: string;
+  sparkData?: number[];
+  sparkColor?: string;
 }
 
 function DeltaBadge({ delta, tc }: { delta: number | null; tc: ReturnType<typeof useThemeColors> }) {
@@ -40,7 +45,7 @@ function DeltaBadge({ delta, tc }: { delta: number | null; tc: ReturnType<typeof
   );
 }
 
-export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, loading }: Props) {
+export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, loading, timeseries }: Props) {
   const tc = useThemeColors();
 
   if (loading || !kpis) {
@@ -60,12 +65,16 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
       value: formatCurrency(kpis.total_pipeline_value_usd),
       delta: comparisons?.total_pipeline_value_usd.delta_pct ?? null,
       testId: 'exec-kpi-pipeline',
+      sparkData: timeseries?.pipeline_value_usd?.map(d => d.value),
+      sparkColor: magenta[500],
     },
     {
       label: 'Sessions',
       value: formatNumber(kpis.sessions),
       delta: comparisons?.sessions.delta_pct ?? null,
       testId: 'exec-kpi-sessions',
+      sparkData: timeseries?.sessions?.map(d => d.value),
+      sparkColor: indigo[600],
     },
     {
       label: 'Conversion Rate',
@@ -115,11 +124,16 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
           <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['1'] }}>
             {card.label}
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline' }}>
-            <span style={{ fontFamily: fontFamily.display, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-              {card.value}
-            </span>
-            <DeltaBadge delta={card.delta} tc={tc} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline' }}>
+              <span style={{ fontFamily: fontFamily.display, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }}>
+                {card.value}
+              </span>
+              <DeltaBadge delta={card.delta} tc={tc} />
+            </div>
+            {card.sparkData && card.sparkData.length >= 2 && (
+              <Sparkline data={card.sparkData} color={card.sparkColor} width={80} height={32} />
+            )}
           </div>
         </div>
       ))}
