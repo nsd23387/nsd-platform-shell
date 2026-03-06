@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useContext } from 'react';
-import { useMarketingDashboard } from '../../../../hooks/useActivitySpine';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied, DashboardCard } from '../../../../components/dashboard';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
@@ -12,6 +12,10 @@ import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { MarketingContext } from '../lib/MarketingContext';
+import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
+import { AreaLineChart } from '../../../../components/dashboard/charts/AreaLineChart';
+import { indigo, violet } from '../../../../design/tokens/colors';
+import { getTargetForMetric } from '../lib/marketingTargets';
 
 function TechnicalHealthPlaceholder() {
   const tc = useThemeColors();
@@ -37,12 +41,12 @@ function TechnicalHealthPlaceholder() {
 
 export default function SeoCommandCenterPage() {
   const tc = useThemeColors();
-  const { queryParams } = useContext(MarketingContext);
-  const { data, loading, error } = useMarketingDashboard(queryParams);
+  const { data, loading, error } = useContext(MarketingContext);
 
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Deep Dives'}, {label:'SEO Command Center'}]} />
         <div style={{ marginBottom: space['6'] }}>
           <h1
             style={{
@@ -65,6 +69,33 @@ export default function SeoCommandCenterPage() {
         {error && !loading && (
           <DashboardCard title="Error" error={error} />
         )}
+
+        <DashboardSection title="Search Performance Trend" description="Daily clicks and impressions from Google Search Console.">
+          {(() => {
+            const clicks = data?.timeseries?.clicks ?? [];
+            const impressions = data?.timeseries?.impressions ?? [];
+            if (!clicks.length && !impressions.length && !loading) return null;
+            const merged = clicks.map((c, i) => ({
+              date: c.date,
+              clicks: c.value,
+              impressions: impressions[i]?.value ?? 0,
+            }));
+            const clicksTarget = getTargetForMetric('clicks', merged.length || 30);
+            return (
+              <AreaLineChart
+                data={merged}
+                series={[
+                  { dataKey: 'clicks', label: 'Clicks', color: indigo[600] },
+                  { dataKey: 'impressions', label: 'Impressions', color: violet[500] },
+                ]}
+                height={220}
+                targetValue={clicksTarget?.daily}
+                targetLabel={clicksTarget?.label}
+                formatXAxis={(d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              />
+            );
+          })()}
+        </DashboardSection>
 
         <DashboardSection title="Query Opportunities" description="Search queries with opportunity tags for optimization.">
           <MarketingSeoIntelligencePanel

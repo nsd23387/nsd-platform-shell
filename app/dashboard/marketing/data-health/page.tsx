@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useContext } from 'react';
-import { useMarketingDashboard } from '../../../../hooks/useActivitySpine';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied, DashboardCard } from '../../../../components/dashboard';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
@@ -10,15 +10,16 @@ import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space } from '../../../../design/tokens/spacing';
 import { MarketingContext } from '../lib/MarketingContext';
+import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
 
 export default function DataHealthPage() {
   const tc = useThemeColors();
-  const { queryParams } = useContext(MarketingContext);
-  const { data, loading, error } = useMarketingDashboard(queryParams);
+  const { data, loading, error } = useContext(MarketingContext);
 
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'System'}, {label:'Data Health'}]} />
         <div style={{ marginBottom: space['6'] }}>
           <h1
             style={{

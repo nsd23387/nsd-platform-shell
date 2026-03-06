@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useContext } from 'react';
-import { useMarketingDashboard } from '../../../../hooks/useActivitySpine';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { DashboardCard, AccessDenied } from '../../../../components/dashboard';
 import { MarketingKPIOverview } from '../components/MarketingKPIOverview';
@@ -24,17 +24,18 @@ import { space } from '../../../../design/tokens/spacing';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { MarketingContext } from '../lib/MarketingContext';
+import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
 
 const EMPTY_GA4_FUNNEL = { view_item: 0, add_to_cart: 0, begin_checkout: 0, purchase: 0, form_start: 0, form_submit: 0 };
 
 export default function OperatorHubPage() {
   const tc = useThemeColors();
-  const { periodState, queryParams } = useContext(MarketingContext);
-  const { data, loading, error, refetch } = useMarketingDashboard(queryParams);
+  const { periodState, data, loading, error, refetch } = useContext(MarketingContext);
 
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Overview'}, {label:'Operator Hub'}]} />
         <div style={{ marginBottom: space['6'] }}>
           <h1
             style={{

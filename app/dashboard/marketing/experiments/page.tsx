@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
@@ -8,6 +9,7 @@ import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../../design/tokens/spacing';
 import { indigo } from '../../../../design/tokens/colors';
+import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
 
 interface Experiment {
   id: string;
@@ -129,6 +131,7 @@ export default function ExperimentsPage() {
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'System'}, {label:'Experiments'}]} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: space['3'], marginBottom: space['6'] }}>
           <div>
             <h1

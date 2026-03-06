@@ -6,7 +6,7 @@ import { DashboardSection, DashboardGrid, EmptyStateCard } from '../../../../com
 import { SkeletonCard } from '../../../../components/dashboard';
 import { DataTable } from '../../../sales-engine/components/ui/DataTable';
 import { formatNumber, formatPercent, formatPosition, formatCurrency } from '../lib/format';
-import { violet } from '../../../../design/tokens/colors';
+import { indigo, violet, magenta, neutral } from '../../../../design/tokens/colors';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../../design/tokens/spacing';
@@ -19,14 +19,62 @@ interface Props {
   error: string | null;
 }
 
+interface OpportunityTag {
+  label: string;
+  bg: string;
+  text: string;
+}
+
+function getOpportunityTag(r: MarketingSEOQuery): OpportunityTag | null {
+  if (r.avg_position < 4 && r.ctr < 0.03) {
+    return { label: 'Snippet Fix', bg: indigo[600], text: '#ffffff' };
+  }
+  if (r.avg_position >= 4 && r.avg_position <= 10 && r.impressions > 200) {
+    return { label: 'Ranking Push', bg: violet[500], text: '#ffffff' };
+  }
+  if (r.avg_position >= 11 && r.avg_position <= 20 && r.impressions > 100) {
+    return { label: 'Content Expansion', bg: magenta[100], text: magenta[700] };
+  }
+  if (r.avg_position > 20 && r.impressions > 500) {
+    return { label: 'Publish Fast', bg: magenta[500], text: '#ffffff' };
+  }
+  return null;
+}
+
+function OpportunityBadge({ row }: { row: MarketingSEOQuery }) {
+  const tag = getOpportunityTag(row);
+  if (!tag) return <span style={{ color: neutral[400], fontFamily: fontFamily.body, fontSize: fontSize.xs }}>—</span>;
+  return (
+    <span
+      data-testid={`badge-opportunity-${tag.label.toLowerCase().replace(/\s+/g, '-')}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: `${space['0.5']} ${space['2']}`,
+        borderRadius: radius.full,
+        backgroundColor: tag.bg,
+        color: tag.text,
+        fontFamily: fontFamily.body,
+        fontSize: fontSize.xs,
+        fontWeight: fontWeight.medium,
+        whiteSpace: 'nowrap',
+        lineHeight: 1.4,
+      }}
+    >
+      {tag.label}
+    </span>
+  );
+}
+
 const COLUMNS = [
-  { key: 'query', header: 'Query', width: '28%' },
-  { key: 'clicks', header: 'Clicks', width: '10%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatNumber(r.clicks) },
-  { key: 'impressions', header: 'Impressions', width: '12%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatNumber(r.impressions) },
-  { key: 'ctr', header: 'CTR', width: '10%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatPercent(r.ctr) },
-  { key: 'avg_position', header: 'Avg Pos', width: '10%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatPosition(r.avg_position) },
-  { key: 'submissions', header: 'Submissions', width: '12%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatNumber(r.submissions) },
-  { key: 'revenue_per_click', header: 'Rev/Click', width: '12%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatCurrency(r.revenue_per_click) },
+  { key: 'query', header: 'Query', width: '24%' },
+  { key: 'clicks', header: 'Clicks', width: '9%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatNumber(r.clicks) },
+  { key: 'impressions', header: 'Impressions', width: '10%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatNumber(r.impressions) },
+  { key: 'ctr', header: 'CTR', width: '8%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatPercent(r.ctr) },
+  { key: 'avg_position', header: 'Avg Pos', width: '9%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatPosition(r.avg_position) },
+  { key: 'opportunity', header: 'Opportunity', width: '14%', render: (r: MarketingSEOQuery) => <OpportunityBadge row={r} /> },
+  { key: 'submissions', header: 'Submissions', width: '10%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatNumber(r.submissions) },
+  { key: 'revenue_per_click', header: 'Rev/Click', width: '10%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatCurrency(r.revenue_per_click) },
 ];
 
 function toggleStyle(active: boolean, tc: ThemeColors): React.CSSProperties {

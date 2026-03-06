@@ -40,7 +40,8 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
   - CORE 4 ENGINES: Warm Outreach (`/warm-outreach`), Cold Outreach (`/cold-outreach`), Post Free Content (`/content`), Run Paid Ads (`/paid-ads`)
   - DEEP DIVES: SEO Command Center (`/seo`), Google Ads War Room (`/google-ads`)
   - SYSTEM: Data Health (`/data-health`), Experiments (`/experiments`), Forecasting (`/forecasting`)
-- **Shared Layout**: `app/dashboard/marketing/layout.tsx` provides `MarketingContext` with period state, comparison mode, channel filter, and computed query params to all child routes.
+- **Shared Layout**: `app/dashboard/marketing/layout.tsx` provides `MarketingContext` with period state, comparison mode, channel filter, computed query params, and shared API data (`data/loading/error/refetch`) to all child routes. Single `useMarketingDashboard` call at layout level; sub-screens consume context.
+- **Collapsible Sidebar**: `MarketingNav` supports `collapsed`/`onToggleCollapse` props; auto-collapses below 1024px; persists to localStorage (`marketing-nav-collapsed`). Collapsed = 48px, icons only with tooltip titles.
 - **Adminto Component Library**: `app/dashboard/marketing/components/adminto/` provides `StatTile`, `EngineCard`, `OpportunityTable`, `InsightsFeed`, `ForecastCalculator`, `ExperimentLog`, `PacingChart`, `DrilldownBreadcrumb`.
 - **Core 4 Engine Aggregation**: Backend computes per-engine metrics (Warm=direct/email sources, Post Free Content=organic/SEO, Run Paid Ads=Google Ads, Cold Outreach=placeholder).
 - **Global Filters**: Channel, campaign, device, geo, landing page filters supported via parameterized SQL.
@@ -48,7 +49,15 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 - **Experiments**: CRUD via localStorage (no DB migration required).
 - **Forecasting**: Client-side what-if calculator with editable inputs and computed outputs.
 - **Database Connection**: Uses `SUPABASE_DATABASE_URL || DATABASE_URL` with SSL.
-- **Chart Library**: Uses Recharts with NSD brand color tokens, `ResponsiveContainer`, and custom tooltips.
+- **Chart Library**: Uses Recharts with NSD brand color tokens (`chartColors` = indigo/violet/magenta spectrum), `ResponsiveContainer`, custom tooltips, and `ReferenceLine` for target reference lines.
+- **Marketing Targets Config**: `app/dashboard/marketing/lib/marketingTargets.ts` defines monthly targets (sessions=10k, submissions=150, pipeline=$50k, impressions=200k, clicks=5k) with `getTargetForMetric()` helper and `GOOGLE_ADS_TARGETS` for ROAS/budget/CPC/CTR.
+- **Engine Colors**: `app/dashboard/marketing/lib/engineColors.ts` defines per-engine NSD accent colors (Warm=magenta[500], Cold=indigo[600], Content=violet[500], Paid=magenta[700]).
+- **Executive Overview Enhancements**: KPI sparklines (inline timeseries trend lines), Core 4 EngineCards (clickable, with real data and NSD accent colors), auto-generated performance narrative block, Marketing Performance Score gauge.
+- **Engine Sub-Screen Trends**: SEO (clicks+impressions dual chart), Content (sessions), Warm Outreach (submissions), Paid Ads (clicks + budget pacing bar chart) — all with target reference lines.
+- **SEO Opportunity Tags**: `MarketingSeoIntelligencePanel` computes inline tags: "Snippet Fix", "Ranking Push", "Content Expansion", "Publish Fast" with NSD brand badge colors.
+- **DrilldownBreadcrumbs**: All sub-screens include `DrilldownBreadcrumb` at the top of the page for spatial awareness.
+- **Comparison Period Label**: `GlobalFilters` displays "vs previous period" / "vs last week" / "vs last month" next to comparison mode selector.
+- **DB Pool Tuning**: `max: 15` connections, `statement_timeout: '10s'` on the marketing overview pool.
 - **Responsive Design**: Utilizes breakpoint constants, animation keyframe definitions, `useMediaQuery` hooks, and a responsive `DashboardGrid`.
 - **DataTable**: A shared, theme-aware data table component with pagination and column sorting.
 - **Dark Mode**: Implemented via `ThemeContext`, persisting preferences to localStorage, and using `data-theme` attribute on `<html>`. All dashboard components use `useThemeColors()` for theme compatibility.

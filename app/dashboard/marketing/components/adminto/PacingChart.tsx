@@ -14,6 +14,7 @@ import {
   ReferenceLine,
   CartesianGrid,
 } from 'recharts';
+import { magenta, indigo } from '../../../../../design/tokens/colors';
 
 export interface PacingDataPoint {
   label: string;
@@ -29,6 +30,9 @@ export interface PacingChartProps {
   targetLabel?: string;
   height?: number;
   currencyPrefix?: string;
+  barColor?: string;
+  targetLineColor?: string;
+  targetLabelColor?: string;
 }
 
 export function PacingChart({
@@ -39,6 +43,9 @@ export function PacingChart({
   targetLabel = 'Target',
   height = 300,
   currencyPrefix = '$',
+  barColor = magenta[500],
+  targetLineColor = indigo[800],
+  targetLabelColor = indigo[800],
 }: PacingChartProps) {
   const tc = useThemeColors();
 
@@ -171,14 +178,14 @@ export function PacingChart({
               />
               <Bar
                 dataKey="actual"
-                fill={tc.chartColors[0]}
+                fill={barColor}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={40}
               />
               {avgTarget != null && (
                 <ReferenceLine
                   y={avgTarget}
-                  stroke={tc.semantic.warning.base}
+                  stroke={targetLineColor}
                   strokeDasharray="6 3"
                   strokeWidth={2}
                   label={{
@@ -187,7 +194,7 @@ export function PacingChart({
                     style: {
                       fontFamily: fontFamily.body,
                       fontSize: 11,
-                      fill: tc.semantic.warning.dark,
+                      fill: targetLabelColor,
                     },
                   }}
                 />
@@ -217,7 +224,7 @@ export function PacingChart({
                 width: '12px',
                 height: '12px',
                 borderRadius: radius.sm,
-                backgroundColor: tc.chartColors[0],
+                backgroundColor: barColor,
                 display: 'inline-block',
               }}
             />
@@ -228,9 +235,9 @@ export function PacingChart({
               style={{
                 width: '12px',
                 height: '2px',
-                backgroundColor: tc.semantic.warning.base,
+                backgroundColor: targetLineColor,
                 display: 'inline-block',
-                borderTop: `2px dashed ${tc.semantic.warning.base}`,
+                borderTop: `2px dashed ${targetLineColor}`,
               }}
             />
             {targetLabel} ({currencyPrefix}{avgTarget.toLocaleString()})

@@ -1,8 +1,10 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
-import { violet, indigo } from '../../../../design/tokens/colors';
+import { violet } from '../../../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../../design/tokens/spacing';
 import { Icon } from '../../../../design/components/Icon';
@@ -53,96 +55,148 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-export function MarketingNav() {
+interface MarketingNavProps {
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
+export function MarketingNav({ collapsed = false, onToggleCollapse }: MarketingNavProps) {
   const tc = useThemeColors();
-  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  const currentPath = usePathname() ?? '';
+
+  const navWidth = collapsed ? '48px' : '220px';
 
   return (
     <nav
       style={{
-        width: '220px',
-        minWidth: '220px',
+        width: navWidth,
+        minWidth: navWidth,
         backgroundColor: tc.background.surface,
         borderRight: `1px solid ${tc.border.default}`,
         padding: `${space['4']} 0`,
         overflowY: 'auto',
-        transition: `background-color ${duration.slow} ${easing.DEFAULT}, border-color ${duration.slow} ${easing.DEFAULT}`,
+        overflowX: 'hidden',
+        transition: `width ${duration.slow} ${easing.DEFAULT}, min-width ${duration.slow} ${easing.DEFAULT}, background-color ${duration.slow} ${easing.DEFAULT}, border-color ${duration.slow} ${easing.DEFAULT}`,
+        display: 'flex',
+        flexDirection: 'column',
       }}
       data-testid="nav-marketing-command-center"
     >
-      <div
-        style={{
-          padding: `0 ${space['4']} ${space['4']}`,
-          borderBottom: `1px solid ${tc.border.subtle}`,
-          marginBottom: space['3'],
-        }}
-      >
-        <h3
+      {!collapsed && (
+        <div
           style={{
-            fontFamily: fontFamily.display,
-            fontSize: fontSize.base,
-            fontWeight: fontWeight.semibold,
-            color: tc.text.primary,
-            marginBottom: space['0.5'],
+            padding: `0 ${space['4']} ${space['4']}`,
+            borderBottom: `1px solid ${tc.border.subtle}`,
+            marginBottom: space['3'],
           }}
         >
-          Command Center
-        </h3>
-        <p
-          style={{
-            fontFamily: fontFamily.body,
-            fontSize: fontSize.xs,
-            color: tc.text.muted,
-          }}
-        >
-          Marketing Intelligence
-        </p>
-      </div>
-
-      {NAV_GROUPS.map((group) => (
-        <div key={group.title} style={{ marginBottom: space['2'] }}>
-          <div
+          <h3
             style={{
-              padding: `${space['2']} ${space['4']}`,
-              fontFamily: fontFamily.body,
-              fontSize: fontSize.xs,
-              fontWeight: fontWeight.medium,
-              color: tc.text.placeholder,
-              textTransform: 'uppercase' as const,
-              letterSpacing: '0.05em',
+              fontFamily: fontFamily.display,
+              fontSize: fontSize.base,
+              fontWeight: fontWeight.semibold,
+              color: tc.text.primary,
+              marginBottom: space['0.5'],
+              whiteSpace: 'nowrap',
             }}
           >
-            {group.title}
-          </div>
-          {group.items.map((item) => {
-            const isActive = currentPath === item.href;
-            return (
-              <a
-                key={item.href}
-                href={item.href}
+            Command Center
+          </h3>
+          <p
+            style={{
+              fontFamily: fontFamily.body,
+              fontSize: fontSize.xs,
+              color: tc.text.muted,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Marketing Intelligence
+          </p>
+        </div>
+      )}
+
+      {collapsed && (
+        <div style={{ height: space['3'], flexShrink: 0 }} />
+      )}
+
+      <div style={{ flex: 1 }}>
+        {NAV_GROUPS.map((group) => (
+          <div key={group.title} style={{ marginBottom: space['2'] }}>
+            {!collapsed && (
+              <div
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: space['2.5'],
                   padding: `${space['2']} ${space['4']}`,
                   fontFamily: fontFamily.body,
-                  fontSize: fontSize.sm,
-                  fontWeight: isActive ? fontWeight.semibold : fontWeight.normal,
-                  color: isActive ? tc.text.primary : tc.text.muted,
-                  backgroundColor: isActive ? tc.background.muted : 'transparent',
-                  textDecoration: 'none',
-                  borderLeft: isActive ? `3px solid ${violet[500]}` : '3px solid transparent',
-                  transition: `all ${duration.normal} ${easing.DEFAULT}`,
+                  fontSize: fontSize.xs,
+                  fontWeight: fontWeight.medium,
+                  color: tc.text.placeholder,
+                  textTransform: 'uppercase' as const,
+                  letterSpacing: '0.05em',
+                  whiteSpace: 'nowrap',
                 }}
-                data-testid={`nav-marketing-${item.href.split('/').pop()}`}
               >
-                <Icon name={item.icon as any} size={16} />
-                <span>{item.label}</span>
-              </a>
-            );
-          })}
-        </div>
-      ))}
+                {group.title}
+              </div>
+            )}
+            {group.items.map((item) => {
+              const isActive = currentPath === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  title={collapsed ? item.label : undefined}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: collapsed ? 'center' : 'flex-start',
+                    gap: collapsed ? '0' : space['2.5'],
+                    padding: collapsed ? `${space['2']} 0` : `${space['2']} ${space['4']}`,
+                    fontFamily: fontFamily.body,
+                    fontSize: fontSize.sm,
+                    fontWeight: isActive ? fontWeight.semibold : fontWeight.normal,
+                    color: isActive ? tc.text.primary : tc.text.muted,
+                    backgroundColor: isActive ? tc.background.muted : 'transparent',
+                    textDecoration: 'none',
+                    borderLeft: collapsed ? 'none' : (isActive ? `3px solid ${violet[500]}` : '3px solid transparent'),
+                    transition: `all ${duration.normal} ${easing.DEFAULT}`,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                  }}
+                  data-testid={`nav-marketing-${item.href.split('/').pop()}`}
+                >
+                  <Icon name={item.icon as any} size={16} />
+                  {!collapsed && <span>{item.label}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {onToggleCollapse && (
+        <button
+          onClick={onToggleCollapse}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: collapsed ? 'center' : 'flex-end',
+            padding: collapsed ? `${space['2']} 0` : `${space['2']} ${space['4']}`,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: tc.text.muted,
+            transition: `color ${duration.normal} ${easing.DEFAULT}`,
+            width: '100%',
+            flexShrink: 0,
+            borderTop: `1px solid ${tc.border.subtle}`,
+            marginTop: space['2'],
+          }}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          data-testid="button-toggle-marketing-nav"
+        >
+          <Icon name={collapsed ? 'arrow-right' : 'arrow-left'} size={16} />
+        </button>
+      )}
     </nav>
   );
 }

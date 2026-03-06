@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useContext } from 'react';
-import { useMarketingDashboard } from '../../../../hooks/useActivitySpine';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
@@ -10,6 +10,7 @@ import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { MarketingContext } from '../lib/MarketingContext';
+import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
 
 function fmt(n: number, prefix = '') {
   if (!isFinite(n) || isNaN(n)) return '—';
@@ -23,8 +24,7 @@ function fmtCurrency(n: number) {
 
 export default function ForecastingPage() {
   const tc = useThemeColors();
-  const { queryParams } = useContext(MarketingContext);
-  const { data } = useMarketingDashboard(queryParams);
+  const { data } = useContext(MarketingContext);
 
   const adsOverview = data?.google_ads_overview;
   const defaultCpc = adsOverview?.cpc ?? 3.5;
@@ -99,6 +99,7 @@ export default function ForecastingPage() {
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'System'}, {label:'Forecasting'}]} />
         <div style={{ marginBottom: space['6'] }}>
           <h1
             style={{

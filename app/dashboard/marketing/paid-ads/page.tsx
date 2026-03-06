@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useContext } from 'react';
-import { useMarketingDashboard } from '../../../../hooks/useActivitySpine';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied, DashboardCard } from '../../../../components/dashboard';
 import { MarketingGoogleAdsOverviewPanel } from '../components/MarketingGoogleAdsOverviewPanel';
@@ -12,6 +12,11 @@ import { space, radius } from '../../../../design/tokens/spacing';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
 import { DashboardGrid } from '../../../../components/dashboard/DashboardGrid';
 import { MarketingContext } from '../lib/MarketingContext';
+import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
+import { AreaLineChart } from '../../../../components/dashboard/charts/AreaLineChart';
+import { indigo, magenta } from '../../../../design/tokens/colors';
+import { getTargetForMetric, getDailyBudgetTarget, GOOGLE_ADS_TARGETS } from '../lib/marketingTargets';
+import { PacingChart } from '../components/adminto/PacingChart';
 
 function ImpressionSharePlaceholder() {
   const tc = useThemeColors();
@@ -37,12 +42,12 @@ function ImpressionSharePlaceholder() {
 
 export default function PaidAdsPage() {
   const tc = useThemeColors();
-  const { queryParams } = useContext(MarketingContext);
-  const { data, loading, error } = useMarketingDashboard(queryParams);
+  const { data, loading, error } = useContext(MarketingContext);
 
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Core 4 Engines'}, {label:'Run Paid Ads'}]} />
         <div style={{ marginBottom: space['6'] }}>
           <h1
             style={{
@@ -66,6 +71,25 @@ export default function PaidAdsPage() {
           <DashboardCard title="Error" error={error} />
         )}
 
+        <DashboardSection title="Clicks Trend" description="Daily paid search clicks over the selected period.">
+          {(() => {
+            const clicks = data?.timeseries?.clicks ?? [];
+            if (!clicks.length && !loading) return null;
+            const chartData = clicks.map((c) => ({ date: c.date, clicks: c.value }));
+            const target = getTargetForMetric('clicks', chartData.length || 30);
+            return (
+              <AreaLineChart
+                data={chartData}
+                series={[{ dataKey: 'clicks', label: 'Clicks', color: indigo[600] }]}
+                height={220}
+                targetValue={target?.daily}
+                targetLabel={target?.label}
+                formatXAxis={(d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              />
+            );
+          })()}
+        </DashboardSection>
+
         <MarketingGoogleAdsOverviewPanel
           overview={data?.google_ads_overview ?? { spend: 0, impressions: 0, clicks: 0, conversions: 0, cpc: 0, ctr: 0, roas: 0 }}
           loading={loading}
@@ -77,6 +101,55 @@ export default function PaidAdsPage() {
           loading={loading}
           error={error}
         />
+
+        <DashboardSection title="Budget Pacing" description="Daily ad spend versus daily budget target.">
+          {(() => {
+            const pipeline = data?.timeseries?.pipeline_value_usd ?? [];
+            const campaigns = data?.google_ads_campaigns ?? [];
+            const totalSpend = data?.google_ads_overview?.spend ?? 0;
+            const daysInPeriod = pipeline.length || 30;
+            const dailyTarget = getDailyBudgetTarget(daysInPeriod);
+
+            if (campaigns.length > 0) {
+              const pacingData = campaigns.map((c) => ({
+                label: c.campaign_name?.length > 20 ? c.campaign_name.slice(0, 18) + '...' : (c.campaign_name || 'Unknown'),
+                actual: Number(c.spend) || 0,
+                target: dailyTarget,
+              }));
+              return (
+                <PacingChart
+                  data={pacingData}
+                  title=""
+                  targetLabel="Daily Budget"
+                  height={260}
+                />
+              );
+            }
+
+            if (totalSpend > 0) {
+              return (
+                <PacingChart
+                  data={[{ label: 'Total', actual: totalSpend, target: GOOGLE_ADS_TARGETS.monthly_budget_usd }]}
+                  title=""
+                  targetLabel="Monthly Budget"
+                  height={200}
+                />
+              );
+            }
+
+            return (
+              <div style={{
+                padding: space['6'],
+                textAlign: 'center',
+                color: 'var(--text-muted)',
+                fontFamily: fontFamily.body,
+                fontSize: fontSize.sm,
+              }}>
+                No spend data available for pacing chart.
+              </div>
+            );
+          })()}
+        </DashboardSection>
 
         <DashboardSection title="Impression Share" description="Coverage and lost impression share data.">
           <ImpressionSharePlaceholder />
