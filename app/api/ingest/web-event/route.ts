@@ -168,10 +168,50 @@ export async function POST(request: NextRequest) {
     const result = await db.query(sql, values);
     const insertedId = result.rows[0]?.id;
 
+    let attributionBridged = false;
+    if (data.event_type === 'conversion' && eventData.quote_id) {
+      const utmSource = (eventData.utm_source as string) || data.source || null;
+      const utmMedium = (eventData.utm_medium as string) || null;
+      const utmCampaign = (eventData.utm_campaign as string) || null;
+      const gclid = (eventData.gclid as string) || null;
+      const lpRaw = (eventData.landing_page as string) || resolvedLandingPage || null;
+
+      if (utmSource || gclid) {
+        try {
+          const bridgeSql = `
+            UPDATE analytics.raw_qms_deals
+            SET
+              utm_source = COALESCE(NULLIF($2, ''), utm_source),
+              utm_medium = COALESCE(NULLIF($3, ''), utm_medium),
+              utm_campaign = COALESCE(NULLIF($4, ''), utm_campaign),
+              landing_page = COALESCE(NULLIF($5, ''), landing_page),
+              referrer = COALESCE(NULLIF($6, ''), referrer)
+            WHERE convex_quote_id = $1
+              AND (utm_source IS NULL OR utm_source = '')
+          `;
+          const bridgeResult = await db.query(bridgeSql, [
+            eventData.quote_id,
+            utmSource,
+            utmMedium,
+            utmCampaign,
+            lpRaw,
+            data.referrer ?? null,
+          ]);
+          attributionBridged = (bridgeResult.rowCount ?? 0) > 0;
+          if (attributionBridged) {
+            console.log(`[ingest/web-event] Attribution bridged to QMS deal: ${eventData.quote_id} (source=${utmSource})`);
+          }
+        } catch (bridgeErr) {
+          console.warn('[ingest/web-event] Attribution bridge failed (non-fatal):', bridgeErr);
+        }
+      }
+    }
+
     return NextResponse.json(
       {
         id: insertedId,
         landing_page: resolvedLandingPage,
+        attribution_bridged: attributionBridged,
       },
       { status: 201, headers: cors },
     );

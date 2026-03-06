@@ -242,11 +242,11 @@ export async function POST(request: NextRequest) {
         customer_state = EXCLUDED.customer_state,
         sign_text = EXCLUDED.sign_text,
         sign_type = EXCLUDED.sign_type,
-        landing_page = EXCLUDED.landing_page,
-        referrer = EXCLUDED.referrer,
-        utm_source = EXCLUDED.utm_source,
-        utm_medium = EXCLUDED.utm_medium,
-        utm_campaign = EXCLUDED.utm_campaign,
+        landing_page = COALESCE(NULLIF(EXCLUDED.landing_page, ''), analytics.raw_qms_deals.landing_page),
+        referrer = COALESCE(NULLIF(EXCLUDED.referrer, ''), analytics.raw_qms_deals.referrer),
+        utm_source = COALESCE(NULLIF(EXCLUDED.utm_source, ''), analytics.raw_qms_deals.utm_source),
+        utm_medium = COALESCE(NULLIF(EXCLUDED.utm_medium, ''), analytics.raw_qms_deals.utm_medium),
+        utm_campaign = COALESCE(NULLIF(EXCLUDED.utm_campaign, ''), analytics.raw_qms_deals.utm_campaign),
         updated_at = EXCLUDED.updated_at,
         deposit_paid_at = EXCLUDED.deposit_paid_at,
         quote_paid_at = EXCLUDED.quote_paid_at,
@@ -310,11 +310,52 @@ export async function POST(request: NextRequest) {
     const result = await db.query(sql, values);
     const row = result.rows[0];
 
+    let attributionEnriched = false;
+    const hasUtm = d.utm_source && d.utm_source.trim() !== '';
+    if (!hasUtm) {
+      try {
+        const enrichSql = `
+          UPDATE analytics.raw_qms_deals AS qms
+          SET
+            utm_source = COALESCE(NULLIF(we.event_data->>'utm_source', ''), NULLIF(we.payload->>'utm_source', ''), we.source),
+            utm_medium = COALESCE(NULLIF(we.event_data->>'utm_medium', ''), we.payload->>'utm_medium'),
+            utm_campaign = COALESCE(NULLIF(we.event_data->>'utm_campaign', ''), we.payload->>'utm_campaign'),
+            landing_page = COALESCE(NULLIF(we.event_data->>'landing_page', ''), NULLIF(we.payload->>'landing_page', '')),
+            referrer = we.referrer
+          FROM (
+            SELECT payload, source, referrer, event_data
+            FROM analytics.raw_web_events
+            WHERE event_type = 'conversion'
+              AND (
+                payload->>'quote_id' = $1
+                OR event_data->>'quote_id' = $1
+              )
+              AND (
+                COALESCE(NULLIF(event_data->>'utm_source', ''), NULLIF(payload->>'utm_source', ''), source) IS NOT NULL
+                AND COALESCE(NULLIF(event_data->>'utm_source', ''), NULLIF(payload->>'utm_source', ''), source) != ''
+              )
+            ORDER BY occurred_at DESC
+            LIMIT 1
+          ) AS we
+          WHERE qms.convex_quote_id = $1
+            AND (qms.utm_source IS NULL OR qms.utm_source = '')
+        `;
+        const enrichResult = await db.query(enrichSql, [d.convex_quote_id]);
+        attributionEnriched = (enrichResult.rowCount ?? 0) > 0;
+        if (attributionEnriched) {
+          console.log(`[ingest/qms-deal] Attribution enriched from web-event for: ${d.quote_number}`);
+        }
+      } catch (enrichErr) {
+        console.warn('[ingest/qms-deal] Attribution enrichment failed (non-fatal):', enrichErr);
+      }
+    }
+
     return NextResponse.json(
       {
         id: row.id,
         quote_number: d.quote_number,
         action: row.inserted ? 'inserted' : 'updated',
+        attribution_enriched: attributionEnriched,
       },
       { status: row.inserted ? 201 : 200, headers: cors },
     );
