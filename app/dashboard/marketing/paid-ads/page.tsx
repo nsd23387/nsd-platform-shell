@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useContext } from 'react';
+import React, { useContext, useMemo } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied, DashboardCard } from '../../../../components/dashboard';
+import { PageExportBar } from '../../../../components/dashboard/PageExportBar';
+import type { ExportSection } from '../../../../lib/exportUtils';
 import { MarketingGoogleAdsOverviewPanel } from '../components/MarketingGoogleAdsOverviewPanel';
 import { MarketingGoogleAdsCampaignsPanel } from '../components/MarketingGoogleAdsCampaignsPanel';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
@@ -44,6 +46,43 @@ export default function PaidAdsPage() {
   const tc = useThemeColors();
   const { data, loading, error } = useContext(MarketingContext);
 
+  const overview = data?.google_ads_overview ?? { spend: 0, impressions: 0, clicks: 0, conversions: 0, cpc: 0, ctr: 0, roas: 0 };
+  const campaigns = data?.google_ads_campaigns ?? [];
+
+  const exportSections: ExportSection[] = useMemo(() => {
+    const sections: ExportSection[] = [
+      {
+        type: 'kpis' as const,
+        title: 'Google Ads Overview',
+        items: [
+          { label: 'Spend', value: `$${Number(overview.spend).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+          { label: 'Impressions', value: Number(overview.impressions).toLocaleString('en-US') },
+          { label: 'Clicks', value: Number(overview.clicks).toLocaleString('en-US') },
+          { label: 'Conversions', value: Number(overview.conversions).toLocaleString('en-US') },
+          { label: 'CPC', value: `$${Number(overview.cpc).toFixed(2)}` },
+          { label: 'CTR', value: `${Number(overview.ctr).toFixed(1)}%` },
+          { label: 'ROAS', value: `${Number(overview.roas).toFixed(2)}x` },
+        ],
+      },
+      {
+        type: 'table' as const,
+        title: 'Campaigns',
+        columns: [
+          { key: 'campaign_name', label: 'Campaign' },
+          { key: 'spend', label: 'Spend', format: 'currency' as const },
+          { key: 'impressions', label: 'Impressions', format: 'number' as const },
+          { key: 'clicks', label: 'Clicks', format: 'number' as const },
+          { key: 'conversions', label: 'Conversions', format: 'number' as const },
+          { key: 'cpc', label: 'CPC', format: 'currency' as const },
+          { key: 'ctr', label: 'CTR', format: 'percent' as const },
+          { key: 'roas', label: 'ROAS', format: 'number' as const },
+        ],
+        rows: campaigns as unknown as Record<string, unknown>[],
+      },
+    ];
+    return sections;
+  }, [overview, campaigns]);
+
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
@@ -65,6 +104,14 @@ export default function PaidAdsPage() {
           <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
             Spend, ROAS, campaign performance, and budget pacing for all paid channels.
           </p>
+          <div style={{ marginTop: space['3'] }}>
+            <PageExportBar
+              filename="paid-ads"
+              pdfTitle="Run Paid Ads"
+              sections={exportSections}
+              loading={loading}
+            />
+          </div>
         </div>
 
         {error && !loading && (
@@ -91,13 +138,13 @@ export default function PaidAdsPage() {
         </DashboardSection>
 
         <MarketingGoogleAdsOverviewPanel
-          overview={data?.google_ads_overview ?? { spend: 0, impressions: 0, clicks: 0, conversions: 0, cpc: 0, ctr: 0, roas: 0 }}
+          overview={overview}
           loading={loading}
           error={error}
         />
 
         <MarketingGoogleAdsCampaignsPanel
-          campaigns={data?.google_ads_campaigns ?? []}
+          campaigns={campaigns}
           loading={loading}
           error={error}
         />
@@ -105,7 +152,6 @@ export default function PaidAdsPage() {
         <DashboardSection title="Budget Pacing" description="Daily ad spend versus daily budget target.">
           {(() => {
             const pipeline = data?.timeseries?.pipeline_value_usd ?? [];
-            const campaigns = data?.google_ads_campaigns ?? [];
             const totalSpend = data?.google_ads_overview?.spend ?? 0;
             const daysInPeriod = pipeline.length || 30;
             const dailyTarget = getDailyBudgetTarget(daysInPeriod);

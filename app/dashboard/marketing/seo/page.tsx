@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useContext } from 'react';
+import React, { useContext, useMemo } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied, DashboardCard } from '../../../../components/dashboard';
+import { PageExportBar } from '../../../../components/dashboard/PageExportBar';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
 import { MarketingSeoRevenuePanel } from '../components/MarketingSeoRevenuePanel';
 import { MarketingSeoIntelligencePanel } from '../components/MarketingSeoIntelligencePanel';
@@ -16,6 +17,7 @@ import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
 import { AreaLineChart } from '../../../../components/dashboard/charts/AreaLineChart';
 import { indigo, violet } from '../../../../design/tokens/colors';
 import { getTargetForMetric } from '../lib/marketingTargets';
+import type { ExportSection } from '../../../../lib/exportUtils';
 
 function TechnicalHealthPlaceholder() {
   const tc = useThemeColors();
@@ -43,27 +45,86 @@ export default function SeoCommandCenterPage() {
   const tc = useThemeColors();
   const { data, loading, error } = useContext(MarketingContext);
 
+  const exportSections = useMemo<ExportSection[]>(() => {
+    if (!data) return [];
+    const sections: ExportSection[] = [];
+
+    if (data.seo_queries?.length) {
+      sections.push({
+        type: 'table',
+        title: 'SEO Queries',
+        columns: [
+          { key: 'query', label: 'Query' },
+          { key: 'clicks', label: 'Clicks', format: 'number' },
+          { key: 'impressions', label: 'Impressions', format: 'number' },
+          { key: 'ctr', label: 'CTR', format: 'percent' },
+          { key: 'position', label: 'Position', format: 'number' },
+        ],
+        rows: data.seo_queries,
+      });
+    }
+
+    if (data.seo_movers?.length) {
+      sections.push({
+        type: 'table',
+        title: 'SEO Movers',
+        columns: [
+          { key: 'query', label: 'Query' },
+          { key: 'clicks_delta', label: 'Clicks Delta', format: 'number' },
+          { key: 'impressions_delta', label: 'Impressions Delta', format: 'number' },
+          { key: 'position_delta', label: 'Position Delta', format: 'number' },
+        ],
+        rows: data.seo_movers,
+      });
+    }
+
+    if (data.pages?.length) {
+      sections.push({
+        type: 'table',
+        title: 'Page Performance',
+        columns: [
+          { key: 'page', label: 'Page' },
+          { key: 'sessions', label: 'Sessions', format: 'number' },
+          { key: 'clicks', label: 'Clicks', format: 'number' },
+          { key: 'quotes', label: 'Quotes', format: 'number' },
+          { key: 'pipeline_value_usd', label: 'Pipeline', format: 'currency' },
+        ],
+        rows: data.pages,
+      });
+    }
+
+    return sections;
+  }, [data]);
+
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
         <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Deep Dives'}, {label:'SEO Command Center'}]} />
-        <div style={{ marginBottom: space['6'] }}>
-          <h1
-            style={{
-              fontFamily: fontFamily.display,
-              fontSize: fontSize['3xl'],
-              fontWeight: fontWeight.semibold,
-              color: tc.text.primary,
-              marginBottom: space['1'],
-              lineHeight: lineHeight.snug,
-            }}
-            data-testid="text-page-title"
-          >
-            SEO Command Center
-          </h1>
-          <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
-            Query opportunities, page performance, and technical health.
-          </p>
+        <div style={{ marginBottom: space['6'], display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: space['4'], flexWrap: 'wrap' }}>
+          <div>
+            <h1
+              style={{
+                fontFamily: fontFamily.display,
+                fontSize: fontSize['3xl'],
+                fontWeight: fontWeight.semibold,
+                color: tc.text.primary,
+                marginBottom: space['1'],
+                lineHeight: lineHeight.snug,
+              }}
+              data-testid="text-page-title"
+            >
+              SEO Command Center
+            </h1>
+            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
+              Query opportunities, page performance, and technical health.
+            </p>
+          </div>
+          <PageExportBar
+            filename="seo-command-center"
+            pdfTitle="SEO Command Center"
+            sections={exportSections}
+            loading={loading}
+          />
         </div>
 
         {error && !loading && (
