@@ -118,7 +118,7 @@ export default function PaidAdsPage() {
           <DashboardCard title="Error" error={error} />
         )}
 
-        <DashboardSection title="Clicks Trend" description="Daily paid search clicks over the selected period.">
+        <DashboardSection title="Clicks Trend" description="Daily paid search clicks over the selected period." index={0}>
           {(() => {
             const clicks = data?.timeseries?.clicks ?? [];
             if (!clicks.length && !loading) return null;
@@ -149,24 +149,22 @@ export default function PaidAdsPage() {
           error={error}
         />
 
-        <DashboardSection title="Budget Pacing" description="Daily ad spend versus daily budget target.">
+        <DashboardSection title="Budget Pacing" description="Daily ad spend versus per-campaign daily budget from Google Ads." index={1}>
           {(() => {
-            const pipeline = data?.timeseries?.pipeline_value_usd ?? [];
             const totalSpend = data?.google_ads_overview?.spend ?? 0;
-            const daysInPeriod = pipeline.length || 30;
-            const dailyTarget = getDailyBudgetTarget(daysInPeriod);
 
             if (campaigns.length > 0) {
+              const hasRealBudgets = campaigns.some(c => (c.daily_budget ?? 0) > 0);
               const pacingData = campaigns.map((c) => ({
                 label: c.campaign_name?.length > 20 ? c.campaign_name.slice(0, 18) + '...' : (c.campaign_name || 'Unknown'),
                 actual: Number(c.spend) || 0,
-                target: dailyTarget,
+                target: hasRealBudgets ? (Number(c.daily_budget) || 0) : undefined,
               }));
               return (
                 <PacingChart
                   data={pacingData}
                   title=""
-                  targetLabel="Daily Budget"
+                  targetLabel={hasRealBudgets ? 'Campaign Daily Budget' : 'Daily Budget'}
                   height={260}
                 />
               );
@@ -197,7 +195,7 @@ export default function PaidAdsPage() {
           })()}
         </DashboardSection>
 
-        <DashboardSection title="Impression Share" description="Coverage and lost impression share data.">
+        <DashboardSection title="Impression Share" description="Coverage and lost impression share data." index={2}>
           <ImpressionSharePlaceholder />
         </DashboardSection>
       </div>

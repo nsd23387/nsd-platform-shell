@@ -106,7 +106,7 @@ export default function Core4OverviewPage() {
   const thStyle: React.CSSProperties = {
     padding: `${space['3']} ${space['4']}`,
     fontFamily: fontFamily.body,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: tc.text.muted,
     textAlign: 'left' as const,
@@ -117,7 +117,7 @@ export default function Core4OverviewPage() {
   const tdStyle: React.CSSProperties = {
     padding: `${space['3']} ${space['4']}`,
     fontFamily: fontFamily.body,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
     color: tc.text.secondary,
     borderBottom: `1px solid ${tc.border.subtle}`,
     whiteSpace: 'nowrap' as const,
@@ -154,7 +154,7 @@ export default function Core4OverviewPage() {
           </div>
         </div>
 
-        <DashboardSection title="Engine Comparison" description="Click a row to drill into that engine.">
+        <DashboardSection title="Engine Comparison" description="Click a row to drill into that engine." index={0}>
           <div
             style={{
               overflow: 'auto',

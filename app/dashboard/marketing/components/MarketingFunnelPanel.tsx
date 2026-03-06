@@ -92,7 +92,7 @@ export function MarketingFunnelPanel({ funnel, loading, error }: Props) {
                     gap: space['1'],
                     marginTop: space['1.5'],
                     fontFamily: fontFamily.body,
-                    fontSize: fontSize.xs,
+                    fontSize: fontSize.sm,
                     color: tc.text.muted,
                   }}>
                     <span>{'\u2193'}</span>

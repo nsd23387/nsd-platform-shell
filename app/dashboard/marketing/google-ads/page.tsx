@@ -102,7 +102,7 @@ export default function GoogleAdsWarRoomPage() {
           <DashboardCard title="Error" error={error} />
         )}
 
-        <DashboardSection title="Campaign Performance" description="Campaign-level metrics from Google Ads.">
+        <DashboardSection title="Campaign Performance" description="Campaign-level metrics from Google Ads." index={0}>
           <MarketingGoogleAdsCampaignsPanel
             campaigns={data?.google_ads_campaigns ?? []}
             loading={loading}
@@ -110,21 +110,21 @@ export default function GoogleAdsWarRoomPage() {
           />
         </DashboardSection>
 
-        <DashboardSection title="Ad Group Performance">
+        <DashboardSection title="Ad Group Performance" index={1}>
           <FutureDataSection
             title="Ad Group Table"
             description="Additional BigQuery tables required. Sync ads_AdGroupStats to see ad group-level spend, CPC, clicks, quotes, CPA, and pipeline."
           />
         </DashboardSection>
 
-        <DashboardSection title="Keyword Performance">
+        <DashboardSection title="Keyword Performance" index={2}>
           <FutureDataSection
             title="Keyword Table"
             description="Additional BigQuery tables required. Sync ads_KeywordStats to see keyword-level match type, clicks, CPC, spend, quotes, CPA, and quality score."
           />
         </DashboardSection>
 
-        <DashboardSection title="Search Terms Triage">
+        <DashboardSection title="Search Terms Triage" index={3}>
           <FutureDataSection
             title="Search Term Triage"
             description="Additional BigQuery tables required. Sync ads_SearchQueryStats to see daily search terms with add-negative, promote-to-exact, and keep/remove actions."

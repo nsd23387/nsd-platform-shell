@@ -144,7 +144,7 @@ export function ExperimentLog({
           }}
           style={{
             fontFamily: fontFamily.body,
-            fontSize: fontSize.sm,
+            fontSize: fontSize.base,
             fontWeight: fontWeight.medium,
             color: tc.text.inverse,
             backgroundColor: tc.chartColors[0],
@@ -287,7 +287,7 @@ export function ExperimentLog({
               onClick={handleSubmit}
               style={{
                 fontFamily: fontFamily.body,
-                fontSize: fontSize.sm,
+                fontSize: fontSize.base,
                 fontWeight: fontWeight.medium,
                 color: tc.text.inverse,
                 backgroundColor: tc.chartColors[0],
@@ -304,7 +304,7 @@ export function ExperimentLog({
               onClick={resetForm}
               style={{
                 fontFamily: fontFamily.body,
-                fontSize: fontSize.sm,
+                fontSize: fontSize.base,
                 fontWeight: fontWeight.medium,
                 color: tc.text.secondary,
                 backgroundColor: 'transparent',
@@ -344,7 +344,7 @@ export function ExperimentLog({
                       padding: `${space['3']} ${space['4']}`,
                       textAlign: 'left',
                       fontFamily: fontFamily.body,
-                      fontSize: fontSize.xs,
+                      fontSize: fontSize.sm,
                       fontWeight: fontWeight.medium,
                       letterSpacing: '0.06em',
                       textTransform: 'uppercase' as const,
@@ -382,7 +382,7 @@ export function ExperimentLog({
                       {exp.hypothesis && (
                         <div
                           style={{
-                            fontSize: fontSize.xs,
+                            fontSize: fontSize.sm,
                             color: tc.text.muted,
                             marginTop: space['0.5'],
                             lineHeight: lineHeight.normal,
@@ -416,7 +416,7 @@ export function ExperimentLog({
                       <span
                         style={{
                           fontFamily: fontFamily.body,
-                          fontSize: fontSize.xs,
+                          fontSize: fontSize.sm,
                           fontWeight: fontWeight.medium,
                           padding: `${space['0.5']} ${space['2']}`,
                           borderRadius: radius.full,
@@ -463,7 +463,7 @@ export function ExperimentLog({
 function labelStyle(tc: ReturnType<typeof import('../../../../../hooks/useThemeColors').useThemeColors>): React.CSSProperties {
   return {
     fontFamily: fontFamily.body,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: tc.text.muted,
     textTransform: 'uppercase' as const,
@@ -475,7 +475,7 @@ function cellStyle(tc: ReturnType<typeof import('../../../../../hooks/useThemeCo
   return {
     padding: `${space['3']} ${space['4']}`,
     fontFamily: fontFamily.body,
-    fontSize: fontSize.md,
+    fontSize: fontSize.base,
     color: tc.text.primary,
     verticalAlign: 'top',
   };
@@ -484,7 +484,7 @@ function cellStyle(tc: ReturnType<typeof import('../../../../../hooks/useThemeCo
 function actionBtnStyle(tc: ReturnType<typeof import('../../../../../hooks/useThemeColors').useThemeColors>): React.CSSProperties {
   return {
     fontFamily: fontFamily.body,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: tc.text.secondary,
     backgroundColor: 'transparent',

@@ -1,0 +1,358 @@
+For Neon Signs Depot, the Cost per Quote (CPQ) needs to be defined precisely so it reflects true marketing efficiency and can scale across channels (Google Ads, SEO, direct, etc.). Below is the correct structure, formula, and implementation logic.
+
+1. Core Formula
+Cost
+ 
+per
+ 
+Quote
+ 
+(CPQ)
+=
+Total Marketing Spend
+Total Quotes Generated
+Cost per Quote (CPQ)=
+Total Quotes Generated
+Total Marketing Spend
+	​
+
+
+Example:
+
+Ad spend = $1,200
+
+Quotes generated = 40
+
+𝐶
+𝑃
+𝑄
+=
+1200
+/
+40
+=
+$
+30
+CPQ=1200/40=$30
+
+So each quote costs $30 to acquire.
+
+2. Channel-Specific Cost per Quote (Required)
+
+CPQ must be calculated per acquisition channel.
+
+Google Ads CPQ
+𝐶
+𝑃
+𝑄
+𝑎
+𝑑
+𝑠
+=
+Google Ads Spend
+Quotes from Google Ads
+CPQ
+ads
+	​
+
+=
+Quotes from Google Ads
+Google Ads Spend
+	​
+
+
+Example:
+
+Spend = $500
+
+Quotes = 20
+
+CPQ = $25
+
+SEO CPQ
+
+SEO technically has no direct spend per click, so use content + SEO cost allocation.
+
+𝐶
+𝑃
+𝑄
+𝑆
+𝐸
+𝑂
+=
+SEO Cost
+Quotes from Organic
+CPQ
+SEO
+	​
+
+=
+Quotes from Organic
+SEO Cost
+	​
+
+
+Example:
+
+SEO cost = $2,000/month
+
+Organic quotes = 80
+
+CPQ = $25
+
+3. Exact Quote Definition (Critical)
+
+Quotes should include only revenue-intent events:
+
+custom_quote_submit
+wholesale_quote_submit
+channel_letter_quote_submit
+
+Do NOT include:
+
+contact forms
+
+chats
+
+phone calls
+
+Otherwise CPQ becomes distorted.
+
+4. Implementation in Your Data Model
+
+Since your canonical source is:
+
+analytics.raw_web_events
+
+The quote count is:
+
+event_type IN (
+ 'custom_quote_submit',
+ 'wholesale_quote_submit',
+ 'channel_letter_quote_submit'
+)
+5. SQL Implementation
+Cost per Quote (Google Ads)
+SELECT
+SUM(spend) / NULLIF(COUNT(q.event_id),0) AS cost_per_quote
+FROM analytics.raw_google_ads ads
+LEFT JOIN analytics.raw_web_events q
+ON ads.gclid = q.gclid
+WHERE q.event_type IN (
+ 'custom_quote_submit',
+ 'wholesale_quote_submit',
+ 'channel_letter_quote_submit'
+);
+Cost per Quote (All Channels)
+SELECT
+channel,
+SUM(spend) / COUNT(*) AS cost_per_quote
+FROM conversion_events
+GROUP BY channel;
+6. Alternative Formula (Derived from CPC)
+
+Since:
+
+𝐶
+𝑃
+𝑄
+=
+𝐶
+𝑃
+𝐶
+𝐶
+𝑙
+𝑖
+𝑐
+𝑘
+-
+𝑡
+𝑜
+-
+𝑄
+𝑢
+𝑜
+𝑡
+𝑒
+ 
+𝑅
+𝑎
+𝑡
+𝑒
+CPQ=
+Click-to-Quote Rate
+CPC
+	​
+
+
+Example:
+
+CPC = $2.40
+
+Click → Quote = 5%
+
+𝐶
+𝑃
+𝑄
+=
+2.40
+/
+0.05
+=
+48
+CPQ=2.40/0.05=48
+
+CPQ = $48 per quote
+
+7. Example Using Your Current Ads Data
+
+If your campaign looks like:
+
+Metric	Example
+Spend	$300
+Clicks	120
+CPC	$2.50
+Quotes	6
+
+Then:
+
+Click → Quote
+6
+/
+120
+=
+5
+%
+6/120=5%
+Cost per Quote
+300
+/
+6
+=
+$
+50
+300/6=$50
+8. Relationship to Other Metrics
+
+CPQ determines everything downstream.
+
+Metric	Formula
+Cost per Quote	spend / quotes
+Cost per Sale	CPQ / quote-to-close rate
+ROAS	revenue / spend
+
+Example:
+
+CPQ = $40
+
+Quote close rate = 20%
+
+𝐶
+𝑜
+𝑠
+𝑡
+ 
+𝑝
+𝑒
+𝑟
+ 
+𝑆
+𝑎
+𝑙
+𝑒
+=
+40
+/
+0.20
+=
+$
+200
+Cost per Sale=40/0.20=$200
+9. Dashboard Metrics (Command Center)
+
+You should track CPQ at four levels:
+
+Level	Example
+Channel	Google Ads
+Campaign	Custom Neon
+Ad Group	Business Neon Signs
+Keyword	custom neon sign
+10. Target Benchmarks for Your Business
+
+For custom signage businesses like yours:
+
+Metric	Target
+CPC	$2–$4
+Click → Quote	4–8%
+Cost per Quote	$25–$60
+Quote → Close	15–25%
+
+This typically produces:
+
+Customer Acquisition Cost
+
+$120–$300
+
+Which works if average order value is $600–$1,200.
+
+11. The Most Useful Derived Metric
+
+For scaling ads, the most useful KPI is actually:
+
+Pipeline per Click
+𝑃
+𝑖
+𝑝
+𝑒
+𝑙
+𝑖
+𝑛
+𝑒
+ 
+𝑝
+𝑒
+𝑟
+ 
+𝐶
+𝑙
+𝑖
+𝑐
+𝑘
+=
+𝐶
+𝑙
+𝑖
+𝑐
+𝑘
+-
+𝑡
+𝑜
+-
+𝑄
+𝑢
+𝑜
+𝑡
+𝑒
+×
+𝐴
+𝑣
+𝑒
+𝑟
+𝑎
+𝑔
+𝑒
+ 
+𝑄
+𝑢
+𝑜
+𝑡
+𝑒
+ 
+𝑉
+𝑎
+𝑙
+𝑢
+𝑒
+Pipeline per Click=Click-to-Quote×Average Quote Value
+
+This tells you how much revenue each click is worth.

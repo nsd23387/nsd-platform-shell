@@ -75,7 +75,7 @@ export function MarketingPipelineCategoryPanel({ categories, loading, error }: P
             {donutData.map((d) => (
               <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: space['1.5'] }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: d.color, display: 'inline-block' }} />
-                <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>{d.name}</span>
+                <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>{d.name}</span>
               </div>
             ))}
           </div>

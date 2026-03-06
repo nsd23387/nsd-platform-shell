@@ -35,7 +35,7 @@ function DeltaBadge({ delta, tc }: { delta: number | null; tc: ReturnType<typeof
   return (
     <span style={{
       fontFamily: fontFamily.body,
-      fontSize: fontSize.xs,
+      fontSize: fontSize.sm,
       fontWeight: fontWeight.medium,
       color,
       marginLeft: space['2'],

@@ -92,7 +92,7 @@ export default function ExperimentsPage() {
   const labelStyle: React.CSSProperties = {
     display: 'block',
     fontFamily: fontFamily.body,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: tc.text.muted,
     marginBottom: space['1'],
@@ -101,7 +101,7 @@ export default function ExperimentsPage() {
   const thStyle: React.CSSProperties = {
     padding: `${space['3']} ${space['3']}`,
     fontFamily: fontFamily.body,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: tc.text.muted,
     textAlign: 'left' as const,
@@ -222,7 +222,7 @@ export default function ExperimentsPage() {
           </div>
         )}
 
-        <DashboardSection title="Experiment Log" description={`${experiments.length} experiment${experiments.length !== 1 ? 's' : ''} recorded.`}>
+        <DashboardSection title="Experiment Log" description={`${experiments.length} experiment${experiments.length !== 1 ? 's' : ''} recorded.`} index={0}>
           {experiments.length === 0 ? (
             <div style={{ padding: space['8'], textAlign: 'center' as const, border: `1px dashed ${tc.border.default}`, borderRadius: radius.lg, backgroundColor: tc.background.muted }}>
               <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
@@ -250,7 +250,7 @@ export default function ExperimentsPage() {
                         <span style={{
                           padding: `${space['0.5']} ${space['2']}`,
                           borderRadius: radius.full,
-                          fontSize: fontSize.xs,
+                          fontSize: fontSize.sm,
                           fontWeight: fontWeight.medium,
                           backgroundColor: exp.decision === 'keep' ? tc.semantic.success.light : exp.decision === 'revert' ? tc.semantic.danger.light : exp.decision === 'iterate' ? tc.semantic.warning.light : tc.background.muted,
                           color: exp.decision === 'keep' ? tc.semantic.success.dark : exp.decision === 'revert' ? tc.semantic.danger.dark : exp.decision === 'iterate' ? tc.semantic.warning.dark : tc.text.muted,
@@ -258,19 +258,19 @@ export default function ExperimentsPage() {
                           {exp.decision}
                         </span>
                       </td>
-                      <td style={{ ...tdStyle, fontSize: fontSize.xs }}>{exp.startDate}{exp.endDate ? ` - ${exp.endDate}` : ''}</td>
+                      <td style={{ ...tdStyle, fontSize: fontSize.sm }}>{exp.startDate}{exp.endDate ? ` - ${exp.endDate}` : ''}</td>
                       <td style={tdStyle}>
                         <div style={{ display: 'flex', gap: space['2'] }}>
                           <button
                             onClick={() => { setEditing(exp); setShowForm(true); }}
-                            style={{ ...btnStyle, padding: `${space['1']} ${space['3']}`, fontSize: fontSize.xs, backgroundColor: tc.background.muted, color: tc.text.secondary }}
+                            style={{ ...btnStyle, padding: `${space['1']} ${space['3']}`, fontSize: fontSize.sm, backgroundColor: tc.background.muted, color: tc.text.secondary }}
                             data-testid={`button-edit-experiment-${exp.id}`}
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDelete(exp.id)}
-                            style={{ ...btnStyle, padding: `${space['1']} ${space['3']}`, fontSize: fontSize.xs, backgroundColor: tc.semantic.danger.light, color: tc.semantic.danger.dark }}
+                            style={{ ...btnStyle, padding: `${space['1']} ${space['3']}`, fontSize: fontSize.sm, backgroundColor: tc.semantic.danger.light, color: tc.semantic.danger.dark }}
                             data-testid={`button-delete-experiment-${exp.id}`}
                           >
                             Delete

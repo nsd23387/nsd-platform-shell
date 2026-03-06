@@ -100,7 +100,7 @@ export function DonutChart({
               {centerValue}
             </div>
           )}
-          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
             {centerLabel}
           </div>
         </div>

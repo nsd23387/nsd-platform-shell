@@ -120,7 +120,7 @@ export default function PostFreeContentPage() {
           <DashboardCard title="Error" error={error} />
         )}
 
-        <DashboardSection title="Organic Sessions Trend" description="Daily sessions from organic search and content.">
+        <DashboardSection title="Organic Sessions Trend" description="Daily sessions from organic search and content." index={0}>
           {(() => {
             const sessions = data?.timeseries?.sessions ?? [];
             if (!sessions.length && !loading) return null;
