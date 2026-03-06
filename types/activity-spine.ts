@@ -436,10 +436,34 @@ export interface QMSAgingBuckets {
 export interface QMSCloseRate {
   won: number;
   lost: number;
+  open: number;
   total: number;
   rate: number;
+  decision_rate: number;
   won_revenue_usd: number;
   lost_revenue_usd: number;
+}
+
+export interface QMSClickToQuote {
+  organic_clicks: number;
+  paid_clicks: number;
+  total_quotes: number;
+  organic_quotes: number;
+  paid_quotes: number;
+  organic_rate: number;
+  paid_rate: number;
+  blended_rate: number;
+}
+
+export interface QMSTimeseriesPoint {
+  date: string;
+  value: number;
+}
+
+export interface QMSTimeseries {
+  pipeline: QMSTimeseriesPoint[];
+  quotes: QMSTimeseriesPoint[];
+  won_revenue: QMSTimeseriesPoint[];
 }
 
 export interface QMSVelocity {
@@ -496,6 +520,8 @@ export interface QMSAnalytics {
   recent_deals: QMSRecentDeal[];
   attribution: QMSAttribution[];
   discount_usage: QMSDiscountUsage | null;
+  click_to_quote?: QMSClickToQuote;
+  timeseries?: QMSTimeseries;
 }
 
 // ============================================

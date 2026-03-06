@@ -59,17 +59,24 @@ const CLOSE_RATE_SQL = `
   SELECT
     COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid') AS won,
     COUNT(*) FILTER (WHERE quote_activity = 'Not Interested') AS lost,
-    COUNT(*) FILTER (WHERE quote_activity IN ('Quote Paid', 'Not Interested')) AS decided,
     COUNT(*) AS total,
+    CASE WHEN COUNT(*) > 0
+      THEN ROUND(
+        COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid')::numeric
+        / COUNT(*)::numeric,
+      4)
+      ELSE 0
+    END AS close_rate,
     CASE WHEN COUNT(*) FILTER (WHERE quote_activity IN ('Quote Paid', 'Not Interested')) > 0
       THEN ROUND(
         COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid')::numeric
         / COUNT(*) FILTER (WHERE quote_activity IN ('Quote Paid', 'Not Interested'))::numeric,
       4)
       ELSE 0
-    END AS close_rate,
+    END AS decision_rate,
     COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) AS won_revenue_cents,
-    COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Not Interested'), 0) AS lost_revenue_cents
+    COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Not Interested'), 0) AS lost_revenue_cents,
+    COUNT(*) - COUNT(*) FILTER (WHERE quote_activity IN ('Quote Paid', 'Not Interested')) AS open
   FROM analytics.raw_qms_deals
   WHERE created_at >= NOW() - INTERVAL '90 days'
 `;
@@ -139,6 +146,109 @@ const DISCOUNT_USAGE_SQL = `
   WHERE created_at >= NOW() - INTERVAL '90 days'
 `;
 
+const CLICK_TO_QUOTE_SQL = `
+  WITH
+    organic_clicks AS (
+      SELECT COALESCE(SUM(clicks), 0) AS total_clicks
+      FROM analytics.metrics_search_console_page
+    ),
+    paid_clicks AS (
+      SELECT COALESCE(SUM((payload->>'clicks')::int), 0) AS total_clicks
+      FROM analytics.raw_google_ads
+      WHERE event_name = 'campaign_performance'
+        AND source_system = 'google-ads-bq'
+        AND occurred_at >= NOW() - INTERVAL '90 days'
+    ),
+    qms_totals AS (
+      SELECT
+        COUNT(*) AS total_quotes,
+        COUNT(*) FILTER (WHERE COALESCE(NULLIF(utm_source, ''), NULLIF(referrer, ''), 'direct') != 'google' OR utm_medium IS NULL OR utm_medium != 'cpc') AS organic_quotes,
+        COUNT(*) FILTER (WHERE utm_source = 'google' AND utm_medium = 'cpc') AS paid_quotes
+      FROM analytics.raw_qms_deals
+      WHERE created_at >= NOW() - INTERVAL '90 days'
+    )
+  SELECT
+    oc.total_clicks AS organic_clicks,
+    pc.total_clicks AS paid_clicks,
+    q.total_quotes,
+    q.organic_quotes,
+    q.paid_quotes,
+    CASE WHEN oc.total_clicks > 0
+      THEN ROUND(q.organic_quotes::numeric / oc.total_clicks::numeric, 6)
+      ELSE 0
+    END AS organic_click_to_quote_rate,
+    CASE WHEN pc.total_clicks > 0
+      THEN ROUND(q.paid_quotes::numeric / pc.total_clicks::numeric, 6)
+      ELSE 0
+    END AS paid_click_to_quote_rate,
+    CASE WHEN (oc.total_clicks + pc.total_clicks) > 0
+      THEN ROUND(q.total_quotes::numeric / (oc.total_clicks + pc.total_clicks)::numeric, 6)
+      ELSE 0
+    END AS blended_click_to_quote_rate
+  FROM organic_clicks oc, paid_clicks pc, qms_totals q
+`;
+
+const TIMESERIES_PIPELINE_SQL = `
+  WITH date_range AS (
+    SELECT d::date FROM generate_series(
+      (NOW() - INTERVAL '90 days')::date,
+      NOW()::date,
+      '1 day'::interval
+    ) AS d
+  ),
+  daily AS (
+    SELECT created_at::date AS day, SUM(total_price_cents) / 100.0 AS val
+    FROM analytics.raw_qms_deals
+    WHERE created_at >= NOW() - INTERVAL '90 days'
+    GROUP BY created_at::date
+  )
+  SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
+  FROM date_range dr
+  LEFT JOIN daily dy ON dr.d = dy.day
+  ORDER BY dr.d ASC
+`;
+
+const TIMESERIES_QUOTES_SQL = `
+  WITH date_range AS (
+    SELECT d::date FROM generate_series(
+      (NOW() - INTERVAL '90 days')::date,
+      NOW()::date,
+      '1 day'::interval
+    ) AS d
+  ),
+  daily AS (
+    SELECT created_at::date AS day, COUNT(*) AS val
+    FROM analytics.raw_qms_deals
+    WHERE created_at >= NOW() - INTERVAL '90 days'
+    GROUP BY created_at::date
+  )
+  SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
+  FROM date_range dr
+  LEFT JOIN daily dy ON dr.d = dy.day
+  ORDER BY dr.d ASC
+`;
+
+const TIMESERIES_WON_SQL = `
+  WITH date_range AS (
+    SELECT d::date FROM generate_series(
+      (NOW() - INTERVAL '90 days')::date,
+      NOW()::date,
+      '1 day'::interval
+    ) AS d
+  ),
+  daily AS (
+    SELECT quote_paid_at::date AS day, SUM(total_price_cents) / 100.0 AS val
+    FROM analytics.raw_qms_deals
+    WHERE quote_paid_at IS NOT NULL
+      AND quote_paid_at >= NOW() - INTERVAL '90 days'
+    GROUP BY quote_paid_at::date
+  )
+  SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
+  FROM date_range dr
+  LEFT JOIN daily dy ON dr.d = dy.day
+  ORDER BY dr.d ASC
+`;
+
 function toNum(val: unknown): number {
   if (val == null) return 0;
   const n = Number(val);
@@ -193,6 +303,10 @@ export async function GET(request: NextRequest) {
       recentRes,
       attrRes,
       discountRes,
+      tsPipelineRes,
+      tsQuotesRes,
+      tsWonRes,
+      clickToQuoteRes,
     ] = await Promise.all([
       db.query(PIPELINE_SUMMARY_SQL),
       db.query(AGING_BUCKETS_SQL),
@@ -202,6 +316,10 @@ export async function GET(request: NextRequest) {
       db.query(RECENT_DEALS_SQL),
       db.query(ATTRIBUTION_SQL),
       db.query(DISCOUNT_USAGE_SQL),
+      db.query(TIMESERIES_PIPELINE_SQL),
+      db.query(TIMESERIES_QUOTES_SQL),
+      db.query(TIMESERIES_WON_SQL),
+      db.query(CLICK_TO_QUOTE_SQL),
     ]);
 
     const queryMs = Math.round(performance.now() - t0);
@@ -211,6 +329,7 @@ export async function GET(request: NextRequest) {
     const cr = closeRateRes.rows[0] ?? {};
     const v = velocityRes.rows[0] ?? {};
     const disc = discountRes.rows[0] ?? {};
+    const ctq = clickToQuoteRes.rows[0] ?? {};
 
     return NextResponse.json({
       data: {
@@ -232,8 +351,10 @@ export async function GET(request: NextRequest) {
         close_rate: {
           won: toNum(cr.won),
           lost: toNum(cr.lost),
+          open: toNum(cr.open),
           total: toNum(cr.total),
           rate: toNum(cr.close_rate),
+          decision_rate: toNum(cr.decision_rate),
           won_revenue_usd: toNum(cr.won_revenue_cents) / 100,
           lost_revenue_usd: toNum(cr.lost_revenue_cents) / 100,
         },
@@ -275,6 +396,30 @@ export async function GET(request: NextRequest) {
           total: toNum(disc.total),
           discount_redeemed: toNum(disc.discount_redeemed),
           avg_discount_pct: toNum(disc.avg_discount_pct),
+        },
+        click_to_quote: {
+          organic_clicks: toNum(ctq.organic_clicks),
+          paid_clicks: toNum(ctq.paid_clicks),
+          total_quotes: toNum(ctq.total_quotes),
+          organic_quotes: toNum(ctq.organic_quotes),
+          paid_quotes: toNum(ctq.paid_quotes),
+          organic_rate: toNum(ctq.organic_click_to_quote_rate),
+          paid_rate: toNum(ctq.paid_click_to_quote_rate),
+          blended_rate: toNum(ctq.blended_click_to_quote_rate),
+        },
+        timeseries: {
+          pipeline: (tsPipelineRes.rows ?? []).map((r: Record<string, unknown>) => ({
+            date: String(r.date),
+            value: toNum(r.value),
+          })),
+          quotes: (tsQuotesRes.rows ?? []).map((r: Record<string, unknown>) => ({
+            date: String(r.date),
+            value: toNum(r.value),
+          })),
+          won_revenue: (tsWonRes.rows ?? []).map((r: Record<string, unknown>) => ({
+            date: String(r.date),
+            value: toNum(r.value),
+          })),
         },
       },
       meta: { query_execution_ms: queryMs },

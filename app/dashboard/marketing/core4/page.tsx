@@ -51,7 +51,7 @@ export default function Core4OverviewPage() {
       return [
         { name: 'Warm Outreach', href: '/dashboard/marketing/warm-outreach', sessions: '—', clicks: '—', quotes: '—', quoteRate: '—', pipeline: '—', spend: '$0', cac: '—', roas: '—' },
         { name: 'Cold Outreach', href: '/dashboard/marketing/cold-outreach', sessions: '—', clicks: '—', quotes: '—', quoteRate: '—', pipeline: '—', spend: '$0', cac: '—', roas: '—' },
-        { name: 'Post Free Content', href: '/dashboard/marketing/content', sessions: '—', clicks: '—', quotes: '—', quoteRate: '—', pipeline: '—', spend: '$0', cac: '—', roas: '—' },
+        { name: 'SEO', href: '/dashboard/marketing/content', sessions: '—', clicks: '—', quotes: '—', quoteRate: '—', pipeline: '—', spend: '$0', cac: '—', roas: '—' },
         { name: 'Run Paid Ads', href: '/dashboard/marketing/paid-ads', sessions: '—', clicks: '—', quotes: '—', quoteRate: '—', pipeline: '—', spend: '—', cac: '—', roas: '—' },
       ];
     }
@@ -59,7 +59,7 @@ export default function Core4OverviewPage() {
     const map: { key: keyof typeof core4; name: string; href: string }[] = [
       { key: 'warm_outreach', name: 'Warm Outreach', href: '/dashboard/marketing/warm-outreach' },
       { key: 'cold_outreach', name: 'Cold Outreach', href: '/dashboard/marketing/cold-outreach' },
-      { key: 'post_free_content', name: 'Post Free Content', href: '/dashboard/marketing/content' },
+      { key: 'post_free_content', name: 'SEO', href: '/dashboard/marketing/content' },
       { key: 'run_paid_ads', name: 'Run Paid Ads', href: '/dashboard/marketing/paid-ads' },
     ];
 
