@@ -60,7 +60,7 @@ export default function SeoCommandCenterPage() {
           { key: 'ctr', label: 'CTR', format: 'percent' },
           { key: 'position', label: 'Position', format: 'number' },
         ],
-        rows: data.seo_queries,
+        rows: data.seo_queries.map((r: any) => ({ ...r })),
       });
     }
 
@@ -74,7 +74,7 @@ export default function SeoCommandCenterPage() {
           { key: 'impressions_delta', label: 'Impressions Delta', format: 'number' },
           { key: 'position_delta', label: 'Position Delta', format: 'number' },
         ],
-        rows: data.seo_movers,
+        rows: data.seo_movers.map((r: any) => ({ ...r })),
       });
     }
 
@@ -89,7 +89,7 @@ export default function SeoCommandCenterPage() {
           { key: 'quotes', label: 'Quotes', format: 'number' },
           { key: 'pipeline_value_usd', label: 'Pipeline', format: 'currency' },
         ],
-        rows: data.pages,
+        rows: data.pages.map((r: any) => ({ ...r })),
       });
     }
 

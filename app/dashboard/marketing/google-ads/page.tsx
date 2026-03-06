@@ -60,7 +60,7 @@ export default function GoogleAdsWarRoomPage() {
           { key: 'conversions', label: 'Conversions', format: 'number' },
           { key: 'roas', label: 'ROAS', format: 'number' },
         ],
-        rows: data.google_ads_campaigns,
+        rows: data.google_ads_campaigns.map((r: any) => ({ ...r })),
       });
     }
 

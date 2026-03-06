@@ -31,7 +31,7 @@ export default function DataHealthPage() {
           { key: 'value', label: 'Value' },
           { key: 'status', label: 'Status' },
         ],
-        rows: data.pipeline_health,
+        rows: data.pipeline_health.map(r => ({ ...r })),
       });
     }
 
