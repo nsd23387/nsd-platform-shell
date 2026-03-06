@@ -105,7 +105,7 @@ export function MarketingNav({ collapsed = false, onToggleCollapse }: MarketingN
           <p
             style={{
               fontFamily: fontFamily.body,
-              fontSize: fontSize.xs,
+              fontSize: fontSize.sm,
               color: tc.text.muted,
               whiteSpace: 'nowrap',
             }}
@@ -127,7 +127,7 @@ export function MarketingNav({ collapsed = false, onToggleCollapse }: MarketingN
                 style={{
                   padding: `${space['2']} ${space['4']}`,
                   fontFamily: fontFamily.body,
-                  fontSize: fontSize.xs,
+                  fontSize: fontSize.sm,
                   fontWeight: fontWeight.medium,
                   color: tc.text.placeholder,
                   textTransform: 'uppercase' as const,

@@ -105,7 +105,7 @@ export function ForecastCalculator({
           <div
             style={{
               fontFamily: fontFamily.body,
-              fontSize: fontSize.xs,
+              fontSize: fontSize.sm,
               fontWeight: fontWeight.medium,
               color: tc.text.muted,
               textTransform: 'uppercase' as const,
@@ -170,7 +170,7 @@ export function ForecastCalculator({
                     display: 'flex',
                     justifyContent: 'space-between',
                     fontFamily: fontFamily.body,
-                    fontSize: fontSize.xs,
+                    fontSize: fontSize.sm,
                     color: tc.text.muted,
                     marginTop: space['0.5'],
                   }}
@@ -195,7 +195,7 @@ export function ForecastCalculator({
           <div
             style={{
               fontFamily: fontFamily.body,
-              fontSize: fontSize.xs,
+              fontSize: fontSize.sm,
               fontWeight: fontWeight.medium,
               color: tc.text.muted,
               textTransform: 'uppercase' as const,
@@ -220,7 +220,7 @@ export function ForecastCalculator({
                 <div
                   style={{
                     fontFamily: fontFamily.body,
-                    fontSize: fontSize.xs,
+                    fontSize: fontSize.sm,
                     fontWeight: fontWeight.medium,
                     color: tc.text.muted,
                     textTransform: 'uppercase' as const,

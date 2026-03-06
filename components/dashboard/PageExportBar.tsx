@@ -32,7 +32,7 @@ export function PageExportBar({ filename, pdfTitle, sections, meta, loading }: P
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: space['3'] }}>
-      <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+      <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
         Export page data
       </span>
       <ExportMenu

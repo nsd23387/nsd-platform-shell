@@ -69,7 +69,7 @@ export function GlobalFilters({
   const pillBase: React.CSSProperties = {
     padding: `${space['1']} ${space['3']}`,
     fontFamily: fontFamily.body,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     border: 'none',
     borderRadius: radius.full,
@@ -87,7 +87,7 @@ export function GlobalFilters({
   const selectStyle: React.CSSProperties = {
     padding: `${space['1']} ${space['3']}`,
     fontFamily: fontFamily.body,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: tc.text.secondary,
     backgroundColor: tc.background.muted,
@@ -100,7 +100,7 @@ export function GlobalFilters({
   const inputStyle: React.CSSProperties = {
     padding: `${space['1']} ${space['2.5']}`,
     fontFamily: fontFamily.body,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     border: `1px solid ${tc.border.default}`,
     borderRadius: radius.md,
     color: tc.text.primary,
@@ -164,7 +164,7 @@ export function GlobalFilters({
             style={inputStyle}
             data-testid="filter-date-start"
           />
-          <span style={{ color: tc.text.muted, fontSize: fontSize.xs }}>to</span>
+          <span style={{ color: tc.text.muted, fontSize: fontSize.sm }}>to</span>
           <input
             type="date"
             value={rangeEnd}
@@ -271,7 +271,7 @@ export function GlobalFilters({
         <span
           style={{
             fontFamily: fontFamily.body,
-            fontSize: fontSize.xs,
+            fontSize: fontSize.sm,
             color: indigo[600],
             fontWeight: fontWeight.medium,
           }}

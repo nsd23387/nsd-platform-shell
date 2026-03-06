@@ -67,7 +67,7 @@ export function MarketingChannelPerformancePanel({ channels, loading, error }: P
 
   const thStyle = (align: string): React.CSSProperties => ({
     fontFamily: fontFamily.body,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: tc.text.muted,
     textAlign: align as 'left' | 'right',

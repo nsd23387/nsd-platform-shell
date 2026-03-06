@@ -88,12 +88,12 @@ function DeviceCard({ devices }: { devices: MarketingDeviceBreakdown[] }) {
         {donutData.map((d) => (
           <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: space['1.5'] }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: d.color, display: 'inline-block' }} />
-            <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>{d.name}</span>
+            <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>{d.name}</span>
           </div>
         ))}
       </div>
       <div style={{ textAlign: 'center', marginTop: space['2'] }}>
-        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
           Source: {isGA4 ? 'Google Analytics' : 'Search Console'}
         </span>
       </div>
@@ -115,11 +115,11 @@ function CountryCard({ countries }: { countries: MarketingCountryBreakdown[] }) 
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr style={{ borderBottom: `2px solid ${tc.border.default}` }}>
-            <th style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'left', padding: `${space['2']} 0` }}>Country</th>
-            <th style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'right', padding: `${space['2']} 0` }}>{primaryMetric}</th>
-            <th style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'right', padding: `${space['2']} 0` }}>{secondaryMetric}</th>
+            <th style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'left', padding: `${space['2']} 0` }}>Country</th>
+            <th style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'right', padding: `${space['2']} 0` }}>{primaryMetric}</th>
+            <th style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'right', padding: `${space['2']} 0` }}>{secondaryMetric}</th>
             {!isGA4 && (
-              <th style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'right', padding: `${space['2']} 0` }}>CTR</th>
+              <th style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'right', padding: `${space['2']} 0` }}>CTR</th>
             )}
           </tr>
         </thead>
@@ -151,7 +151,7 @@ function CountryCard({ countries }: { countries: MarketingCountryBreakdown[] }) 
         </tbody>
       </table>
       <div style={{ textAlign: 'right', marginTop: space['2'] }}>
-        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
           Source: {isGA4 ? 'Google Analytics' : 'Search Console'}
         </span>
       </div>

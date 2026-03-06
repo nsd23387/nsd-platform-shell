@@ -113,7 +113,7 @@ export function MarketingPipelineHealthPanel({ health, loading, error }: Props) 
                   </span>
                 </div>
                 <span style={{
-                  fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium,
+                  fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
                   color: cfg.color, backgroundColor: cfg.bg,
                   padding: `${space['0.5']} ${space['2.5']}`, borderRadius: radius.full,
                 }}>

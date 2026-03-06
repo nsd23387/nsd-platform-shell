@@ -160,7 +160,7 @@ export function EngineCard({
             <span
               style={{
                 fontFamily: fontFamily.body,
-                fontSize: fontSize.xs,
+                fontSize: fontSize.sm,
                 color: tc.text.muted,
               }}
             >
@@ -172,7 +172,7 @@ export function EngineCard({
                 alignItems: 'center',
                 gap: space['0.5'],
                 fontFamily: fontFamily.body,
-                fontSize: fontSize.sm,
+                fontSize: fontSize.base,
                 fontWeight: fontWeight.medium,
                 padding: `${space['0.5']} ${space['2']}`,
                 borderRadius: radius.DEFAULT,
@@ -199,7 +199,7 @@ export function EngineCard({
             <div
               style={{
                 fontFamily: fontFamily.body,
-                fontSize: fontSize.xs,
+                fontSize: fontSize.sm,
                 fontWeight: fontWeight.medium,
                 color: tc.text.muted,
                 textTransform: 'uppercase' as const,

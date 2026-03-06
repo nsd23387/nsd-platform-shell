@@ -59,16 +59,26 @@ const STATUS_COLORS: Record<string, string> = {
   'Admin Review Changes Requested': violet[600],
 };
 
-function useQMSData(): { data: QMSAnalytics | null; loading: boolean; error: string | null } {
+function useQMSData(queryParams: Record<string, string>): { data: QMSAnalytics | null; loading: boolean; error: string | null } {
   const [data, setData] = useState<QMSAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const paramString = useMemo(() => {
+    const sp = new URLSearchParams();
+    if (queryParams.start) sp.set('start', queryParams.start);
+    if (queryParams.end) sp.set('end', queryParams.end);
+    if (queryParams.preset) sp.set('preset', queryParams.preset);
+    return sp.toString();
+  }, [queryParams.start, queryParams.end, queryParams.preset]);
+
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     async function fetchQMS() {
       try {
-        const res = await fetch('/api/activity-spine/marketing/qms');
+        const url = `/api/activity-spine/marketing/qms${paramString ? `?${paramString}` : ''}`;
+        const res = await fetch(url);
         if (!res.ok) throw new Error(`QMS fetch failed: ${res.status}`);
         const json = await res.json();
         if (!cancelled) {
@@ -84,7 +94,7 @@ function useQMSData(): { data: QMSAnalytics | null; loading: boolean; error: str
     }
     fetchQMS();
     return () => { cancelled = true; };
-  }, []);
+  }, [paramString]);
 
   return { data, loading, error };
 }
@@ -95,8 +105,8 @@ function AgingBar({ label, count, total, color }: { label: string; count: number
   return (
     <div style={{ marginBottom: space['2'] }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: space['1'] }}>
-        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{label}</span>
-        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary }}>{count}</span>
+        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.secondary }}>{label}</span>
+        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary }}>{count}</span>
       </div>
       <div style={{ height: 6, backgroundColor: tc.background.muted, borderRadius: radius.full, overflow: 'hidden' }}>
         <div
@@ -115,10 +125,10 @@ function StatusBreakdownRow({ item, maxCount }: { item: QMSStatusBreakdown; maxC
   return (
     <div style={{ marginBottom: space['3'] }} data-testid={`status-row-${item.status.toLowerCase().replace(/\s+/g, '-')}`}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: space['1'] }}>
-        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{item.status}</span>
+        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.secondary }}>{item.status}</span>
         <div style={{ display: 'flex', gap: space['3'], alignItems: 'baseline' }}>
-          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary }}>{item.count}</span>
-          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>{formatUSD(item.value_usd)}</span>
+          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary }}>{item.count}</span>
+          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>{formatUSD(item.value_usd)}</span>
         </div>
       </div>
       <div style={{ height: 4, backgroundColor: tc.background.muted, borderRadius: radius.full, overflow: 'hidden' }}>
@@ -133,28 +143,28 @@ function DealRow({ deal }: { deal: QMSRecentDeal }) {
   const color = STATUS_COLORS[deal.status] ?? indigo[500];
   return (
     <tr data-testid={`deal-row-${deal.quote_number}`}>
-      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary }}>
+      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary }}>
         {deal.quote_number}
       </td>
-      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>
+      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.secondary }}>
         {deal.customer_name ?? '\u2014'}
       </td>
       <td style={{ padding: `${space['2']} ${space['3']}` }}>
         <span style={{
-          fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium,
+          fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
           padding: `${space['0.5']} ${space['2']}`, borderRadius: radius.DEFAULT,
           backgroundColor: `${color}18`, color: color,
         }}>
           {deal.status}
         </span>
       </td>
-      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary, textAlign: 'right' }}>
+      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary, textAlign: 'right' }}>
         {formatUSD(deal.total_price_usd)}
       </td>
-      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
         {deal.sign_type ?? '\u2014'}
       </td>
-      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
         {timeAgo(deal.updated_at)}
       </td>
     </tr>
@@ -165,10 +175,10 @@ function AttributionRow({ item }: { item: QMSAttribution }) {
   const tc = useThemeColors();
   return (
     <tr data-testid={`attr-row-${item.source}`}>
-      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{item.source}</td>
-      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary, textAlign: 'right' }}>{item.count}</td>
-      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, textAlign: 'right' }}>{formatUSD(item.value_usd)}</td>
-      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, textAlign: 'right' }}>{item.won}</td>
+      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.primary }}>{item.source}</td>
+      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary, textAlign: 'right' }}>{item.count}</td>
+      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.secondary, textAlign: 'right' }}>{formatUSD(item.value_usd)}</td>
+      <td style={{ padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted, textAlign: 'right' }}>{item.won}</td>
     </tr>
   );
 }
@@ -197,8 +207,8 @@ function EmptyDataCard({ title, description }: { title: string; description: str
 
 export default function WarmOutreachPage() {
   const tc = useThemeColors();
-  const { data, loading, error } = useContext(MarketingContext);
-  const qms = useQMSData();
+  const { data, loading, error, queryParams } = useContext(MarketingContext);
+  const qms = useQMSData(queryParams);
 
   const conversions = data?.recent_conversions ?? [];
   const pipeline = data?.pipeline_categories ?? [];
@@ -393,7 +403,7 @@ export default function WarmOutreachPage() {
         </div>
 
         {qmsAvailable && qms.data?.timeseries && (
-          <DashboardSection title="Pipeline Trend (90d)" description="Daily pipeline value from new quotes created.">
+          <DashboardSection title="Pipeline Trend (90d)" description="Daily pipeline value from new quotes created." index={0}>
             {(() => {
               const ts = qms.data.timeseries.pipeline ?? [];
               if (!ts.length) return null;
@@ -411,7 +421,7 @@ export default function WarmOutreachPage() {
         )}
 
         {qmsAvailable && qms.data?.timeseries && (
-          <DashboardSection title="Quotes Trend (90d)" description="Daily new quotes created.">
+          <DashboardSection title="Quotes Trend (90d)" description="Daily new quotes created." index={1}>
             {(() => {
               const ts = qms.data.timeseries.quotes ?? [];
               if (!ts.length) return null;
@@ -429,7 +439,7 @@ export default function WarmOutreachPage() {
         )}
 
         {qmsAvailable && qms.data?.timeseries && (
-          <DashboardSection title="Won Revenue Trend (90d)" description="Daily revenue from closed-won deals.">
+          <DashboardSection title="Won Revenue Trend (90d)" description="Daily revenue from closed-won deals." index={2}>
             {(() => {
               const ts = qms.data.timeseries.won_revenue ?? [];
               if (!ts.length) return null;
@@ -446,7 +456,7 @@ export default function WarmOutreachPage() {
           </DashboardSection>
         )}
 
-        <DashboardSection title="Submissions Trend" description="Daily form submissions and conversion events.">
+        <DashboardSection title="Submissions Trend" description="Daily form submissions and conversion events." index={3}>
           {(() => {
             const submissions = data?.timeseries?.submissions ?? [];
             if (!submissions.length && !loading) return null;
@@ -466,7 +476,7 @@ export default function WarmOutreachPage() {
         </DashboardSection>
 
         {qms.loading && (
-          <DashboardSection title="QMS Pipeline" description="Loading quote management data...">
+          <DashboardSection title="QMS Pipeline" description="Loading quote management data..." index={4}>
             <DashboardGrid columns={{ sm: 2, md: 3, lg: 4 }}>
               <StatTile label="Active Pipeline" value="..." loading />
               <StatTile label="Won Revenue" value="..." loading />
@@ -478,7 +488,7 @@ export default function WarmOutreachPage() {
 
         {qmsAvailable && qmsPipeline && (
           <>
-            <DashboardSection title="QMS Pipeline" description="Live deal metrics from the Quote Management System.">
+            <DashboardSection title="QMS Pipeline" description="Live deal metrics from the Quote Management System." index={4}>
               <DashboardGrid columns={{ sm: 2, md: 3, lg: 4 }}>
                 <StatTile
                   label="Active Pipeline"
@@ -499,7 +509,7 @@ export default function WarmOutreachPage() {
               </DashboardGrid>
             </DashboardSection>
 
-            <DashboardSection title="Deal Health" description="Close rate, velocity, and aging distribution.">
+            <DashboardSection title="Deal Health" description="Close rate, velocity, and aging distribution." index={5}>
               <DashboardGrid columns={{ sm: 1, md: 2, lg: 3 }}>
                 <DashboardCard title="Quote-to-Close Rate (90d)" loading={qms.loading}>
                   {qmsCloseRate && (
@@ -507,30 +517,30 @@ export default function WarmOutreachPage() {
                       <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['2'] }}>
                         {(qmsCloseRate.rate * 100).toFixed(1)}%
                       </p>
-                      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginBottom: space['3'] }}>
+                      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['3'] }}>
                         {qmsCloseRate.won} won out of {qmsCloseRate.total} total quotes
                       </p>
                       <div style={{ display: 'flex', gap: space['4'], marginBottom: space['2'] }}>
-                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
                           Won: {qmsCloseRate.won}
                         </span>
-                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
                           Lost: {qmsCloseRate.lost}
                         </span>
-                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
                           Open: {qmsCloseRate.open}
                         </span>
                       </div>
                       <div style={{ display: 'flex', gap: space['4'], marginBottom: space['2'] }}>
-                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
                           Won: {formatUSD(qmsCloseRate.won_revenue_usd)}
                         </span>
-                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
                           Lost: {formatUSD(qmsCloseRate.lost_revenue_usd)}
                         </span>
                       </div>
                       {qmsCloseRate.decision_rate > 0 && (
-                        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['2'] }}>
+                        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['2'] }}>
                           Decision win rate: {(qmsCloseRate.decision_rate * 100).toFixed(0)}% ({qmsCloseRate.won} of {qmsCloseRate.won + qmsCloseRate.lost} decided)
                         </p>
                       )}
@@ -544,15 +554,15 @@ export default function WarmOutreachPage() {
                       <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['1'] }}>
                         {qmsVelocity.avg_days_to_close}d
                       </p>
-                      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['1'] }}>
+                      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted, marginBottom: space['1'] }}>
                         avg days to close
                       </p>
                       {qmsVelocity.avg_days_to_deposit > 0 && (
-                        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+                        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
                           {qmsVelocity.avg_days_to_deposit}d avg to deposit
                         </p>
                       )}
-                      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['2'] }}>
+                      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['2'] }}>
                         Based on {qmsVelocity.sample_size} closed deals
                       </p>
                     </div>
@@ -573,7 +583,7 @@ export default function WarmOutreachPage() {
             </DashboardSection>
 
             {qmsStatusBreakdown.length > 0 && (
-              <DashboardSection title="Status Breakdown" description="Active deals by quote lifecycle stage.">
+              <DashboardSection title="Status Breakdown" description="Active deals by quote lifecycle stage." index={6}>
                 <DashboardGrid columns={{ sm: 1, md: 2 }}>
                   <DashboardCard title="By Stage" loading={qms.loading}>
                     <div data-testid="card-status-breakdown">
@@ -591,23 +601,23 @@ export default function WarmOutreachPage() {
                             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }}>
                               {qmsDiscount.with_discount}
                             </p>
-                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>with discount</p>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>with discount</p>
                           </div>
                           <div>
                             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }}>
                               {qmsDiscount.discount_redeemed}
                             </p>
-                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>redeemed</p>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>redeemed</p>
                           </div>
                           <div>
                             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }}>
                               {qmsDiscount.total > 0 ? ((qmsDiscount.with_discount / qmsDiscount.total) * 100).toFixed(0) : 0}%
                             </p>
-                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>offer rate</p>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>offer rate</p>
                           </div>
                         </div>
                         {qmsDiscount.avg_discount_pct > 0 && (
-                          <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+                          <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
                             Avg discount: {qmsDiscount.avg_discount_pct}%
                           </p>
                         )}
@@ -621,7 +631,7 @@ export default function WarmOutreachPage() {
                         <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['2'] }}>
                           {(qms.data.click_to_quote.blended_rate * 100).toFixed(2)}%
                         </p>
-                        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginBottom: space['3'] }}>
+                        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['3'] }}>
                           {qms.data.click_to_quote.total_quotes} quotes from {(qms.data.click_to_quote.organic_clicks + qms.data.click_to_quote.paid_clicks).toLocaleString()} clicks
                         </p>
                         <div style={{ display: 'flex', gap: space['6'], marginBottom: space['2'] }}>
@@ -629,7 +639,7 @@ export default function WarmOutreachPage() {
                             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
                               {(qms.data.click_to_quote.organic_rate * 100).toFixed(2)}%
                             </p>
-                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
                               Organic ({qms.data.click_to_quote.organic_quotes} / {qms.data.click_to_quote.organic_clicks.toLocaleString()})
                             </p>
                           </div>
@@ -637,7 +647,7 @@ export default function WarmOutreachPage() {
                             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
                               {(qms.data.click_to_quote.paid_rate * 100).toFixed(2)}%
                             </p>
-                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
                               Paid ({qms.data.click_to_quote.paid_quotes} / {qms.data.click_to_quote.paid_clicks.toLocaleString()})
                             </p>
                           </div>
@@ -650,7 +660,7 @@ export default function WarmOutreachPage() {
             )}
 
             {qmsAttribution.length > 0 && (
-              <DashboardSection title="Source Attribution" description="Where deals come from and how they convert.">
+              <DashboardSection title="Source Attribution" description="Where deals come from and how they convert." index={7}>
                 <div style={{
                   backgroundColor: tc.background.surface,
                   border: `1px solid ${tc.border.default}`,
@@ -666,7 +676,7 @@ export default function WarmOutreachPage() {
                             style={{
                               padding: `${space['3']} ${space['3']}`,
                               fontFamily: fontFamily.body,
-                              fontSize: fontSize.xs,
+                              fontSize: fontSize.sm,
                               fontWeight: fontWeight.medium,
                               color: tc.text.muted,
                               textAlign: i === 0 ? 'left' : 'right',
@@ -690,7 +700,7 @@ export default function WarmOutreachPage() {
             )}
 
             {qmsRecentDeals.length > 0 && (
-              <DashboardSection title="Recent Deals" description="Latest updated quotes from the QMS.">
+              <DashboardSection title="Recent Deals" description="Latest updated quotes from the QMS." index={8}>
                 <div style={{
                   backgroundColor: tc.background.surface,
                   border: `1px solid ${tc.border.default}`,
@@ -706,7 +716,7 @@ export default function WarmOutreachPage() {
                             style={{
                               padding: `${space['3']} ${space['3']}`,
                               fontFamily: fontFamily.body,
-                              fontSize: fontSize.xs,
+                              fontSize: fontSize.sm,
                               fontWeight: fontWeight.medium,
                               color: tc.text.muted,
                               textAlign: i === 3 ? 'right' : 'left',
@@ -733,7 +743,7 @@ export default function WarmOutreachPage() {
         )}
 
         {!qms.loading && qms.error && (
-          <DashboardSection title="QMS Connection Error" description="Unable to load Quote Management System data.">
+          <DashboardSection title="QMS Connection Error" description="Unable to load Quote Management System data." index={4}>
             <div
               style={{
                 padding: space['6'],
@@ -746,7 +756,7 @@ export default function WarmOutreachPage() {
               <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.secondary, marginBottom: space['2'] }}>
                 Failed to load QMS data
               </p>
-              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
                 {qms.error}
               </p>
             </div>
@@ -754,7 +764,7 @@ export default function WarmOutreachPage() {
         )}
 
         {!qms.loading && !qms.error && !qmsAvailable && (
-          <DashboardSection title="QMS Integration" description="Connect the Quote Management System to see deal lifecycle metrics.">
+          <DashboardSection title="QMS Integration" description="Connect the Quote Management System to see deal lifecycle metrics." index={4}>
             <DashboardGrid columns={{ sm: 1, md: 2, lg: 3 }}>
               <EmptyDataCard title="Quote Aging Buckets" description="Connect QMS to see 0-2, 3-7, 8-14, 15+ day aging." />
               <EmptyDataCard title="Quote-to-Close Rate" description="Connect QMS to track close rates over time." />
@@ -766,19 +776,19 @@ export default function WarmOutreachPage() {
           </DashboardSection>
         )}
 
-        <DashboardSection title="Web Analytics" description="Conversion events and pipeline from existing sources.">
+        <DashboardSection title="Web Analytics" description="Conversion events and pipeline from existing sources." index={9}>
           <DashboardGrid columns={{ sm: 1, md: 2, lg: 3 }}>
             <DashboardCard title="Recent Conversions" loading={loading}>
               <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }} data-testid="text-warm-conversions">
                 {conversions.length}
               </p>
-              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>conversion events tracked</p>
+              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>conversion events tracked</p>
             </DashboardCard>
             <DashboardCard title="Pipeline Categories" loading={loading}>
               <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['3xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }} data-testid="text-warm-pipeline-cats">
                 {pipeline.length}
               </p>
-              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>active categories</p>
+              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>active categories</p>
             </DashboardCard>
           </DashboardGrid>
         </DashboardSection>

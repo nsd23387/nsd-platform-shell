@@ -28,7 +28,7 @@ export function DrilldownBreadcrumb({ items }: DrilldownBreadcrumbProps) {
         alignItems: 'center',
         gap: space['1'],
         fontFamily: fontFamily.body,
-        fontSize: fontSize.sm,
+        fontSize: fontSize.base,
         flexWrap: 'wrap',
       }}
     >
@@ -42,7 +42,7 @@ export function DrilldownBreadcrumb({ items }: DrilldownBreadcrumbProps) {
               <span
                 style={{
                   color: tc.text.muted,
-                  fontSize: fontSize.xs,
+                  fontSize: fontSize.sm,
                   userSelect: 'none',
                 }}
               >

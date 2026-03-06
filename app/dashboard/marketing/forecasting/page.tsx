@@ -62,7 +62,7 @@ export default function ForecastingPage() {
   const labelStyle: React.CSSProperties = {
     display: 'block',
     fontFamily: fontFamily.body,
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: tc.text.muted,
     marginBottom: space['1'],
@@ -92,7 +92,7 @@ export default function ForecastingPage() {
       <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }} data-testid={testId}>
         {value}
       </p>
-      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['1'] }}>{label}</p>
+      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['1'] }}>{label}</p>
     </div>
   );
 
@@ -119,7 +119,7 @@ export default function ForecastingPage() {
           </p>
         </div>
 
-        <DashboardSection title="Inputs" description="Adjust parameters to model different scenarios.">
+        <DashboardSection title="Inputs" description="Adjust parameters to model different scenarios." index={0}>
           <div
             style={{
               display: 'grid',
@@ -160,7 +160,7 @@ export default function ForecastingPage() {
           </div>
         </DashboardSection>
 
-        <DashboardSection title="Projected Outputs" description="Computed from your inputs above.">
+        <DashboardSection title="Projected Outputs" description="Computed from your inputs above." index={1}>
           <DashboardGrid columns={{ sm: 2, md: 3, lg: 4 }}>
             {outputCard('Clicks / Day', fmt(outputs.clicksPerDay), 'text-clicks-day')}
             {outputCard('Quotes / Day', fmt(outputs.quotesPerDay), 'text-quotes-day')}

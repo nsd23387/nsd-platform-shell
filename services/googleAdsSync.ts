@@ -83,6 +83,7 @@ export async function syncCampaignPerformance(
     SELECT
       s.campaign_id,
       c.campaign_name,
+      c.campaign_budget_amount_micros,
       s.segments_date,
       IFNULL(s.metrics_impressions, 0) AS impressions,
       IFNULL(s.metrics_clicks, 0) AS clicks,
@@ -149,6 +150,9 @@ export async function syncCampaignPerformance(
       }
       const occurredAt = `${dateStr}T00:00:00Z`;
 
+      const budgetMicros = Number(row.campaign_budget_amount_micros ?? 0);
+      const dailyBudget = budgetMicros / 1_000_000;
+
       const payload = {
         campaign_id: String(row.campaign_id ?? ''),
         campaign_name: String(row.campaign_name ?? ''),
@@ -162,6 +166,8 @@ export async function syncCampaignPerformance(
         ctr,
         roas,
         date: dateStr,
+        daily_budget_micros: budgetMicros,
+        daily_budget: dailyBudget,
       };
 
       await dbClient.query(INSERT_SQL, [

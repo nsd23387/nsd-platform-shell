@@ -7,6 +7,13 @@
  * pipeline summary, aging buckets, close rate, deal velocity,
  * status breakdown, and recent deals.
  *
+ * Accepts query params:
+ *   start=YYYY-MM-DD  — period start (inclusive)
+ *   end=YYYY-MM-DD    — period end (inclusive)
+ *   preset=last_7d|last_30d|last_90d
+ *
+ * If no date params are given, defaults to last 90 days.
+ *
  * GOVERNANCE: Read-only. All data comes from analytics.raw_qms_deals.
  */
 
@@ -33,6 +40,32 @@ function getPool(): Pool {
   return pool;
 }
 
+function resolveDateRange(searchParams: URLSearchParams): { start: string; end: string; days: number } {
+  const now = new Date();
+  const end = searchParams.get('end') || now.toISOString().slice(0, 10);
+  let start = searchParams.get('start');
+
+  if (!start) {
+    const preset = searchParams.get('preset') || 'last_90d';
+    const presetDays: Record<string, number> = {
+      last_7d: 7, last_30d: 30, last_90d: 90,
+      mtd: Math.max(1, now.getDate()),
+      qtd: (() => {
+        const qStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+        return Math.max(1, Math.ceil((now.getTime() - qStart.getTime()) / 86400000));
+      })(),
+      ytd: Math.max(1, Math.ceil((now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000)),
+    };
+    const days = presetDays[preset] ?? 90;
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - days);
+    start = startDate.toISOString().slice(0, 10);
+  }
+
+  const days = Math.max(1, Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / 86400000));
+  return { start, end, days };
+}
+
 const PIPELINE_SUMMARY_SQL = `
   SELECT
     COUNT(*) FILTER (WHERE quote_active AND quote_activity NOT IN ('Quote Paid', 'Not Interested')) AS active_deals,
@@ -42,6 +75,7 @@ const PIPELINE_SUMMARY_SQL = `
     COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) AS won_cents,
     COUNT(*) AS total_deals
   FROM analytics.raw_qms_deals
+  WHERE created_at::date BETWEEN $1 AND $2
 `;
 
 const AGING_BUCKETS_SQL = `
@@ -53,6 +87,7 @@ const AGING_BUCKETS_SQL = `
   FROM analytics.raw_qms_deals
   WHERE quote_active
     AND quote_activity NOT IN ('Quote Paid', 'Not Interested')
+    AND created_at::date BETWEEN $1 AND $2
 `;
 
 const CLOSE_RATE_SQL = `
@@ -78,7 +113,7 @@ const CLOSE_RATE_SQL = `
     COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Not Interested'), 0) AS lost_revenue_cents,
     COUNT(*) - COUNT(*) FILTER (WHERE quote_activity IN ('Quote Paid', 'Not Interested')) AS open
   FROM analytics.raw_qms_deals
-  WHERE created_at >= NOW() - INTERVAL '90 days'
+  WHERE created_at::date BETWEEN $1 AND $2
 `;
 
 const DEAL_VELOCITY_SQL = `
@@ -88,7 +123,7 @@ const DEAL_VELOCITY_SQL = `
     COUNT(*) AS sample_size
   FROM analytics.raw_qms_deals
   WHERE quote_paid_at IS NOT NULL
-    AND created_at >= NOW() - INTERVAL '90 days'
+    AND created_at::date BETWEEN $1 AND $2
 `;
 
 const STATUS_BREAKDOWN_SQL = `
@@ -98,6 +133,7 @@ const STATUS_BREAKDOWN_SQL = `
     COALESCE(SUM(total_price_cents), 0) AS value_cents
   FROM analytics.raw_qms_deals
   WHERE quote_active
+    AND created_at::date BETWEEN $1 AND $2
   GROUP BY quote_activity
   ORDER BY count DESC
 `;
@@ -120,6 +156,7 @@ const RECENT_DEALS_SQL = `
     revision_round,
     discount_code
   FROM analytics.raw_qms_deals
+  WHERE created_at::date BETWEEN $1 AND $2
   ORDER BY updated_at DESC
   LIMIT 25
 `;
@@ -131,6 +168,7 @@ const ATTRIBUTION_SQL = `
     COALESCE(SUM(total_price_cents), 0) AS value_cents,
     COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid') AS won
   FROM analytics.raw_qms_deals
+  WHERE created_at::date BETWEEN $1 AND $2
   GROUP BY COALESCE(NULLIF(utm_source, ''), NULLIF(referrer, ''), 'direct')
   ORDER BY count DESC
   LIMIT 15
@@ -143,7 +181,7 @@ const DISCOUNT_USAGE_SQL = `
     COUNT(*) FILTER (WHERE discount_used_at IS NOT NULL) AS discount_redeemed,
     ROUND(AVG(discount_percentage) FILTER (WHERE discount_code IS NOT NULL), 1) AS avg_discount_pct
   FROM analytics.raw_qms_deals
-  WHERE created_at >= NOW() - INTERVAL '90 days'
+  WHERE created_at::date BETWEEN $1 AND $2
 `;
 
 const CLICK_TO_QUOTE_SQL = `
@@ -157,7 +195,7 @@ const CLICK_TO_QUOTE_SQL = `
       FROM analytics.raw_google_ads
       WHERE event_name = 'campaign_performance'
         AND source_system = 'google-ads-bq'
-        AND occurred_at >= NOW() - INTERVAL '90 days'
+        AND occurred_at::date BETWEEN $1 AND $2
     ),
     qms_totals AS (
       SELECT
@@ -165,7 +203,7 @@ const CLICK_TO_QUOTE_SQL = `
         COUNT(*) FILTER (WHERE COALESCE(NULLIF(utm_source, ''), NULLIF(referrer, ''), 'direct') != 'google' OR utm_medium IS NULL OR utm_medium != 'cpc') AS organic_quotes,
         COUNT(*) FILTER (WHERE utm_source = 'google' AND utm_medium = 'cpc') AS paid_quotes
       FROM analytics.raw_qms_deals
-      WHERE created_at >= NOW() - INTERVAL '90 days'
+      WHERE created_at::date BETWEEN $1 AND $2
     )
   SELECT
     oc.total_clicks AS organic_clicks,
@@ -188,66 +226,32 @@ const CLICK_TO_QUOTE_SQL = `
   FROM organic_clicks oc, paid_clicks pc, qms_totals q
 `;
 
-const TIMESERIES_PIPELINE_SQL = `
-  WITH date_range AS (
-    SELECT d::date FROM generate_series(
-      (NOW() - INTERVAL '90 days')::date,
-      NOW()::date,
-      '1 day'::interval
-    ) AS d
-  ),
-  daily AS (
-    SELECT created_at::date AS day, SUM(total_price_cents) / 100.0 AS val
-    FROM analytics.raw_qms_deals
-    WHERE created_at >= NOW() - INTERVAL '90 days'
-    GROUP BY created_at::date
-  )
-  SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
-  FROM date_range dr
-  LEFT JOIN daily dy ON dr.d = dy.day
-  ORDER BY dr.d ASC
-`;
+function makeTimeseriesSql(valueExpr: string, dateColumn: string, extraWhere: string = ''): string {
+  return `
+    WITH date_range AS (
+      SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
+    ),
+    daily AS (
+      SELECT ${dateColumn}::date AS day, ${valueExpr} AS val
+      FROM analytics.raw_qms_deals
+      WHERE ${dateColumn}::date BETWEEN $1 AND $2
+        ${extraWhere}
+      GROUP BY ${dateColumn}::date
+    )
+    SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
+    FROM date_range dr
+    LEFT JOIN daily dy ON dr.d = dy.day
+    ORDER BY dr.d ASC
+  `;
+}
 
-const TIMESERIES_QUOTES_SQL = `
-  WITH date_range AS (
-    SELECT d::date FROM generate_series(
-      (NOW() - INTERVAL '90 days')::date,
-      NOW()::date,
-      '1 day'::interval
-    ) AS d
-  ),
-  daily AS (
-    SELECT created_at::date AS day, COUNT(*) AS val
-    FROM analytics.raw_qms_deals
-    WHERE created_at >= NOW() - INTERVAL '90 days'
-    GROUP BY created_at::date
-  )
-  SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
-  FROM date_range dr
-  LEFT JOIN daily dy ON dr.d = dy.day
-  ORDER BY dr.d ASC
-`;
-
-const TIMESERIES_WON_SQL = `
-  WITH date_range AS (
-    SELECT d::date FROM generate_series(
-      (NOW() - INTERVAL '90 days')::date,
-      NOW()::date,
-      '1 day'::interval
-    ) AS d
-  ),
-  daily AS (
-    SELECT quote_paid_at::date AS day, SUM(total_price_cents) / 100.0 AS val
-    FROM analytics.raw_qms_deals
-    WHERE quote_paid_at IS NOT NULL
-      AND quote_paid_at >= NOW() - INTERVAL '90 days'
-    GROUP BY quote_paid_at::date
-  )
-  SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
-  FROM date_range dr
-  LEFT JOIN daily dy ON dr.d = dy.day
-  ORDER BY dr.d ASC
-`;
+const TIMESERIES_PIPELINE_SQL = makeTimeseriesSql('SUM(total_price_cents) / 100.0', 'created_at');
+const TIMESERIES_QUOTES_SQL = makeTimeseriesSql('COUNT(*)', 'created_at');
+const TIMESERIES_WON_SQL = makeTimeseriesSql(
+  'SUM(total_price_cents) / 100.0',
+  'quote_paid_at',
+  'AND quote_paid_at IS NOT NULL',
+);
 
 function toNum(val: unknown): number {
   if (val == null) return 0;
@@ -292,6 +296,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const { start, end, days } = resolveDateRange(request.nextUrl.searchParams);
+    const dateParams = [start, end];
+
     const t0 = performance.now();
 
     const [
@@ -308,18 +315,18 @@ export async function GET(request: NextRequest) {
       tsWonRes,
       clickToQuoteRes,
     ] = await Promise.all([
-      db.query(PIPELINE_SUMMARY_SQL),
-      db.query(AGING_BUCKETS_SQL),
-      db.query(CLOSE_RATE_SQL),
-      db.query(DEAL_VELOCITY_SQL),
-      db.query(STATUS_BREAKDOWN_SQL),
-      db.query(RECENT_DEALS_SQL),
-      db.query(ATTRIBUTION_SQL),
-      db.query(DISCOUNT_USAGE_SQL),
-      db.query(TIMESERIES_PIPELINE_SQL),
-      db.query(TIMESERIES_QUOTES_SQL),
-      db.query(TIMESERIES_WON_SQL),
-      db.query(CLICK_TO_QUOTE_SQL),
+      db.query(PIPELINE_SUMMARY_SQL, dateParams),
+      db.query(AGING_BUCKETS_SQL, dateParams),
+      db.query(CLOSE_RATE_SQL, dateParams),
+      db.query(DEAL_VELOCITY_SQL, dateParams),
+      db.query(STATUS_BREAKDOWN_SQL, dateParams),
+      db.query(RECENT_DEALS_SQL, dateParams),
+      db.query(ATTRIBUTION_SQL, dateParams),
+      db.query(DISCOUNT_USAGE_SQL, dateParams),
+      db.query(TIMESERIES_PIPELINE_SQL, dateParams),
+      db.query(TIMESERIES_QUOTES_SQL, dateParams),
+      db.query(TIMESERIES_WON_SQL, dateParams),
+      db.query(CLICK_TO_QUOTE_SQL, dateParams),
     ]);
 
     const queryMs = Math.round(performance.now() - t0);
@@ -421,6 +428,7 @@ export async function GET(request: NextRequest) {
             value: toNum(r.value),
           })),
         },
+        period: { start, end, days },
       },
       meta: { query_execution_ms: queryMs },
       timestamp: new Date().toISOString(),

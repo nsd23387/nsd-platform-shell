@@ -102,7 +102,7 @@ export function MarketingRecentConversionsPanel({ conversions, loading, error }:
                     <span style={{
                       display: 'inline-block',
                       fontFamily: fontFamily.body,
-                      fontSize: fontSize.xs,
+                      fontSize: fontSize.sm,
                       fontWeight: fontWeight.medium,
                       color: catColor,
                       backgroundColor: `${catColor}12`,
@@ -120,7 +120,7 @@ export function MarketingRecentConversionsPanel({ conversions, loading, error }:
                     <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
                       {formatCurrency(c.preliminary_price_usd)}
                     </div>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted }}>
+                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
                       {timeAgo(c.created_at)}
                     </div>
                   </div>

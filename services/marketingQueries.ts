@@ -711,7 +711,8 @@ const GOOGLE_ADS_CAMPAIGNS_SQL = `
       ELSE 0 END AS ctr,
     CASE WHEN SUM((payload->>'cost')::numeric) > 0
       THEN SUM((payload->>'conversion_value')::numeric) / SUM((payload->>'cost')::numeric)
-      ELSE 0 END AS roas
+      ELSE 0 END AS roas,
+    MAX(COALESCE((payload->>'daily_budget')::numeric, 0)) AS daily_budget
   FROM analytics.raw_google_ads
   WHERE source_system = 'google-ads-bq'
     AND event_name = 'campaign_performance'
@@ -1419,6 +1420,7 @@ export async function executeMarketingQueries(
       cpc: nonNegative(toNumber(r.cpc)),
       ctr: clamp(toNumber(r.ctr), 0, 1),
       roas: nonNegative(toNumber(r.roas)),
+      daily_budget: nonNegative(toNumber(r.daily_budget)),
     }));
 
   let timeseries: MarketingTimeseries | undefined;

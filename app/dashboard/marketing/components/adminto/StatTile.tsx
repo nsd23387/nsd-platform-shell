@@ -111,7 +111,7 @@ export function StatTile({
           <span
             style={{
               fontFamily: fontFamily.body,
-              fontSize: fontSize.sm,
+              fontSize: fontSize.base,
               fontWeight: fontWeight.medium,
               color: tc.text.muted,
               letterSpacing: '0.02em',
@@ -160,7 +160,7 @@ export function StatTile({
               alignItems: 'center',
               gap: space['0.5'],
               fontFamily: fontFamily.body,
-              fontSize: fontSize.sm,
+              fontSize: fontSize.base,
               fontWeight: fontWeight.medium,
               padding: `${space['0.5']} ${space['2']}`,
               borderRadius: radius.DEFAULT,

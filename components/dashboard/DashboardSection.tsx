@@ -3,9 +3,12 @@
 import React from 'react';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../design/tokens/typography';
-import { space, componentSpacing } from '../../design/tokens/spacing';
+import { space, componentSpacing, radius } from '../../design/tokens/spacing';
 import { ExportMenu } from './ExportMenu';
 import type { ExportSection } from '../../lib/exportUtils';
+
+const LIGHT_TINT = '#f5f3ff';
+const DARK_TINT = '#1e1e38';
 
 export interface ExportConfig {
   filename: string;
@@ -19,10 +22,15 @@ export interface DashboardSectionProps {
   description?: string;
   children: React.ReactNode;
   exportConfig?: ExportConfig;
+  index?: number;
 }
 
-export function DashboardSection({ title, description, children, exportConfig }: DashboardSectionProps) {
+export function DashboardSection({ title, description, children, exportConfig, index }: DashboardSectionProps) {
   const tc = useThemeColors();
+
+  const isTinted = typeof index === 'number' && index % 2 === 1;
+  const isDark = tc.background.page === '#0f0f1a';
+  const tintBg = isTinted ? (isDark ? DARK_TINT : LIGHT_TINT) : undefined;
 
   const handleExportCSV = () => {
     if (!exportConfig) return;
@@ -43,6 +51,13 @@ export function DashboardSection({ title, description, children, exportConfig }:
       style={{
         marginTop: componentSpacing.sectionTopMargin,
         marginBottom: space['8'],
+        ...(tintBg ? {
+          backgroundColor: tintBg,
+          padding: `${space['6']} ${space['5']}`,
+          borderRadius: radius.lg,
+          marginLeft: `-${space['4']}`,
+          marginRight: `-${space['4']}`,
+        } : {}),
       }}
     >
       <div style={{ marginBottom: componentSpacing.sectionHeaderMargin, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: space['4'] }}>
@@ -50,7 +65,7 @@ export function DashboardSection({ title, description, children, exportConfig }:
           <h2
             style={{
               fontFamily: fontFamily.display,
-              fontSize: fontSize.xl,
+              fontSize: fontSize['2xl'],
               fontWeight: fontWeight.semibold,
               color: tc.text.secondary,
               marginBottom: space['1'],
@@ -63,7 +78,7 @@ export function DashboardSection({ title, description, children, exportConfig }:
             <p
               style={{
                 fontFamily: fontFamily.body,
-                fontSize: fontSize.base,
+                fontSize: fontSize.lg,
                 color: tc.text.muted,
                 lineHeight: lineHeight.normal,
               }}

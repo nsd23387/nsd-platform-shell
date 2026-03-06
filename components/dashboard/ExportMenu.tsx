@@ -35,7 +35,7 @@ export function ExportMenu({ onExportCSV, onExportPDF, disabled }: ExportMenuPro
         data-testid="button-export"
         style={{
           fontFamily: fontFamily.body,
-          fontSize: fontSize.xs,
+          fontSize: fontSize.sm,
           fontWeight: fontWeight.medium,
           color: disabled ? tc.text.muted : magenta[600],
           background: 'transparent',
