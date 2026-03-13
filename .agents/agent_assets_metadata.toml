@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "VASRFJhX-B85KbLlQQOI8"
+uri = "file://snippets/marketing-dashboard-forensics-audit.md"
+type = "text"
+title = "NSD Marketing Command Center — Forensic Audit Report"
