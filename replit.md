@@ -41,3 +41,21 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 - **Supabase**: Used for persistence of new `DRAFT` campaigns, campaign editing/duplication, and Marketing Dashboard analytics via its `analytics` schema.
 - **Google BigQuery**: Read-only source for Google Ads data, accessed via `@google-cloud/bigquery` SDK.
 - **Convex QMS**: Quote Management System, pushes lifecycle events to `POST /api/ingest/qms-deal`. Data stored in `analytics.raw_qms_deals`.
+- **ODS SEO Cluster Engine**: Provides keyword clustering, opportunity detection, and recommendation management. Consumed via `/api/proxy/seo/*` proxy routes.
+
+## SEO Intelligence Module
+The SEO Intelligence module (`/dashboard/seo`) provides a read-only decision surface for keyword cluster analysis and SEO recommendation approval. It consumes the cluster engine APIs from `nsd-ods-api` via server-side proxy routes.
+
+**Routes:**
+- `/dashboard/seo` — SEO Overview with summary KPIs (clusters, opportunities, pending/approved counts) and top clusters table
+- `/dashboard/seo/clusters` — Full clusters table with sortable columns; row click opens ClusterDetailDrawer showing member keywords
+- `/dashboard/seo/opportunities` — Cluster opportunities with type badges (Optimize Page, New Page, Expand Content) and links to recommendations
+- `/dashboard/seo/recommendations` — Recommendations table with status filter (All/Pending/Approved/Rejected); row click opens RecommendationPanel with Approve/Reject/Feedback actions
+- `/dashboard/seo/outcomes` — Learning outcomes tracking position changes, CTR/traffic impact of executed recommendations
+
+**Architecture:**
+- **Layout**: `app/dashboard/seo/layout.tsx` with collapsible sub-navigation sidebar (same pattern as MarketingNav)
+- **API Client**: `lib/seoApi.ts` — typed client functions for all SEO endpoints
+- **Proxy Routes**: `app/api/proxy/seo/{clusters,cluster-opportunities,recommendations,outcomes}/route.ts` — server-side proxies to ODS API with mock data fallback when `ODS_API_URL` is not configured
+- **Components**: `app/dashboard/seo/components/` — `ClusterDetailDrawer`, `RecommendationPanel`, `RecommendationFeedbackModal`
+- **Permissions**: `dashboard:seo:view` (via DashboardGuard), `seo:read`, `seo:approve` (approval buttons gated by bootstrap permissions)

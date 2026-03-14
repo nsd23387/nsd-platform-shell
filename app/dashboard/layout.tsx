@@ -22,6 +22,7 @@ const navItems = [
   { href: '/dashboard/media', label: 'Media', icon: 'eye' },
   { href: '/dashboard/sales', label: 'Sales', icon: 'trending' },
   { href: '/dashboard/marketing', label: 'Marketing', icon: 'target' },
+  { href: '/dashboard/seo', label: 'SEO Intelligence', icon: 'search' },
 ];
 
 function ThemeToggle() {
