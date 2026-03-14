@@ -1,0 +1,228 @@
+'use client';
+
+import React, { useState, useCallback, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useThemeColors } from '../../../hooks/useThemeColors';
+import { violet } from '../../../design/tokens/colors';
+import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
+import { space, radius, duration, easing } from '../../../design/tokens/spacing';
+import { Icon } from '../../../design/components/Icon';
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: string;
+}
+
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: 'Overview',
+    items: [
+      { href: '/dashboard/seo', label: 'SEO Overview', icon: 'chart' },
+    ],
+  },
+  {
+    title: 'Analysis',
+    items: [
+      { href: '/dashboard/seo/clusters', label: 'Clusters', icon: 'code' },
+      { href: '/dashboard/seo/opportunities', label: 'Opportunities', icon: 'lightbulb' },
+    ],
+  },
+  {
+    title: 'Decisions',
+    items: [
+      { href: '/dashboard/seo/recommendations', label: 'Recommendations', icon: 'review' },
+      { href: '/dashboard/seo/outcomes', label: 'Outcomes', icon: 'trending' },
+    ],
+  },
+];
+
+const STORAGE_KEY = 'seo-nav-collapsed';
+const COLLAPSE_BREAKPOINT = 1024;
+
+interface SeoLayoutProps {
+  children: React.ReactNode;
+}
+
+export default function SeoLayout({ children }: SeoLayoutProps) {
+  const tc = useThemeColors();
+  const currentPath = usePathname() ?? '';
+
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored !== null) return stored === 'true';
+    return window.innerWidth < COLLAPSE_BREAKPOINT;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < COLLAPSE_BREAKPOINT) {
+        setCollapsed(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleToggleCollapse = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(STORAGE_KEY, String(next));
+      return next;
+    });
+  }, []);
+
+  const navWidth = collapsed ? '48px' : '220px';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        height: '100%',
+        minHeight: 0,
+        transition: `background-color ${duration.slow} ${easing.DEFAULT}`,
+      }}
+    >
+      <nav
+        style={{
+          width: navWidth,
+          minWidth: navWidth,
+          backgroundColor: tc.background.surface,
+          borderRight: `1px solid ${tc.border.default}`,
+          padding: `${space['4']} 0`,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          transition: `width ${duration.slow} ${easing.DEFAULT}, min-width ${duration.slow} ${easing.DEFAULT}, background-color ${duration.slow} ${easing.DEFAULT}, border-color ${duration.slow} ${easing.DEFAULT}`,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+        data-testid="nav-seo-intelligence"
+      >
+        {!collapsed && (
+          <div
+            style={{
+              padding: `0 ${space['4']} ${space['4']}`,
+              borderBottom: `1px solid ${tc.border.subtle}`,
+              marginBottom: space['3'],
+            }}
+          >
+            <h3
+              style={{
+                fontFamily: fontFamily.display,
+                fontSize: fontSize.base,
+                fontWeight: fontWeight.semibold,
+                color: tc.text.primary,
+                marginBottom: space['0.5'],
+                whiteSpace: 'nowrap',
+              }}
+            >
+              SEO Intelligence
+            </h3>
+            <p
+              style={{
+                fontFamily: fontFamily.body,
+                fontSize: fontSize.sm,
+                color: tc.text.muted,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Cluster analysis and decisions
+            </p>
+          </div>
+        )}
+
+        {collapsed && <div style={{ height: space['3'], flexShrink: 0 }} />}
+
+        <div style={{ flex: 1 }}>
+          {NAV_GROUPS.map((group) => (
+            <div key={group.title} style={{ marginBottom: space['2'] }}>
+              {!collapsed && (
+                <div
+                  style={{
+                    padding: `${space['2']} ${space['4']}`,
+                    fontFamily: fontFamily.body,
+                    fontSize: fontSize.sm,
+                    fontWeight: fontWeight.medium,
+                    color: tc.text.placeholder,
+                    textTransform: 'uppercase' as const,
+                    letterSpacing: '0.05em',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {group.title}
+                </div>
+              )}
+              {group.items.map((item) => {
+                const isActive = currentPath === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    title={collapsed ? item.label : undefined}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: collapsed ? 'center' : 'flex-start',
+                      gap: collapsed ? '0' : space['2.5'],
+                      padding: collapsed ? `${space['2']} 0` : `${space['2']} ${space['4']}`,
+                      fontFamily: fontFamily.body,
+                      fontSize: fontSize.sm,
+                      fontWeight: isActive ? fontWeight.semibold : fontWeight.normal,
+                      color: isActive ? tc.text.primary : tc.text.muted,
+                      backgroundColor: isActive ? tc.background.muted : 'transparent',
+                      textDecoration: 'none',
+                      borderLeft: collapsed ? 'none' : (isActive ? `3px solid ${violet[500]}` : '3px solid transparent'),
+                      transition: `all ${duration.normal} ${easing.DEFAULT}`,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                    }}
+                    data-testid={`nav-seo-${item.href.split('/').pop()}`}
+                  >
+                    <Icon name={item.icon as any} size={16} />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={handleToggleCollapse}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: collapsed ? 'center' : 'flex-end',
+            padding: collapsed ? `${space['2']} 0` : `${space['2']} ${space['4']}`,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: tc.text.muted,
+            transition: `color ${duration.normal} ${easing.DEFAULT}`,
+            width: '100%',
+            flexShrink: 0,
+            borderTop: `1px solid ${tc.border.subtle}`,
+            marginTop: space['2'],
+          }}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          data-testid="button-toggle-seo-nav"
+        >
+          <Icon name={collapsed ? 'arrow-right' : 'arrow-left'} size={16} />
+        </button>
+      </nav>
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: space['6'] }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
