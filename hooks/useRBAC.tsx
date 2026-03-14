@@ -31,6 +31,7 @@ export const DASHBOARD_PERMISSIONS = {
   media: 'dashboard:media:view',
   sales: 'dashboard:sales:view',
   marketing: 'dashboard:marketing:view',
+  seo: 'dashboard:seo:view',
 } as const;
 
 export type DashboardName = keyof typeof DASHBOARD_PERMISSIONS;

@@ -28,6 +28,9 @@ export async function GET() {
       'dashboard:media:view',
       'dashboard:sales:view',
       'dashboard:marketing:view',
+      'dashboard:seo:view',
+      'seo:read',
+      'seo:approve',
     ],
     environment: {
       name: 'development' as const,
@@ -42,6 +45,7 @@ export async function GET() {
       marketing_dashboard: true,
       sales_engine: true,
       campaigns: true,
+      seo_intelligence: true,
     },
     // M68-03: Additional required keys to prevent "Cannot read properties of undefined" errors
     payload: {},
