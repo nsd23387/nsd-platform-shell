@@ -1,0 +1,207 @@
+You are performing a **full verification of the SEO Intelligence Cluster Engine** inside the `nsd-ods-api` system.
+
+The goal is to confirm that the following components are functioning correctly in the database:
+
+1. Schema objects exist
+2. Cluster job inserted data
+3. Cluster metrics compute correctly
+4. Cluster opportunities are generated
+5. SEO recommendations were created
+
+Use SQL queries against the Postgres/Supabase database.
+
+Follow the steps in order and print results for each step.
+
+---
+
+STEP 1 — Verify Cluster Tables Exist
+
+Run:
+
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'analytics'
+AND table_name IN (
+'keyword_clusters',
+'keyword_cluster_members'
+);
+
+Expected result:
+
+keyword_clusters
+keyword_cluster_members
+
+---
+
+STEP 2 — Verify Cluster Metrics View Exists
+
+Run:
+
+SELECT table_name
+FROM information_schema.views
+WHERE table_schema = 'analytics'
+AND table_name = 'keyword_cluster_metrics_daily';
+
+Expected result:
+
+keyword_cluster_metrics_daily
+
+---
+
+STEP 3 — Verify Opportunity Detection View Exists
+
+Run:
+
+SELECT table_name
+FROM information_schema.views
+WHERE table_schema = 'analytics'
+AND table_name = 'seo_cluster_opportunities';
+
+Expected result:
+
+seo_cluster_opportunities
+
+---
+
+STEP 4 — Check Cluster Count
+
+Run:
+
+SELECT COUNT(*) AS cluster_count
+FROM analytics.keyword_clusters;
+
+Print the result.
+
+If the result is 0, the cluster job has not executed or inserted rows.
+
+---
+
+STEP 5 — Inspect Sample Clusters
+
+Run:
+
+SELECT
+primary_keyword,
+cluster_size,
+total_impressions,
+avg_position
+FROM analytics.keyword_clusters
+ORDER BY total_impressions DESC
+LIMIT 20;
+
+Print results.
+
+This confirms cluster aggregation logic.
+
+---
+
+STEP 6 — Verify Cluster Members
+
+Run:
+
+SELECT
+cluster_id,
+keyword,
+impressions,
+position
+FROM analytics.keyword_cluster_members
+LIMIT 20;
+
+This verifies that queries are mapped to clusters.
+
+---
+
+STEP 7 — Verify Cluster Metrics Aggregation
+
+Run:
+
+SELECT
+cluster_id,
+keyword_count,
+total_impressions,
+avg_position,
+avg_ctr
+FROM analytics.keyword_cluster_metrics_daily
+ORDER BY total_impressions DESC
+LIMIT 20;
+
+Confirm that aggregation is working.
+
+---
+
+STEP 8 — Verify Opportunity Detection
+
+Run:
+
+SELECT
+cluster_id,
+primary_keyword,
+total_impressions,
+avg_position,
+opportunity_type
+FROM analytics.seo_cluster_opportunities
+ORDER BY total_impressions DESC
+LIMIT 20;
+
+Expected opportunity types:
+
+optimize_existing_page
+create_new_page
+expand_content
+monitor
+
+---
+
+STEP 9 — Verify Recommendations Were Generated
+
+Run:
+
+SELECT
+cluster_topic,
+primary_keyword,
+recommended_url,
+status,
+created_at
+FROM analytics.seo_recommendations
+ORDER BY created_at DESC
+LIMIT 20;
+
+Expected status:
+
+pending_review
+
+---
+
+STEP 10 — Verify Event Logging
+
+Run:
+
+SELECT
+type,
+created_at,
+payload
+FROM activity.events
+WHERE type = 'seo_cluster_generation_run'
+ORDER BY created_at DESC
+LIMIT 5;
+
+This confirms the cluster job executed and logged correctly.
+
+---
+
+STEP 11 — Summarize Engine Status
+
+After running all queries, output a summary:
+
+Clusters detected: <count>
+Cluster members present: yes/no
+Cluster metrics working: yes/no
+Opportunities generated: yes/no
+Recommendations generated: yes/no
+
+If any stage fails, identify the failing component:
+
+cluster generator
+metrics view
+opportunity detection
+recommendation generator
