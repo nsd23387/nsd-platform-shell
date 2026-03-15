@@ -44,7 +44,7 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 - **ODS SEO Cluster Engine**: Provides keyword clustering, opportunity detection, and recommendation management. Consumed via `/api/proxy/seo/*` proxy routes.
 
 ## SEO Intelligence Module
-The SEO Intelligence module (`/dashboard/seo`) provides a read-only decision surface for keyword cluster analysis and SEO recommendation approval. It consumes the cluster engine APIs from `nsd-ods-api` via server-side proxy routes.
+The SEO Intelligence module (`/dashboard/seo`) provides a read-only decision surface for keyword cluster analysis and SEO recommendation approval. Data is sourced directly from the Supabase `analytics` schema via `lib/seo-db.ts`.
 
 **Routes:**
 - `/dashboard/seo` — SEO Overview with summary KPIs (clusters, opportunities, pending/approved counts) and top clusters table
@@ -56,6 +56,7 @@ The SEO Intelligence module (`/dashboard/seo`) provides a read-only decision sur
 **Architecture:**
 - **Layout**: `app/dashboard/seo/layout.tsx` with collapsible sub-navigation sidebar (same pattern as MarketingNav)
 - **API Client**: `lib/seoApi.ts` — typed client functions for all SEO endpoints
-- **Proxy Routes**: `app/api/proxy/seo/{clusters,cluster-opportunities,recommendations,outcomes}/route.ts` — server-side proxies to ODS API with mock data fallback when `ODS_API_URL` is not configured
+- **Database Layer**: `lib/seo-db.ts` — server-side queries against Supabase `analytics` schema tables (`keyword_clusters`, `keyword_cluster_members`, `seo_recommendations`, `seo_recommendation_approvals`, `seo_learning_outcomes`)
+- **API Routes**: `app/api/proxy/seo/{clusters,cluster-opportunities,recommendations,outcomes}/route.ts` — server-side routes querying Supabase directly via `lib/seo-db.ts`
 - **Components**: `app/dashboard/seo/components/` — `ClusterDetailDrawer`, `RecommendationPanel`, `RecommendationFeedbackModal`
 - **Permissions**: `dashboard:seo:view` (via DashboardGuard), `seo:read`, `seo:approve` (approval buttons gated by bootstrap permissions)
