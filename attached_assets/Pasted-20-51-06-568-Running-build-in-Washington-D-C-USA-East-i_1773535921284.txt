@@ -1,0 +1,45 @@
+20:51:06.568 Running build in Washington, D.C., USA (East) – iad1
+20:51:06.569 Build machine configuration: 4 cores, 8 GB
+20:51:06.674 Cloning github.com/nsd23387/nsd-platform-shell (Branch: main, Commit: 8634704)
+20:51:09.125 Cloning completed: 2.450s
+20:51:09.242 Restored build cache from previous deployment (2EZLot95EzJth9tWJgLYR2Qx1aS9)
+20:51:09.549 Warning: Detected "engines": { "node": ">=18.0.0" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version
+20:51:09.550 Running "vercel build"
+20:51:10.091 Vercel CLI 50.32.4
+20:51:10.416 Warning: Detected "engines": { "node": ">=18.0.0" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version
+20:51:10.436 Installing dependencies...
+20:51:11.774 
+20:51:11.774 up to date in 1s
+20:51:11.775 
+20:51:11.775 175 packages are looking for funding
+20:51:11.775   run `npm fund` for details
+20:51:11.826 Detected Next.js version: 14.2.35
+20:51:11.831 Running "npm run build"
+20:51:11.930 
+20:51:11.930 > nsd-platform-shell@1.0.0 build
+20:51:11.930 > next build
+20:51:11.930 
+20:51:12.600   ▲ Next.js 14.2.35
+20:51:12.600 
+20:51:12.629    Creating an optimized production build ...
+20:51:31.633  ✓ Compiled successfully
+20:51:31.634    Linting and checking validity of types ...
+20:51:41.051 
+20:51:41.051 Failed to compile.
+20:51:41.051 
+20:51:41.051 ./app/dashboard/marketing/paid-ads/page.tsx
+20:51:41.052 49:9  Warning: The 'overview' logical expression could make the dependencies of useMemo Hook (at line 84) change on every render. To fix this, wrap the initialization of 'overview' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+20:51:41.052 50:9  Warning: The 'campaigns' logical expression could make the dependencies of useMemo Hook (at line 84) change on every render. To fix this, wrap the initialization of 'campaigns' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+20:51:41.052 
+20:51:41.052 ./app/dashboard/marketing/warm-outreach/page.tsx
+20:51:41.052 221:9  Warning: The 'qmsStatusBreakdown' logical expression could make the dependencies of useMemo Hook (at line 372) change on every render. To fix this, wrap the initialization of 'qmsStatusBreakdown' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+20:51:41.052 222:9  Warning: The 'qmsRecentDeals' logical expression could make the dependencies of useMemo Hook (at line 372) change on every render. To fix this, wrap the initialization of 'qmsRecentDeals' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+20:51:41.052 223:9  Warning: The 'qmsAttribution' logical expression could make the dependencies of useMemo Hook (at line 372) change on every render. To fix this, wrap the initialization of 'qmsAttribution' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+20:51:41.053 
+20:51:41.053 ./lib/seoApi.ts
+20:51:41.053 118:5  Error: [READ-ONLY VIOLATION] Sales Engine UI is read-only. POST/PUT/PATCH/DELETE methods are not allowed. Use the read-only API functions.  no-restricted-syntax
+20:51:41.053 125:5  Error: [READ-ONLY VIOLATION] Sales Engine UI is read-only. POST/PUT/PATCH/DELETE methods are not allowed. Use the read-only API functions.  no-restricted-syntax
+20:51:41.053 132:5  Error: [READ-ONLY VIOLATION] Sales Engine UI is read-only. POST/PUT/PATCH/DELETE methods are not allowed. Use the read-only API functions.  no-restricted-syntax
+20:51:41.053 
+20:51:41.053 info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+20:51:41.085 Error: Command "npm run build" exited with 1
