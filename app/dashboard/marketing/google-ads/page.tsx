@@ -569,7 +569,7 @@ export default function GoogleAdsWarRoomPage() {
           { key: 'conversions', label: 'Conversions', format: 'number' },
           { key: 'roas', label: 'ROAS', format: 'number' },
         ],
-        rows: data.google_ads_campaigns.map((r: Record<string, unknown>) => ({ ...r })),
+        rows: data.google_ads_campaigns.map((r) => ({ ...r } as Record<string, unknown>)),
       });
     }
 

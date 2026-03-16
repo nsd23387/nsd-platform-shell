@@ -1,0 +1,54 @@
+16:41:21.087 Running build in Washington, D.C., USA (East) – iad1
+16:41:21.088 Build machine configuration: 4 cores, 8 GB
+16:41:21.188 Cloning github.com/nsd23387/nsd-platform-shell (Branch: main, Commit: 5acbadb)
+16:41:23.219 Cloning completed: 2.030s
+16:41:23.451 Restored build cache from previous deployment (En6vZjqThGMkiDRmCStayXqW4GhQ)
+16:41:23.740 Warning: Detected "engines": { "node": ">=18.0.0" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version
+16:41:23.740 Running "vercel build"
+16:41:24.287 Vercel CLI 50.32.4
+16:41:24.585 Warning: Detected "engines": { "node": ">=18.0.0" } in your `package.json` that will automatically upgrade when a new major Node.js Version is released. Learn More: https://vercel.link/node-version
+16:41:24.601 Installing dependencies...
+16:41:25.853 
+16:41:25.854 up to date in 1s
+16:41:25.854 
+16:41:25.854 175 packages are looking for funding
+16:41:25.854   run `npm fund` for details
+16:41:25.886 Detected Next.js version: 14.2.35
+16:41:25.891 Running "npm run build"
+16:41:26.001 
+16:41:26.001 > nsd-platform-shell@1.0.0 build
+16:41:26.001 > next build
+16:41:26.001 
+16:41:26.656   ▲ Next.js 14.2.35
+16:41:26.657 
+16:41:26.684    Creating an optimized production build ...
+16:41:37.183  ✓ Compiled successfully
+16:41:37.184    Linting and checking validity of types ...
+16:41:45.718 
+16:41:45.719 ./app/dashboard/marketing/paid-ads/page.tsx
+16:41:45.720 49:9  Warning: The 'overview' logical expression could make the dependencies of useMemo Hook (at line 84) change on every render. To fix this, wrap the initialization of 'overview' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+16:41:45.720 50:9  Warning: The 'campaigns' logical expression could make the dependencies of useMemo Hook (at line 84) change on every render. To fix this, wrap the initialization of 'campaigns' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+16:41:45.720 
+16:41:45.720 ./app/dashboard/marketing/warm-outreach/page.tsx
+16:41:45.721 221:9  Warning: The 'qmsStatusBreakdown' logical expression could make the dependencies of useMemo Hook (at line 372) change on every render. To fix this, wrap the initialization of 'qmsStatusBreakdown' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+16:41:45.721 222:9  Warning: The 'qmsRecentDeals' logical expression could make the dependencies of useMemo Hook (at line 372) change on every render. To fix this, wrap the initialization of 'qmsRecentDeals' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+16:41:45.721 223:9  Warning: The 'qmsAttribution' logical expression could make the dependencies of useMemo Hook (at line 372) change on every render. To fix this, wrap the initialization of 'qmsAttribution' in its own useMemo() Hook.  react-hooks/exhaustive-deps
+16:41:45.721 
+16:41:45.722 info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+16:41:52.398 Failed to compile.
+16:41:52.399 
+16:41:52.399 ./app/dashboard/marketing/google-ads/page.tsx:572:45
+16:41:52.399 Type error: Argument of type '(r: Record<string, unknown>) => { [x: string]: unknown; }' is not assignable to parameter of type '(value: MarketingGoogleAdsCampaign, index: number, array: MarketingGoogleAdsCampaign[]) => { [x: string]: unknown; }'.
+16:41:52.399   Types of parameters 'r' and 'value' are incompatible.
+16:41:52.399     Type 'MarketingGoogleAdsCampaign' is not assignable to type 'Record<string, unknown>'.
+16:41:52.399       Index signature for type 'string' is missing in type 'MarketingGoogleAdsCampaign'.
+16:41:52.399 
+16:41:52.399 [0m [90m 570 |[39m           { key[33m:[39m [32m'roas'[39m[33m,[39m label[33m:[39m [32m'ROAS'[39m[33m,[39m format[33m:[39m [32m'number'[39m }[33m,[39m[0m
+16:41:52.400 [0m [90m 571 |[39m         ][33m,[39m[0m
+16:41:52.400 [0m[31m[1m>[22m[39m[90m 572 |[39m         rows[33m:[39m data[33m.[39mgoogle_ads_campaigns[33m.[39mmap((r[33m:[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m) [33m=>[39m ({ [33m...[39mr }))[33m,[39m[0m
+16:41:52.400 [0m [90m     |[39m                                             [31m[1m^[22m[39m[0m
+16:41:52.400 [0m [90m 573 |[39m       })[33m;[39m[0m
+16:41:52.400 [0m [90m 574 |[39m     }[0m
+16:41:52.400 [0m [90m 575 |[39m[0m
+16:41:52.440 Next.js build worker exited with code: 1 and signal: null
+16:41:52.460 Error: Command "npm run build" exited with 1
