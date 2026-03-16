@@ -470,7 +470,7 @@ function CampaignTrendSection() {
     const grouped: Record<string, Record<string, number>> = {};
     for (const r of daily) {
       if (!grouped[r.date]) grouped[r.date] = {};
-      grouped[r.date][r.campaign_id] = (grouped[r.date][r.campaign_id] || 0) + r[metric];
+      grouped[r.date][r.campaign_id] = (grouped[r.date][r.campaign_id] || 0) + Number(r[metric]);
     }
     const campaigns = Array.from(new Set(daily.map(r => r.campaign_id)));
     return Object.entries(grouped)
