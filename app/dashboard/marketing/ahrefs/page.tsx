@@ -148,8 +148,8 @@ function KeywordGapPanel({ competitor }: { competitor: string }) {
   const sorted = useMemo(() => {
     if (!data) return [];
     return [...data].sort((a, b) => {
-      const av = (a as Record<string, unknown>)[sort.key];
-      const bv = (b as Record<string, unknown>)[sort.key];
+      const av = (a as unknown as Record<string, unknown>)[sort.key];
+      const bv = (b as unknown as Record<string, unknown>)[sort.key];
       if (typeof av === 'string' && typeof bv === 'string') {
         return sort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
       }
