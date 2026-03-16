@@ -30,7 +30,7 @@ async function getOverviewKpis() {
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+        COUNT(*) FILTER (WHERE status = 'pending_review')::int AS pending,
         COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
         COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected
       FROM analytics.seo_recommendations
@@ -355,10 +355,14 @@ async function getCompetitorsList() {
 }
 
 export async function GET(req: NextRequest) {
+  if (!process.env.SUPABASE_DATABASE_URL && !process.env.DATABASE_URL) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
+  }
   try {
     const view = req.nextUrl.searchParams.get('view') || 'overview-kpis';
     const competitor = req.nextUrl.searchParams.get('competitor');
-    const limit = Math.min(parseInt(req.nextUrl.searchParams.get('limit') || '100', 10), 500);
+    const rawLimit = parseInt(req.nextUrl.searchParams.get('limit') || '100', 10);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 100;
     const sortBy = req.nextUrl.searchParams.get('sort_by') || 'impressions';
 
     let result: unknown;
