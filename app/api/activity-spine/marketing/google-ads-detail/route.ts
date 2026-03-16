@@ -10,30 +10,65 @@ const pool = new Pool({
   max: 5,
 });
 
+type MarketingPreset = 'last_7d' | 'last_30d' | 'last_90d' | 'mtd' | 'qtd' | 'ytd';
+
+const VALID_PRESETS: MarketingPreset[] = ['last_7d', 'last_30d', 'last_90d', 'mtd', 'qtd', 'ytd'];
+
+const LEGACY_PERIOD_MAP: Record<string, MarketingPreset> = {
+  '7d': 'last_7d',
+  '30d': 'last_30d',
+  '90d': 'last_90d',
+};
+
+function resolvePreset(preset: MarketingPreset): { start: string; end: string } {
+  const now = new Date();
+  const end = now.toISOString().slice(0, 10);
+
+  switch (preset) {
+    case 'last_7d': {
+      const s = new Date(now); s.setUTCDate(s.getUTCDate() - 6);
+      return { start: s.toISOString().slice(0, 10), end };
+    }
+    case 'last_30d': {
+      const s = new Date(now); s.setUTCDate(s.getUTCDate() - 29);
+      return { start: s.toISOString().slice(0, 10), end };
+    }
+    case 'last_90d': {
+      const s = new Date(now); s.setUTCDate(s.getUTCDate() - 89);
+      return { start: s.toISOString().slice(0, 10), end };
+    }
+    case 'mtd': {
+      return { start: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`, end };
+    }
+    case 'qtd': {
+      const qMonth = Math.floor(now.getUTCMonth() / 3) * 3 + 1;
+      return { start: `${now.getUTCFullYear()}-${String(qMonth).padStart(2, '0')}-01`, end };
+    }
+    case 'ytd': {
+      return { start: `${now.getUTCFullYear()}-01-01`, end };
+    }
+  }
+}
+
 function dateParams(req: NextRequest): { start: string; end: string } {
   const sp = req.nextUrl.searchParams;
-  const preset = sp.get('preset');
-  const now = new Date();
-  let start: string;
-  let end: string = now.toISOString().slice(0, 10);
 
   if (sp.get('start') && sp.get('end')) {
-    start = sp.get('start')!;
-    end = sp.get('end')!;
-  } else if (preset === 'last_7d') {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 7);
-    start = d.toISOString().slice(0, 10);
-  } else if (preset === 'last_90d') {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 90);
-    start = d.toISOString().slice(0, 10);
-  } else {
-    const d = new Date(now);
-    d.setDate(d.getDate() - 30);
-    start = d.toISOString().slice(0, 10);
+    return { start: sp.get('start')!, end: sp.get('end')! };
   }
-  return { start, end };
+
+  const presetParam = sp.get('preset');
+  const legacyPeriod = sp.get('period');
+
+  if (presetParam && VALID_PRESETS.includes(presetParam as MarketingPreset)) {
+    return resolvePreset(presetParam as MarketingPreset);
+  }
+
+  if (legacyPeriod && legacyPeriod in LEGACY_PERIOD_MAP) {
+    return resolvePreset(LEGACY_PERIOD_MAP[legacyPeriod]);
+  }
+
+  return resolvePreset('last_30d');
 }
 
 async function getCampaignDaily(start: string, end: string) {
