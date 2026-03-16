@@ -112,7 +112,7 @@ function SeoOverviewContent() {
                             backgroundColor: r.position <= 10 ? `${violet[500]}15` : 'transparent',
                             color: r.position <= 10 ? violet[600] : tc.text.secondary,
                           }}>
-                            {r.position.toFixed(1)}
+                            {Number(r.position || 0).toFixed(1)}
                           </span>
                         </td>
                       </tr>
@@ -138,7 +138,7 @@ function SeoOverviewContent() {
                   <tbody>
                     {pageOpts.slice(0, 5).map((r, i) => (
                       <tr key={r.id} style={{ borderBottom: `1px solid ${tc.border.subtle}` }} data-testid={`row-page-opt-${i}`}>
-                        <td style={{ ...cellStyle, fontWeight: fontWeight.medium, color: tc.text.primary, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.url}>{r.url.replace('https://neonsignsdepot.com', '')}</td>
+                        <td style={{ ...cellStyle, fontWeight: fontWeight.medium, color: tc.text.primary, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.url}>{(r.url || '').replace('https://neonsignsdepot.com', '')}</td>
                         <td style={cellStyle}>{r.primary_keyword}</td>
                         <td style={cellStyle}>
                           <span style={{
@@ -146,11 +146,11 @@ function SeoOverviewContent() {
                             borderRadius: radius.full, fontSize: fontSize.sm,
                             backgroundColor: `${indigo[500]}15`, color: indigo[500],
                           }}>
-                            {r.optimization_type.replace(/_/g, ' ')}
+                            {(r.optimization_type || '').replace(/_/g, ' ')}
                           </span>
                         </td>
                         <td style={{ ...cellStyle, maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.recommended_title}>{r.recommended_title}</td>
-                        <td style={cellStyle}>{r.priority_score.toFixed(0)}</td>
+                        <td style={cellStyle}>{Number(r.priority_score || 0).toFixed(0)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -187,7 +187,7 @@ function SeoOverviewContent() {
                             {r.keyword_difficulty}
                           </span>
                         </td>
-                        <td style={cellStyle}>${r.cpc.toFixed(2)}</td>
+                        <td style={cellStyle}>${Number(r.cpc || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -219,11 +219,11 @@ function SeoOverviewContent() {
                             backgroundColor: r.seo_priority_score >= 100 ? `${violet[500]}15` : 'transparent',
                             color: r.seo_priority_score >= 100 ? violet[600] : tc.text.secondary,
                           }}>
-                            {r.seo_priority_score.toFixed(1)}
+                            {Number(r.seo_priority_score || 0).toFixed(1)}
                           </span>
                         </td>
-                        <td style={cellStyle}>{r.total_impressions.toLocaleString()}</td>
-                        <td style={cellStyle}>{r.avg_position.toFixed(1)}</td>
+                        <td style={cellStyle}>{Number(r.total_impressions || 0).toLocaleString()}</td>
+                        <td style={cellStyle}>{Number(r.avg_position || 0).toFixed(1)}</td>
                         <td style={cellStyle}>{r.keyword_count}</td>
                       </tr>
                     ))}

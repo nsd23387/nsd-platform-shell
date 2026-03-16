@@ -129,11 +129,11 @@ function CompetitiveIntelContent() {
                 <tr key={`${r.keyword}-${r.competitor_domain}-${i}`} style={{ borderBottom: `1px solid ${tc.border.subtle}` }} data-testid={`row-kw-gap-${i}`}>
                   <td style={{ ...cellStyle, fontWeight: fontWeight.medium, color: tc.text.primary }}>{r.keyword}</td>
                   <td style={cellStyle}>{r.competitor_domain}</td>
-                  <td style={cellStyle}>{r.volume.toLocaleString()}</td>
-                  <td style={cellStyle}><KDIndicator kd={r.keyword_difficulty} /></td>
-                  <td style={cellStyle}>${r.cpc.toFixed(2)}</td>
+                  <td style={cellStyle}>{Number(r.volume || 0).toLocaleString()}</td>
+                  <td style={cellStyle}><KDIndicator kd={Number(r.keyword_difficulty || 0)} /></td>
+                  <td style={cellStyle}>${Number(r.cpc || 0).toFixed(2)}</td>
                   <td style={cellStyle}>{r.best_position || '--'}</td>
-                  <td style={cellStyle}>{r.sum_traffic.toLocaleString()}</td>
+                  <td style={cellStyle}>{Number(r.sum_traffic || 0).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -167,8 +167,8 @@ function CompetitiveIntelContent() {
                       {r.domain_rating}
                     </span>
                   </td>
-                  <td style={cellStyle}>{r.traffic_domain.toLocaleString()}</td>
-                  <td style={cellStyle}>{r.dofollow_links.toLocaleString()}</td>
+                  <td style={cellStyle}>{Number(r.traffic_domain || 0).toLocaleString()}</td>
+                  <td style={cellStyle}>{Number(r.dofollow_links || 0).toLocaleString()}</td>
                   <td style={cellStyle}>{r.links_to_target}</td>
                 </tr>
               ))}
@@ -193,11 +193,11 @@ function CompetitiveIntelContent() {
                 <tr key={`${r.url}-${i}`} style={{ borderBottom: `1px solid ${tc.border.subtle}` }} data-testid={`row-top-page-${i}`}>
                   <td style={{ ...cellStyle, fontWeight: fontWeight.medium, color: tc.text.primary, maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.url}>{r.url}</td>
                   <td style={cellStyle}>{r.competitor_domain}</td>
-                  <td style={cellStyle}>{r.sum_traffic.toLocaleString()}</td>
-                  <td style={cellStyle}>{r.keywords.toLocaleString()}</td>
+                  <td style={cellStyle}>{Number(r.sum_traffic || 0).toLocaleString()}</td>
+                  <td style={cellStyle}>{Number(r.keywords || 0).toLocaleString()}</td>
                   <td style={{ ...cellStyle, maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.top_keyword}>{r.top_keyword}</td>
                   <td style={cellStyle}>{r.top_keyword_best_position || '--'}</td>
-                  <td style={cellStyle}>{r.referring_domains.toLocaleString()}</td>
+                  <td style={cellStyle}>{Number(r.referring_domains || 0).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

@@ -43,7 +43,7 @@ function PagePerformanceContent() {
   const sorted = useMemo(() => {
     let filtered = data;
     if (urlFilter) {
-      filtered = data.filter(r => r.url.toLowerCase().includes(urlFilter.toLowerCase()) || r.query.toLowerCase().includes(urlFilter.toLowerCase()));
+      filtered = data.filter(r => (r.url || '').toLowerCase().includes(urlFilter.toLowerCase()) || (r.query || '').toLowerCase().includes(urlFilter.toLowerCase()));
     }
     return [...filtered].sort((a, b) => {
       const av = a[sortKey], bv = b[sortKey];
@@ -122,9 +122,9 @@ function PagePerformanceContent() {
               <tr key={`${r.url}-${r.query}-${i}`} style={{ borderBottom: `1px solid ${tc.border.subtle}` }} data-testid={`row-page-perf-${i}`}>
                 <td style={{ ...cellStyle, fontWeight: fontWeight.medium, color: tc.text.primary, maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.url}>{r.url}</td>
                 <td style={{ ...cellStyle, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.query}>{r.query}</td>
-                <td style={cellStyle}>{r.impressions.toLocaleString()}</td>
-                <td style={cellStyle}>{r.clicks.toLocaleString()}</td>
-                <td style={cellStyle}>{(r.ctr * 100).toFixed(2)}%</td>
+                <td style={cellStyle}>{Number(r.impressions || 0).toLocaleString()}</td>
+                <td style={cellStyle}>{Number(r.clicks || 0).toLocaleString()}</td>
+                <td style={cellStyle}>{(Number(r.ctr || 0) * 100).toFixed(2)}%</td>
                 <td style={cellStyle}>
                   <span style={{
                     display: 'inline-block',
@@ -135,7 +135,7 @@ function PagePerformanceContent() {
                     backgroundColor: r.position <= 10 ? `${violet[500]}15` : r.position <= 20 ? `${violet[400]}15` : 'transparent',
                     color: r.position <= 10 ? violet[600] : tc.text.secondary,
                   }}>
-                    {r.position.toFixed(1)}
+                    {Number(r.position || 0).toFixed(1)}
                   </span>
                 </td>
               </tr>

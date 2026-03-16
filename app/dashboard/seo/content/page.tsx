@@ -134,11 +134,11 @@ function ContentPipelineContent() {
                         backgroundColor: c.seo_priority_score >= 150 ? `${violet[500]}15` : 'transparent',
                         color: c.seo_priority_score >= 150 ? violet[600] : tc.text.secondary,
                       }}>
-                        {c.seo_priority_score.toFixed(1)}
+                        {Number(c.seo_priority_score || 0).toFixed(1)}
                       </span>
                     </td>
-                    <td style={cellStyle}>{c.total_impressions.toLocaleString()}</td>
-                    <td style={cellStyle}>{c.avg_position.toFixed(1)}</td>
+                    <td style={cellStyle}>{Number(c.total_impressions || 0).toLocaleString()}</td>
+                    <td style={cellStyle}>{Number(c.avg_position || 0).toFixed(1)}</td>
                     <td style={cellStyle}>{c.keyword_count}</td>
                   </tr>
                 ))}
