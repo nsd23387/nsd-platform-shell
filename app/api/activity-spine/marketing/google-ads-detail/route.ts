@@ -38,6 +38,14 @@ function dateParams(req: NextRequest): { start: string; end: string } {
 
 async function getCampaignDaily(start: string, end: string) {
   const { rows } = await pool.query(`
+    WITH deduped AS (
+      SELECT DISTINCT ON (occurred_at, payload->>'campaign_id')
+        occurred_at,
+        payload
+      FROM analytics.raw_google_ads_campaign_daily
+      WHERE occurred_at BETWEEN $1 AND $2
+      ORDER BY occurred_at, payload->>'campaign_id', ingestion_run_id DESC
+    )
     SELECT
       occurred_at::text AS date,
       payload->>'campaign_id' AS campaign_id,
@@ -49,8 +57,7 @@ async function getCampaignDaily(start: string, end: string) {
       COALESCE((payload->>'conversion_value')::numeric, 0) AS conversion_value,
       COALESCE((payload->>'ctr')::numeric, 0) AS ctr,
       COALESCE((payload->>'average_cpc')::numeric, 0) AS average_cpc
-    FROM analytics.raw_google_ads_campaign_daily
-    WHERE occurred_at BETWEEN $1 AND $2
+    FROM deduped
     ORDER BY occurred_at ASC, payload->>'campaign_id'
   `, [start, end]);
   return rows;
@@ -58,6 +65,13 @@ async function getCampaignDaily(start: string, end: string) {
 
 async function getCampaignSummary(start: string, end: string) {
   const { rows } = await pool.query(`
+    WITH deduped AS (
+      SELECT DISTINCT ON (occurred_at, payload->>'campaign_id')
+        payload
+      FROM analytics.raw_google_ads_campaign_daily
+      WHERE occurred_at BETWEEN $1 AND $2
+      ORDER BY occurred_at, payload->>'campaign_id', ingestion_run_id DESC
+    )
     SELECT
       payload->>'campaign_id' AS campaign_id,
       payload->>'campaign_name' AS campaign_name,
@@ -66,8 +80,7 @@ async function getCampaignSummary(start: string, end: string) {
       SUM(COALESCE((payload->>'cost')::numeric, 0)) AS cost,
       SUM(COALESCE((payload->>'conversions')::numeric, 0)) AS conversions,
       SUM(COALESCE((payload->>'conversion_value')::numeric, 0)) AS conversion_value
-    FROM analytics.raw_google_ads_campaign_daily
-    WHERE occurred_at BETWEEN $1 AND $2
+    FROM deduped
     GROUP BY payload->>'campaign_id', payload->>'campaign_name'
     ORDER BY SUM(COALESCE((payload->>'cost')::numeric, 0)) DESC
   `, [start, end]);
@@ -117,6 +130,14 @@ async function getKeywords(start: string, end: string, campaignId?: string | nul
   }
 
   const { rows } = await pool.query(`
+    WITH deduped AS (
+      SELECT DISTINCT ON (occurred_at, payload->>'keyword_text', payload->>'campaign_id', payload->>'ad_group_id')
+        payload
+      FROM analytics.raw_google_ads_keyword_daily
+      WHERE occurred_at BETWEEN $1 AND $2
+        ${campaignFilter}
+      ORDER BY occurred_at, payload->>'keyword_text', payload->>'campaign_id', payload->>'ad_group_id', ingestion_run_id DESC
+    )
     SELECT
       payload->>'keyword_text' AS keyword_text,
       payload->>'keyword_match_type' AS keyword_match_type,
@@ -128,9 +149,7 @@ async function getKeywords(start: string, end: string, campaignId?: string | nul
       SUM(COALESCE((payload->>'cost')::numeric, 0)) AS cost,
       SUM(COALESCE((payload->>'conversions')::numeric, 0)) AS conversions,
       SUM(COALESCE((payload->>'conversion_value')::numeric, 0)) AS conversion_value
-    FROM analytics.raw_google_ads_keyword_daily
-    WHERE occurred_at BETWEEN $1 AND $2
-      ${campaignFilter}
+    FROM deduped
     GROUP BY
       payload->>'keyword_text',
       payload->>'keyword_match_type',
@@ -168,6 +187,14 @@ async function getSearchTerms(start: string, end: string, campaignId?: string | 
   const orderCol = sortBy === 'clicks' ? "SUM(COALESCE((payload->>'clicks')::int, 0))" : "SUM(COALESCE((payload->>'cost')::numeric, 0))";
 
   const { rows } = await pool.query(`
+    WITH deduped AS (
+      SELECT DISTINCT ON (occurred_at, payload->>'campaign_id', payload->>'ad_group_id', payload->>'search_term')
+        payload
+      FROM analytics.raw_google_ads_search_term_daily
+      WHERE occurred_at BETWEEN $1 AND $2
+        ${campaignFilter}
+      ORDER BY occurred_at, payload->>'campaign_id', payload->>'ad_group_id', payload->>'search_term', ingestion_run_id DESC
+    )
     SELECT
       payload->>'campaign_id' AS campaign_id,
       payload->>'campaign_name' AS campaign_name,
@@ -178,15 +205,13 @@ async function getSearchTerms(start: string, end: string, campaignId?: string | 
       SUM(COALESCE((payload->>'cost')::numeric, 0)) AS cost,
       SUM(COALESCE((payload->>'conversions')::numeric, 0)) AS conversions,
       SUM(COALESCE((payload->>'conversion_value')::numeric, 0)) AS conversion_value
-    FROM analytics.raw_google_ads_search_term_daily
-    WHERE occurred_at BETWEEN $1 AND $2
-      ${campaignFilter}
+    FROM deduped
     GROUP BY
       payload->>'campaign_id',
       payload->>'campaign_name',
       payload->>'ad_group_id',
       payload->>'ad_group_name'
-    ORDER BY ${orderCol} DESC
+    ORDER BY SUM(COALESCE((payload->>'cost')::numeric, 0)) DESC
     LIMIT 200
   `, params);
 
@@ -209,13 +234,19 @@ async function getSearchTerms(start: string, end: string, campaignId?: string | 
 async function getConversionActions(start: string, end: string) {
   try {
     const { rows } = await pool.query(`
+      WITH deduped AS (
+        SELECT DISTINCT ON (occurred_at, payload->>'campaign_id', payload->>'conversion_action_name')
+          payload
+        FROM analytics.raw_google_ads_campaign_conversions
+        WHERE occurred_at BETWEEN $1 AND $2
+        ORDER BY occurred_at, payload->>'campaign_id', payload->>'conversion_action_name', ingestion_run_id DESC
+      )
       SELECT
         payload->>'conversion_action_name' AS conversion_action_name,
         payload->>'conversion_action_category' AS conversion_action_category,
         SUM(COALESCE((payload->>'conversions')::numeric, 0)) AS conversions,
         SUM(COALESCE((payload->>'conversion_value')::numeric, 0)) AS conversion_value
-      FROM analytics.raw_google_ads_campaign_conversions
-      WHERE occurred_at BETWEEN $1 AND $2
+      FROM deduped
       GROUP BY payload->>'conversion_action_name', payload->>'conversion_action_category'
       ORDER BY SUM(COALESCE((payload->>'conversions')::numeric, 0)) DESC
     `, [start, end]);
