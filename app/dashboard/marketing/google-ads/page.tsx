@@ -472,7 +472,7 @@ function CampaignTrendSection() {
       if (!grouped[r.date]) grouped[r.date] = {};
       grouped[r.date][r.campaign_id] = (grouped[r.date][r.campaign_id] || 0) + r[metric];
     }
-    const campaigns = [...new Set(daily.map(r => r.campaign_id))];
+    const campaigns = Array.from(new Set(daily.map(r => r.campaign_id)));
     return Object.entries(grouped)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, vals]) => {
