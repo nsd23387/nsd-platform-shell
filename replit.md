@@ -43,6 +43,38 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 - **Convex QMS**: Quote Management System, pushes lifecycle events to `POST /api/ingest/qms-deal`. Data stored in `analytics.raw_qms_deals`.
 - **ODS SEO Cluster Engine**: Provides keyword clustering, opportunity detection, and recommendation management. Consumed via `/api/proxy/seo/*` proxy routes.
 
+## Google Ads Deep Dive & Ahrefs Intelligence
+The marketing dashboard now includes deep-dive views for Google Ads granular data and Ahrefs competitive intelligence, all sourced from Supabase `analytics` schema tables.
+
+**Google Ads Deep Dive** (`/dashboard/marketing/google-ads`):
+- Key Metrics summary (total spend, clicks, conversions, CPC, CPL, ROAS)
+- Campaign Performance Trend chart (daily clicks/impressions/cost/conversions with metric toggle)
+- Conversion Actions breakdown (pending `raw_google_ads_campaign_conversions` table migration)
+- Keyword Performance sortable table with campaign filter (`raw_google_ads_keyword_daily`)
+- Search Terms table aggregated by ad group (`raw_google_ads_search_term_daily` — search term text not yet in pipeline)
+
+**Ahrefs Intelligence** (`/dashboard/marketing/ahrefs`):
+- Keyword Gap table with competitor filter, KD badges, CPC, position (`raw_ahrefs_keyword_gap`)
+- Backlink Gap table sorted by domain rating (`raw_ahrefs_backlink_gap`)
+- Top Pages table showing competitor pages by traffic (`raw_ahrefs_top_pages`)
+
+**API Routes:**
+- `app/api/activity-spine/marketing/google-ads-detail/route.ts` — views: `summary`, `daily`, `keywords`, `search-terms`, `conversions`, `campaigns-list`
+- `app/api/activity-spine/marketing/ahrefs/route.ts` — views: `keyword-gap`, `backlink-gap`, `top-pages`, `competitors`
+
+**Data Sources (all JSONB payload columns):**
+- `analytics.raw_google_ads_campaign_daily` (277 rows, campaign/day grain)
+- `analytics.raw_google_ads_keyword_daily` (1,140 rows, keyword/day grain)
+- `analytics.raw_google_ads_search_term_daily` (9,730 rows, search term/day grain)
+- `analytics.raw_ahrefs_keyword_gap` (290 rows, keyword/competitor)
+- `analytics.raw_ahrefs_backlink_gap` (60 rows, domain/competitor)
+- `analytics.raw_ahrefs_top_pages` (350 rows, page/competitor)
+
+**Notes:**
+- Campaign names display as IDs (no name mapping available yet)
+- Conversion action tables (`raw_google_ads_campaign_conversions`, `raw_google_ads_ad_group_conversions`) not yet created in Supabase
+- Competitors tracked: vistaprint.com, etsy.com, amazon.com, neonmfg.com
+
 ## SEO Intelligence Module
 The SEO Intelligence module (`/dashboard/seo`) provides a read-only decision surface for keyword cluster analysis and SEO recommendation approval. Data is sourced directly from the Supabase `analytics` schema via `lib/seo-db.ts`.
 

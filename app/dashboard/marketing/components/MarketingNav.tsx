@@ -43,6 +43,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/marketing/seo', label: 'SEO Command Center', icon: 'search' },
       { href: '/dashboard/marketing/google-ads', label: 'Google Ads War Room', icon: 'target' },
+      { href: '/dashboard/marketing/ahrefs', label: 'Ahrefs Intelligence', icon: 'trending' },
     ],
   },
   {
