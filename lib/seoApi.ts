@@ -138,3 +138,182 @@ export async function getOutcomes(): Promise<SeoOutcome[]> {
   const data = await seoFetch<{ data: SeoOutcome[] }>('/api/proxy/seo/outcomes');
   return data.data ?? [];
 }
+
+export interface SeoOverviewKpis {
+  total_clusters: number;
+  total_opportunities: number;
+  page_optimization_recs: number;
+  internal_link_recs: number;
+  content_artifacts: number;
+  ahrefs_keywords_tracked: number;
+  indexed_pages: number;
+  recommendations_total: number;
+  recommendations_pending: number;
+  recommendations_approved: number;
+  recommendations_rejected: number;
+}
+
+export interface PageQueryPerformance {
+  url: string;
+  query: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  position: number;
+}
+
+export interface PageOptimizationRec {
+  id: string;
+  url: string;
+  page_type: string;
+  primary_keyword: string;
+  optimization_type: string;
+  recommended_title: string;
+  recommended_meta_description: string;
+  content_recommendations: string | null;
+  priority_score: number;
+  status: string;
+  created_at: string;
+  generated_by: string;
+}
+
+export interface InternalLinkRec {
+  id: string;
+  source_page: string;
+  target_page: string;
+  anchor_text: string;
+  reason: string;
+  priority: string;
+  rule_source: string;
+  created_at: string;
+}
+
+export interface ContentArtifact {
+  id: string;
+  artifact_type: string;
+  status: string;
+  title: string;
+  generated_by: string;
+  created_at: string;
+  primary_keyword: string;
+  cluster_topic: string;
+}
+
+export interface GenerationCandidate {
+  cluster_id: string;
+  cluster_keyword: string;
+  total_impressions: number;
+  avg_position: number;
+  keyword_count: number;
+  seo_priority_score: number;
+}
+
+export interface GenerationEvent {
+  id: string;
+  event_type: string;
+  generator_version: string;
+  model: string;
+  created_at: string;
+}
+
+export interface ContentPipeline {
+  artifacts: ContentArtifact[];
+  candidates: GenerationCandidate[];
+  events: GenerationEvent[];
+}
+
+export interface AhrefsKeywordGap {
+  keyword: string;
+  competitor_domain: string;
+  volume: number;
+  keyword_difficulty: number;
+  cpc: number;
+  best_position: number;
+  best_position_url: string;
+  sum_traffic: number;
+  topic_cluster: string;
+}
+
+export interface AhrefsBacklinkGap {
+  domain: string;
+  competitor_domain: string;
+  domain_rating: number;
+  traffic_domain: number;
+  dofollow_links: number;
+  links_to_target: number;
+  first_seen: string;
+}
+
+export interface AhrefsTopPage {
+  url: string;
+  competitor_domain: string;
+  sum_traffic: number;
+  keywords: number;
+  top_keyword: string;
+  top_keyword_volume: number;
+  top_keyword_best_position: number;
+  referring_domains: number;
+  value: number;
+  topic_cluster: string;
+}
+
+export interface ClusterPriority {
+  cluster_id: string;
+  cluster_keyword: string;
+  total_impressions: number;
+  avg_position: number;
+  keyword_count: number;
+  ranking_opportunity: number;
+  missing_page_signal: number;
+  seo_priority_score: number;
+}
+
+async function seoIntelFetch<T>(view: string, params?: Record<string, string>): Promise<T> {
+  const sp = new URLSearchParams({ view });
+  if (params) Object.entries(params).forEach(([k, v]) => { if (v) sp.set(k, v); });
+  const data = await seoFetch<{ data: T }>(`/api/proxy/seo/intelligence?${sp.toString()}`);
+  return data.data;
+}
+
+export async function getSeoOverviewKpis(): Promise<SeoOverviewKpis> {
+  return seoIntelFetch<SeoOverviewKpis>('overview-kpis');
+}
+
+export async function getPagePerformance(sortBy?: string, limit?: number): Promise<PageQueryPerformance[]> {
+  return seoIntelFetch<PageQueryPerformance[]>('page-performance', {
+    sort_by: sortBy || 'impressions',
+    limit: String(limit || 100),
+  });
+}
+
+export async function getPageOptimizations(): Promise<PageOptimizationRec[]> {
+  return seoIntelFetch<PageOptimizationRec[]>('page-optimization');
+}
+
+export async function getInternalLinkRecs(): Promise<InternalLinkRec[]> {
+  return seoIntelFetch<InternalLinkRec[]>('internal-links');
+}
+
+export async function getContentPipelineData(): Promise<ContentPipeline> {
+  return seoIntelFetch<ContentPipeline>('content-pipeline');
+}
+
+export async function getCompetitiveKeywordGap(competitor?: string): Promise<AhrefsKeywordGap[]> {
+  return seoIntelFetch<AhrefsKeywordGap[]>('competitive-gap', { competitor: competitor || '' });
+}
+
+export async function getCompetitiveBacklinks(competitor?: string): Promise<AhrefsBacklinkGap[]> {
+  return seoIntelFetch<AhrefsBacklinkGap[]>('competitive-backlinks', { competitor: competitor || '' });
+}
+
+export async function getCompetitiveTopPages(competitor?: string): Promise<AhrefsTopPage[]> {
+  return seoIntelFetch<AhrefsTopPage[]>('competitive-pages', { competitor: competitor || '' });
+}
+
+export async function getClusterPriorities(limit?: number): Promise<ClusterPriority[]> {
+  return seoIntelFetch<ClusterPriority[]>('cluster-priorities', { limit: String(limit || 50) });
+}
+
+export async function getCompetitorsList(): Promise<string[]> {
+  return seoIntelFetch<string[]>('competitors-list');
+}
