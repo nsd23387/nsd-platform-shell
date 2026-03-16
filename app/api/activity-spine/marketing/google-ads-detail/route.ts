@@ -95,7 +95,18 @@ async function getCampaignDaily(start: string, end: string) {
     FROM deduped
     ORDER BY occurred_at ASC, payload->>'campaign_id'
   `, [start, end]);
-  return rows;
+  return rows.map(r => ({
+    date: r.date,
+    campaign_id: r.campaign_id,
+    campaign_name: r.campaign_name,
+    clicks: Number(r.clicks),
+    impressions: Number(r.impressions),
+    cost: Number(r.cost),
+    conversions: Number(r.conversions),
+    conversion_value: Number(r.conversion_value),
+    ctr: Number(r.ctr),
+    average_cpc: Number(r.average_cpc),
+  }));
 }
 
 async function getCampaignSummary(start: string, end: string) {
