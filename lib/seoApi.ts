@@ -317,3 +317,87 @@ export async function getClusterPriorities(limit?: number): Promise<ClusterPrior
 export async function getCompetitorsList(): Promise<string[]> {
   return seoIntelFetch<string[]>('competitors-list');
 }
+
+export interface EngineRecommendationCard {
+  opportunity_id: string;
+  balanced_rank: number;
+  portfolio_position: string | null;
+  opportunity_family: string;
+  primary_remedy: string;
+  secondary_remedy: string | null;
+  topic_cluster: string;
+  primary_subject: string;
+  nsd_page_url: string | null;
+  competitor_domain: string | null;
+  total_opportunity_score: number;
+  urgency_band: string;
+  data_confidence: string;
+  source_freshness_label: string;
+  confidence_reason: string | null;
+  recommendation_title: string;
+  recommendation_summary: string;
+  recommendation_reason: string;
+  evidence_summary_short: string;
+  action_state_badge: string;
+  ahrefs_search_volume: number | null;
+  ahrefs_keyword_difficulty: number | null;
+  ahrefs_cpc: number | null;
+  gsc_impressions: number | null;
+  gsc_best_position: number | null;
+  ads_cost: number | null;
+  ads_conversions: number | null;
+  competitor_referring_domains: number | null;
+  competitor_domain_rating: number | null;
+  internal_link_signal_strength: string | null;
+  nsd_ranking_page: string | null;
+  execution_status: string | null;
+  approval_status: string | null;
+  candidate_id: string | null;
+  mutation_type: string | null;
+  rollback_status: string | null;
+}
+
+export interface EngineRecommendationSection {
+  section_id: string;
+  section_title: string;
+  section_description: string;
+  items: EngineRecommendationCard[];
+}
+
+export interface EngineRecommendationDetail extends EngineRecommendationCard {
+  evidence_summary_long: string | null;
+  execution_candidates: Array<{
+    candidate_id: string | null;
+    execution_status: string | null;
+    approval_status: string | null;
+    mutation_type: string | null;
+    rollback_status: string | null;
+    target_page_url: string | null;
+    target_field: string | null;
+    proposed_value: string | null;
+    awaiting_approval: boolean | null;
+    ready_to_execute: boolean | null;
+    rollback_eligible: boolean | null;
+    created_at: string | null;
+  }>;
+}
+
+export async function getEngineRecommendations(opts?: {
+  limit?: number;
+  family?: string;
+  remedy?: string;
+  urgency?: string;
+  grouped?: boolean;
+}): Promise<EngineRecommendationSection[]> {
+  const params: Record<string, string> = {};
+  if (opts?.limit) params.limit = String(opts.limit);
+  if (opts?.family) params.family = opts.family;
+  if (opts?.remedy) params.remedy = opts.remedy;
+  if (opts?.urgency) params.urgency = opts.urgency;
+  if (opts?.grouped === false) params.grouped = 'false';
+  return seoIntelFetch<EngineRecommendationSection[]>('recommendations', params);
+}
+
+export async function getEngineRecommendationDetail(opportunityId: string): Promise<EngineRecommendationDetail> {
+  return seoIntelFetch<EngineRecommendationDetail>('recommendation-detail', { opportunity_id: opportunityId });
+}
