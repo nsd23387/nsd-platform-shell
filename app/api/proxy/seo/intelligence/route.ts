@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { toRecommendationCard, groupIntoSections } from '../../../../../lib/recommendation-templates';
+import type { OpportunityRow } from '../../../../../lib/recommendation-templates';
 
 const pool = new Pool({
   connectionString: process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL,
@@ -354,6 +356,108 @@ async function getCompetitorsList() {
   return rows.map(r => r.competitor);
 }
 
+async function getEngineRecommendations(limit: number, family?: string | null, remedy?: string | null, urgency?: string | null) {
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  let paramIdx = 1;
+
+  if (family) {
+    conditions.push(`q.opportunity_family = $${paramIdx++}`);
+    params.push(family);
+  }
+  if (remedy) {
+    conditions.push(`q.primary_remedy = $${paramIdx++}`);
+    params.push(remedy);
+  }
+  if (urgency) {
+    conditions.push(`q.urgency_band = $${paramIdx++}`);
+    params.push(urgency);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const { rows } = await pool.query(`
+    SELECT
+      q.balanced_rank, q.canonical_queue_rank, q.portfolio_position,
+      q.balancing_strategy, q.balancing_reason,
+      q.opportunity_id, q.opportunity_family, q.opportunity_type,
+      q.topic_cluster, q.primary_subject, q.nsd_page_url, q.competitor_domain,
+      q.total_opportunity_score::numeric, q.demand_score::numeric,
+      q.competitive_opportunity_score::numeric, q.authority_gap_score::numeric,
+      q.paid_support_score::numeric, q.execution_readiness_score::numeric,
+      q.primary_remedy, q.secondary_remedy,
+      q.data_confidence, q.source_coverage_count::int, q.urgency_band,
+      q.source_freshness_label, q.confidence_reason,
+      q.ahrefs_search_volume::int, q.ahrefs_keyword_difficulty::int,
+      q.ahrefs_cpc::numeric, q.gsc_impressions::numeric, q.gsc_best_position::numeric,
+      q.ads_cost::numeric, q.ads_conversions::numeric,
+      q.competitor_referring_domains::int, q.competitor_domain_rating::numeric,
+      q.evidence_summary_short, q.evidence_summary_long,
+      q.internal_link_signal_strength, q.nsd_ranking_page,
+      q.ahrefs_data_stale,
+      e.execution_status, e.approval_status, e.candidate_id::text,
+      e.mutation_type, e.rollback_status,
+      e.awaiting_approval, e.ready_to_execute
+    FROM analytics.seo_opportunity_queue_balanced q
+    LEFT JOIN LATERAL (
+      SELECT eq.execution_status, eq.approval_status, eq.candidate_id,
+             eq.mutation_type, eq.rollback_status,
+             eq.awaiting_approval, eq.ready_to_execute
+      FROM analytics.seo_execution_queue eq
+      WHERE eq.opportunity_id = q.opportunity_id
+      ORDER BY eq.created_at DESC
+      LIMIT 1
+    ) e ON true
+    ${whereClause}
+    ORDER BY q.balanced_rank ASC
+    LIMIT $${paramIdx}
+  `, [...params, limit]);
+
+  return rows;
+}
+
+async function getEngineRecommendationDetail(opportunityId: string) {
+  const { rows } = await pool.query(`
+    SELECT
+      q.balanced_rank, q.canonical_queue_rank, q.portfolio_position,
+      q.balancing_strategy, q.balancing_reason,
+      q.opportunity_id, q.opportunity_family, q.opportunity_type,
+      q.topic_cluster, q.primary_subject, q.nsd_page_url, q.competitor_domain,
+      q.total_opportunity_score::numeric, q.demand_score::numeric,
+      q.competitive_opportunity_score::numeric, q.authority_gap_score::numeric,
+      q.paid_support_score::numeric, q.execution_readiness_score::numeric,
+      q.primary_remedy, q.secondary_remedy,
+      q.data_confidence, q.source_coverage_count::int, q.urgency_band,
+      q.source_freshness_label, q.confidence_reason,
+      q.ahrefs_search_volume::int, q.ahrefs_keyword_difficulty::int,
+      q.ahrefs_cpc::numeric, q.gsc_impressions::numeric, q.gsc_best_position::numeric,
+      q.ads_cost::numeric, q.ads_conversions::numeric,
+      q.competitor_referring_domains::int, q.competitor_domain_rating::numeric,
+      q.evidence_summary_short, q.evidence_summary_long,
+      q.internal_link_signal_strength, q.nsd_ranking_page,
+      q.ahrefs_data_stale
+    FROM analytics.seo_opportunity_queue_balanced q
+    WHERE q.opportunity_id = $1
+  `, [opportunityId]);
+
+  if (rows.length === 0) return null;
+  const opp = rows[0];
+
+  const { rows: execRows } = await pool.query(`
+    SELECT candidate_id::text, execution_status, approval_status,
+           mutation_type, rollback_status, target_page_url, target_field,
+           proposed_value, approval_required, reviewer_id, reviewed_at,
+           review_notes, rollback_available, execution_timestamp,
+           awaiting_approval, ready_to_execute, rollback_eligible,
+           created_at
+    FROM analytics.seo_execution_queue
+    WHERE opportunity_id = $1
+    ORDER BY created_at DESC
+  `, [opportunityId]);
+
+  return { ...opp, execution_candidates: execRows };
+}
+
 export async function GET(req: NextRequest) {
   if (!process.env.SUPABASE_DATABASE_URL && !process.env.DATABASE_URL) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
@@ -398,6 +502,30 @@ export async function GET(req: NextRequest) {
       case 'competitors-list':
         result = await getCompetitorsList();
         break;
+      case 'recommendations': {
+        const family = req.nextUrl.searchParams.get('family');
+        const remedy = req.nextUrl.searchParams.get('remedy');
+        const urgencyFilter = req.nextUrl.searchParams.get('urgency');
+        const grouped = req.nextUrl.searchParams.get('grouped') !== 'false';
+        const rows = await getEngineRecommendations(limit, family, remedy, urgencyFilter);
+        const cards = (rows as unknown as OpportunityRow[]).map(toRecommendationCard);
+        result = grouped ? groupIntoSections(cards) : cards;
+        break;
+      }
+      case 'recommendation-detail': {
+        const oppId = req.nextUrl.searchParams.get('opportunity_id');
+        if (!oppId) return NextResponse.json({ error: 'opportunity_id required' }, { status: 400 });
+        const detail = await getEngineRecommendationDetail(oppId);
+        if (!detail) return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 });
+        const execCandidates = (detail as Record<string, unknown>).execution_candidates as Array<Record<string, unknown>> | undefined;
+        const latestExec = execCandidates && execCandidates.length > 0 ? execCandidates[0] : null;
+        const detailWithExec = latestExec
+          ? { ...detail, execution_status: latestExec.execution_status, approval_status: latestExec.approval_status, candidate_id: latestExec.candidate_id, mutation_type: latestExec.mutation_type, rollback_status: latestExec.rollback_status, awaiting_approval: latestExec.awaiting_approval, ready_to_execute: latestExec.ready_to_execute }
+          : detail;
+        const card = toRecommendationCard(detailWithExec as unknown as OpportunityRow);
+        result = { ...card, evidence_summary_long: (detail as Record<string, unknown>).evidence_summary_long, execution_candidates: execCandidates };
+        break;
+      }
       default:
         return NextResponse.json({ error: `Unknown view: ${view}` }, { status: 400 });
     }
