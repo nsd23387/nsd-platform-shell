@@ -325,7 +325,7 @@ function DetailPanel({
                     <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary }}>
                       {(ec.mutation_type || '').replace(/_/g, ' ')}
                     </span>
-                    <Badge label={ec.execution_status} colors={ecStatus} />
+                    <Badge label={ec.execution_status || 'unknown'} colors={ecStatus} />
                   </div>
                   {ec.target_page_url && (
                     <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, wordBreak: 'break-all' }}>
