@@ -142,15 +142,18 @@ export async function getOutcomes(): Promise<SeoOutcome[]> {
 export interface SeoOverviewKpis {
   total_clusters: number;
   total_opportunities: number;
+  high_urgency: number;
+  medium_urgency: number;
+  low_urgency: number;
   page_optimization_recs: number;
   internal_link_recs: number;
   content_artifacts: number;
   ahrefs_keywords_tracked: number;
   indexed_pages: number;
-  recommendations_total: number;
-  recommendations_pending: number;
-  recommendations_approved: number;
-  recommendations_rejected: number;
+  execution_candidates_total: number;
+  awaiting_approval: number;
+  approved: number;
+  published: number;
 }
 
 export interface PageQueryPerformance {

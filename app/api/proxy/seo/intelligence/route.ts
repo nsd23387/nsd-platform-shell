@@ -13,9 +13,16 @@ const pool = new Pool({
 });
 
 async function getOverviewKpis() {
-  const [clusters, opportunities, pageOpts, internalLinks, contentArtifacts, ahrefsKw, pageIndex, recommendations] = await Promise.all([
-    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.keyword_clusters`),
-    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_cluster_opportunities`),
+  const [engineCounts, pageOpts, internalLinks, contentArtifacts, ahrefsKw, pageIndex, execQueue] = await Promise.all([
+    pool.query(`
+      SELECT
+        COUNT(*)::int AS total_opportunities,
+        COUNT(DISTINCT topic_cluster)::int AS total_clusters,
+        COUNT(*) FILTER (WHERE urgency_band = 'high')::int AS high_urgency,
+        COUNT(*) FILTER (WHERE urgency_band = 'medium')::int AS medium_urgency,
+        COUNT(*) FILTER (WHERE urgency_band = 'low')::int AS low_urgency
+      FROM analytics.seo_opportunity_queue_balanced
+    `),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_page_optimization_recommendations`),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.internal_link_recommendations`),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_content_artifacts`),
@@ -32,25 +39,31 @@ async function getOverviewKpis() {
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE status = 'pending_review')::int AS pending,
-        COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
-        COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected
-      FROM analytics.seo_recommendations
+        COUNT(*) FILTER (WHERE awaiting_approval = true)::int AS awaiting_approval,
+        COUNT(*) FILTER (WHERE approval_status = 'approved')::int AS approved,
+        COUNT(*) FILTER (WHERE execution_status = 'published')::int AS published
+      FROM analytics.seo_execution_queue
     `),
   ]);
 
+  const eng = engineCounts.rows[0];
+  const exec = execQueue.rows[0];
+
   return {
-    total_clusters: clusters.rows[0].cnt,
-    total_opportunities: opportunities.rows[0].cnt,
+    total_clusters: eng.total_clusters,
+    total_opportunities: eng.total_opportunities,
+    high_urgency: eng.high_urgency,
+    medium_urgency: eng.medium_urgency,
+    low_urgency: eng.low_urgency,
     page_optimization_recs: pageOpts.rows[0].cnt,
     internal_link_recs: internalLinks.rows[0].cnt,
     content_artifacts: contentArtifacts.rows[0].cnt,
     ahrefs_keywords_tracked: ahrefsKw.rows[0].cnt,
     indexed_pages: pageIndex.rows[0].cnt,
-    recommendations_total: recommendations.rows[0].total,
-    recommendations_pending: recommendations.rows[0].pending,
-    recommendations_approved: recommendations.rows[0].approved,
-    recommendations_rejected: recommendations.rows[0].rejected,
+    execution_candidates_total: exec.total,
+    awaiting_approval: exec.awaiting_approval,
+    approved: exec.approved,
+    published: exec.published,
   };
 }
 
@@ -466,7 +479,8 @@ export async function GET(req: NextRequest) {
     const view = req.nextUrl.searchParams.get('view') || 'overview-kpis';
     const competitor = req.nextUrl.searchParams.get('competitor');
     const rawLimit = parseInt(req.nextUrl.searchParams.get('limit') || '100', 10);
-    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 100;
+    const maxLimit = view === 'recommendations' ? 2000 : 500;
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, maxLimit) : 100;
     const sortBy = req.nextUrl.searchParams.get('sort_by') || 'impressions';
 
     let result: unknown;
