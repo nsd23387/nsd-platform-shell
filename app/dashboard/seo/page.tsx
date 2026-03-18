@@ -71,16 +71,16 @@ function SeoOverviewContent() {
       </div>
 
       <DashboardGrid columns={4}>
-        <DashboardCard title="Keyword Clusters" value={loading ? undefined : String(kpis?.total_clusters ?? 0)} subtitle="Grouped keyword themes" loading={loading} error={error} />
+        <DashboardCard title="Engine Opportunities" value={loading ? undefined : String(kpis?.total_opportunities ?? 0)} subtitle="Scored and ranked" loading={loading} error={error} />
+        <DashboardCard title="Topic Clusters" value={loading ? undefined : String(kpis?.total_clusters ?? 0)} subtitle="Unique keyword themes" loading={loading} error={error} />
+        <DashboardCard title="High Urgency" value={loading ? undefined : String(kpis?.high_urgency ?? 0)} subtitle="Immediate action needed" loading={loading} error={error} variant={(kpis?.high_urgency ?? 0) > 0 ? 'warning' : 'default'} />
         <DashboardCard title="Indexed Pages" value={loading ? undefined : String(kpis?.indexed_pages ?? 0)} subtitle="Pages in site index" loading={loading} error={error} />
-        <DashboardCard title="Page Opt. Recs" value={loading ? undefined : String(kpis?.page_optimization_recs ?? 0)} subtitle="Title/meta suggestions" loading={loading} error={error} />
-        <DashboardCard title="Ahrefs Keywords" value={loading ? undefined : String(kpis?.ahrefs_keywords_tracked ?? 0)} subtitle="Competitive gap tracked" loading={loading} error={error} />
       </DashboardGrid>
 
       <DashboardGrid columns={4}>
-        <DashboardCard title="Opportunities" value={loading ? undefined : String(kpis?.total_opportunities ?? 0)} subtitle="Actionable gaps" loading={loading} error={error} />
-        <DashboardCard title="Pending Review" value={loading ? undefined : String(kpis?.recommendations_pending ?? 0)} subtitle="Awaiting approval" loading={loading} error={error} variant={(kpis?.recommendations_pending ?? 0) > 0 ? 'warning' : 'default'} />
+        <DashboardCard title="Awaiting Approval" value={loading ? undefined : String(kpis?.awaiting_approval ?? 0)} subtitle="Execution candidates" loading={loading} error={error} variant={(kpis?.awaiting_approval ?? 0) > 0 ? 'warning' : 'default'} />
         <DashboardCard title="Internal Links" value={loading ? undefined : String(kpis?.internal_link_recs ?? 0)} subtitle="Linking suggestions" loading={loading} error={error} />
+        <DashboardCard title="Ahrefs Keywords" value={loading ? undefined : String(kpis?.ahrefs_keywords_tracked ?? 0)} subtitle="Competitive gap tracked" loading={loading} error={error} />
         <DashboardCard title="Content Artifacts" value={loading ? undefined : String(kpis?.content_artifacts ?? 0)} subtitle="Generated briefs" loading={loading} error={error} />
       </DashboardGrid>
 

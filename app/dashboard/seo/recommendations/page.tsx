@@ -373,7 +373,7 @@ function RecommendationsContent() {
     setError(null);
     try {
       const data = await getEngineRecommendations({
-        limit: 200,
+        limit: 2000,
         family: familyFilter || undefined,
         remedy: remedyFilter || undefined,
         urgency: urgencyFilter || undefined,
