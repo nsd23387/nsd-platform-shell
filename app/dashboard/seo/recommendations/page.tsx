@@ -48,6 +48,18 @@ const ACTION_BADGE_STYLES: Record<string, { bg: string; text: string; label: str
   rolled_back: { bg: '#fee2e2', text: '#991b1b', label: 'Rolled Back' },
 };
 
+function formatEvidenceShort(raw: string): string {
+  return raw
+    .replace(/\bSV:([\d,]+)/g, (_, v) => `Volume: ${v}`)
+    .replace(/\bKD:([\d.]+)/g, (_, v) => `KD: ${v}`)
+    .replace(/\bGSC:\s*([\d,]+)\s*imp\s*@\s*([\d.]+)/g, (_, imp, pos) => `GSC: ${imp} imp at pos ${pos}`)
+    .replace(/\bAds:\s*\$?([\d,.]+)/g, (_, v) => `Ads: $${v}`)
+    .replace(/\bConv:\s*([\d.]+)/g, (_, v) => `${v} conversions`)
+    .replace(/\bComp:\s*([\w./:@-]+)/g, (_, v) => `vs ${v}`)
+    .replace(/\s*→\s*/g, ' — ')
+    .replace(/_/g, ' ');
+}
+
 function Badge({ label, colors }: { label: string; colors: { bg: string; text: string } }) {
   return (
     <span
@@ -106,7 +118,7 @@ function RecommendationCardRow({
             {card.recommendation_title}
           </div>
           <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['1'] }}>
-            Cluster: {card.topic_cluster} | Score: {Number(card.total_opportunity_score).toFixed(2)} | Rank #{card.balanced_rank}
+            Score: {Number(card.total_opportunity_score).toFixed(2)} | Rank #{card.balanced_rank}{card.competitor_domain ? ` | vs ${card.competitor_domain}` : ''}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: space['1'], flexShrink: 0 }}>
@@ -127,8 +139,8 @@ function RecommendationCardRow({
       </div>
 
       {card.evidence_summary_short && (
-        <div style={{ fontFamily: fontFamily.mono, fontSize: '11px', color: tc.text.muted, marginTop: space['2'], padding: `${space['1']} ${space['2']}`, backgroundColor: tc.background.muted, borderRadius: radius.md }}>
-          {card.evidence_summary_short}
+        <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['2'], padding: `${space['1']} ${space['2']}`, backgroundColor: tc.background.muted, borderRadius: radius.md }}>
+          {formatEvidenceShort(card.evidence_summary_short)}
         </div>
       )}
     </div>
@@ -194,11 +206,8 @@ function DetailPanel({
           <p style={fieldLabel}>Reason</p>
           <p style={fieldValue}>{detail.recommendation_reason}</p>
 
-          <p style={fieldLabel}>Cluster</p>
+          <p style={fieldLabel}>Topic Cluster</p>
           <p style={fieldValue}>{detail.topic_cluster}</p>
-
-          <p style={fieldLabel}>Primary Subject</p>
-          <p style={fieldValue}>{detail.primary_subject}</p>
 
           {detail.nsd_page_url && (
             <>
@@ -207,17 +216,38 @@ function DetailPanel({
             </>
           )}
 
-          {detail.competitor_domain && (
-            <>
-              <p style={fieldLabel}>Competitor</p>
-              <p style={fieldValue}>{detail.competitor_domain}</p>
-            </>
-          )}
-
-          {detail.nsd_ranking_page && (
+          {detail.nsd_ranking_page && detail.nsd_ranking_page !== detail.nsd_page_url && (
             <>
               <p style={fieldLabel}>NSD Ranking Page</p>
               <p style={{ ...fieldValue, wordBreak: 'break-all' }}>{detail.nsd_ranking_page}</p>
+            </>
+          )}
+
+          {detail.competitor_domain && (
+            <>
+              <p style={fieldLabel}>Competitor</p>
+              <p style={fieldValue}>
+                {detail.competitor_domain}
+                {detail.primary_subject && detail.primary_subject.startsWith('http') && detail.primary_subject.includes(detail.competitor_domain) && (
+                  <span style={{ display: 'block', fontSize: fontSize.sm, color: tc.text.muted, wordBreak: 'break-all', marginTop: space['0.5'] }}>
+                    Ranking page: {detail.primary_subject}
+                  </span>
+                )}
+              </p>
+            </>
+          )}
+
+          {detail.primary_subject && !detail.primary_subject.startsWith('http') && detail.primary_subject !== detail.topic_cluster && (
+            <>
+              <p style={fieldLabel}>Target Keyword</p>
+              <p style={fieldValue}>{detail.primary_subject}</p>
+            </>
+          )}
+
+          {detail.primary_subject && detail.primary_subject.startsWith('http') && (!detail.competitor_domain || !detail.primary_subject.includes(detail.competitor_domain)) && (
+            <>
+              <p style={fieldLabel}>Reference Page</p>
+              <p style={{ ...fieldValue, wordBreak: 'break-all' }}>{detail.primary_subject}</p>
             </>
           )}
         </div>
@@ -297,7 +327,7 @@ function DetailPanel({
 
           {detail.evidence_summary_short && (
             <div style={{ marginTop: space['2'], padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.muted, borderRadius: radius.md }}>
-              <p style={{ fontFamily: fontFamily.mono, fontSize: '11px', color: tc.text.muted, lineHeight: lineHeight.relaxed }}>{detail.evidence_summary_short}</p>
+              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, lineHeight: lineHeight.relaxed }}>{formatEvidenceShort(detail.evidence_summary_short)}</p>
             </div>
           )}
         </div>
