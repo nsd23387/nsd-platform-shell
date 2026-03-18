@@ -106,8 +106,27 @@ function fmtDollar(v: number | null | undefined): string {
   return `$${Number(v).toFixed(2)}`;
 }
 
-function subjectLabel(row: OpportunityRow): string {
-  return row.primary_subject || row.topic_cluster || 'this topic';
+function isUrl(s: string): boolean {
+  return s.startsWith('http://') || s.startsWith('https://');
+}
+
+function topicLabel(row: OpportunityRow): string {
+  return row.topic_cluster || 'this topic';
+}
+
+function nsdPageLabel(row: OpportunityRow): string {
+  if (row.nsd_page_url) return row.nsd_page_url;
+  if (row.nsd_ranking_page) return row.nsd_ranking_page;
+  return '';
+}
+
+function competitorContext(row: OpportunityRow): string {
+  if (!row.competitor_domain) return '';
+  const subject = row.primary_subject;
+  if (subject && isUrl(subject) && subject.includes(row.competitor_domain)) {
+    return `${row.competitor_domain} is ranking with ${subject}`;
+  }
+  return `${row.competitor_domain} is competing for this topic`;
 }
 
 function gscEvidence(row: OpportunityRow): string {
@@ -134,90 +153,104 @@ function paidEvidence(row: OpportunityRow): string {
 
 function authorityEvidence(row: OpportunityRow): string {
   const parts: string[] = [];
-  if (row.competitor_domain) parts.push(`competitor ${row.competitor_domain}`);
   if (row.competitor_domain_rating != null) parts.push(`DR ${fmtDec(row.competitor_domain_rating, 0)}`);
   if (row.competitor_referring_domains != null) parts.push(`${fmtNum(row.competitor_referring_domains)} referring domains`);
   return parts.length ? parts.join(', ') : '';
 }
 
 function buildTitle(remedy: string, row: OpportunityRow): string {
-  const subject = subjectLabel(row);
+  const topic = topicLabel(row);
+  const nsd = nsdPageLabel(row);
+  const nsdShort = nsd ? ` (${nsd.replace(/^https?:\/\/(www\.)?neonsignsdepot\.com/, '')})` : '';
   switch (remedy) {
     case 'create_new_page':
-      return `Create new page: ${subject}`;
+      return `Create a new NSD page for "${topic}"`;
     case 'strengthen_existing_page':
-      return `Strengthen page: ${subject}`;
+      return `Strengthen NSD page for "${topic}"${nsdShort}`;
     case 'add_internal_links':
-      return `Add internal links: ${subject}`;
+      return `Add internal links for "${topic}"${nsdShort}`;
     case 'pursue_backlinks':
-      return `Pursue backlinks: ${subject}`;
+      return `Build backlinks for "${topic}"${nsdShort}`;
     case 'maintain_paid_support':
-      return `Maintain paid support: ${subject}`;
+      return `Keep paid support for "${topic}"`;
     case 'metadata_ctr_optimization':
-      return `Optimize metadata: ${subject}`;
-    case 'hybrid':
-      return `Hybrid optimization: ${subject}`;
+      return `Improve title/meta for "${topic}"${nsdShort}`;
+    case 'hybrid': {
+      const secondary = row.secondary_remedy ? row.secondary_remedy.replace(/_/g, ' ') : 'combined tactics';
+      return `"${topic}" — ${secondary}${nsdShort}`;
+    }
     default:
-      return `Opportunity: ${subject}`;
+      return `Opportunity for "${topic}"`;
   }
 }
 
 function buildSummary(remedy: string, row: OpportunityRow): string {
-  const subject = subjectLabel(row);
+  const topic = topicLabel(row);
   const ahrefs = ahrefsEvidence(row);
   const gsc = gscEvidence(row);
   const paid = paidEvidence(row);
   const auth = authorityEvidence(row);
+  const comp = competitorContext(row);
+  const nsd = nsdPageLabel(row);
 
   switch (remedy) {
     case 'create_new_page': {
-      let s = `Create a dedicated page for "${subject}" because competitors are ranking for this topic and NSD does not have a strong page presence.`;
-      if (ahrefs) s += ` Demand is supported by ${ahrefs}.`;
-      if (gsc) s += ` Current organic signal: ${gsc}.`;
+      let s = `NSD does not have a strong page for "${topic}."`;
+      if (comp) s += ` ${comp}.`;
+      s += ` Create a dedicated page to capture this traffic.`;
+      if (ahrefs) s += ` Demand: ${ahrefs}.`;
+      if (gsc) s += ` Organic signal: ${gsc}.`;
       return s;
     }
     case 'strengthen_existing_page': {
-      let s = `Strengthen "${subject}" because NSD already has a page and some organic visibility, but competitors are outperforming it.`;
-      if (gsc) s += ` Current organic signal: ${gsc}.`;
-      if (ahrefs) s += ` External evidence: ${ahrefs}.`;
+      let s = `NSD has a page${nsd ? ` (${nsd})` : ''} for "${topic}" with some organic visibility, but competitors are outranking it.`;
+      if (comp) s += ` ${comp}.`;
+      if (gsc) s += ` Organic signal: ${gsc}.`;
+      if (ahrefs) s += ` Demand: ${ahrefs}.`;
       return s;
     }
     case 'add_internal_links': {
-      let s = `Add internal links to "${subject}" because NSD has ranking potential but appears under-supported internally.`;
-      if (row.internal_link_signal_strength) s += ` Internal-link signal is ${row.internal_link_signal_strength}.`;
-      if (row.nsd_ranking_page) s += ` Current ranking page: ${row.nsd_ranking_page}.`;
+      let s = `"${topic}" has ranking potential on NSD but the page appears under-linked internally.`;
+      if (row.internal_link_signal_strength) s += ` Internal-link signal: ${row.internal_link_signal_strength}.`;
+      if (nsd) s += ` Target page: ${nsd}.`;
       if (gsc) s += ` Organic signal: ${gsc}.`;
       return s;
     }
     case 'pursue_backlinks': {
-      let s = `Prioritize backlink outreach for "${subject}" because competitors benefit from stronger authority support.`;
-      if (auth) s += ` Strongest signal: ${auth}.`;
+      let s = `NSD needs more backlinks for "${topic}" to close the authority gap with competitors.`;
+      if (comp) s += ` ${comp}`;
+      if (auth) s += ` (${auth}).`;
+      else if (comp) s += '.';
+      if (nsd) s += ` Target NSD page: ${nsd}.`;
       if (ahrefs) s += ` Demand: ${ahrefs}.`;
       return s;
     }
     case 'maintain_paid_support': {
-      let s = `Maintain paid support for "${subject}" because paid demand is active while SEO is still weak or immature.`;
-      if (paid) s += ` Paid signal: ${paid}.`;
+      let s = `Paid ads are driving results for "${topic}" while SEO is still developing.`;
+      if (paid) s += ` Current: ${paid}.`;
       if (gsc) s += ` Organic signal: ${gsc}.`;
+      s += ` Keep paid support active until organic rankings improve.`;
       return s;
     }
     case 'metadata_ctr_optimization': {
-      let s = `Improve metadata for "${subject}" because NSD already ranks within visible range but CTR is weak relative to impressions.`;
-      if (gsc) s += ` Current signal: ${gsc}.`;
-      if (ahrefs) s += ` Demand: ${ahrefs}.`;
+      let s = `NSD ranks for "${topic}" but click-through rate is low relative to impressions.`;
+      if (gsc) s += ` Current: ${gsc}.`;
+      s += ` Improve the title tag and meta description to increase CTR.`;
+      if (nsd) s += ` Page: ${nsd}.`;
       return s;
     }
     case 'hybrid': {
       const secondaryLabel = row.secondary_remedy ? row.secondary_remedy.replace(/_/g, ' ') : 'multiple tactics';
-      let s = `Apply combined optimization for "${subject}" using ${secondaryLabel}.`;
-      if (gsc) s += ` Organic signal: ${gsc}.`;
+      let s = `"${topic}" needs a combined approach (${secondaryLabel}) to improve NSD's position.`;
+      if (comp) s += ` ${comp}.`;
+      if (gsc) s += ` Organic: ${gsc}.`;
       if (ahrefs) s += ` Demand: ${ahrefs}.`;
-      if (auth) s += ` Authority: ${auth}.`;
+      if (auth) s += ` Competitor authority: ${auth}.`;
       if (paid) s += ` Paid: ${paid}.`;
       return s;
     }
     default: {
-      let s = `Optimize "${subject}".`;
+      let s = `Optimize NSD's presence for "${topic}."`;
       if (gsc) s += ` Organic signal: ${gsc}.`;
       return s;
     }
