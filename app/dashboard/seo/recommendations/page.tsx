@@ -50,12 +50,12 @@ const ACTION_BADGE_STYLES: Record<string, { bg: string; text: string; label: str
 
 function formatEvidenceShort(raw: string): string {
   return raw
-    .replace(/\bSV:(\d[\d,]*)/g, (_, v) => `Volume: ${v}`)
-    .replace(/\bKD:(\d+)/g, (_, v) => `KD: ${v}`)
-    .replace(/\bGSC:(\d[\d,]*)imp@([\d.]+)/g, (_, imp, pos) => `GSC: ${imp} imp at pos ${pos}`)
-    .replace(/\bAds:\$?([\d,.]+)/g, (_, v) => `Ads: $${v}`)
-    .replace(/\bConv:(\d+)/g, (_, v) => `${v} conversions`)
-    .replace(/\bComp:([\w.-]+)/g, (_, v) => `vs ${v}`)
+    .replace(/\bSV:([\d,]+)/g, (_, v) => `Volume: ${v}`)
+    .replace(/\bKD:([\d.]+)/g, (_, v) => `KD: ${v}`)
+    .replace(/\bGSC:\s*([\d,]+)\s*imp\s*@\s*([\d.]+)/g, (_, imp, pos) => `GSC: ${imp} imp at pos ${pos}`)
+    .replace(/\bAds:\s*\$?([\d,.]+)/g, (_, v) => `Ads: $${v}`)
+    .replace(/\bConv:\s*([\d.]+)/g, (_, v) => `${v} conversions`)
+    .replace(/\bComp:\s*([\w./:@-]+)/g, (_, v) => `vs ${v}`)
     .replace(/\s*→\s*/g, ' — ')
     .replace(/_/g, ' ');
 }
@@ -241,6 +241,13 @@ function DetailPanel({
             <>
               <p style={fieldLabel}>Target Keyword</p>
               <p style={fieldValue}>{detail.primary_subject}</p>
+            </>
+          )}
+
+          {detail.primary_subject && detail.primary_subject.startsWith('http') && (!detail.competitor_domain || !detail.primary_subject.includes(detail.competitor_domain)) && (
+            <>
+              <p style={fieldLabel}>Reference Page</p>
+              <p style={{ ...fieldValue, wordBreak: 'break-all' }}>{detail.primary_subject}</p>
             </>
           )}
         </div>
