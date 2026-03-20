@@ -47,6 +47,12 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    title: 'Sales Funnel',
+    items: [
+      { href: '/dashboard/marketing/quote-funnel', label: 'Quote Pipeline', icon: 'chart' },
+    ],
+  },
+  {
     title: 'System',
     items: [
       { href: '/dashboard/marketing/data-health', label: 'Data Health', icon: 'shield' },
