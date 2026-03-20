@@ -234,14 +234,15 @@ async function getSearchTerms(start: string, end: string, campaignId?: string | 
 
   const { rows } = await pool.query(`
     WITH deduped AS (
-      SELECT DISTINCT ON (occurred_at, payload->>'campaign_id', payload->>'ad_group_id', payload->>'search_term')
+      SELECT DISTINCT ON (occurred_at, payload->>'campaign_id', payload->>'ad_group_id', COALESCE(payload->>'search_term', ''))
         payload
       FROM analytics.raw_google_ads_search_term_daily
       WHERE occurred_at BETWEEN $1 AND $2
         ${campaignFilter}
-      ORDER BY occurred_at, payload->>'campaign_id', payload->>'ad_group_id', payload->>'search_term', ingestion_run_id DESC
+      ORDER BY occurred_at, payload->>'campaign_id', payload->>'ad_group_id', COALESCE(payload->>'search_term', ''), ingestion_run_id DESC
     )
     SELECT
+      COALESCE(NULLIF(payload->>'search_term', ''), '(not available)') AS search_term,
       payload->>'campaign_id' AS campaign_id,
       payload->>'campaign_name' AS campaign_name,
       payload->>'ad_group_id' AS ad_group_id,
@@ -253,15 +254,17 @@ async function getSearchTerms(start: string, end: string, campaignId?: string | 
       SUM(COALESCE((payload->>'conversion_value')::numeric, 0)) AS conversion_value
     FROM deduped
     GROUP BY
+      COALESCE(NULLIF(payload->>'search_term', ''), '(not available)'),
       payload->>'campaign_id',
       payload->>'campaign_name',
       payload->>'ad_group_id',
       payload->>'ad_group_name'
-    ORDER BY SUM(COALESCE((payload->>'cost')::numeric, 0)) DESC
+    ORDER BY ${orderCol} DESC
     LIMIT 200
   `, params);
 
   return rows.map(r => ({
+    search_term: r.search_term,
     campaign_id: r.campaign_id,
     campaign_name: r.campaign_name,
     ad_group_id: r.ad_group_id,

@@ -51,7 +51,7 @@ The marketing dashboard now includes deep-dive views for Google Ads granular dat
 - Campaign Performance Trend chart (daily clicks/impressions/cost/conversions with metric toggle)
 - Conversion Actions breakdown (pending `raw_google_ads_campaign_conversions` table migration)
 - Keyword Performance sortable table with campaign filter (`raw_google_ads_keyword_daily`)
-- Search Terms table aggregated by ad group (`raw_google_ads_search_term_daily` — search term text not yet in pipeline)
+- Search Terms table with search term text when available, aggregated by ad group (`raw_google_ads_search_term_daily`)
 
 **Ahrefs Intelligence** (`/dashboard/marketing/ahrefs`):
 - Keyword Gap table with competitor filter, KD badges, CPC, position (`raw_ahrefs_keyword_gap`)
@@ -74,6 +74,28 @@ The marketing dashboard now includes deep-dive views for Google Ads granular dat
 - Campaign names display as IDs (no name mapping available yet)
 - Conversion action tables (`raw_google_ads_campaign_conversions`, `raw_google_ads_ad_group_conversions`) not yet created in Supabase
 - Competitors tracked: vistaprint.com, etsy.com, amazon.com, neonmfg.com
+
+## Quote Pipeline Dashboard
+The Quote Pipeline dashboard (`/dashboard/marketing/quote-funnel`) provides quote-to-close metrics, aging analysis, and win rate breakdowns from QMS production data (132 rows in `analytics.raw_qms_deals`).
+
+**Sections:**
+- KPI grid: Quote-to-Close Rate, Won Revenue, Revenue per Quote, Avg Won Order, Open Quotes, Avg Sales Cycle
+- Aging Quotes: Horizontal bar chart of open quotes by age band (0-3d, 3-7d, 7-14d, 14-30d, 30-60d, 60+d) with pipeline value
+- Cost per Quote: Google Ads spend / web quote submissions (deduped `raw_google_ads_campaign_daily`)
+- Win Rate by Type: Sortable tables for quote_type and sign_type with win rate, revenue, avg won value
+- Pipeline Stage Breakdown: All lifecycle stages with active/closed status, count, pipeline value, avg age
+- Weekly Submission Trend: AreaLineChart showing submissions and won per week
+- Source Attribution: UTM source/medium breakdown with coverage warning (currently ~11% attribution rate)
+
+**API Route:** `app/api/activity-spine/marketing/quote-funnel/route.ts` — 7 views: `summary`, `aging`, `win-rate-by-type`, `pipeline-trend`, `stage-breakdown`, `attribution`, `cost-per-quote`
+
+**Navigation:** "Sales Funnel" nav group in MarketingNav with "Quote Pipeline" link
+
+**Data Notes:**
+- UTM campaign attribution is 0% filled — per-campaign win rate is blocked
+- UTM source is ~11% filled (mostly google/cpc from Google Ads clicks)
+- `deposit_paid_at` is never populated; `quote_paid_at` is used for won order detection
+- Cost per Quote is approximate: total Google Ads spend / all web conversion events
 
 ## SEO Command Center
 The SEO Command Center (`/dashboard/seo`) provides a comprehensive read-only decision surface for keyword cluster analysis, page performance, competitive intelligence, content pipeline management, internal linking, and SEO recommendation approval. Data is sourced from the Supabase `analytics` schema via `lib/seo-db.ts` and `app/api/proxy/seo/intelligence/route.ts`.

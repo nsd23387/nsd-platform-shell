@@ -51,6 +51,7 @@ interface KeywordRow {
 }
 
 interface SearchTermRow {
+  search_term: string;
   campaign_id: string;
   campaign_name: string;
   ad_group_id: string;
@@ -335,11 +336,15 @@ function SearchTermsSection() {
     whiteSpace: 'nowrap',
   });
 
+  const hasSearchTerms = terms.some(t => t.search_term && t.search_term !== '(not available)');
+
   return (
     <div>
-      <div style={{ marginBottom: space['3'], padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.muted, borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
-        Search term text is not yet available in the data pipeline. Showing aggregated metrics by ad group.
-      </div>
+      {!hasSearchTerms && (
+        <div style={{ marginBottom: space['3'], padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.muted, borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+          Search term text is not yet available for most rows in the data pipeline. Showing aggregated metrics by ad group.
+        </div>
+      )}
       <div style={{ marginBottom: space['4'], display: 'flex', gap: space['3'], alignItems: 'center', flexWrap: 'wrap' }}>
         <CampaignFilter campaigns={campaigns ?? []} value={campaignFilter} onChange={setCampaignFilter} />
         <div style={{ display: 'flex', gap: space['2'] }}>
@@ -368,6 +373,7 @@ function SearchTermsSection() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }} data-testid="table-search-terms">
           <thead>
             <tr>
+              <th style={thStyle('left')}>Search Term</th>
               <th style={thStyle('left')}>Ad Group</th>
               <th style={thStyle('left')}>Campaign</th>
               <th style={thStyle()}>Clicks</th>
@@ -381,9 +387,14 @@ function SearchTermsSection() {
           </thead>
           <tbody>
             {terms.map((t, i) => (
-              <tr key={`${t.ad_group_id}-${i}`}>
+              <tr key={`${t.search_term}-${t.ad_group_id}-${i}`}>
+                <td style={tdStyle('left')}>
+                  <span style={{ color: t.search_term === '(not available)' ? tc.text.placeholder : tc.text.primary }}>
+                    {t.search_term}
+                  </span>
+                </td>
                 <td style={tdStyle('left')}>{t.ad_group_name || t.ad_group_id}</td>
-                <td style={tdStyle('left')}>{t.campaign_name || t.campaign_id}</td>
+                <td style={tdStyle('left')}>{t.campaign_name !== t.campaign_id ? t.campaign_name : `Campaign ${t.campaign_id.slice(-6)}`}</td>
                 <td style={tdStyle()}>{t.clicks.toLocaleString()}</td>
                 <td style={tdStyle()}>{t.impressions.toLocaleString()}</td>
                 <td style={tdStyle()}>{(t.ctr * 100).toFixed(1)}%</td>
