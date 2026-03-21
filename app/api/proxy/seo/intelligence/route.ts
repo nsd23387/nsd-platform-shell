@@ -369,6 +369,202 @@ async function getCompetitorsList() {
   return rows.map(r => r.competitor);
 }
 
+const PHASE1_INTENT_TO_REMEDY: Record<string, string> = {
+  create_page: 'create_new_page',
+  strengthen_page: 'strengthen_existing_page',
+  improve_ctr: 'metadata_ctr_optimization',
+  add_internal_links: 'add_internal_links',
+};
+
+function mapPhase1RowToOpportunityShape(row: Record<string, unknown>, idx: number) {
+  const intent = String(row.strategic_intent || '');
+  const remedy = PHASE1_INTENT_TO_REMEDY[intent] || intent;
+  const bucket = String(row.target_page_bucket || '');
+  const nsdPageUrl = bucket.startsWith('existing:') ? bucket.replace('existing:', '') : null;
+
+  return {
+    opportunity_id: row.opportunity_id,
+    opportunity_family: 'page',
+    opportunity_type: intent,
+    topic_cluster: row.topic_cluster,
+    primary_subject: row.topic_cluster,
+    nsd_page_url: nsdPageUrl,
+    competitor_domain: null,
+    total_opportunity_score: Number(row.business_impact_score || 0),
+    demand_score: Number(row.max_keyword_score || 0),
+    competitive_opportunity_score: Number(row.competitor_evidence_count || 0) / 10,
+    authority_gap_score: Number(row.authority_evidence_count || 0) / 10,
+    paid_support_score: 0,
+    execution_readiness_score: 0,
+    primary_remedy: remedy,
+    secondary_remedy: null,
+    urgency_band: row.urgency_band || 'low',
+    data_confidence: Number(row.confidence_score || 0) >= 7 ? 'high' : Number(row.confidence_score || 0) >= 4 ? 'medium' : 'low',
+    source_freshness_label: 'healthy',
+    confidence_reason: null,
+    source_coverage_count: Number(row.keyword_driver_count || 0),
+    ahrefs_search_volume: null,
+    ahrefs_keyword_difficulty: null,
+    ahrefs_cpc: null,
+    gsc_impressions: null,
+    gsc_best_position: null,
+    ads_cost: null,
+    ads_conversions: null,
+    competitor_referring_domains: null,
+    competitor_domain_rating: null,
+    evidence_summary_short: [
+      `${row.keyword_driver_count || 0} keyword drivers`,
+      `${row.competitor_evidence_count || 0} competitor signals`,
+      `${row.authority_evidence_count || 0} authority signals`,
+      row.commercial_tier ? `tier: ${String(row.commercial_tier).replace(/_/g, ' ')}` : null,
+    ].filter(Boolean).join(' | '),
+    evidence_summary_long: null,
+    internal_link_signal_strength: null,
+    nsd_ranking_page: null,
+    balanced_rank: idx + 1,
+    portfolio_position: null,
+    balancing_strategy: null,
+    ahrefs_data_stale: null,
+    execution_status: row.execution_status as string | null || null,
+    approval_status: row.approval_status as string | null || null,
+    candidate_id: row.candidate_id ? String(row.candidate_id) : null,
+    mutation_type: row.mutation_type as string | null || null,
+    rollback_status: row.rollback_status as string | null || null,
+    awaiting_approval: row.awaiting_approval as boolean | null || null,
+    ready_to_execute: row.ready_to_execute as boolean | null || null,
+    phase1_confidence_score: Number(row.confidence_score || 0),
+    phase1_business_impact_score: Number(row.business_impact_score || 0),
+    phase1_strategic_intent: intent,
+    phase1_commercial_tier: row.commercial_tier || null,
+    phase1_lifecycle_phase: row.lifecycle_phase || null,
+    phase1_bottleneck_primary: row.bottleneck_primary || null,
+    phase1_bottleneck_secondary: row.bottleneck_secondary || null,
+    phase1_target_page_bucket: bucket,
+    phase1_recommended_target_page: row.recommended_target_page || null,
+    phase1_wp_page_exists: row.wp_page_exists || null,
+    phase1_create_page_warning: row.create_page_warning || null,
+    phase1_kpi_primary: row.kpi_primary || null,
+    phase1_kpi_secondary: row.kpi_secondary || null,
+    phase1_baseline_window_days: row.baseline_window_days != null ? Number(row.baseline_window_days) : null,
+    phase1_measurement_window_days: row.measurement_window_days != null ? Number(row.measurement_window_days) : null,
+    phase1_baseline_fields: row.baseline_fields || null,
+    phase1_success_threshold: row.success_threshold || null,
+    phase1_measurement_notes: row.measurement_notes || null,
+  };
+}
+
+function extractPhase1Fields(detail: Record<string, unknown>) {
+  return {
+    phase1_confidence_score: Number(detail.phase1_confidence_score ?? detail.confidence_score ?? 0),
+    phase1_business_impact_score: Number(detail.phase1_business_impact_score ?? detail.business_impact_score ?? 0),
+    phase1_strategic_intent: detail.phase1_strategic_intent ?? detail.strategic_intent ?? null,
+    phase1_commercial_tier: detail.phase1_commercial_tier ?? detail.commercial_tier ?? null,
+    phase1_lifecycle_phase: detail.phase1_lifecycle_phase ?? detail.lifecycle_phase ?? null,
+    phase1_bottleneck_primary: detail.phase1_bottleneck_primary ?? detail.bottleneck_primary ?? null,
+    phase1_bottleneck_secondary: detail.phase1_bottleneck_secondary ?? detail.bottleneck_secondary ?? null,
+    phase1_target_page_bucket: detail.phase1_target_page_bucket ?? detail.target_page_bucket ?? null,
+    phase1_recommended_target_page: detail.phase1_recommended_target_page ?? detail.recommended_target_page ?? null,
+    phase1_wp_page_exists: detail.phase1_wp_page_exists ?? detail.wp_page_exists ?? null,
+    phase1_create_page_warning: detail.phase1_create_page_warning ?? detail.create_page_warning ?? null,
+    phase1_kpi_primary: detail.phase1_kpi_primary ?? detail.kpi_primary ?? null,
+    phase1_kpi_secondary: detail.phase1_kpi_secondary ?? detail.kpi_secondary ?? null,
+    phase1_baseline_window_days: detail.phase1_baseline_window_days ?? (detail.baseline_window_days != null ? Number(detail.baseline_window_days) : null),
+    phase1_measurement_window_days: detail.phase1_measurement_window_days ?? (detail.measurement_window_days != null ? Number(detail.measurement_window_days) : null),
+    phase1_baseline_fields: detail.phase1_baseline_fields ?? detail.baseline_fields ?? null,
+    phase1_success_threshold: detail.phase1_success_threshold ?? detail.success_threshold ?? null,
+    phase1_measurement_notes: detail.phase1_measurement_notes ?? detail.measurement_notes ?? null,
+  };
+}
+
+async function getPhase1Recommendations(remedy?: string | null, urgency?: string | null) {
+  const conditions: string[] = [];
+  const params: string[] = [];
+  let paramIdx = 1;
+
+  if (remedy) {
+    const intentKey = Object.entries(PHASE1_INTENT_TO_REMEDY).find(([, v]) => v === remedy)?.[0] || remedy;
+    conditions.push(`p.strategic_intent = $${paramIdx++}`);
+    params.push(intentKey);
+  }
+  if (urgency) {
+    conditions.push(`p.urgency_band = $${paramIdx++}`);
+    params.push(urgency);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const { rows } = await pool.query(`
+    SELECT
+      p.*,
+      e.execution_status, e.approval_status, e.candidate_id::text,
+      e.mutation_type, e.rollback_status,
+      e.awaiting_approval, e.ready_to_execute
+    FROM analytics.seo_phase1_opportunity p
+    LEFT JOIN LATERAL (
+      SELECT eq.execution_status, eq.approval_status, eq.candidate_id,
+             eq.mutation_type, eq.rollback_status,
+             eq.awaiting_approval, eq.ready_to_execute
+      FROM analytics.seo_execution_queue eq
+      WHERE eq.opportunity_id = p.opportunity_id::text
+      ORDER BY eq.created_at DESC
+      LIMIT 1
+    ) e ON true
+    ${whereClause}
+    ORDER BY p.business_impact_score DESC NULLS LAST, p.confidence_score DESC NULLS LAST
+  `, params);
+
+  return rows.map((r, i) => mapPhase1RowToOpportunityShape(r, i));
+}
+
+async function getPhase1RecommendationDetail(opportunityId: string) {
+  const { rows } = await pool.query(`
+    SELECT p.*
+    FROM analytics.seo_phase1_opportunity p
+    WHERE p.opportunity_id = $1
+  `, [opportunityId]);
+
+  if (rows.length === 0) return null;
+
+  const { rows: execRows } = await pool.query(`
+    SELECT candidate_id::text, execution_status, approval_status,
+           mutation_type, rollback_status, target_page_url, target_field,
+           proposed_value, approval_required, reviewer_id, reviewed_at,
+           review_notes, rollback_available, execution_timestamp,
+           awaiting_approval, ready_to_execute, rollback_eligible,
+           created_at
+    FROM analytics.seo_execution_queue
+    WHERE opportunity_id::text = $1
+    ORDER BY created_at DESC
+  `, [opportunityId]);
+
+  const mapped = mapPhase1RowToOpportunityShape(rows[0], 0);
+  return { ...mapped, execution_candidates: execRows };
+}
+
+async function getPhase1Suppressed() {
+  const { rows } = await pool.query(`
+    SELECT * FROM analytics.seo_phase1_suppressed
+    ORDER BY business_impact_score DESC NULLS LAST
+  `);
+
+  return rows.map((r, i) => ({
+    opportunity_id: r.opportunity_id,
+    topic_cluster: r.topic_cluster,
+    strategic_intent: r.strategic_intent,
+    target_page_bucket: r.target_page_bucket,
+    recommended_target_page: r.recommended_target_page,
+    max_keyword_score: Number(r.max_keyword_score || 0),
+    urgency_band: r.urgency_band || 'low',
+    keyword_driver_count: Number(r.keyword_driver_count || 0),
+    status: r.status,
+    lifecycle_phase: r.lifecycle_phase,
+    commercial_tier: r.commercial_tier,
+    confidence_score: Number(r.confidence_score || 0),
+    business_impact_score: Number(r.business_impact_score || 0),
+    suppression_reason: r.suppression_reason,
+  }));
+}
+
 async function getEngineRecommendations(limit: number, family?: string | null, remedy?: string | null, urgency?: string | null) {
   const conditions: string[] = [];
   const params: (string | number)[] = [];
@@ -524,6 +720,34 @@ export async function GET(req: NextRequest) {
         const rows = await getEngineRecommendations(limit, family, remedy, urgencyFilter);
         const cards = (rows as unknown as OpportunityRow[]).map(toRecommendationCard);
         result = grouped ? groupIntoSections(cards) : cards;
+        break;
+      }
+      case 'phase1-recommendations': {
+        const p1Remedy = req.nextUrl.searchParams.get('remedy');
+        const p1Urgency = req.nextUrl.searchParams.get('urgency');
+        const p1Grouped = req.nextUrl.searchParams.get('grouped') !== 'false';
+        const p1Rows = await getPhase1Recommendations(p1Remedy, p1Urgency);
+        const p1Cards = (p1Rows as unknown as OpportunityRow[]).map(toRecommendationCard);
+        const p1Result = p1Grouped ? groupIntoSections(p1Cards) : p1Cards;
+        result = { sections: p1Result, phase1_fields: p1Rows };
+        break;
+      }
+      case 'phase1-detail': {
+        const p1OppId = req.nextUrl.searchParams.get('opportunity_id');
+        if (!p1OppId) return NextResponse.json({ error: 'opportunity_id required' }, { status: 400 });
+        const p1Detail = await getPhase1RecommendationDetail(p1OppId);
+        if (!p1Detail) return NextResponse.json({ error: 'Phase-1 opportunity not found' }, { status: 404 });
+        const p1ExecCandidates = (p1Detail as Record<string, unknown>).execution_candidates as Array<Record<string, unknown>> | undefined;
+        const p1LatestExec = p1ExecCandidates && p1ExecCandidates.length > 0 ? p1ExecCandidates[0] : null;
+        const p1DetailWithExec = p1LatestExec
+          ? { ...p1Detail, execution_status: p1LatestExec.execution_status, approval_status: p1LatestExec.approval_status, candidate_id: p1LatestExec.candidate_id, mutation_type: p1LatestExec.mutation_type, rollback_status: p1LatestExec.rollback_status, awaiting_approval: p1LatestExec.awaiting_approval, ready_to_execute: p1LatestExec.ready_to_execute }
+          : p1Detail;
+        const p1Card = toRecommendationCard(p1DetailWithExec as unknown as OpportunityRow);
+        result = { ...p1Card, evidence_summary_long: null, execution_candidates: p1ExecCandidates, ...extractPhase1Fields(p1Detail) };
+        break;
+      }
+      case 'phase1-suppressed': {
+        result = await getPhase1Suppressed();
         break;
       }
       case 'recommendation-detail': {

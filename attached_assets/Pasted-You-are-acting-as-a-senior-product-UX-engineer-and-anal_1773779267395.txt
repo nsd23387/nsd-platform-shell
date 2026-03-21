@@ -1,0 +1,366 @@
+You are acting as a senior product/UX engineer and analytics integration engineer for the NSD SEO Intelligence system.
+
+Your task is to implement the **Dashboard Recommendation Layer Refresh** so the SEO Intelligence dashboard and recommendations reflect the current engine state instead of generic recommendation text.
+
+This implementation should be driven by the already-completed intelligence and execution layers.
+
+==================================================
+OBJECTIVE
+==================================================
+
+Replace generic recommendation messaging with structured, evidence-based, remedy-specific recommendations that reflect the real outputs of the NSD SEO Intelligence Engine.
+
+The dashboard must now present recommendations using the actual current decisioning layer, including:
+- scored opportunities
+- remedy classification
+- urgency
+- freshness/confidence
+- cluster attribution
+- execution state where relevant
+
+This is not a cosmetic copy change only.
+It is a recommendation presentation refresh aligned to the current engine architecture.
+
+==================================================
+CURRENT ENGINE STATE (ALREADY COMPLETE)
+==================================================
+
+The SEO engine already has:
+- source ingestion and backfills
+- canonical external modeling
+- cross-source intelligence
+- scored opportunities
+- deterministic remedy classification
+- ranked opportunity queue
+- balanced queue
+- freshness/confidence controls
+- internal-link signal strengthening
+- page/query cluster attribution
+- execution governance, candidate generation, approval state, audit model
+- live execution layer v1 for selected mutation types
+
+Canonical decisioning/reporting surfaces already exist, including:
+- `analytics.seo_opportunity_score_v2`
+- `analytics.seo_opportunity_queue`
+- `analytics.seo_opportunity_queue_balanced`
+- `analytics.daily_report_opportunity_payload`
+- `analytics.weekly_seo_opportunity_rollup`
+- execution-layer views in ODS
+
+Current problem:
+- the dashboard still shows generic recommendation text
+- recommendation cards/messages are not reflecting the current structured intelligence outputs
+- the UI is behind the engine
+
+==================================================
+PRIMARY GOALS
+==================================================
+
+1. Make recommendations remedy-specific
+2. Make recommendations evidence-based
+3. Make recommendations trust-aware
+4. Make recommendations execution-aware where applicable
+5. Improve recommendation grouping and hierarchy in the dashboard
+6. Preserve deterministic logic — no AI-generated dashboard recommendation copy in this phase
+
+==================================================
+PHASE A — INVESTIGATE CURRENT DASHBOARD RECOMMENDATION PATH
+==================================================
+
+Before changing anything, determine:
+
+1. What current API payload(s) the dashboard uses for SEO recommendations
+2. Whether the dashboard is still reading:
+   - legacy recommendation text fields
+   - older generic recommendation tables/views
+   - raw or intermediate fields rather than the queue/scored surfaces
+3. Whether the dashboard currently uses:
+   - `topic_cluster` instead of `attributed_cluster`
+   - generic recommendation text instead of `primary_remedy`
+   - no freshness/confidence fields
+   - no execution-state fields
+4. Which repo(s) are involved:
+   - dashboard/frontend repo
+   - `nsd-ods-api`
+5. Whether the existing dashboard API contract is sufficient or whether a cleaner recommendation payload view/endpoint is needed
+
+Your first output must clearly state:
+- the current recommendation rendering path
+- why the UI is still generic
+- whether changes are needed in:
+  - frontend only
+  - ODS payload only
+  - or both
+
+Do not assume. Establish truth first.
+
+==================================================
+PHASE B — DEFINE THE NEW RECOMMENDATION PRESENTATION CONTRACT
+==================================================
+
+Create or refine the data contract that the dashboard should consume for recommendation rendering.
+
+At minimum, each recommendation card/row should expose:
+
+Core fields:
+- opportunity_id
+- opportunity_family
+- attributed_cluster
+- primary_subject
+- primary_remedy
+- total_opportunity_score
+- urgency_band
+- source_freshness_label
+- data_confidence
+- confidence_reason
+
+Evidence fields:
+- ahrefs_search_volume
+- ahrefs_keyword_difficulty
+- ahrefs_cpc
+- gsc_impressions
+- gsc_best_position
+- gsc_ctr
+- ads_cost
+- ads_conversions
+- competitor_domain if relevant
+- referring_domain / DR if relevant
+- internal_link_signal_strength if relevant
+- nsd_page_url / nsd_ranking_page where relevant
+
+Execution fields where relevant:
+- execution_status
+- approval_status
+- candidate_id if exists
+- rollback_status if relevant
+
+Presentation fields:
+- recommendation_title
+- recommendation_summary
+- recommendation_reason
+- evidence_summary_short
+- evidence_summary_long (optional)
+- action_state_badge
+
+Important:
+- If these fields already exist in current queue/scoring/execution surfaces, reuse them
+- Only add new ODS payload fields if truly needed
+- Prefer one clean recommendation payload view over scattered frontend transformations if that makes the system more robust
+
+Suggested canonical payload surface if needed:
+- `analytics.seo_dashboard_recommendations`
+or similarly named
+- or a small API endpoint in `nsd-ods-api` that projects the queue/execution state cleanly
+
+==================================================
+PHASE C — REPLACE GENERIC RECOMMENDATION COPY WITH DETERMINISTIC TEMPLATES
+==================================================
+
+Recommendation copy must now be generated from deterministic templates based on `primary_remedy`, opportunity family, and evidence.
+
+Do NOT use generic text like:
+- improve this page
+- optimize content
+- add more internal links
+- fix SEO issues
+
+Instead, implement structured templates by remedy family.
+
+At minimum support these recommendation templates:
+
+### 1. create_new_page
+Example pattern:
+Create a dedicated **[cluster/topic]** page because competitors are ranking for this topic and NSD does not have a strong page presence. Demand is supported by **Ahrefs volume [X]** and **[CPC if available]**.
+
+### 2. strengthen_existing_page
+Strengthen **[page/query]** because NSD already has a page and some organic visibility, but competitors are outperforming it. Current organic signal is **[GSC metrics]** and the opportunity is supported by **[external evidence]**.
+
+### 3. add_internal_links
+Add internal links to **[target page]** because NSD has ranking potential but appears under-supported internally. Internal-link signal is **[strong/moderate/position_only]** and the current ranking page is **[URL]**.
+
+### 4. pursue_backlinks
+Prioritize backlink outreach for **[cluster/page]** because competitors benefit from stronger authority support. The strongest current signal includes **[referring domain / DR / competitor]**.
+
+### 5. maintain_paid_support
+Maintain paid support for **[query/cluster]** because paid demand is active while SEO is still weak or immature. Paid signal shows **[cost / conversions / CPC]**.
+
+### 6. metadata_ctr_optimization
+Improve metadata for **[page/query]** because NSD already ranks within visible range but CTR is weak relative to impressions. Current signal is **[impressions / position / CTR]**.
+
+### 7. hybrid
+Use a deterministic combined template based on the dominant paired remedies, for example:
+- strengthen_existing_page + pursue_backlinks
+- create_new_page + pursue_backlinks
+- create_new_page + maintain_paid_support
+
+Requirements:
+- recommendation text must be deterministic
+- recommendation text must use real evidence fields
+- no vague placeholders
+- no AI generation in this phase
+- suppress or exclude branded/no-action rows completely
+
+==================================================
+PHASE D — DASHBOARD INFORMATION HIERARCHY REFRESH
+==================================================
+
+Update the dashboard so recommendations are grouped and surfaced in a way that matches the current engine.
+
+At minimum, the recommendation layer should present sections such as:
+
+1. Top overall opportunities
+2. Quick wins
+3. Page/content opportunities
+4. Authority / outreach opportunities
+5. Paid-supported opportunities
+6. Awaiting approval / execution-ready opportunities
+7. Recently published / recently executed changes (if execution state is available)
+
+Requirements:
+- use `seo_opportunity_queue_balanced` where operational presentation is better than canonical queue
+- preserve the canonical queue as score truth in the backend
+- use urgency + remedy + family to drive grouping
+- make recommendation cards actionable and interpretable
+
+Each recommendation card should clearly display:
+- remedy
+- cluster
+- score
+- urgency
+- why this recommendation exists
+- trust/freshness
+- execution state if applicable
+
+==================================================
+PHASE E — TRUST AND EXECUTION VISIBILITY
+==================================================
+
+Make recommendation cards trust-aware and execution-aware.
+
+At minimum:
+- show freshness/confidence state
+- show confidence reason
+- show if the recommendation is:
+  - recommendation only
+  - candidate generated
+  - awaiting approval
+  - approved
+  - published
+  - rolled back
+
+Do not bury this information.
+It should be visible in the recommendation layer so the dashboard reflects the current state of the system.
+
+==================================================
+PHASE F — ODS/API CHANGES ONLY IF NEEDED
+==================================================
+
+If the current API contract is too generic or fragmented, implement the minimum safe ODS/API improvement needed.
+
+Acceptable examples:
+- add a clean dashboard recommendation view
+- add a read endpoint like:
+  - `/api/v1/seo/intelligence/recommendations`
+- expose grouped sections or a flatter payload depending on the existing frontend architecture
+
+Requirements:
+- do not duplicate scoring logic
+- do not recreate queue logic in the UI
+- keep ODS as the source of recommendation truth
+
+==================================================
+PHASE G — VALIDATION
+==================================================
+
+Validation must prove:
+
+1. generic recommendation text is gone
+2. recommendation cards now reflect actual remedies
+3. evidence fields are visible and accurate
+4. freshness/confidence is visible
+5. execution state is visible where relevant
+6. branded/no-action opportunities do not appear
+7. grouped sections are useful and aligned to the queue
+8. the dashboard uses current engine outputs, not stale generic layers
+9. no regressions to existing scoring/queue/reporting logic
+
+You must show:
+- before/after comparison of recommendation text
+- sample recommendation cards for each major remedy type
+- sample grouped sections
+- sample execution-aware recommendation state
+- confirmation of which underlying data surface is now driving the dashboard
+
+==================================================
+IMPLEMENTATION CONSTRAINTS
+==================================================
+
+- Use the existing engine outputs as source of truth
+- Do not redesign scoring in this phase
+- Do not add AI-generated recommendation copy
+- Keep logic deterministic, inspectable, and production-safe
+- Prefer backend recommendation payload cleanup over excessive frontend-only string construction if the current contract is messy
+- Preserve backward compatibility where possible
+
+==================================================
+EXPECTED DESIGN APPROACH
+==================================================
+
+- first diagnose why recommendations are still generic
+- then define a clean recommendation contract
+- then replace recommendation rendering with remedy-specific templates
+- then update dashboard grouping/hierarchy
+- then expose trust and execution state clearly
+
+==================================================
+REQUIRED OUTPUT FORMAT
+==================================================
+
+Provide:
+
+1. Executive summary
+- what was implemented
+- whether changes were frontend only, ODS only, or both
+- what now drives recommendation rendering
+
+2. Findings before implementation
+- why recommendations were generic
+- what payload/path the dashboard was using
+- what needed to change
+
+3. File-by-file change summary
+Only include files actually modified
+
+4. Exact implementation summary
+- payload/API changes
+- frontend rendering/template changes
+- grouping/hierarchy changes
+- trust/execution visibility changes
+
+5. Validation evidence
+Include:
+- before/after recommendation examples
+- examples for each remedy type
+- section/grouping examples
+- execution-state examples
+- proof branded/no-action rows are excluded
+
+6. Remaining limitation notes
+State clearly any remaining limits after this refresh
+
+7. Deferred next steps
+Only true next steps after this phase
+
+==================================================
+QUALITY BAR
+==================================================
+
+When finished, the result should leave NSD with:
+- non-generic, remedy-specific recommendations
+- evidence-based recommendation cards
+- trust-aware and execution-aware recommendation rendering
+- dashboard sections aligned to the real queue and engine outputs
+
+Important:
+Do not stop at “text changed.”
+This prompt is complete only when the dashboard recommendation layer is truly aligned to the current SEO engine and validated against live data.

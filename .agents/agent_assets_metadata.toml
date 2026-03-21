@@ -1,0 +1,14 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "VASRFJhX-B85KbLlQQOI8"
+uri = "file://snippets/marketing-dashboard-forensics-audit.md"
+type = "text"
+title = "NSD Marketing Command Center — Forensic Audit Report"
+
+[[outputs]]
+id = "ee5UAyXhGFPv7--8_WG6s"
+uri = "file://.local/feasibility-audit-report.md"
+type = "text"
+title = "NSD Sales-Conversion & Marketing Efficiency — Feasibility Audit Report"

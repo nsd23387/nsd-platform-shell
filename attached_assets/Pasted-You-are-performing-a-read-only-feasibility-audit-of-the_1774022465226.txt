@@ -1,0 +1,244 @@
+You are performing a read-only feasibility audit of the current Neon Signs Depot analytics + quote/sales data stack.
+
+Objective
+Determine whether the following sales-conversion and marketing efficiency metrics can be accurately enabled from the current-state data model and systems, identify all gaps/blockers, and assess the feasibility and required changes to integrate these metrics into the current marketing analytics dashboard.
+
+Metrics to assess
+1. Cost per Quote
+2. Quote-to-Close Rate
+3. Revenue per Quote
+4. Gross Profit per Won Order
+5. Pipeline Velocity
+6. Aging Quotes
+7. Win Rate by Campaign
+8. Win Rate by Keyword
+9. Win Rate by Order Type
+
+Important context
+- NSD is a quote-driven business, not a pure ecommerce conversion business.
+- Revenue is often realized after quote submission and assisted sales follow-up.
+- The goal is not to invent new architecture first. The goal is to audit current feasibility based on what already exists.
+- We need an honest current-state assessment:
+  - what is already possible now
+  - what is partially possible with caveats
+  - what is blocked
+  - what exact data/model/dashboard changes would be needed
+
+Primary audit questions
+A. Can each metric be calculated today from current production data with acceptable trustworthiness?
+B. If yes, what exact tables/fields/sources support it?
+C. If partially, what assumptions or proxies are currently required?
+D. If blocked, what exact missing data, schema, joins, attribution links, or business rules prevent it?
+E. Can the current marketing analytics dashboard be extended to show these metrics without violating architecture/governance?
+F. What backend and frontend changes would be needed to integrate them cleanly?
+
+Required investigation scope
+
+1. Inventory all current relevant data sources
+Audit the current repos, schemas, and dashboards to identify all existing sources that may support these metrics, including but not limited to:
+- quote system / quote management data
+- order / won revenue data
+- WooCommerce orders if relevant
+- Google Ads campaign / keyword attribution data
+- GA4 / GTM derived marketing attribution data
+- analytics views / marts / summary tables
+- campaign / source / keyword fields already captured on quote records
+- order type / quote type / lead type fields
+- pipeline stage / quote status / order status / timestamps
+- direct cost fields or proxy cost sources
+- sales cycle timestamps / stage transition timestamps
+- marketing dashboard query sources and contracts
+
+2. Determine feasibility metric by metric
+For each metric, produce:
+- Definition
+- Exact formula
+- Current feasibility status:
+  - Fully feasible now
+  - Partially feasible with caveats
+  - Blocked
+- Exact supporting data sources
+- Exact blockers/gaps
+- Data quality or attribution risks
+- Minimum viable path to enable
+- Recommended canonical definition for NSD
+
+Use these target definitions unless current architecture requires refinement:
+
+Cost per Quote
+= marketing spend / quote submissions
+
+Quote-to-Close Rate
+= won orders / quotes submitted
+
+Revenue per Quote
+= won revenue / quotes submitted
+
+Gross Profit per Won Order
+= (won revenue - direct variable costs) / won orders
+
+Pipeline Velocity
+Executive version:
+= (qualified quotes × win rate × average order value) / average sales cycle length
+Operational version:
+= average time between key stages (quote submitted → first response → mockup sent → approval → payment → won)
+
+Aging Quotes
+= current date - quote submission date, bucketed into aging bands
+Also assess aged-open-quote rate:
+= open quotes older than X days / total open quotes
+
+Win Rate by Campaign
+= won orders attributed to campaign / quotes attributed to campaign
+
+Win Rate by Keyword
+= won orders attributed to keyword / quotes attributed to keyword
+
+Win Rate by Order Type
+= won orders of that type / quotes of that type
+
+3. Attribution audit
+Investigate whether quotes and won orders can currently be tied back to:
+- source
+- medium
+- campaign
+- keyword
+- order type
+
+Specifically determine:
+- whether quote records currently preserve campaign and keyword attribution
+- whether won orders retain linkage back to originating quote
+- whether there is a canonical quote → order → revenue path
+- whether attribution breaks after quote submission
+- whether first-touch, last-touch, or quote-origin attribution is currently feasible
+- what attribution model is most realistic given current data
+
+Do not assume attribution exists unless proven in the schema/code.
+
+4. Gross profit feasibility audit
+Determine whether gross profit per won order is currently possible.
+Investigate whether direct costs are already captured for won orders, such as:
+- supplier/factory cost
+- shipping cost
+- payment processing fees
+- design labor if stored as variable cost
+- any existing cost or margin fields
+If not available, determine whether:
+- gross profit is blocked
+- contribution profit proxy is possible
+- margin must be added later through new data capture or syncs
+
+5. Pipeline / lifecycle audit
+Determine whether pipeline velocity and aging can be supported today by auditing:
+- quote created timestamp
+- first response timestamp
+- mockup sent timestamp
+- approval timestamp
+- payment timestamp
+- order won/closed timestamp
+- stage transition history
+- open vs closed vs stale quote statuses
+If some timestamps are not directly stored, determine whether they can be inferred from activity/event logs or whether they are blocked.
+
+6. Dashboard feasibility audit
+Audit the current marketing analytics dashboard and determine:
+- current data model/query structure
+- what entities/measures/dimensions already exist
+- whether the dashboard is marketing-only or already supports quote/revenue funnel metrics
+- whether these new metrics belong in the current dashboard, a new sales conversion module, or a blended executive funnel view
+- whether the current UI and backend contracts can support:
+  - trend cards
+  - funnel tiles
+  - aging widgets
+  - win rate tables by campaign/keyword/order type
+  - pipeline velocity summaries
+
+Assess whether integration should be:
+A. additive to current dashboard
+B. a new Sales Conversion section within the current dashboard
+C. a separate quote-to-revenue dashboard surface with cross-links
+
+7. Output required
+
+Produce a structured audit document with these sections:
+
+Section 1 — Executive Summary
+- Overall feasibility summary
+- Which metrics are fully feasible now
+- Which are partial
+- Which are blocked
+- Whether current dashboard integration is practical now
+
+Section 2 — Current State Data Inventory
+- Relevant tables/views/endpoints/files
+- Purpose of each
+- Key fields relevant to the target metrics
+
+Section 3 — Metric-by-Metric Feasibility Matrix
+For each metric include:
+- Metric name
+- Canonical formula
+- Feasibility status
+- Supporting tables/fields
+- Known assumptions
+- Gaps/blockers
+- Recommended next step
+
+Section 4 — Attribution Feasibility
+- Current attribution path
+- Current attribution breaks
+- Recommended canonical attribution rule for NSD
+- Minimum changes required to enable campaign/keyword win-rate reporting
+
+Section 5 — Dashboard Integration Assessment
+- Can current dashboard absorb these metrics cleanly?
+- Recommended UX placement
+- Required backend changes
+- Required frontend changes
+- Recommended rollout order
+
+Section 6 — Gap Analysis
+Separate gaps into:
+- Data capture gaps
+- Schema/model gaps
+- Join/linkage gaps
+- Attribution gaps
+- Cost-accounting gaps
+- Dashboard/query/API gaps
+
+Section 7 — Recommended Implementation Plan
+Provide phased recommendations:
+- Phase 0: metrics possible now with existing data
+- Phase 1: smallest additions to unlock highest-value blocked metrics
+- Phase 2: deeper architecture changes if needed
+For each phase include:
+- objective
+- exact work items
+- dependencies
+- expected result
+
+Section 8 — Copy-Paste-Ready Milestones / Tasks
+Translate findings into explicit implementation tasks that can be added to the project plan.
+
+Execution rules
+- Read-only audit only
+- Do not modify code or schema
+- Do not invent tables/fields; prove them
+- Be precise and skeptical
+- Favor canonical, production-safe definitions
+- Distinguish between “can calculate now” and “can calculate only with unreliable assumptions”
+- If a metric is only partially feasible, explain exactly why
+- If dashboard integration is possible, explain the cleanest architecture path
+- If not possible, explain what must be built first
+
+Investigation method
+1. Audit existing analytics/dashboard code paths
+2. Audit quote/order/revenue schemas and views
+3. Audit attribution capture and linkage
+4. Audit lifecycle/stage timestamps
+5. Audit cost/margin availability
+6. Assess frontend/backend dashboard feasibility
+7. Produce the structured report
+
+Final instruction
+Do not give a generic answer. Ground every conclusion in actual current-state code, schema, queries, and data contracts. This is a feasibility audit, not a redesign brainstorm.

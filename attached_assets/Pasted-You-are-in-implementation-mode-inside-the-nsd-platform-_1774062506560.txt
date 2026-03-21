@@ -1,0 +1,82 @@
+You are in implementation mode inside the nsd-platform-shell repo.
+
+Mission:
+Add the smallest production-safe boundary controls so the Phase-1 SEO operator experience is truly constrained in practice, not just visually narrowed in the nav.
+
+Current state:
+- Non-Phase-1 SEO sections are hidden from nav, but some routes remain directly accessible by URL.
+- The recommendations experience may still expose a broader “All Remedies” mode.
+- `/dashboard/seo/content` can expose autonomous generation history that is not governed for Phase 1.
+
+Goal:
+Tighten operator discipline for production Phase 1 without redesigning routing, permissions, or the app shell.
+
+Critical policy:
+- Keep this narrow.
+- Do NOT introduce a large RBAC project.
+- Do NOT redesign the dashboard.
+- Prefer redirects, flags, and simple guards over new permission architecture.
+
+Implementation requirements:
+
+1. Route-boundary hardening
+For these routes:
+- `/dashboard/seo/clusters`
+- `/dashboard/seo/opportunities`
+- `/dashboard/seo/competitive`
+- `/dashboard/seo/content` (if still considered out of scope)
+
+implement the smallest safe Phase-1 behavior:
+- redirect to `/dashboard/seo/recommendations`
+- OR show a minimal “Out of scope for Phase 1” redirecting state
+- choose the narrower option consistent with current routing patterns
+
+2. All Remedies production discipline
+If “All Remedies” currently exists:
+- gate it behind a feature flag or explicit non-default internal toggle
+- do not let standard Phase-1 operators land in broad-mode by accident
+
+3. Environment hardening check
+Verify and, if needed, minimally harden behavior for:
+- `NEXT_PUBLIC_API_MODE`
+- `NEXT_PUBLIC_READ_ONLY`
+
+Requirements:
+- if API mode is disabled, surface a visible UI warning instead of silently showing an empty/misleading SEO surface
+- do not broadly redesign env handling; just make Phase-1 operator failures more obvious
+
+4. Preserve the usable Phase-1 operator surfaces
+Do not disrupt:
+- `/dashboard/seo`
+- `/dashboard/seo/recommendations`
+- `/dashboard/seo/internal-links`
+- `/dashboard/seo/pages`
+- `/dashboard/seo/outcomes`
+
+Files to inspect:
+- `app/dashboard/seo/layout.tsx`
+- the route entry files for hidden pages
+- `app/dashboard/seo/recommendations/page.tsx`
+- any current feature-flag or runtime-flag helpers
+- any env-mode handling around SEO API access
+
+Deliverables:
+1. concise summary
+2. exact files changed
+3. route-boundary behavior chosen
+4. All Remedies gating behavior
+5. API/read-only warning behavior
+6. verification evidence
+
+Acceptance criteria:
+- hidden non-Phase-1 routes are no longer casually accessible as active operator pages
+- broad-mode access is deliberately controlled
+- API-disabled state is visibly surfaced to the operator
+- Phase-1 pages remain intact
+
+Output format:
+A. summary
+B. files changed
+C. boundary hardening
+D. flag/env handling
+E. verification evidence

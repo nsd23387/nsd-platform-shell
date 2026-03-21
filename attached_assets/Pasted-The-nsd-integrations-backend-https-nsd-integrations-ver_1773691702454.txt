@@ -1,0 +1,79 @@
+The nsd-integrations backend (https://nsd-integrations.vercel.app) has been significantly expanded. Three data categories are now flowing daily into Supabase (fssgkgyconuzukcwptvc.supabase.co, analytics schema). The marketing analytics section of this dashboard needs to be updated to surface all of it. The backend is read-only from the dashboard's perspective — all data is queried from Supabase.
+
+Phase 1 — Investigation (complete before writing any code)
+1. Understand the existing dashboard structure
+
+Locate the marketing analytics section of the dashboard. Identify the files, routes, and components that currently render it
+Note the tech stack in use (charting library, data-fetching pattern, component conventions, styling system)
+Identify how the dashboard currently queries Supabase — direct client calls, a server layer, a shared hook/service, etc.
+Find any existing Google Ads, SEO, or Ahrefs components and note exactly what data they currently display and where they source it from
+2. Audit the Supabase tables now available
+
+All tables live in the analytics schema. Query each to understand actual column shapes and date ranges available before building any UI. The analytics schema requires Accept-Profile: analytics (REST) or schema: 'analytics' (JS client).
+
+Google Ads tables — all store data in a payload jsonb column alongside occurred_at (date), event_name, ingestion_run_id, and source_system:
+
+Table	Grain	Key payload fields
+raw_google_ads_campaign_daily	campaign/day	campaign_id, clicks, impressions, cost, conversions, conversion_value, view_through_conversions, interactions, ctr, average_cpc, cost_per_conversion
+raw_google_ads_ad_group_daily	ad group/day	+ ad_group_id
+raw_google_ads_keyword_daily	keyword/day	+ criterion_id, keyword_text, keyword_match_type
+raw_google_ads_search_term_daily	search term/day	campaign_id, ad_group_id, search_term, clicks, impressions, cost, conversions, ctr, average_cpc, cost_per_conversion
+raw_google_ads_campaign_conversions	conversion action/day	campaign_id, conversion_action_name, conversion_action_category, conversions, conversion_value, value_per_conversion
+raw_google_ads_ad_group_conversions	conversion action/day	+ ad_group_id
+Ahrefs tables:
+
+Table	Grain	Key payload fields
+raw_ahrefs_keyword_gap	keyword/competitor	keyword, target_position, competitor_position, search_volume, keyword_difficulty, cpc, target_domain, competitor_domain
+raw_ahrefs_backlink_gap	domain/competitor	referring_domain, target_has_backlink, competitor_has_backlink, domain_rating, backlinks_count, target_domain, competitor_domain
+raw_ahrefs_top_pages	page/week	url, traffic, traffic_value, top_keyword, top_keyword_volume, backlinks, referring_domains, target_domain
+Ahrefs target domain is neonsignsdepot.com. Competitors tracked: vistaprint.com, etsy.com, amazon.com, neonmfg.com, neonpros.com.
+
+3. Identify gaps and redundancy
+
+List which of the above data points the dashboard currently shows (if any)
+List what is completely new and needs net-new components
+Note any existing components that can be extended rather than replaced
+Check if there are existing campaign ID → campaign name mappings available anywhere (the current data has campaign IDs, not names)
+4. Summarise findings before proceeding
+Write a short summary of: current dashboard state, which components exist, what data each uses, and a concrete list of what needs to be built or changed. Confirm this before starting Phase 2.
+
+Phase 2 — Implementation
+Build or update the marketing analytics section according to the investigation findings. Follow all existing patterns exactly — do not introduce new libraries, data-fetching approaches, or styling conventions unless the existing codebase has none.
+
+Google Ads — required views
+
+Campaign performance overview — daily trend chart (last 30 days) for clicks, impressions, cost, and conversions. One line/bar per campaign. Default to last 30 days with a date range picker.
+
+Key metrics summary — for the selected date range, show aggregated totals: total spend, total clicks, total conversions, blended CPC, blended CPL (cost per conversion), total conversion value, ROAS (conversion_value ÷ cost).
+
+Conversion actions breakdown — table showing each conversion_action_name with total conversions, total value, and value per conversion over the selected range. Sourced from raw_google_ads_campaign_conversions. This is new data that did not exist before.
+
+Keyword performance table — sortable table of keywords with clicks, impressions, cost, CTR, avg CPC, conversions, cost per conversion. Include keyword text and match type. Allow filtering by campaign.
+
+Search terms table — top search terms by cost or clicks, with CTR and conversion data. Useful for identifying new keyword opportunities and negatives.
+
+Ahrefs — required views
+
+Keyword gap panel — table of keywords where competitors rank but neonsignsdepot.com does not (or ranks lower). Show keyword, search volume, difficulty, CPC, and which competitors rank for it. Allow filtering by competitor.
+
+Backlink gap panel — referring domains that link to competitors but not to neonsignsdepot.com. Show domain rating, backlinks count, and which competitors it links to. Sort by domain rating descending.
+
+Top pages panel — table of the site's top-performing pages by organic traffic. Show URL, traffic, traffic value, top keyword, and referring domains. This refreshes weekly.
+
+Implementation rules
+
+Query only from Supabase — do not call the nsd-integrations API directly from the dashboard
+Extract payload fields carefully — all metrics are inside a jsonb payload column, not top-level columns. Use payload->>'field_name' in SQL or cast appropriately in the data layer
+All date filtering should be on occurred_at, not on fields inside the payload
+Do not modify any existing dashboard sections outside of marketing analytics
+Do not remove any existing charts or tables — only add or extend
+If campaign names are unavailable (only IDs exist), display the campaign ID formatted clearly and add a note that name mapping is pending
+Add loading states and empty states to every new component — the data may be sparse on some dates
+The raw_google_ads_campaign_conversions and raw_google_ads_ad_group_conversions tables may not yet be populated (Supabase migration pending) — handle the empty state gracefully
+Definition of Done
+All 8 views above are rendered with real data from Supabase
+Date range filtering works across all Google Ads views
+Competitor filter works on keyword gap and backlink gap panels
+No existing dashboard functionality is broken
+Empty and loading states are handled on every new component
+No hardcoded data, mock data, or placeholder values anywhere

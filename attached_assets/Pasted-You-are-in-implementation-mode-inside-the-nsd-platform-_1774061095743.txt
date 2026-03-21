@@ -1,0 +1,139 @@
+You are in implementation mode inside the nsd-platform-shell repo.
+
+Mission:
+Narrow the existing SEO operator surface to Phase 1 and resolve the approval-path mismatch so operator approvals align with the live engine-backed recommendations path.
+
+Critical policy:
+- Do NOT build new pages.
+- Do NOT redesign the SEO section.
+- Do NOT create a new UI system.
+- Build only on the existing recommendations/operator surface.
+- Hide or narrow non-Phase-1 features instead of deleting them.
+
+Ground truth from repo investigation:
+- The shell already has a real SEO operator surface.
+- `/dashboard/seo/recommendations` is the primary operator page and is already wired.
+- `/dashboard/seo/internal-links`, `/dashboard/seo/pages`, and `/dashboard/seo/outcomes` are real and reusable.
+- `/dashboard/seo/clusters`, `/dashboard/seo/opportunities`, and `/dashboard/seo/competitive` should be hidden for Phase 1.
+- `/dashboard/seo/content` is optional to hide and should not be a Phase-1 operator surface.
+- The critical blocking risk is approval-path mismatch:
+  - current approval may write to `analytics.seo_recommendations`
+  - the visible recommendation cards are engine-backed from a different path
+  - if so, approval state may not reflect after refresh
+- Default recommendation filtering should be narrowed to these Phase-1 remedies:
+  - `metadata_ctr_optimization`
+  - `strengthen_existing_page`
+  - `add_internal_links`
+  - `create_new_page`
+- If `hybrid` is a live ranking-push remedy in the engine-backed surface, include it after verifying the exact values returned from the data source.
+
+Implementation requirements:
+
+1. Nav narrowing
+In:
+- `app/dashboard/seo/layout.tsx`
+
+remove Phase-1-out-of-scope nav items from `NAV_GROUPS`:
+- `Clusters` → `/dashboard/seo/clusters`
+- `Opportunities` → `/dashboard/seo/opportunities`
+- `Ahrefs Intelligence` → `/dashboard/seo/competitive`
+- optionally hide `Content Pipeline` → `/dashboard/seo/content` if it is currently exposed and not governed for Phase 1
+
+Do not delete the underlying pages.
+This task is nav narrowing, not route deletion.
+
+2. Default Recommendations filter to Phase-1 scope
+In:
+- `app/dashboard/seo/recommendations/page.tsx`
+
+pre-set the initial filter state so the page defaults to the Phase-1 remedies only.
+
+Important:
+- first confirm the exact field/value used by the live engine-backed recommendations source
+- verify whether the page filters on `primary_remedy`, `opportunity_family`, or both
+- verify exact remedy values from the live source before hard-coding
+- include `hybrid` only if it is present and appropriate for Phase-1 ranking-push handling
+
+Do not change the rest of the recommendations workflow.
+This is a default-scope narrowing only.
+
+3. Suppression / reason visibility
+If the engine-backed response already includes suppression-aware fields such as:
+- suppression reason
+- confidence reason
+- source freshness
+- action-state badge values
+
+then expose the minimum additional UI needed in:
+- `app/dashboard/seo/recommendations/page.tsx`
+
+to make “why suppressed” or “why excluded” visible when present.
+
+Do not invent a new suppression UI if the engine does not return it yet.
+Keep this additive and minimal.
+
+4. Resolve the approval path
+This is the critical fix.
+
+Investigate and then implement the correct approval write path so operator approval/rejection updates the same engine-backed pipeline the recommendations page is reading from.
+
+Inspect and update as needed:
+- `app/api/proxy/seo/recommendations/route.ts`
+- `lib/seo-db.ts`
+- `seoApi.ts` or equivalent client call site
+- any other current approval helper
+
+Required behavior:
+- if the recommendations page is engine-backed, approvals must write to the engine-backed approval/status path
+- do not leave approval writing only to legacy `analytics.seo_recommendations` if that is not the source of truth for the cards
+- keep the current button UX if possible
+- minimize surface-area change
+
+5. Preserve current reusable Phase-1 pages
+Leave these working:
+- `/dashboard/seo/recommendations`
+- `/dashboard/seo/internal-links`
+- `/dashboard/seo/pages`
+- `/dashboard/seo/outcomes`
+
+6. Do not add new routes or RBAC
+Do not add sub-page RBAC or new route guards in this pass unless required by an existing pattern and truly trivial.
+This task is the smallest safe Phase-1 narrowing only.
+
+7. Confirm production env assumptions
+Verify, but do not broadly redesign, that:
+- `NEXT_PUBLIC_API_MODE` is not effectively disabling live SEO data in the intended environment
+- `NEXT_PUBLIC_READ_ONLY` / runtime flags do not block the intended approval behavior unexpectedly
+
+Files to inspect:
+- `app/dashboard/seo/layout.tsx`
+- `app/dashboard/seo/recommendations/page.tsx`
+- `app/api/proxy/seo/recommendations/route.ts`
+- `lib/seo-db.ts`
+- `seoApi.ts` or the equivalent SEO client module
+- any existing shared badge or action-state UI helper if needed
+
+Deliverables:
+1. concise summary
+2. exact files changed
+3. nav entries removed/hidden
+4. default filter behavior implemented
+5. approval-path correction details
+6. suppression visibility changes if any
+7. test or verification evidence
+
+Acceptance criteria:
+- non-Phase-1 SEO sections are removed from the nav
+- recommendations page defaults to Phase-1 remedies only
+- operator approval/rejection updates the same pipeline the page reads from
+- no new pages or APIs were invented unnecessarily
+- `/dashboard/seo/recommendations`, `/internal-links`, `/pages`, and `/outcomes` remain usable
+
+Output format:
+A. summary
+B. files changed
+C. nav narrowing
+D. default filter behavior
+E. approval-path fix
+F. suppression visibility change
+G. verification evidence

@@ -405,6 +405,72 @@ export async function getEngineRecommendationDetail(opportunityId: string): Prom
   return seoIntelFetch<EngineRecommendationDetail>('recommendation-detail', { opportunity_id: opportunityId });
 }
 
+export interface Phase1MeasurementPlan {
+  phase1_kpi_primary: string | null;
+  phase1_kpi_secondary: string | null;
+  phase1_baseline_window_days: number | null;
+  phase1_measurement_window_days: number | null;
+  phase1_baseline_fields: string[] | null;
+  phase1_success_threshold: string | null;
+  phase1_measurement_notes: string | null;
+}
+
+export interface Phase1Fields extends Phase1MeasurementPlan {
+  phase1_confidence_score: number;
+  phase1_business_impact_score: number;
+  phase1_strategic_intent: string | null;
+  phase1_commercial_tier: string | null;
+  phase1_lifecycle_phase: string | null;
+  phase1_bottleneck_primary: string | null;
+  phase1_bottleneck_secondary: string | null;
+  phase1_target_page_bucket: string | null;
+  phase1_recommended_target_page: string | null;
+  phase1_wp_page_exists: boolean | null;
+  phase1_create_page_warning: string | null;
+}
+
+export interface Phase1RecommendationsResponse {
+  sections: EngineRecommendationSection[];
+  phase1_fields: Array<EngineRecommendationCard & Phase1Fields>;
+}
+
+export interface Phase1DetailResponse extends EngineRecommendationDetail, Phase1Fields {}
+
+export interface Phase1SuppressedRow {
+  opportunity_id: string;
+  topic_cluster: string;
+  strategic_intent: string;
+  target_page_bucket: string | null;
+  recommended_target_page: string | null;
+  max_keyword_score: number;
+  urgency_band: string;
+  keyword_driver_count: number;
+  status: string;
+  lifecycle_phase: string | null;
+  commercial_tier: string | null;
+  confidence_score: number;
+  business_impact_score: number;
+  suppression_reason: string;
+}
+
+export async function getPhase1Recommendations(opts?: {
+  remedy?: string;
+  urgency?: string;
+}): Promise<Phase1RecommendationsResponse> {
+  const params: Record<string, string> = {};
+  if (opts?.remedy) params.remedy = opts.remedy;
+  if (opts?.urgency) params.urgency = opts.urgency;
+  return seoIntelFetch<Phase1RecommendationsResponse>('phase1-recommendations', params);
+}
+
+export async function getPhase1RecommendationDetail(opportunityId: string): Promise<Phase1DetailResponse> {
+  return seoIntelFetch<Phase1DetailResponse>('phase1-detail', { opportunity_id: opportunityId });
+}
+
+export async function getPhase1Suppressed(): Promise<Phase1SuppressedRow[]> {
+  return seoIntelFetch<Phase1SuppressedRow[]>('phase1-suppressed');
+}
+
 export async function approveEngineCandidate(opts: {
   candidate_id?: string;
   opportunity_id?: string;

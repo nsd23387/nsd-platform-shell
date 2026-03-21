@@ -34,7 +34,7 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 - **Chart Library**: Recharts with NSD brand color tokens, `ResponsiveContainer`, custom tooltips, and `ReferenceLine`.
 - **SEO Revenue Attribution**: Implements path-based normalization for URLs.
 - **Data Export**: Client-side CSV and PDF export on all marketing dashboard pages via `ExportMenu` and `PageExportBar` components, powered by `jspdf` + `jspdf-autotable`.
-- **SEO Command Center**: Provides a read-only decision surface for keyword cluster analysis, page performance, competitive intelligence, content pipeline management, internal linking, and SEO recommendation approval. Engine-backed approval path writes to `analytics.seo_execution_queue`.
+- **SEO Command Center**: Provides a read-only decision surface for keyword cluster analysis, page performance, competitive intelligence, content pipeline management, internal linking, and SEO recommendation approval. Engine-backed approval path writes to `analytics.seo_execution_queue`. Phase-1 recommendations default to `analytics.seo_phase1_opportunity` (44 rows) with strategic intents (`create_page`, `strengthen_page`, `improve_ctr`, `add_internal_links`), measurement plans (KPIs, baseline/measurement windows, success thresholds), and a suppressed view from `analytics.seo_phase1_suppressed`. The broader engine queue is gated behind `NEXT_PUBLIC_SEO_ALL_REMEDIES=true`.
 
 ## External Dependencies
 - **M60 Campaign Management APIs**: Primary source for campaign lifecycle, readiness, and outcome data.

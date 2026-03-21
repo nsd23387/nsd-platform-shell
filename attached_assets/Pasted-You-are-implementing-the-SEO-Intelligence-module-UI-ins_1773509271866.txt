@@ -1,0 +1,413 @@
+You are implementing the **SEO Intelligence module UI** inside the `nsd-platform-shell` repository.
+
+Follow these instructions exactly.
+
+The UI will consume the cluster engine APIs from `nsd-ods-api`.
+
+The UI must remain **read-only except for approval actions**.
+
+Do NOT compute SEO metrics in the UI.
+
+All SEO logic must remain in `nsd-ods-api`.
+
+---
+
+# OBJECTIVE
+
+Create a new **SEO Intelligence module** inside Platform Shell that allows management to:
+
+• view keyword clusters
+• see cluster opportunities
+• review SEO recommendations
+• approve or reject recommendations
+• view learning outcomes
+
+This module will power the **SEO decision workflow**.
+
+---
+
+# STEP 1 — Create SEO Module Route Structure
+
+Add routes:
+
+/seo
+/seo/clusters
+/seo/opportunities
+/seo/recommendations
+/seo/outcomes
+
+Update the shell router.
+
+File:
+
+src/routes/index.tsx
+
+Add:
+
+{
+path: "/seo",
+element: <SeoLayout />,
+children: [
+{ path: "", element: <SeoOverviewPage /> },
+{ path: "clusters", element: <SeoClustersPage /> },
+{ path: "opportunities", element: <SeoOpportunitiesPage /> },
+{ path: "recommendations", element: <SeoRecommendationsPage /> },
+{ path: "outcomes", element: <SeoOutcomesPage /> }
+]
+}
+
+---
+
+# STEP 2 — Add Navigation Item
+
+Update the main navigation sidebar.
+
+File:
+
+src/components/layout/Sidebar.tsx
+
+Add menu item:
+
+{
+label: "SEO Intelligence",
+icon: "search",
+path: "/seo"
+}
+
+Submenu:
+
+Clusters
+Opportunities
+Recommendations
+Outcomes
+
+---
+
+# STEP 3 — Create API Client
+
+Create file:
+
+src/api/seoApi.ts
+
+Functions:
+
+getClusters()
+
+GET /api/v1/seo/clusters
+
+getClusterMembers(clusterId)
+
+GET /api/v1/seo/clusters/:id
+
+getClusterOpportunities()
+
+GET /api/v1/seo/cluster-opportunities
+
+getRecommendations()
+
+GET /api/v1/seo/recommendations
+
+approveRecommendation(id)
+
+POST /api/v1/seo/recommendations/:id/approve
+
+rejectRecommendation(id)
+
+POST /api/v1/seo/recommendations/:id/reject
+
+All requests must include auth token and enforce permission:
+
+seo:read
+
+Approval endpoints require:
+
+seo:approve
+
+---
+
+# STEP 4 — Create SEO Overview Page
+
+File:
+
+src/pages/seo/SeoOverviewPage.tsx
+
+Display high-level metrics.
+
+Cards:
+
+Total Clusters
+Cluster Opportunities
+Pending Recommendations
+Approved Recommendations
+
+Data sources:
+
+GET /api/v1/seo/clusters
+GET /api/v1/seo/cluster-opportunities
+GET /api/v1/seo/recommendations
+
+Display summary counts.
+
+---
+
+# STEP 5 — Build Clusters Table
+
+File:
+
+src/pages/seo/SeoClustersPage.tsx
+
+Columns:
+
+Cluster Topic
+Keyword Count
+Total Impressions
+Avg Position
+Avg CTR
+Action
+
+Fetch:
+
+GET /api/v1/seo/clusters
+
+Row click opens cluster detail.
+
+---
+
+# STEP 6 — Cluster Detail Drawer
+
+Component:
+
+src/components/seo/ClusterDetailDrawer.tsx
+
+Fetch members:
+
+GET /api/v1/seo/clusters/:id
+
+Display table:
+
+Keyword
+Impressions
+Clicks
+Position
+CTR
+
+Also show:
+
+Primary Keyword
+Cluster Size
+Total Impressions
+
+---
+
+# STEP 7 — Opportunities Page
+
+File:
+
+src/pages/seo/SeoOpportunitiesPage.tsx
+
+Fetch:
+
+GET /api/v1/seo/cluster-opportunities
+
+Columns:
+
+Cluster Topic
+Opportunity Type
+Total Impressions
+Avg Position
+Suggested Action
+
+Opportunity types:
+
+optimize_existing_page
+create_new_page
+expand_content
+
+Each row includes:
+
+View Recommendation button
+
+---
+
+# STEP 8 — Recommendations Page
+
+File:
+
+src/pages/seo/SeoRecommendationsPage.tsx
+
+Fetch:
+
+GET /api/v1/seo/recommendations
+
+Columns:
+
+Cluster Topic
+Primary Keyword
+Recommended Action
+Recommended URL
+Status
+Created At
+
+Row click opens recommendation panel.
+
+---
+
+# STEP 9 — Recommendation Detail Panel
+
+Component:
+
+src/components/seo/RecommendationPanel.tsx
+
+Display:
+
+Cluster Topic
+Primary Keyword
+Recommended Title
+Recommended Meta Description
+Target URL
+Opportunity Type
+Estimated Impact
+
+Add action buttons:
+
+Approve
+Reject
+Provide Feedback
+
+Approve button:
+
+POST /api/v1/seo/recommendations/:id/approve
+
+Reject button:
+
+POST /api/v1/seo/recommendations/:id/reject
+
+Disable buttons if status != pending_review
+
+---
+
+# STEP 10 — Feedback Modal
+
+Component:
+
+src/components/seo/RecommendationFeedbackModal.tsx
+
+Input:
+
+feedback_text
+
+POST
+
+/api/v1/seo/recommendations/:id/feedback
+
+After submission refresh recommendation list.
+
+---
+
+# STEP 11 — Outcomes Page
+
+File:
+
+src/pages/seo/SeoOutcomesPage.tsx
+
+Fetch:
+
+GET /api/v1/seo/outcomes
+
+Columns:
+
+Cluster Topic
+Keyword
+Page URL
+Old Position
+New Position
+CTR Change
+Traffic Change
+Execution Date
+
+Purpose:
+
+Track impact of approved recommendations.
+
+---
+
+# STEP 12 — UI Guardrails
+
+Enforce the following:
+
+Only show approve/reject buttons if user has permission:
+
+seo:approve
+
+Do not compute SEO metrics client-side.
+
+All numbers must come from the API.
+
+---
+
+# STEP 13 — UI Components
+
+Create folder:
+
+src/components/seo/
+
+Components:
+
+ClusterTable
+ClusterDetailDrawer
+OpportunityTable
+RecommendationPanel
+RecommendationFeedbackModal
+
+Reuse existing table and card components from Platform Shell.
+
+---
+
+# STEP 14 — Styling
+
+Follow existing design tokens.
+
+Cards
+Tables
+Drawer panels
+Modal dialogs
+
+Ensure responsive layout.
+
+---
+
+# STEP 15 — Testing
+
+Add tests:
+
+src/tests/seo-ui.test.ts
+
+Test:
+
+Cluster table rendering
+Recommendation approval flow
+Feedback modal submission
+
+Mock API responses.
+
+---
+
+# RESULT
+
+Platform Shell must now support:
+
+/seo/clusters
+/seo/opportunities
+/seo/recommendations
+/seo/outcomes
+
+Management can:
+
+view SEO opportunities
+approve recommendations
+reject recommendations
+submit feedback
+
+The system remains:
+
+read-only analytics + human approval surface.
