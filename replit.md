@@ -17,7 +17,7 @@ The Sales Engine UI is built with Next.js 14 (App Router) and TypeScript, runnin
 - **Governance Components**: Includes `ReadOnlyBanner`, `CampaignStateBadge`, `ExecutionReadinessPanel`, `ConfidenceBadge`, `ProvenancePill`, and `LearningSignalsPanel`.
 - **Execution Explainability**: Features components like `ExecutionConfidenceBadge`, `ExecutionTimeline`, and `ExecutionExplainabilityPanel` for transparent execution outcomes.
 - **Marketing Dashboard UI**: Features 12 routed screens with shared sub-navigation, global filters (date range, comparison mode, channel), and a collapsible sidebar (`MarketingNav`). It utilizes the Adminto Component Library for marketing-specific components.
-- **Responsive Design**: Achieved using breakpoint constants and `useMediaQuery` hooks.
+- **Responsive Design**: Achieved using breakpoint constants and `useMediaQuery` hooks. Mobile breakpoint (768px): main sidebar becomes a hamburger-triggered overlay drawer; SEO and Marketing sub-navs collapse into compact dropdown toggles showing the current page name.
 - **Dark Mode**: Implemented via `ThemeContext` with localStorage persistence.
 
 **Technical Implementations:**
