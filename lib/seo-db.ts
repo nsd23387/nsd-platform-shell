@@ -201,6 +201,68 @@ export async function rejectRecommendation(id: string) {
   }
 }
 
+export async function approveExecutionCandidate(candidateId: string, reviewNotes?: string) {
+  const p = getPool();
+  const upd = await p.query(
+    `UPDATE analytics.seo_execution_queue
+     SET approval_status = 'approved',
+         awaiting_approval = false,
+         reviewer_id = 'operator',
+         reviewed_at = NOW(),
+         review_notes = $2
+     WHERE candidate_id = $1::uuid`,
+    [candidateId, reviewNotes || null]
+  );
+  if (upd.rowCount === 0) throw new Error('Execution candidate not found');
+}
+
+export async function rejectExecutionCandidate(candidateId: string, reviewNotes?: string) {
+  const p = getPool();
+  const upd = await p.query(
+    `UPDATE analytics.seo_execution_queue
+     SET approval_status = 'rejected',
+         awaiting_approval = false,
+         reviewer_id = 'operator',
+         reviewed_at = NOW(),
+         review_notes = $2
+     WHERE candidate_id = $1::uuid`,
+    [candidateId, reviewNotes || null]
+  );
+  if (upd.rowCount === 0) throw new Error('Execution candidate not found');
+}
+
+export async function approveByOpportunityId(opportunityId: string, reviewNotes?: string) {
+  const p = getPool();
+  const upd = await p.query(
+    `UPDATE analytics.seo_execution_queue
+     SET approval_status = 'approved',
+         awaiting_approval = false,
+         reviewer_id = 'operator',
+         reviewed_at = NOW(),
+         review_notes = $2
+     WHERE opportunity_id = $1
+       AND awaiting_approval = true`,
+    [opportunityId, reviewNotes || null]
+  );
+  if (upd.rowCount === 0) throw new Error('No pending execution candidate found for this opportunity');
+}
+
+export async function rejectByOpportunityId(opportunityId: string, reviewNotes?: string) {
+  const p = getPool();
+  const upd = await p.query(
+    `UPDATE analytics.seo_execution_queue
+     SET approval_status = 'rejected',
+         awaiting_approval = false,
+         reviewer_id = 'operator',
+         reviewed_at = NOW(),
+         review_notes = $2
+     WHERE opportunity_id = $1
+       AND awaiting_approval = true`,
+    [opportunityId, reviewNotes || null]
+  );
+  if (upd.rowCount === 0) throw new Error('No pending execution candidate found for this opportunity');
+}
+
 export async function submitFeedback(id: string, feedbackText: string) {
   const p = getPool();
   const result = await p.query(`

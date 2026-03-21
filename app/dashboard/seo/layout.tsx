@@ -30,15 +30,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Analysis',
     items: [
-      { href: '/dashboard/seo/clusters', label: 'Clusters', icon: 'code' },
-      { href: '/dashboard/seo/opportunities', label: 'Opportunities', icon: 'lightbulb' },
       { href: '/dashboard/seo/pages', label: 'Page Performance', icon: 'search' },
-    ],
-  },
-  {
-    title: 'Competitive Intel',
-    items: [
-      { href: '/dashboard/seo/competitive', label: 'Ahrefs Intelligence', icon: 'globe' },
     ],
   },
   {
@@ -46,7 +38,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/seo/recommendations', label: 'Recommendations', icon: 'review' },
       { href: '/dashboard/seo/internal-links', label: 'Internal Links', icon: 'code' },
-      { href: '/dashboard/seo/content', label: 'Content Pipeline', icon: 'ai' },
     ],
   },
   {
