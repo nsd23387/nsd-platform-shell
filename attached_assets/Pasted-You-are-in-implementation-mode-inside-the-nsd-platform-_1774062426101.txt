@@ -1,0 +1,110 @@
+You are in implementation mode inside the nsd-platform-shell repo.
+
+Mission:
+Harden the SEO Recommendations experience so the default Phase-1 operator view reads directly from the dedicated ODS Phase-1 endpoints instead of relying primarily on client-side narrowing of the broader engine feed.
+
+Current state:
+- Nav has already been narrowed for Phase 1.
+- Recommendations currently default to a Phase-1 scope in the UI.
+- Approval path has already been corrected to write to the engine-backed queue.
+- The remaining hardening gap is that Phase-1 is still primarily a narrowed presentation of the broader feed rather than a direct consumer of the dedicated backend Phase-1 source of truth.
+
+Goal:
+Make `/dashboard/seo/recommendations` use the dedicated Phase-1 ODS endpoints by default, while preserving a controlled fallback or broader mode only if already useful and safe.
+
+Important backend contract now available:
+- primary surfaced endpoint:
+  - `GET /api/v1/seo/opportunity/phase1`
+- suppressed endpoint:
+  - `GET /api/v1/seo/opportunity/phase1/suppressed`
+
+Critical policy:
+- Do NOT redesign the SEO UI.
+- Do NOT add new pages.
+- Do NOT replace the approval fix.
+- Reuse the current recommendations page, detail panel, badge system, and filters where possible.
+- Keep changes as narrow as possible.
+
+Implementation requirements:
+
+1. Default data source shift
+Make the default Recommendations experience read from the dedicated Phase-1 endpoint rather than from the broader engine feed plus client-side narrowing.
+
+Required behavior:
+- default page load should fetch the Phase-1 surfaced endpoint
+- default filters should align to the backend Phase-1 contract, not reimplement eligibility in the client
+- continue showing recommendation cards, detail panel, and existing operator actions
+
+2. Preserve broader mode only if safe
+If the current “All Remedies” mode is still worth keeping:
+- make it an explicit secondary mode
+- do NOT let it be the default
+- preferably guard it behind a feature flag or clearly non-default operator control
+- if adding a feature flag is too invasive, keep the toggle but make sure default boot path is Phase-1 endpoint-backed
+
+3. Use actual backend field values
+Do not rely on earlier assumed remedy mappings.
+Inspect the live fields returned by the current ODS Phase-1 endpoint and align the UI to the actual contract:
+- likely `strategic_intent`
+- possibly `commercial_tier`
+- confidence/business impact fields
+- measurement plan fields
+- suppression reason only when using the suppressed endpoint
+
+4. Measurement-plan visibility
+If the Phase-1 endpoint now returns measurement-plan data:
+- expose it in the existing detail panel with the smallest additive UI change possible
+- do NOT create a new page
+- use existing card/detail layout where possible
+
+5. Suppressed visibility
+Implement the smallest safe way to inspect suppressed Phase-1 rows if useful.
+Acceptable patterns:
+- optional toggle/tab inside the recommendations page
+- lightweight section/drawer
+- secondary fetch only when requested
+
+Do NOT invent a large new workflow.
+The goal is simply to make the dedicated `/phase1/suppressed` backend path usable when needed.
+
+6. Keep approval path aligned
+Do not undo the prior approval fix.
+Verify that approvals/rejections still act on the engine-backed queue for surfaced Phase-1 recommendations.
+
+7. Optional hardening
+If low-cost and clean:
+- restrict direct access to hidden non-Phase-1 SEO routes by redirecting them to `/dashboard/seo/recommendations`
+- only do this if it can be done narrowly and without introducing RBAC sprawl
+- otherwise leave routes as-is and note that they remain directly accessible
+
+Files to inspect:
+- `app/dashboard/seo/recommendations/page.tsx`
+- `app/api/proxy/seo/recommendations/route.ts`
+- `lib/seoApi.ts`
+- `lib/seo-db.ts`
+- any current SEO proxy/client helpers for recommendations
+- `app/dashboard/seo/layout.tsx` only if route-hardening is attempted
+
+Deliverables:
+1. concise summary
+2. exact files changed
+3. how the default data source changed
+4. how broader “All Remedies” mode now behaves
+5. measurement-plan visibility change
+6. suppressed-view behavior if implemented
+7. verification evidence
+
+Acceptance criteria:
+- default recommendations view reads from the dedicated ODS `/phase1` surfaced endpoint
+- Phase-1 client behavior no longer depends primarily on client-side narrowing of the broader queue
+- approval/rejection still updates the engine-backed path correctly
+- measurement-plan data is visible if returned by backend
+- no new SEO pages were created
+
+Output format:
+A. summary
+B. files changed
+C. default source-of-truth change
+D. broader-mode behavior
+E. measurement/suppressed UI changes
+F. verification evidence
