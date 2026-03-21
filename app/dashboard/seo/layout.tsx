@@ -8,6 +8,7 @@ import { violet } from '../../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../design/tokens/spacing';
 import { Icon } from '../../../design/components/Icon';
+import { isApiDisabled } from '../../../config/appConfig';
 
 interface NavItem {
   href: string;
@@ -224,6 +225,26 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
       </nav>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {isApiDisabled && (
+          <div
+            style={{
+              padding: `${space['3']} ${space['6']}`,
+              backgroundColor: '#fef3c7',
+              borderBottom: '1px solid #f59e0b',
+              fontFamily: fontFamily.body,
+              fontSize: fontSize.sm,
+              fontWeight: fontWeight.medium,
+              color: '#92400e',
+              display: 'flex',
+              alignItems: 'center',
+              gap: space['2'],
+            }}
+            data-testid="banner-api-disabled"
+          >
+            <Icon name="warning" size={16} />
+            SEO data is unavailable. API mode is disabled — data shown may be incomplete or empty.
+          </div>
+        )}
         <div style={{ flex: 1, overflow: 'auto', padding: space['6'] }}>
           {children}
         </div>
