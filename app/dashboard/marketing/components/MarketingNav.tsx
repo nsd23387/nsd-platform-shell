@@ -65,11 +65,16 @@ const NAV_GROUPS: NavGroup[] = [
 interface MarketingNavProps {
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  isMobile?: boolean;
 }
 
-export function MarketingNav({ collapsed = false, onToggleCollapse }: MarketingNavProps) {
+export function MarketingNav({ collapsed = false, onToggleCollapse, isMobile = false }: MarketingNavProps) {
   const tc = useThemeColors();
   const currentPath = usePathname() ?? '';
+
+  if (isMobile) {
+    return null;
+  }
 
   const navWidth = collapsed ? '48px' : '220px';
 
@@ -207,3 +212,5 @@ export function MarketingNav({ collapsed = false, onToggleCollapse }: MarketingN
     </nav>
   );
 }
+
+export { NAV_GROUPS };

@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useThemeColors } from '../../../hooks/useThemeColors';
 import { violet } from '../../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
@@ -51,6 +52,7 @@ const NAV_GROUPS: NavGroup[] = [
 
 const STORAGE_KEY = 'seo-nav-collapsed';
 const COLLAPSE_BREAKPOINT = 1024;
+const MOBILE_BREAKPOINT = 768;
 
 interface SeoLayoutProps {
   children: React.ReactNode;
@@ -59,6 +61,9 @@ interface SeoLayoutProps {
 export default function SeoLayout({ children }: SeoLayoutProps) {
   const tc = useThemeColors();
   const currentPath = usePathname() ?? '';
+
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileSubNavOpen, setMobileSubNavOpen] = useState(false);
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -69,13 +74,20 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < COLLAPSE_BREAKPOINT) {
+      const width = window.innerWidth;
+      setIsMobile(width < MOBILE_BREAKPOINT);
+      if (width < COLLAPSE_BREAKPOINT) {
         setCollapsed(true);
       }
     };
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    setMobileSubNavOpen(false);
+  }, [currentPath]);
 
   const handleToggleCollapse = useCallback(() => {
     setCollapsed((prev) => {
@@ -85,7 +97,149 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
     });
   }, []);
 
+  const currentLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.href === currentPath)?.label || 'SEO Intelligence';
+
   const navWidth = collapsed ? '48px' : '220px';
+
+  const navLinks = (
+    <>
+      {NAV_GROUPS.map((group) => (
+        <div key={group.title} style={{ marginBottom: space['2'] }}>
+          {!collapsed && !isMobile && (
+            <div
+              style={{
+                padding: `${space['2']} ${space['4']}`,
+                fontFamily: fontFamily.body,
+                fontSize: fontSize.sm,
+                fontWeight: fontWeight.medium,
+                color: tc.text.placeholder,
+                textTransform: 'uppercase' as const,
+                letterSpacing: '0.05em',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {group.title}
+            </div>
+          )}
+          {isMobile && (
+            <div
+              style={{
+                padding: `${space['1']} ${space['4']}`,
+                fontFamily: fontFamily.body,
+                fontSize: '11px',
+                fontWeight: fontWeight.medium,
+                color: tc.text.placeholder,
+                textTransform: 'uppercase' as const,
+                letterSpacing: '0.05em',
+              }}
+            >
+              {group.title}
+            </div>
+          )}
+          {group.items.map((item) => {
+            const isActive = currentPath === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={collapsed && !isMobile ? item.label : undefined}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
+                  gap: collapsed && !isMobile ? '0' : space['2.5'],
+                  padding: collapsed && !isMobile ? `${space['2']} 0` : `${space['2']} ${space['4']}`,
+                  fontFamily: fontFamily.body,
+                  fontSize: fontSize.sm,
+                  fontWeight: isActive ? fontWeight.semibold : fontWeight.normal,
+                  color: isActive ? tc.text.primary : tc.text.muted,
+                  backgroundColor: isActive ? tc.background.muted : 'transparent',
+                  textDecoration: 'none',
+                  borderLeft: collapsed && !isMobile ? 'none' : (isActive ? `3px solid ${violet[500]}` : '3px solid transparent'),
+                  transition: `all ${duration.normal} ${easing.DEFAULT}`,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                }}
+                data-testid={`nav-seo-${item.href.split('/').pop()}`}
+              >
+                <Icon name={item.icon as any} size={16} />
+                {(collapsed && !isMobile) ? null : <span>{item.label}</span>}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+        <button
+          onClick={() => setMobileSubNavOpen(prev => !prev)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: `${space['2.5']} ${space['4']}`,
+            backgroundColor: tc.background.surface,
+            borderBottom: `1px solid ${tc.border.default}`,
+            fontFamily: fontFamily.body,
+            fontSize: fontSize.sm,
+            fontWeight: fontWeight.medium,
+            color: tc.text.primary,
+            border: 'none',
+            borderBottomWidth: '1px',
+            borderBottomStyle: 'solid',
+            borderBottomColor: tc.border.default,
+            cursor: 'pointer',
+            width: '100%',
+          }}
+          data-testid="button-toggle-seo-subnav-mobile"
+        >
+          <span>{currentLabel}</span>
+          {mobileSubNavOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        {mobileSubNavOpen && (
+          <div
+            style={{
+              backgroundColor: tc.background.surface,
+              borderBottom: `1px solid ${tc.border.default}`,
+              padding: `${space['2']} 0`,
+            }}
+          >
+            {navLinks}
+          </div>
+        )}
+
+        {isApiDisabled && (
+          <div
+            style={{
+              padding: `${space['2']} ${space['4']}`,
+              backgroundColor: '#fef3c7',
+              borderBottom: '1px solid #f59e0b',
+              fontFamily: fontFamily.body,
+              fontSize: fontSize.sm,
+              fontWeight: fontWeight.medium,
+              color: '#92400e',
+              display: 'flex',
+              alignItems: 'center',
+              gap: space['2'],
+            }}
+            data-testid="banner-api-disabled"
+          >
+            <Icon name="warning" size={16} />
+            SEO data is unavailable.
+          </div>
+        )}
+
+        <div style={{ flex: 1, overflow: 'auto', padding: space['4'] }}>
+          {children}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -147,57 +301,7 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
         {collapsed && <div style={{ height: space['3'], flexShrink: 0 }} />}
 
         <div style={{ flex: 1 }}>
-          {NAV_GROUPS.map((group) => (
-            <div key={group.title} style={{ marginBottom: space['2'] }}>
-              {!collapsed && (
-                <div
-                  style={{
-                    padding: `${space['2']} ${space['4']}`,
-                    fontFamily: fontFamily.body,
-                    fontSize: fontSize.sm,
-                    fontWeight: fontWeight.medium,
-                    color: tc.text.placeholder,
-                    textTransform: 'uppercase' as const,
-                    letterSpacing: '0.05em',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {group.title}
-                </div>
-              )}
-              {group.items.map((item) => {
-                const isActive = currentPath === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    title={collapsed ? item.label : undefined}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: collapsed ? 'center' : 'flex-start',
-                      gap: collapsed ? '0' : space['2.5'],
-                      padding: collapsed ? `${space['2']} 0` : `${space['2']} ${space['4']}`,
-                      fontFamily: fontFamily.body,
-                      fontSize: fontSize.sm,
-                      fontWeight: isActive ? fontWeight.semibold : fontWeight.normal,
-                      color: isActive ? tc.text.primary : tc.text.muted,
-                      backgroundColor: isActive ? tc.background.muted : 'transparent',
-                      textDecoration: 'none',
-                      borderLeft: collapsed ? 'none' : (isActive ? `3px solid ${violet[500]}` : '3px solid transparent'),
-                      transition: `all ${duration.normal} ${easing.DEFAULT}`,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                    }}
-                    data-testid={`nav-seo-${item.href.split('/').pop()}`}
-                  >
-                    <Icon name={item.icon as any} size={16} />
-                    {!collapsed && <span>{item.label}</span>}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+          {navLinks}
         </div>
 
         <button
