@@ -8,8 +8,8 @@ import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design
 import { space, radius } from '../../../../design/tokens/spacing';
 import { violet, indigo, magenta } from '../../../../design/tokens/colors';
 import { Icon } from '../../../../design/components/Icon';
-import { getEngineRecommendations, getEngineRecommendationDetail, approveEngineCandidate, rejectEngineCandidate } from '../../../../lib/seoApi';
-import type { EngineRecommendationSection, EngineRecommendationCard, EngineRecommendationDetail } from '../../../../lib/seoApi';
+import { getEngineRecommendations, getEngineRecommendationDetail, getPhase1Recommendations, getPhase1RecommendationDetail, getPhase1Suppressed, approveEngineCandidate, rejectEngineCandidate } from '../../../../lib/seoApi';
+import type { EngineRecommendationSection, EngineRecommendationCard, EngineRecommendationDetail, Phase1DetailResponse, Phase1SuppressedRow } from '../../../../lib/seoApi';
 
 const REMEDY_COLORS: Record<string, { bg: string; text: string }> = {
   create_new_page: { bg: '#dbeafe', text: '#1e40af' },
@@ -341,6 +341,62 @@ function DetailPanel({
           )}
         </div>
 
+        {(detail as unknown as Phase1DetailResponse).phase1_kpi_primary && (
+          <div style={{ borderTop: `1px solid ${tc.border.default}`, paddingTop: space['4'], marginBottom: space['6'] }}>
+            <p style={{ ...fieldLabel, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['3'] }}>Measurement Plan</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space['3'] }}>
+              <div>
+                <p style={fieldLabel}>Primary KPI</p>
+                <p style={fieldValue}>{((detail as unknown as Phase1DetailResponse).phase1_kpi_primary || '').replace(/_/g, ' ')}</p>
+              </div>
+              {(detail as unknown as Phase1DetailResponse).phase1_kpi_secondary && (
+                <div>
+                  <p style={fieldLabel}>Secondary KPI</p>
+                  <p style={fieldValue}>{((detail as unknown as Phase1DetailResponse).phase1_kpi_secondary || '').replace(/_/g, ' ')}</p>
+                </div>
+              )}
+              {(detail as unknown as Phase1DetailResponse).phase1_baseline_window_days != null && (
+                <div>
+                  <p style={fieldLabel}>Baseline Window</p>
+                  <p style={fieldValue}>{(detail as unknown as Phase1DetailResponse).phase1_baseline_window_days} days</p>
+                </div>
+              )}
+              {(detail as unknown as Phase1DetailResponse).phase1_measurement_window_days != null && (
+                <div>
+                  <p style={fieldLabel}>Measurement Window</p>
+                  <p style={fieldValue}>{(detail as unknown as Phase1DetailResponse).phase1_measurement_window_days} days</p>
+                </div>
+              )}
+            </div>
+            {(detail as unknown as Phase1DetailResponse).phase1_success_threshold && (
+              <div style={{ marginTop: space['2'] }}>
+                <p style={fieldLabel}>Success Threshold</p>
+                <p style={{ ...fieldValue, fontSize: fontSize.sm, lineHeight: lineHeight.relaxed }}>{(detail as unknown as Phase1DetailResponse).phase1_success_threshold}</p>
+              </div>
+            )}
+            {(detail as unknown as Phase1DetailResponse).phase1_measurement_notes && (
+              <div style={{ marginTop: space['1'] }}>
+                <p style={fieldLabel}>Measurement Notes</p>
+                <p style={{ ...fieldValue, fontSize: fontSize.sm, lineHeight: lineHeight.relaxed, color: tc.text.muted }}>{(detail as unknown as Phase1DetailResponse).phase1_measurement_notes}</p>
+              </div>
+            )}
+            {(detail as unknown as Phase1DetailResponse).phase1_bottleneck_primary && (
+              <div style={{ marginTop: space['2'], display: 'flex', gap: space['3'] }}>
+                <div>
+                  <p style={fieldLabel}>Primary Bottleneck</p>
+                  <p style={fieldValue}>{(detail as unknown as Phase1DetailResponse).phase1_bottleneck_primary}</p>
+                </div>
+                {(detail as unknown as Phase1DetailResponse).phase1_bottleneck_secondary && (
+                  <div>
+                    <p style={fieldLabel}>Secondary Bottleneck</p>
+                    <p style={fieldValue}>{(detail as unknown as Phase1DetailResponse).phase1_bottleneck_secondary}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {detail.execution_candidates && detail.execution_candidates.length > 0 && (
           <div style={{ borderTop: `1px solid ${tc.border.default}`, paddingTop: space['4'] }}>
             <p style={{ ...fieldLabel, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['3'] }}>
@@ -434,6 +490,55 @@ function DetailPanel({
   );
 }
 
+function SuppressedSection({
+  tc,
+  filterBtnStyle,
+}: {
+  tc: ReturnType<typeof useThemeColors>;
+  filterBtnStyle: (active: boolean) => React.CSSProperties;
+}) {
+  const [suppressed, setSuppressed] = useState<Phase1SuppressedRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    getPhase1Suppressed()
+      .then(setSuppressed)
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ padding: space['4'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>Loading suppressed...</div>;
+  if (error) return <div style={{ padding: space['4'], color: tc.semantic.danger.dark, fontFamily: fontFamily.body }}>Error: {error}</div>;
+  if (suppressed.length === 0) return <div style={{ padding: space['4'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>No suppressed opportunities.</div>;
+
+  return (
+    <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ borderBottom: `1px solid ${tc.border.default}` }}>
+            {['Topic Cluster', 'Intent', 'Suppression Reason', 'Tier', 'Impact'].map(h => (
+              <th key={h} style={{ padding: `${space['3']} ${space['4']}`, textAlign: 'left', fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.muted }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {suppressed.map((r) => (
+            <tr key={r.opportunity_id} style={{ borderBottom: `1px solid ${tc.border.subtle}` }} data-testid={`row-suppressed-${r.opportunity_id}`}>
+              <td style={{ padding: `${space['3']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary, fontWeight: fontWeight.medium }}>{r.topic_cluster}</td>
+              <td style={{ padding: `${space['3']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{(r.strategic_intent || '').replace(/_/g, ' ')}</td>
+              <td style={{ padding: `${space['3']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>{(r.suppression_reason || '').replace(/_/g, ' ')}</td>
+              <td style={{ padding: `${space['3']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>{(r.commercial_tier || '').replace(/_/g, ' ')}</td>
+              <td style={{ padding: `${space['3']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{r.business_impact_score.toFixed(1)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function RecommendationsContent() {
   const tc = useThemeColors();
   const [sections, setSections] = useState<EngineRecommendationSection[]>([]);
@@ -444,8 +549,8 @@ function RecommendationsContent() {
   const [familyFilter, setFamilyFilter] = useState<string>('');
   const [remedyFilter, setRemedyFilter] = useState<string>('');
   const [urgencyFilter, setUrgencyFilter] = useState<string>('');
+  const [showSuppressed, setShowSuppressed] = useState(false);
 
-  const PHASE1_REMEDIES = ['create_new_page', 'strengthen_existing_page', 'metadata_ctr_optimization', 'add_internal_links'];
   const ALLOW_ALL_REMEDIES = process.env.NEXT_PUBLIC_SEO_ALL_REMEDIES === 'true';
   const [phase1Only, setPhase1Only] = useState<boolean>(true);
 
@@ -453,20 +558,19 @@ function RecommendationsContent() {
     setLoading(true);
     setError(null);
     try {
-      const effectiveRemedy = remedyFilter || undefined;
-      const data = await getEngineRecommendations({
-        limit: 2000,
-        family: familyFilter || undefined,
-        remedy: effectiveRemedy,
-        urgency: urgencyFilter || undefined,
-      });
-      if (phase1Only && !effectiveRemedy) {
-        const filtered = data.map(section => ({
-          ...section,
-          items: section.items.filter(item => PHASE1_REMEDIES.includes(item.primary_remedy)),
-        })).filter(section => section.items.length > 0);
-        setSections(filtered);
+      if (phase1Only) {
+        const resp = await getPhase1Recommendations({
+          remedy: remedyFilter || undefined,
+          urgency: urgencyFilter || undefined,
+        });
+        setSections(resp.sections);
       } else {
+        const data = await getEngineRecommendations({
+          limit: 2000,
+          family: familyFilter || undefined,
+          remedy: remedyFilter || undefined,
+          urgency: urgencyFilter || undefined,
+        });
         setSections(data);
       }
     } catch (err: unknown) {
@@ -481,14 +585,19 @@ function RecommendationsContent() {
   const handleSelect = useCallback(async (card: EngineRecommendationCard) => {
     setDetailLoading(true);
     try {
-      const detail = await getEngineRecommendationDetail(card.opportunity_id);
-      setSelectedDetail(detail);
+      if (phase1Only) {
+        const detail = await getPhase1RecommendationDetail(card.opportunity_id);
+        setSelectedDetail(detail as unknown as EngineRecommendationDetail);
+      } else {
+        const detail = await getEngineRecommendationDetail(card.opportunity_id);
+        setSelectedDetail(detail);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setDetailLoading(false);
     }
-  }, []);
+  }, [phase1Only]);
 
   const handleApprovalAction = useCallback(async (opportunityId: string, candidateId: string | null, action: 'approve' | 'reject') => {
     try {
@@ -503,13 +612,18 @@ function RecommendationsContent() {
           opportunity_id: !candidateId ? opportunityId : undefined,
         });
       }
-      const refreshed = await getEngineRecommendationDetail(opportunityId);
-      setSelectedDetail(refreshed);
+      if (phase1Only) {
+        const refreshed = await getPhase1RecommendationDetail(opportunityId);
+        setSelectedDetail(refreshed as unknown as EngineRecommendationDetail);
+      } else {
+        const refreshed = await getEngineRecommendationDetail(opportunityId);
+        setSelectedDetail(refreshed);
+      }
       loadData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [loadData]);
+  }, [loadData, phase1Only]);
 
   const totalItems = useMemo(() => sections.reduce((sum, s) => sum + s.items.length, 0), [sections]);
 
@@ -544,118 +658,133 @@ function RecommendationsContent() {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: space['4'], marginBottom: space['4'], alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
-          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Scope:</span>
-          <button onClick={() => setPhase1Only(true)} style={filterBtnStyle(phase1Only)} data-testid="filter-scope-phase1">
+          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Source:</span>
+          <button onClick={() => { setPhase1Only(true); setShowSuppressed(false); }} style={filterBtnStyle(phase1Only && !showSuppressed)} data-testid="filter-scope-phase1">
             Phase 1
           </button>
           {ALLOW_ALL_REMEDIES && (
-            <button onClick={() => setPhase1Only(false)} style={filterBtnStyle(!phase1Only)} data-testid="filter-scope-all">
+            <button onClick={() => { setPhase1Only(false); setShowSuppressed(false); }} style={filterBtnStyle(!phase1Only && !showSuppressed)} data-testid="filter-scope-all">
               All Remedies
             </button>
           )}
+          <button onClick={() => setShowSuppressed(!showSuppressed)} style={filterBtnStyle(showSuppressed)} data-testid="filter-scope-suppressed">
+            Suppressed
+          </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
-          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Family:</span>
-          {['', 'query', 'page', 'authority'].map(f => (
-            <button key={f || 'all'} onClick={() => setFamilyFilter(f)} style={filterBtnStyle(familyFilter === f)} data-testid={`filter-family-${f || 'all'}`}>
-              {f || 'All'}
-            </button>
-          ))}
-        </div>
+        {!showSuppressed && !phase1Only && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
+            <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Family:</span>
+            {['', 'query', 'page', 'authority'].map(f => (
+              <button key={f || 'all'} onClick={() => setFamilyFilter(f)} style={filterBtnStyle(familyFilter === f)} data-testid={`filter-family-${f || 'all'}`}>
+                {f || 'All'}
+              </button>
+            ))}
+          </div>
+        )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
-          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Urgency:</span>
-          {['', 'high', 'medium', 'low'].map(u => (
-            <button key={u || 'all'} onClick={() => setUrgencyFilter(u)} style={filterBtnStyle(urgencyFilter === u)} data-testid={`filter-urgency-${u || 'all'}`}>
-              {u || 'All'}
-            </button>
-          ))}
-        </div>
+        {!showSuppressed && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
+              <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Urgency:</span>
+              {['', 'high', 'medium', 'low'].map(u => (
+                <button key={u || 'all'} onClick={() => setUrgencyFilter(u)} style={filterBtnStyle(urgencyFilter === u)} data-testid={`filter-urgency-${u || 'all'}`}>
+                  {u || 'All'}
+                </button>
+              ))}
+            </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
-          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Remedy:</span>
-          <select
-            value={remedyFilter}
-            onChange={(e) => setRemedyFilter(e.target.value)}
-            style={{
-              padding: `${space['1']} ${space['2']}`,
-              fontFamily: fontFamily.body,
-              fontSize: fontSize.sm,
-              color: tc.text.primary,
-              backgroundColor: tc.background.surface,
-              border: `1px solid ${tc.border.default}`,
-              borderRadius: radius.md,
-            }}
-            data-testid="filter-remedy"
-          >
-            <option value="">All</option>
-            <option value="create_new_page">Create New Page</option>
-            <option value="strengthen_existing_page">Strengthen Page</option>
-            <option value="metadata_ctr_optimization">Metadata/CTR</option>
-            <option value="add_internal_links">Internal Links</option>
-            {!phase1Only && <option value="pursue_backlinks">Backlinks</option>}
-            {!phase1Only && <option value="maintain_paid_support">Paid Support</option>}
-            {!phase1Only && <option value="hybrid">Hybrid</option>}
-          </select>
-        </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
+              <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Remedy:</span>
+              <select
+                value={remedyFilter}
+                onChange={(e) => setRemedyFilter(e.target.value)}
+                style={{
+                  padding: `${space['1']} ${space['2']}`,
+                  fontFamily: fontFamily.body,
+                  fontSize: fontSize.sm,
+                  color: tc.text.primary,
+                  backgroundColor: tc.background.surface,
+                  border: `1px solid ${tc.border.default}`,
+                  borderRadius: radius.md,
+                }}
+                data-testid="filter-remedy"
+              >
+                <option value="">All</option>
+                <option value="create_new_page">Create New Page</option>
+                <option value="strengthen_existing_page">Strengthen Page</option>
+                <option value="metadata_ctr_optimization">Metadata/CTR</option>
+                <option value="add_internal_links">Internal Links</option>
+                {!phase1Only && <option value="pursue_backlinks">Backlinks</option>}
+                {!phase1Only && <option value="maintain_paid_support">Paid Support</option>}
+                {!phase1Only && <option value="hybrid">Hybrid</option>}
+              </select>
+            </div>
+          </>
+        )}
       </div>
 
-      {loading && (
-        <div style={{ padding: space['8'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>
-          Loading engine recommendations...
-        </div>
-      )}
+      {showSuppressed ? (
+        <SuppressedSection tc={tc} filterBtnStyle={filterBtnStyle} />
+      ) : (
+        <>
+          {loading && (
+            <div style={{ padding: space['8'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>
+              Loading engine recommendations...
+            </div>
+          )}
 
-      {error && (
-        <div style={{ padding: space['4'], backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, color: tc.semantic.danger.dark, fontFamily: fontFamily.body, marginBottom: space['4'] }}>
-          Error: {error}
-        </div>
-      )}
+          {error && (
+            <div style={{ padding: space['4'], backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, color: tc.semantic.danger.dark, fontFamily: fontFamily.body, marginBottom: space['4'] }}>
+              Error: {error}
+            </div>
+          )}
 
-      {!loading && !error && sections.length === 0 && (
-        <div style={{ padding: space['8'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>
-          No recommendations match the current filters.
-        </div>
-      )}
+          {!loading && !error && sections.length === 0 && (
+            <div style={{ padding: space['8'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>
+              No recommendations match the current filters.
+            </div>
+          )}
 
-      {!loading && !error && sections.map((section) => (
-        <div key={section.section_id} style={{ marginBottom: space['8'] }} data-testid={`section-${section.section_id}`}>
-          <div style={{ marginBottom: space['3'] }}>
-            <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary, lineHeight: lineHeight.snug }}>
-              {section.section_title}
-            </h2>
-            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
-              {section.section_description}
-            </p>
-          </div>
+          {!loading && !error && sections.map((section) => (
+            <div key={section.section_id} style={{ marginBottom: space['8'] }} data-testid={`section-${section.section_id}`}>
+              <div style={{ marginBottom: space['3'] }}>
+                <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary, lineHeight: lineHeight.snug }}>
+                  {section.section_title}
+                </h2>
+                <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+                  {section.section_description}
+                </p>
+              </div>
 
-          {section.items.map((card) => (
-            <RecommendationCardRow
-              key={card.opportunity_id}
-              card={card}
-              onSelect={handleSelect}
+              {section.items.map((card) => (
+                <RecommendationCardRow
+                  key={card.opportunity_id}
+                  card={card}
+                  onSelect={handleSelect}
+                  tc={tc}
+                />
+              ))}
+            </div>
+          ))}
+
+          {detailLoading && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ padding: space['6'], backgroundColor: tc.background.surface, borderRadius: radius.lg, fontFamily: fontFamily.body, color: tc.text.primary }}>
+                Loading opportunity detail...
+              </div>
+            </div>
+          )}
+
+          {selectedDetail && (
+            <DetailPanel
+              detail={selectedDetail}
+              onClose={() => setSelectedDetail(null)}
+              onApprovalAction={handleApprovalAction}
               tc={tc}
             />
-          ))}
-        </div>
-      ))}
-
-      {detailLoading && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ padding: space['6'], backgroundColor: tc.background.surface, borderRadius: radius.lg, fontFamily: fontFamily.body, color: tc.text.primary }}>
-            Loading opportunity detail...
-          </div>
-        </div>
-      )}
-
-      {selectedDetail && (
-        <DetailPanel
-          detail={selectedDetail}
-          onClose={() => setSelectedDetail(null)}
-          onApprovalAction={handleApprovalAction}
-          tc={tc}
-        />
+          )}
+        </>
       )}
     </div>
   );
