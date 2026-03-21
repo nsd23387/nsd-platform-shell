@@ -404,3 +404,37 @@ export async function getEngineRecommendations(opts?: {
 export async function getEngineRecommendationDetail(opportunityId: string): Promise<EngineRecommendationDetail> {
   return seoIntelFetch<EngineRecommendationDetail>('recommendation-detail', { opportunity_id: opportunityId });
 }
+
+export async function approveEngineCandidate(opts: {
+  candidate_id?: string;
+  opportunity_id?: string;
+  review_notes?: string;
+}): Promise<void> {
+  await seoFetch('/api/proxy/seo/recommendations', {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'approve',
+      target: 'engine',
+      candidate_id: opts.candidate_id,
+      opportunity_id: opts.opportunity_id,
+      review_notes: opts.review_notes,
+    }),
+  });
+}
+
+export async function rejectEngineCandidate(opts: {
+  candidate_id?: string;
+  opportunity_id?: string;
+  review_notes?: string;
+}): Promise<void> {
+  await seoFetch('/api/proxy/seo/recommendations', {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'reject',
+      target: 'engine',
+      candidate_id: opts.candidate_id,
+      opportunity_id: opts.opportunity_id,
+      review_notes: opts.review_notes,
+    }),
+  });
+}

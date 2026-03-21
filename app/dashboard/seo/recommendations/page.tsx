@@ -8,7 +8,7 @@ import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design
 import { space, radius } from '../../../../design/tokens/spacing';
 import { violet, indigo, magenta } from '../../../../design/tokens/colors';
 import { Icon } from '../../../../design/components/Icon';
-import { getEngineRecommendations, getEngineRecommendationDetail } from '../../../../lib/seoApi';
+import { getEngineRecommendations, getEngineRecommendationDetail, approveEngineCandidate, rejectEngineCandidate } from '../../../../lib/seoApi';
 import type { EngineRecommendationSection, EngineRecommendationCard, EngineRecommendationDetail } from '../../../../lib/seoApi';
 
 const REMEDY_COLORS: Record<string, { bg: string; text: string }> = {
@@ -138,6 +138,13 @@ function RecommendationCardRow({
         {card.opportunity_family && <Badge label={card.opportunity_family} colors={{ bg: '#f5f5f5', text: '#525252' }} />}
       </div>
 
+      {card.confidence_reason && (
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.placeholder, marginTop: space['1.5'], display: 'flex', alignItems: 'flex-start', gap: space['1'] }}>
+          <Icon name="info" size={12} />
+          <span>{card.confidence_reason}</span>
+        </div>
+      )}
+
       {card.evidence_summary_short && (
         <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['2'], padding: `${space['1']} ${space['2']}`, backgroundColor: tc.background.muted, borderRadius: radius.md }}>
           {formatEvidenceShort(card.evidence_summary_short)}
@@ -150,10 +157,12 @@ function RecommendationCardRow({
 function DetailPanel({
   detail,
   onClose,
+  onApprovalAction,
   tc,
 }: {
   detail: EngineRecommendationDetail;
   onClose: () => void;
+  onApprovalAction: (opportunityId: string, candidateId: string | null, action: 'approve' | 'reject') => Promise<void>;
   tc: ReturnType<typeof useThemeColors>;
 }) {
   const fieldLabel: React.CSSProperties = {
@@ -367,7 +376,7 @@ function DetailPanel({
                       {ec.proposed_value.slice(0, 300)}{ec.proposed_value.length > 300 ? '...' : ''}
                     </p>
                   )}
-                  <div style={{ display: 'flex', gap: space['2'], marginTop: space['1'] }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginTop: space['2'] }}>
                     <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
                       Approval: {ec.approval_status}
                     </span>
@@ -375,6 +384,44 @@ function DetailPanel({
                       <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
                         Rollback: {ec.rollback_status}
                       </span>
+                    )}
+                    {ec.awaiting_approval && (
+                      <div style={{ display: 'flex', gap: space['1'], marginLeft: 'auto' }}>
+                        <button
+                          onClick={() => onApprovalAction(detail.opportunity_id, ec.candidate_id, 'approve')}
+                          style={{
+                            padding: `${space['0.5']} ${space['2.5']}`,
+                            fontFamily: fontFamily.body,
+                            fontSize: '11px',
+                            fontWeight: fontWeight.medium,
+                            color: '#fff',
+                            backgroundColor: magenta[500],
+                            border: 'none',
+                            borderRadius: radius.md,
+                            cursor: 'pointer',
+                          }}
+                          data-testid={`button-approve-${ec.candidate_id}`}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => onApprovalAction(detail.opportunity_id, ec.candidate_id, 'reject')}
+                          style={{
+                            padding: `${space['0.5']} ${space['2.5']}`,
+                            fontFamily: fontFamily.body,
+                            fontSize: '11px',
+                            fontWeight: fontWeight.medium,
+                            color: tc.text.muted,
+                            backgroundColor: 'transparent',
+                            border: `1px solid ${tc.border.default}`,
+                            borderRadius: radius.md,
+                            cursor: 'pointer',
+                          }}
+                          data-testid={`button-reject-${ec.candidate_id}`}
+                        >
+                          Reject
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -398,23 +445,35 @@ function RecommendationsContent() {
   const [remedyFilter, setRemedyFilter] = useState<string>('');
   const [urgencyFilter, setUrgencyFilter] = useState<string>('');
 
+  const PHASE1_REMEDIES = ['create_new_page', 'strengthen_existing_page', 'metadata_ctr_optimization', 'add_internal_links'];
+  const [phase1Only, setPhase1Only] = useState<boolean>(true);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const effectiveRemedy = remedyFilter || undefined;
       const data = await getEngineRecommendations({
         limit: 2000,
         family: familyFilter || undefined,
-        remedy: remedyFilter || undefined,
+        remedy: effectiveRemedy,
         urgency: urgencyFilter || undefined,
       });
-      setSections(data);
+      if (phase1Only && !effectiveRemedy) {
+        const filtered = data.map(section => ({
+          ...section,
+          items: section.items.filter(item => PHASE1_REMEDIES.includes(item.primary_remedy)),
+        })).filter(section => section.items.length > 0);
+        setSections(filtered);
+      } else {
+        setSections(data);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [familyFilter, remedyFilter, urgencyFilter]);
+  }, [familyFilter, remedyFilter, urgencyFilter, phase1Only]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -429,6 +488,27 @@ function RecommendationsContent() {
       setDetailLoading(false);
     }
   }, []);
+
+  const handleApprovalAction = useCallback(async (opportunityId: string, candidateId: string | null, action: 'approve' | 'reject') => {
+    try {
+      if (action === 'approve') {
+        await approveEngineCandidate({
+          candidate_id: candidateId || undefined,
+          opportunity_id: !candidateId ? opportunityId : undefined,
+        });
+      } else {
+        await rejectEngineCandidate({
+          candidate_id: candidateId || undefined,
+          opportunity_id: !candidateId ? opportunityId : undefined,
+        });
+      }
+      const refreshed = await getEngineRecommendationDetail(opportunityId);
+      setSelectedDetail(refreshed);
+      loadData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [loadData]);
 
   const totalItems = useMemo(() => sections.reduce((sum, s) => sum + s.items.length, 0), [sections]);
 
@@ -462,6 +542,16 @@ function RecommendationsContent() {
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: space['4'], marginBottom: space['4'], alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
+          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Scope:</span>
+          <button onClick={() => setPhase1Only(true)} style={filterBtnStyle(phase1Only)} data-testid="filter-scope-phase1">
+            Phase 1
+          </button>
+          <button onClick={() => setPhase1Only(false)} style={filterBtnStyle(!phase1Only)} data-testid="filter-scope-all">
+            All Remedies
+          </button>
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
           <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Family:</span>
           {['', 'query', 'page', 'authority'].map(f => (
@@ -501,9 +591,9 @@ function RecommendationsContent() {
             <option value="strengthen_existing_page">Strengthen Page</option>
             <option value="metadata_ctr_optimization">Metadata/CTR</option>
             <option value="add_internal_links">Internal Links</option>
-            <option value="pursue_backlinks">Backlinks</option>
-            <option value="maintain_paid_support">Paid Support</option>
-            <option value="hybrid">Hybrid</option>
+            {!phase1Only && <option value="pursue_backlinks">Backlinks</option>}
+            {!phase1Only && <option value="maintain_paid_support">Paid Support</option>}
+            {!phase1Only && <option value="hybrid">Hybrid</option>}
           </select>
         </div>
       </div>
@@ -560,6 +650,7 @@ function RecommendationsContent() {
         <DetailPanel
           detail={selectedDetail}
           onClose={() => setSelectedDetail(null)}
+          onApprovalAction={handleApprovalAction}
           tc={tc}
         />
       )}
