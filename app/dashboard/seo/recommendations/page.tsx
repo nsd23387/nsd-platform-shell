@@ -446,6 +446,7 @@ function RecommendationsContent() {
   const [urgencyFilter, setUrgencyFilter] = useState<string>('');
 
   const PHASE1_REMEDIES = ['create_new_page', 'strengthen_existing_page', 'metadata_ctr_optimization', 'add_internal_links'];
+  const ALLOW_ALL_REMEDIES = process.env.NEXT_PUBLIC_SEO_ALL_REMEDIES === 'true';
   const [phase1Only, setPhase1Only] = useState<boolean>(true);
 
   const loadData = useCallback(async () => {
@@ -547,9 +548,11 @@ function RecommendationsContent() {
           <button onClick={() => setPhase1Only(true)} style={filterBtnStyle(phase1Only)} data-testid="filter-scope-phase1">
             Phase 1
           </button>
-          <button onClick={() => setPhase1Only(false)} style={filterBtnStyle(!phase1Only)} data-testid="filter-scope-all">
-            All Remedies
-          </button>
+          {ALLOW_ALL_REMEDIES && (
+            <button onClick={() => setPhase1Only(false)} style={filterBtnStyle(!phase1Only)} data-testid="filter-scope-all">
+              All Remedies
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
