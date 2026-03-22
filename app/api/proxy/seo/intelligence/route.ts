@@ -516,6 +516,105 @@ async function getPhase1Recommendations(remedy?: string | null, urgency?: string
   return rows.map((r, i) => mapPhase1RowToOpportunityShape(r, i));
 }
 
+async function resolveGscPageForCluster(topicCluster: string): Promise<string | null> {
+  try {
+    const words = topicCluster.toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return null;
+    const likePattern = '%' + words.join('%') + '%';
+    const { rows } = await pool.query(`
+      SELECT payload->>'page' AS page,
+             SUM((payload->>'impressions')::int) AS total_impressions
+      FROM analytics.raw_search_console
+      WHERE payload->>'query' ILIKE $1
+        AND payload->>'page' ILIKE '%neonsignsdepot.com%'
+      GROUP BY payload->>'page'
+      ORDER BY total_impressions DESC
+      LIMIT 1
+    `, [likePattern]);
+    return rows.length > 0 ? rows[0].page : null;
+  } catch {
+    return null;
+  }
+}
+
+const ALLOWED_METADATA_HOSTS = new Set(['neonsignsdepot.com', 'www.neonsignsdepot.com']);
+
+function isAllowedMetadataUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && ALLOWED_METADATA_HOSTS.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function fetchLivePageMetadata(url: string): Promise<{ title: string | null; metaDescription: string | null }> {
+  if (!isAllowedMetadataUrl(url)) return { title: null, metaDescription: null };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'NSD-SEO-Shell/1.0 (metadata-check)' },
+      redirect: 'follow',
+    });
+    if (!resp.ok) return { title: null, metaDescription: null };
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    const maxBytes = 512 * 1024;
+    const reader = resp.body?.getReader();
+    if (!reader) return { title: null, metaDescription: null };
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      totalBytes += value.length;
+      if (totalBytes > maxBytes) break;
+    }
+    reader.cancel().catch(() => {});
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    const html = decoder.decode(Buffer.concat(chunks));
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim().replace(/\s+/g, ' ') : null;
+    const metaMatch = html.match(/<meta\s[^>]*name\s*=\s*["']description["'][^>]*content\s*=\s*["']([\s\S]*?)["'][^>]*\/?>/i)
+                   || html.match(/<meta\s[^>]*content\s*=\s*["']([\s\S]*?)["'][^>]*name\s*=\s*["']description["'][^>]*\/?>/i);
+    const metaDescription = metaMatch ? metaMatch[1].trim().replace(/\s+/g, ' ') : null;
+    return { title, metaDescription };
+  } catch {
+    return { title: null, metaDescription: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function enrichWithCurrentMetadata(detail: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const primaryRemedy = detail.primary_remedy as string | null;
+  if (primaryRemedy !== 'metadata_ctr_optimization') return detail;
+
+  let pageUrl = (detail.nsd_page_url as string | null)
+    || (detail.phase1_recommended_target_page as string | null)
+    || null;
+
+  const bucket = detail.phase1_target_page_bucket as string | null;
+  if (!pageUrl && bucket && bucket.startsWith('existing:')) {
+    pageUrl = bucket.replace('existing:', '');
+  }
+
+  if (!pageUrl) {
+    const cluster = detail.topic_cluster as string | null;
+    if (cluster) {
+      pageUrl = await resolveGscPageForCluster(cluster);
+    }
+  }
+
+  if (!pageUrl) {
+    return { ...detail, current_page_url: null, current_seo_title: null, current_meta_description: null };
+  }
+
+  const { title, metaDescription } = await fetchLivePageMetadata(pageUrl);
+  return { ...detail, current_page_url: pageUrl, current_seo_title: title, current_meta_description: metaDescription };
+}
+
 async function getPhase1RecommendationDetail(opportunityId: string) {
   const { rows } = await pool.query(`
     SELECT p.*
@@ -737,13 +836,14 @@ export async function GET(req: NextRequest) {
         if (!p1OppId) return NextResponse.json({ error: 'opportunity_id required' }, { status: 400 });
         const p1Detail = await getPhase1RecommendationDetail(p1OppId);
         if (!p1Detail) return NextResponse.json({ error: 'Phase-1 opportunity not found' }, { status: 404 });
-        const p1ExecCandidates = (p1Detail as Record<string, unknown>).execution_candidates as Array<Record<string, unknown>> | undefined;
+        const p1Enriched = await enrichWithCurrentMetadata(p1Detail as Record<string, unknown>);
+        const p1ExecCandidates = p1Enriched.execution_candidates as Array<Record<string, unknown>> | undefined;
         const p1LatestExec = p1ExecCandidates && p1ExecCandidates.length > 0 ? p1ExecCandidates[0] : null;
         const p1DetailWithExec = p1LatestExec
-          ? { ...p1Detail, execution_status: p1LatestExec.execution_status, approval_status: p1LatestExec.approval_status, candidate_id: p1LatestExec.candidate_id, mutation_type: p1LatestExec.mutation_type, rollback_status: p1LatestExec.rollback_status, awaiting_approval: p1LatestExec.awaiting_approval, ready_to_execute: p1LatestExec.ready_to_execute }
-          : p1Detail;
+          ? { ...p1Enriched, execution_status: p1LatestExec.execution_status, approval_status: p1LatestExec.approval_status, candidate_id: p1LatestExec.candidate_id, mutation_type: p1LatestExec.mutation_type, rollback_status: p1LatestExec.rollback_status, awaiting_approval: p1LatestExec.awaiting_approval, ready_to_execute: p1LatestExec.ready_to_execute }
+          : p1Enriched;
         const p1Card = toRecommendationCard(p1DetailWithExec as unknown as OpportunityRow);
-        result = { ...p1Card, evidence_summary_long: null, execution_candidates: p1ExecCandidates, ...extractPhase1Fields(p1Detail) };
+        result = { ...p1Card, evidence_summary_long: null, execution_candidates: p1ExecCandidates, ...extractPhase1Fields(p1Detail), current_page_url: p1Enriched.current_page_url || null, current_seo_title: p1Enriched.current_seo_title || null, current_meta_description: p1Enriched.current_meta_description || null };
         break;
       }
       case 'phase1-suppressed': {

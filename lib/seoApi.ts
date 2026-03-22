@@ -440,7 +440,11 @@ export interface Phase1RecommendationsResponse {
   phase1_fields: Array<EngineRecommendationCard & Phase1Fields>;
 }
 
-export interface Phase1DetailResponse extends EngineRecommendationDetail, Phase1Fields {}
+export interface Phase1DetailResponse extends EngineRecommendationDetail, Phase1Fields {
+  current_page_url: string | null;
+  current_seo_title: string | null;
+  current_meta_description: string | null;
+}
 
 export interface Phase1SuppressedRow {
   opportunity_id: string;
