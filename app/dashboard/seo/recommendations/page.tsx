@@ -84,6 +84,72 @@ function generateProposedMetadata(
   };
 }
 
+function buildExecutionTaskBundle(detail: EngineRecommendationDetail, ec: EngineRecommendationDetail['execution_candidates'][number], meta?: ProposedMetadata | null): string {
+  const p1 = detail as unknown as Phase1DetailResponse;
+  const lines: string[] = [];
+  lines.push('=== SEO EXECUTION TASK ===');
+  lines.push('');
+  lines.push(`Recommendation: ${detail.recommendation_title}`);
+  lines.push(`Type: ${(detail.primary_remedy || '').replace(/_/g, ' ')}`);
+  lines.push(`Cluster: ${detail.topic_cluster}`);
+  lines.push(`Priority Score: ${Number(detail.total_opportunity_score).toFixed(1)}`);
+  lines.push(`Urgency: ${detail.urgency_band}`);
+  lines.push(`Confidence: ${detail.data_confidence}`);
+  lines.push(`Opportunity ID: ${detail.opportunity_id}`);
+  if (ec.candidate_id) lines.push(`Candidate ID: ${ec.candidate_id}`);
+  lines.push('');
+
+  const targetPage = ec.target_page_url || meta?.targetPage || detail.nsd_page_url || p1.current_page_url || null;
+  lines.push(`Target Page: ${targetPage || 'Not yet resolved'}`);
+  if (ec.target_field) lines.push(`Target Field: ${ec.target_field}`);
+  lines.push(`Execution Status: ${(ec.execution_status || 'pending').replace(/_/g, ' ')}`);
+  if (ec.reviewed_at) lines.push(`Approved At: ${new Date(ec.reviewed_at).toLocaleString()}`);
+  if (ec.reviewer_id) lines.push(`Reviewer: ${ec.reviewer_id}`);
+  lines.push('');
+
+  if (detail.primary_remedy === 'metadata_ctr_optimization' && meta) {
+    lines.push('--- METADATA CHANGES ---');
+    if (meta.currentTitle) lines.push(`Current Title: ${meta.currentTitle}`);
+    lines.push(`Proposed Title: ${meta.proposedTitle}`);
+    if (meta.currentMeta) lines.push(`Current Meta Description: ${meta.currentMeta}`);
+    lines.push(`Proposed Meta Description: ${meta.proposedMeta}`);
+    lines.push('');
+  }
+
+  if (ec.proposed_value) {
+    lines.push('--- PROPOSED VALUE ---');
+    lines.push(ec.proposed_value);
+    lines.push('');
+  }
+
+  lines.push('--- ACTION SUMMARY ---');
+  if (detail.primary_remedy === 'metadata_ctr_optimization') {
+    lines.push(`Update the SEO title and meta description${targetPage ? ` on ${targetPage}` : ''} to improve click-through rate for "${detail.topic_cluster}" queries.`);
+  } else if (detail.primary_remedy === 'create_new_page') {
+    lines.push(`Create a new page targeting "${detail.topic_cluster}" cluster.`);
+  } else if (detail.primary_remedy === 'strengthen_existing_page') {
+    lines.push(`Strengthen existing page content${targetPage ? ` at ${targetPage}` : ''} for "${detail.topic_cluster}" cluster.`);
+  } else if (detail.primary_remedy === 'add_internal_links') {
+    lines.push(`Add internal links pointing to the target page for "${detail.topic_cluster}" cluster.`);
+  } else {
+    lines.push(`Implement the ${(detail.primary_remedy || '').replace(/_/g, ' ')} change for "${detail.topic_cluster}" cluster.`);
+  }
+  lines.push('');
+
+  if (detail.recommendation_reason) {
+    lines.push(`Reason: ${detail.recommendation_reason}`);
+  }
+  if (ec.review_notes) {
+    lines.push(`Review Notes: ${ec.review_notes}`);
+  }
+
+  lines.push('');
+  lines.push(`Source: Phase-1 SEO Recommendation Engine`);
+  lines.push(`Generated: ${new Date().toISOString()}`);
+
+  return lines.join('\n');
+}
+
 const REMEDY_COLORS: Record<string, { bg: string; text: string }> = {
   create_new_page: { bg: '#dbeafe', text: '#1e40af' },
   strengthen_existing_page: { bg: '#d1fae5', text: '#065f46' },
@@ -764,6 +830,54 @@ function DetailPanel({
                           <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, fontStyle: 'italic' }}>{ec.review_notes}</p>
                         </div>
                       )}
+
+                      {(() => {
+                        const p1ForBundle = detail as unknown as Phase1DetailResponse;
+                        const metaForBundle = detail.primary_remedy === 'metadata_ctr_optimization'
+                          ? generateProposedMetadata(
+                              detail.topic_cluster,
+                              p1ForBundle.phase1_commercial_tier || null,
+                              p1ForBundle.phase1_target_page_bucket || null,
+                              p1ForBundle.phase1_recommended_target_page || null,
+                              detail.nsd_page_url || null,
+                              p1ForBundle.current_page_url,
+                              p1ForBundle.current_seo_title,
+                              p1ForBundle.current_meta_description,
+                            )
+                          : null;
+
+                        return (
+                          <div style={{ marginTop: space['3'], display: 'flex', alignItems: 'center', gap: space['2'] }}>
+                            <button
+                              onClick={() => {
+                                const bundle = buildExecutionTaskBundle(detail, ec, metaForBundle);
+                                navigator.clipboard.writeText(bundle).then(() => {
+                                  const el = document.getElementById(`copy-feedback-task-${ec.candidate_id}`);
+                                  if (el) { el.textContent = 'Copied to clipboard'; setTimeout(() => { el.textContent = ''; }, 2000); }
+                                }).catch(() => {});
+                              }}
+                              style={{
+                                padding: `${space['1.5']} ${space['3']}`,
+                                fontFamily: fontFamily.body,
+                                fontSize: fontSize.sm,
+                                fontWeight: fontWeight.medium,
+                                color: '#fff',
+                                backgroundColor: magenta[500],
+                                border: 'none',
+                                borderRadius: radius.md,
+                                cursor: 'pointer',
+                              }}
+                              data-testid={`button-copy-execution-task-${ec.candidate_id}`}
+                            >
+                              Copy Execution Task
+                            </button>
+                            <span
+                              id={`copy-feedback-task-${ec.candidate_id}`}
+                              style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.semantic.success.dark }}
+                            />
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
