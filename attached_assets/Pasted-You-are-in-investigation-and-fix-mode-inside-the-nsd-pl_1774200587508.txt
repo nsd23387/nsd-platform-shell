@@ -1,0 +1,124 @@
+You are in investigation-and-fix mode inside the nsd-platform-shell repo.
+
+Mission:
+Find and fix the exact cause of the 500 error when approving an SEO recommendation through `/api/proxy/seo/recommendations`.
+
+Observed production error:
+- Browser request to `/api/proxy/seo/recommendations` returns HTTP 500 when an operator tries to approve a recommendation.
+
+Context:
+The shell approval flow has already been migrated away from the legacy `analytics.seo_recommendations` table and toward the engine-backed execution path. The current Recommendations page supports:
+- surfaced Phase-1 recommendations
+- promoted recommendations
+- approval/reject controls
+- “Approve as Execution Task” for recommendations with no execution candidate yet
+
+This means the failure is likely in one of these areas:
+1. request body shape mismatch
+2. wrong identifier path (candidate_id vs opportunity_id)
+3. route branching bug for Phase-1/promoted rows
+4. DB write bug in `lib/seo-db.ts`
+5. proxy response serialization bug after successful write
+
+Critical policy:
+- Do NOT redesign the SEO workflow.
+- Do NOT change unrelated recommendation rendering.
+- Investigate the failing approval path first.
+- Make the smallest safe fix only.
+- Add useful diagnostics if missing.
+
+Required tasks:
+
+1. Trace the exact approval request path
+Inspect and trace:
+- `app/dashboard/seo/recommendations/page.tsx`
+- `lib/seoApi.ts`
+- `app/api/proxy/seo/recommendations/route.ts`
+- `lib/seo-db.ts`
+
+Determine:
+- what request body the page sends on approval
+- whether it differs for:
+  - surfaced recommendations
+  - promoted recommendations
+  - recommendations with existing execution candidates
+  - recommendations with no execution candidates (“Approve as Execution Task”)
+- which backend helper is called in each case
+
+2. Reproduce and isolate the 500 source
+Identify the exact failing branch.
+Add temporary or permanent structured logging if needed so the route clearly reports:
+- approval mode (`candidate_id` vs `opportunity_id`)
+- identifiers received
+- SQL/update target
+- row counts affected
+- thrown error message
+
+Do not leave silent failures.
+
+3. Verify identifier semantics
+Confirm which identifier is required for each approval path:
+- approve existing candidate
+- approve/create execution task from opportunity
+
+Ensure the route and DB helpers agree on:
+- `candidate_id`
+- `opportunity_id`
+- any required `review_notes`
+- `reviewer_id`
+- `approval_status`
+
+4. Verify DB write helpers
+In `lib/seo-db.ts`, inspect the exact write methods used by approval.
+Confirm:
+- target table is correct for the current engine-backed flow
+- update/insert predicates are valid
+- promoted recommendations can be approved correctly
+- rows with no execution candidate are handled correctly
+- no stale legacy-table assumptions remain in the active approval path
+
+5. Fix the smallest failing path
+Implement the minimum safe fix so approval succeeds for the currently intended workflow.
+Do not broaden scope beyond the approval 500 unless a tiny adjacent fix is required.
+
+6. Return useful error responses
+If approval fails in the future, the proxy should return a structured error with:
+- failing mode
+- missing identifier or branch info where safe
+- short message useful for debugging
+
+Do not expose secrets or raw SQL, but do make failures diagnosable.
+
+7. Verify all intended approval modes
+After the fix, verify at least:
+- approval of a recommendation with an existing execution candidate
+- approval via “Approve as Execution Task” when no candidate exists
+- approval of a promoted recommendation if that path is meant to be supported now
+
+Files to inspect:
+- `app/dashboard/seo/recommendations/page.tsx`
+- `lib/seoApi.ts`
+- `app/api/proxy/seo/recommendations/route.ts`
+- `lib/seo-db.ts`
+
+Deliverables:
+1. concise summary of root cause
+2. exact files changed
+3. exact failing branch/mode
+4. fix implemented
+5. structured error/logging added
+6. verification evidence
+
+Acceptance criteria:
+- approving a recommendation no longer returns HTTP 500
+- the correct engine-backed approval path is used
+- both candidate-based and opportunity-based approval flows work if both are intended
+- future failures are diagnosable from logs/response
+- no unrelated SEO workflows were changed
+
+Output format:
+A. root cause
+B. files changed
+C. fix
+D. diagnostics added
+E. verification evidence
