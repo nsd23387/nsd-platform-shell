@@ -378,6 +378,12 @@ export interface EngineRecommendationDetail extends EngineRecommendationCard {
     target_page_url: string | null;
     target_field: string | null;
     proposed_value: string | null;
+    approval_required: boolean | null;
+    reviewer_id: string | null;
+    reviewed_at: string | null;
+    review_notes: string | null;
+    rollback_available: boolean | null;
+    execution_timestamp: string | null;
     awaiting_approval: boolean | null;
     ready_to_execute: boolean | null;
     rollback_eligible: boolean | null;

@@ -156,20 +156,23 @@ function RecommendationCardRow({
   const freshnessColor = FRESHNESS_COLORS[card.source_freshness_label] || FRESHNESS_COLORS.stale;
   const actionBadge = ACTION_BADGE_STYLES[card.action_state_badge] || ACTION_BADGE_STYLES.recommendation;
 
+  const isApproved = card.action_state_badge === 'approved' || card.action_state_badge === 'published';
+
   return (
     <div
       onClick={() => onSelect(card)}
       style={{
         padding: space['4'],
         backgroundColor: tc.background.surface,
-        border: `1px solid ${tc.border.default}`,
+        border: `1px solid ${isApproved ? '#10b981' : tc.border.default}`,
+        borderLeft: isApproved ? '3px solid #10b981' : `1px solid ${tc.border.default}`,
         borderRadius: radius.lg,
         cursor: 'pointer',
         transition: 'border-color 150ms',
         marginBottom: space['3'],
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = violet[400]; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = tc.border.default; }}
+      onMouseEnter={(e) => { if (!isApproved) (e.currentTarget as HTMLElement).style.borderColor = violet[400]; }}
+      onMouseLeave={(e) => { if (!isApproved) { (e.currentTarget as HTMLElement).style.borderColor = tc.border.default; (e.currentTarget as HTMLElement).style.borderLeftColor = tc.border.default; } }}
       data-testid={`card-recommendation-${card.opportunity_id}`}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: space['3'], marginBottom: space['2'] }}>
@@ -588,15 +591,17 @@ function DetailPanel({
             </p>
             {detail.execution_candidates.map((ec, ecIdx) => {
               const ecStatus = ACTION_BADGE_STYLES[ec.execution_status || ''] || ACTION_BADGE_STYLES.recommendation;
+              const ecApproved = ec.approval_status === 'approved';
               return (
                 <div
                   key={ec.candidate_id || `ec-${ecIdx}`}
                   style={{
                     padding: space['3'],
-                    border: `1px solid ${tc.border.subtle}`,
+                    border: `1px solid ${ecApproved ? '#10b981' : tc.border.subtle}`,
+                    borderLeft: ecApproved ? '3px solid #10b981' : `1px solid ${tc.border.subtle}`,
                     borderRadius: radius.md,
                     marginBottom: space['2'],
-                    backgroundColor: tc.background.muted,
+                    backgroundColor: ecApproved ? tc.background.surface : tc.background.muted,
                   }}
                   data-testid={`execution-candidate-${ec.candidate_id}`}
                 >
@@ -664,9 +669,105 @@ function DetailPanel({
                       </div>
                     )}
                   </div>
+
+                  {ecApproved && (
+                    <div
+                      style={{
+                        marginTop: space['3'],
+                        padding: space['3'],
+                        backgroundColor: tc.background.muted,
+                        borderRadius: radius.md,
+                        borderTop: `1px solid ${tc.border.default}`,
+                      }}
+                      data-testid={`execution-handoff-${ec.candidate_id}`}
+                    >
+                      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: '#047857', marginBottom: space['2'] }}>
+                        Execution Handoff
+                      </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space['2'] }}>
+                        <div>
+                          <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Recommendation Type</p>
+                          <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{(detail.primary_remedy || '').replace(/_/g, ' ')}</p>
+                        </div>
+                        <div>
+                          <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Execution Status</p>
+                          <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{(ec.execution_status || 'pending').replace(/_/g, ' ')}</p>
+                        </div>
+                        {ec.target_page_url && (
+                          <div style={{ gridColumn: '1 / -1' }}>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Target Page</p>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary, wordBreak: 'break-all' }}>{ec.target_page_url}</p>
+                          </div>
+                        )}
+                        {ec.target_field && (
+                          <div>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Target Field</p>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{ec.target_field}</p>
+                          </div>
+                        )}
+                        {ec.reviewed_at && (
+                          <div>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Approved At</p>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{new Date(ec.reviewed_at).toLocaleString()}</p>
+                          </div>
+                        )}
+                        {ec.reviewer_id && (
+                          <div>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Reviewer</p>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{ec.reviewer_id}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ marginTop: space['2'], padding: space['2'], backgroundColor: tc.background.surface, borderRadius: radius.md }}>
+                        <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Execution Summary</p>
+                        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary, lineHeight: lineHeight.relaxed }}>
+                          {ec.execution_status === 'published'
+                            ? `This ${(detail.primary_remedy || '').replace(/_/g, ' ')} change has been published${ec.target_page_url ? ` to ${ec.target_page_url}` : ''}. No further action required.`
+                            : ec.execution_status === 'rolled_back'
+                            ? `This change was rolled back${ec.rollback_status ? ` (${ec.rollback_status})` : ''}. Review the recommendation and determine next steps.`
+                            : `Approved for execution. ${ec.target_page_url ? `Apply the ${(ec.mutation_type || 'change').replace(/_/g, ' ')} to ${ec.target_page_url}.` : `Implement the ${(detail.primary_remedy || '').replace(/_/g, ' ')} change as described above.`}${ec.proposed_value ? ' See the proposed value above for exact content.' : ''}`
+                          }
+                        </p>
+                      </div>
+
+                      {ec.review_notes && (
+                        <div style={{ marginTop: space['2'] }}>
+                          <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Review Notes</p>
+                          <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, fontStyle: 'italic' }}>{ec.review_notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {(!detail.execution_candidates || detail.execution_candidates.length === 0) && (
+          <div style={{ borderTop: `1px solid ${tc.border.default}`, paddingTop: space['4'] }} data-testid="section-create-execution-task">
+            <p style={{ ...fieldLabel, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['2'] }}>Execution Task</p>
+            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['3'], lineHeight: lineHeight.relaxed }}>
+              No execution task exists for this recommendation yet. Approve it to create an execution handoff so it can be tracked and implemented.
+            </p>
+            <button
+              onClick={() => onApprovalAction(detail.opportunity_id, null, 'approve')}
+              style={{
+                padding: `${space['1.5']} ${space['3']}`,
+                fontFamily: fontFamily.body,
+                fontSize: fontSize.sm,
+                fontWeight: fontWeight.medium,
+                color: '#fff',
+                backgroundColor: magenta[500],
+                border: 'none',
+                borderRadius: radius.md,
+                cursor: 'pointer',
+              }}
+              data-testid="button-create-execution-task"
+            >
+              Approve as Execution Task
+            </button>
           </div>
         )}
       </div>
