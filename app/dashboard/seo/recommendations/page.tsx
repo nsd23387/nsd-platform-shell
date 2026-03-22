@@ -14,28 +14,41 @@ import type { EngineRecommendationSection, EngineRecommendationCard, EngineRecom
 interface ProposedMetadata {
   targetPage: string | null;
   targetPageStatus: 'resolved' | 'not_resolved';
-  currentTitle: null;
-  currentMeta: null;
-  currentStatus: 'unavailable';
+  currentTitle: string | null;
+  currentMeta: string | null;
+  currentStatus: 'resolved' | 'unavailable';
   proposedTitle: string;
   proposedMeta: string;
   rationale: string;
 }
 
-function generateProposedMetadata(cluster: string, commercialTier: string | null, targetPageBucket: string | null, recommendedTargetPage: string | null, nsdPageUrl: string | null): ProposedMetadata {
-  let targetPage: string | null = null;
-  let targetPageStatus: 'resolved' | 'not_resolved' = 'not_resolved';
+function generateProposedMetadata(
+  cluster: string,
+  commercialTier: string | null,
+  targetPageBucket: string | null,
+  recommendedTargetPage: string | null,
+  nsdPageUrl: string | null,
+  currentPageUrl?: string | null,
+  currentSeoTitle?: string | null,
+  currentMetaDescription?: string | null,
+): ProposedMetadata {
+  let targetPage: string | null = currentPageUrl || null;
+  let targetPageStatus: 'resolved' | 'not_resolved' = currentPageUrl ? 'resolved' : 'not_resolved';
 
-  if (nsdPageUrl) {
+  if (!targetPage && nsdPageUrl) {
     targetPage = nsdPageUrl;
     targetPageStatus = 'resolved';
-  } else if (recommendedTargetPage) {
+  } else if (!targetPage && recommendedTargetPage) {
     targetPage = recommendedTargetPage;
     targetPageStatus = 'resolved';
-  } else if (targetPageBucket && targetPageBucket.startsWith('existing:')) {
+  } else if (!targetPage && targetPageBucket && targetPageBucket.startsWith('existing:')) {
     targetPage = targetPageBucket.replace('existing:', '');
     targetPageStatus = 'resolved';
   }
+
+  const currentTitle = currentSeoTitle || null;
+  const currentMeta = currentMetaDescription || null;
+  const currentStatus: 'resolved' | 'unavailable' = (currentTitle || currentMeta) ? 'resolved' : 'unavailable';
 
   const clusterTitle = cluster.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   const isTier1 = commercialTier === 'tier1_money_page';
@@ -62,9 +75,9 @@ function generateProposedMetadata(cluster: string, commercialTier: string | null
   return {
     targetPage,
     targetPageStatus,
-    currentTitle: null,
-    currentMeta: null,
-    currentStatus: 'unavailable',
+    currentTitle,
+    currentMeta,
+    currentStatus,
     proposedTitle,
     proposedMeta,
     rationale,
@@ -412,6 +425,9 @@ function DetailPanel({
             p1.phase1_target_page_bucket || null,
             p1.phase1_recommended_target_page || null,
             detail.nsd_page_url || null,
+            p1.current_page_url,
+            p1.current_seo_title,
+            p1.current_meta_description,
           );
 
           const metaFieldLabel: React.CSSProperties = { ...fieldLabel, marginBottom: space['0.5'] };
@@ -457,14 +473,25 @@ function DetailPanel({
                 <div style={{ padding: space['3'], backgroundColor: tc.background.muted, borderRadius: radius.md }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space['2'] }}>
                     <p style={{ ...metaFieldLabel, fontWeight: fontWeight.medium, color: tc.text.secondary, marginBottom: 0 }}>Current Metadata</p>
+                    {meta.currentStatus === 'resolved' && (
+                      <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.semantic.success.dark }}>Live</span>
+                    )}
                   </div>
                   <div style={{ marginBottom: space['2'] }}>
                     <p style={{ ...metaFieldLabel, fontSize: '11px' }}>SEO Title</p>
-                    <p style={unavailableStyle} data-testid="text-current-title">Current metadata unavailable from source payload</p>
+                    {meta.currentTitle ? (
+                      <p style={metaFieldValue} data-testid="text-current-title">{meta.currentTitle}</p>
+                    ) : (
+                      <p style={unavailableStyle} data-testid="text-current-title">Current title unavailable from source payload</p>
+                    )}
                   </div>
                   <div>
                     <p style={{ ...metaFieldLabel, fontSize: '11px' }}>Meta Description</p>
-                    <p style={unavailableStyle} data-testid="text-current-meta">Current metadata unavailable from source payload</p>
+                    {meta.currentMeta ? (
+                      <p style={metaFieldValue} data-testid="text-current-meta">{meta.currentMeta}</p>
+                    ) : (
+                      <p style={unavailableStyle} data-testid="text-current-meta">Current meta description unavailable from source payload</p>
+                    )}
                   </div>
                 </div>
 
