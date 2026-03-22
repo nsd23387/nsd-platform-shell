@@ -11,6 +11,66 @@ import { Icon } from '../../../../design/components/Icon';
 import { getEngineRecommendations, getEngineRecommendationDetail, getPhase1Recommendations, getPhase1RecommendationDetail, getPhase1Suppressed, approveEngineCandidate, rejectEngineCandidate } from '../../../../lib/seoApi';
 import type { EngineRecommendationSection, EngineRecommendationCard, EngineRecommendationDetail, Phase1DetailResponse, Phase1SuppressedRow } from '../../../../lib/seoApi';
 
+interface ProposedMetadata {
+  targetPage: string | null;
+  targetPageStatus: 'resolved' | 'not_resolved';
+  currentTitle: null;
+  currentMeta: null;
+  currentStatus: 'unavailable';
+  proposedTitle: string;
+  proposedMeta: string;
+  rationale: string;
+}
+
+function generateProposedMetadata(cluster: string, commercialTier: string | null, targetPageBucket: string | null, recommendedTargetPage: string | null, nsdPageUrl: string | null): ProposedMetadata {
+  let targetPage: string | null = null;
+  let targetPageStatus: 'resolved' | 'not_resolved' = 'not_resolved';
+
+  if (nsdPageUrl) {
+    targetPage = nsdPageUrl;
+    targetPageStatus = 'resolved';
+  } else if (recommendedTargetPage) {
+    targetPage = recommendedTargetPage;
+    targetPageStatus = 'resolved';
+  } else if (targetPageBucket && targetPageBucket.startsWith('existing:')) {
+    targetPage = targetPageBucket.replace('existing:', '');
+    targetPageStatus = 'resolved';
+  }
+
+  const clusterTitle = cluster.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const isTier1 = commercialTier === 'tier1_money_page';
+  const isTier2 = commercialTier === 'tier2_support_page';
+
+  let proposedTitle: string;
+  let proposedMeta: string;
+  let rationale: string;
+
+  if (isTier1) {
+    proposedTitle = `${clusterTitle} | Custom Designs, Free Shipping | Neon Signs Depot`;
+    proposedMeta = `Shop ${cluster} at Neon Signs Depot. Custom designs, energy-efficient LED, free shipping, and a 2-year warranty. Get a free quote today.`;
+    rationale = `This is a Tier 1 money page cluster. The proposed title leads with the commercial keyword, adds purchase-intent modifiers (custom designs, free shipping), and includes the brand. The meta description targets transactional searchers with a clear value proposition and call-to-action.`;
+  } else if (isTier2) {
+    proposedTitle = `${clusterTitle} | Ideas, Inspiration & Custom Options | Neon Signs Depot`;
+    proposedMeta = `Explore ${cluster} ideas and inspiration at Neon Signs Depot. Browse styles, get design tips, and order custom neon signs with free shipping.`;
+    rationale = `This is a Tier 2 support page cluster. The proposed title balances informational intent (ideas, inspiration) with commercial modifiers (custom options). The meta description guides browsers toward conversion while serving the discovery intent.`;
+  } else {
+    proposedTitle = `${clusterTitle} | Browse & Shop | Neon Signs Depot`;
+    proposedMeta = `Discover ${cluster} at Neon Signs Depot. Browse our collection, find the perfect design, and order with free shipping and a 2-year warranty.`;
+    rationale = `The proposed title targets the cluster keyword with light commercial modifiers. The meta description serves both informational and transactional intent, guiding the searcher toward browsing and ordering.`;
+  }
+
+  return {
+    targetPage,
+    targetPageStatus,
+    currentTitle: null,
+    currentMeta: null,
+    currentStatus: 'unavailable',
+    proposedTitle,
+    proposedMeta,
+    rationale,
+  };
+}
+
 const REMEDY_COLORS: Record<string, { bg: string; text: string }> = {
   create_new_page: { bg: '#dbeafe', text: '#1e40af' },
   strengthen_existing_page: { bg: '#d1fae5', text: '#065f46' },
@@ -340,6 +400,130 @@ function DetailPanel({
             </div>
           )}
         </div>
+
+        {detail.primary_remedy === 'metadata_ctr_optimization' && (() => {
+          const p1 = detail as unknown as Phase1DetailResponse;
+          const meta = generateProposedMetadata(
+            detail.topic_cluster,
+            p1.phase1_commercial_tier || null,
+            p1.phase1_target_page_bucket || null,
+            p1.phase1_recommended_target_page || null,
+            detail.nsd_page_url || null,
+          );
+
+          const metaFieldLabel: React.CSSProperties = { ...fieldLabel, marginBottom: space['0.5'] };
+          const metaFieldValue: React.CSSProperties = { ...fieldValue, fontSize: fontSize.sm, lineHeight: lineHeight.relaxed };
+          const unavailableStyle: React.CSSProperties = { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.placeholder, fontStyle: 'italic' };
+
+          const copyToClipboard = (text: string, label: string) => {
+            navigator.clipboard.writeText(text).then(() => {
+              const el = document.getElementById(`copy-feedback-${label}`);
+              if (el) { el.textContent = 'Copied'; setTimeout(() => { el.textContent = ''; }, 1500); }
+            }).catch(() => {});
+          };
+
+          const copyBtnStyle: React.CSSProperties = {
+            padding: `${space['0.5']} ${space['2']}`,
+            fontFamily: fontFamily.body,
+            fontSize: '11px',
+            fontWeight: fontWeight.medium,
+            color: tc.text.muted,
+            backgroundColor: 'transparent',
+            border: `1px solid ${tc.border.default}`,
+            borderRadius: radius.md,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: space['1'],
+          };
+
+          return (
+            <div style={{ borderTop: `1px solid ${tc.border.default}`, paddingTop: space['4'], marginBottom: space['6'] }} data-testid="section-metadata-action">
+              <p style={{ ...fieldLabel, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['3'] }}>Metadata Action</p>
+
+              <div style={{ marginBottom: space['3'] }}>
+                <p style={metaFieldLabel}>Target Page</p>
+                {meta.targetPageStatus === 'resolved' && meta.targetPage ? (
+                  <p style={{ ...metaFieldValue, wordBreak: 'break-all' }} data-testid="text-target-page">{meta.targetPage}</p>
+                ) : (
+                  <p style={unavailableStyle} data-testid="text-target-page-unavailable">Target page not yet resolved</p>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: space['4'], marginBottom: space['3'] }}>
+                <div style={{ padding: space['3'], backgroundColor: tc.background.muted, borderRadius: radius.md }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space['2'] }}>
+                    <p style={{ ...metaFieldLabel, fontWeight: fontWeight.medium, color: tc.text.secondary, marginBottom: 0 }}>Current Metadata</p>
+                  </div>
+                  <div style={{ marginBottom: space['2'] }}>
+                    <p style={{ ...metaFieldLabel, fontSize: '11px' }}>SEO Title</p>
+                    <p style={unavailableStyle} data-testid="text-current-title">Current metadata unavailable from source payload</p>
+                  </div>
+                  <div>
+                    <p style={{ ...metaFieldLabel, fontSize: '11px' }}>Meta Description</p>
+                    <p style={unavailableStyle} data-testid="text-current-meta">Current metadata unavailable from source payload</p>
+                  </div>
+                </div>
+
+                <div style={{ padding: space['3'], backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.md }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space['2'] }}>
+                    <p style={{ ...metaFieldLabel, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: 0 }}>Proposed Metadata</p>
+                  </div>
+                  <div style={{ marginBottom: space['2'] }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <p style={{ ...metaFieldLabel, fontSize: '11px' }}>SEO Title</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
+                        <button onClick={() => copyToClipboard(meta.proposedTitle, 'title')} style={copyBtnStyle} data-testid="button-copy-title">
+                          Copy title
+                        </button>
+                        <span id="copy-feedback-title" style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.semantic.success.dark }} />
+                      </div>
+                    </div>
+                    <p style={{ ...metaFieldValue, fontWeight: fontWeight.medium }} data-testid="text-proposed-title">{meta.proposedTitle}</p>
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <p style={{ ...metaFieldLabel, fontSize: '11px' }}>Meta Description</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: space['1'] }}>
+                        <button onClick={() => copyToClipboard(meta.proposedMeta, 'meta')} style={copyBtnStyle} data-testid="button-copy-meta">
+                          Copy meta
+                        </button>
+                        <span id="copy-feedback-meta" style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.semantic.success.dark }} />
+                      </div>
+                    </div>
+                    <p style={metaFieldValue} data-testid="text-proposed-meta">{meta.proposedMeta}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: space['3'] }}>
+                <p style={metaFieldLabel}>Why this change is recommended</p>
+                <p style={{ ...metaFieldValue, color: tc.text.muted }} data-testid="text-meta-rationale">{meta.rationale}</p>
+              </div>
+
+              <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => copyToClipboard(`Title: ${meta.proposedTitle}\nMeta Description: ${meta.proposedMeta}`, 'both')}
+                  style={{
+                    padding: `${space['1.5']} ${space['3']}`,
+                    fontFamily: fontFamily.body,
+                    fontSize: fontSize.sm,
+                    fontWeight: fontWeight.medium,
+                    color: '#fff',
+                    backgroundColor: magenta[500],
+                    border: 'none',
+                    borderRadius: radius.md,
+                    cursor: 'pointer',
+                  }}
+                  data-testid="button-copy-both"
+                >
+                  Copy Proposed Metadata
+                </button>
+                <span id="copy-feedback-both" style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.semantic.success.dark, alignSelf: 'center' }} />
+              </div>
+            </div>
+          );
+        })()}
 
         {(detail as unknown as Phase1DetailResponse).phase1_kpi_primary && (
           <div style={{ borderTop: `1px solid ${tc.border.default}`, paddingTop: space['4'], marginBottom: space['6'] }}>

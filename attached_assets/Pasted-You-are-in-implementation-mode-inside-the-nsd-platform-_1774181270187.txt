@@ -1,0 +1,182 @@
+You are in implementation mode inside the nsd-platform-shell repo.
+
+Mission:
+Make metadata CTR recommendations actionable in the UI by turning them from passive diagnostics into operator-ready execution items.
+
+Problem to solve:
+Today, a metadata CTR recommendation explains:
+- the cluster
+- the issue
+- the score
+- the measurement plan
+
+But it does NOT tell the operator:
+- which exact page to edit
+- what the current SEO title is
+- what the current meta description is
+- what the proposed replacement title/meta should be
+- what exact action to take next
+
+That makes the recommendation understandable only to an SEO specialist and too slow for execution.
+
+Goal:
+For Phase-1 metadata CTR recommendations, expose a clear action layer in the existing Recommendations detail view so an operator can immediately understand:
+1. the target page
+2. the current metadata
+3. the proposed metadata
+4. the rationale
+5. the next action to take
+
+Critical policy:
+- Do NOT redesign the SEO UI.
+- Do NOT add a new page.
+- Reuse the existing Recommendations page and detail panel.
+- Keep changes additive and narrow.
+- Do NOT build autonomous apply-to-site behavior in this task.
+- Focus on actionability, not full automation.
+
+Desired operator outcome:
+When a recommendation like:
+- `metadata_ctr_optimization`
+appears for a cluster like `business neon signs`,
+the operator should be able to open the detail panel and immediately see:
+- target page URL, e.g. `/for-businesses/`
+- current title tag
+- current meta description
+- suggested title tag
+- suggested meta description
+- why the new version is better
+- an action CTA such as:
+  - Approve
+  - Copy metadata
+  - Create execution task
+
+Implementation requirements:
+
+1. Identify or add the backend/proxy payload needed
+Inspect the current recommendation payload path used by:
+- `app/api/proxy/seo/intelligence/route.ts`
+- `lib/seoApi.ts`
+- `app/dashboard/seo/recommendations/page.tsx`
+
+Determine whether the current Phase-1 recommendation/detail payload already includes:
+- target page URL
+- current title
+- current meta description
+
+If these are already available anywhere in the backend response, expose them cleanly.
+If not, add the smallest safe proxy-side enrichment possible using existing fields and existing endpoints only.
+
+Do NOT build a broad new backend service in this task.
+If backend cannot yet provide current metadata, degrade gracefully and show the missing state explicitly.
+
+2. Add a metadata action section in the detail panel
+For recommendations where remedy/action type is metadata CTR optimization:
+- add a dedicated section in the existing detail panel
+
+Minimum fields to display:
+- Target Page
+- Current SEO Title
+- Current Meta Description
+- Proposed SEO Title
+- Proposed Meta Description
+- Why this change is recommended
+
+This should be compact and operator-friendly.
+Do NOT create a large new layout.
+
+3. Generate proposed title/meta text
+If the backend already returns suggested metadata, use it.
+If not, generate proposed metadata in the shell only if there is already an established safe generation pattern in this repo.
+Otherwise, add placeholder support and note that backend suggestion support is required.
+
+Preferred behavior:
+- proposed title/meta should be deterministic and business-oriented
+- tied to the cluster and target page
+- not generic filler
+- emphasize commercial intent where relevant
+
+For example, for:
+- cluster: `business neon signs`
+- page: `/for-businesses/`
+
+the proposed metadata should clearly target business/commercial click intent, not generic decorative intent.
+
+4. Add a recommendation-to-action CTA block
+For metadata CTR recommendations, add a lightweight action block with:
+- Approve
+- Copy Proposed Metadata
+- optionally Create Execution Task if there is already a task pattern in the repo
+
+At minimum, support:
+- copy title
+- copy meta description
+- copy both together
+
+Do NOT implement direct CMS publishing in this task.
+
+5. Preserve existing recommendation workflow
+Do not break:
+- current surfaced recommendations
+- suppressed recommendations
+- promoted recommendations
+- approval behavior
+- measurement plan rendering
+
+This task should only make metadata CTR items more actionable.
+
+6. Make unclear states explicit
+If any of these are missing:
+- target page
+- current title
+- current meta
+- proposed replacement
+
+the UI should say so clearly.
+Do NOT silently show empty boxes that look broken.
+
+Examples:
+- “Target page not yet resolved”
+- “Current metadata unavailable from source payload”
+- “Proposed metadata not yet generated”
+
+7. Keep scope limited to metadata CTR recommendations
+Do NOT use this task to redesign:
+- strengthen page recommendations
+- internal link recommendations
+- create page recommendations
+
+This is specifically about making `metadata_ctr_optimization` recommendations actionable.
+
+Files to inspect:
+- `app/dashboard/seo/recommendations/page.tsx`
+- `app/api/proxy/seo/intelligence/route.ts`
+- `lib/seoApi.ts`
+- any shared recommendation detail/card helpers
+- any existing clipboard/copy interaction helper in the repo
+
+Deliverables:
+1. concise summary
+2. exact files changed
+3. what metadata fields are now shown
+4. how proposed metadata is sourced
+5. what CTA actions were added
+6. fallback behavior for missing data
+7. verification evidence
+
+Acceptance criteria:
+- metadata CTR recommendations now show a concrete action layer in the detail panel
+- operator can identify the target page
+- operator can see current and proposed metadata when available
+- operator can copy proposed metadata easily
+- approval flow still works
+- no new page or major redesign was introduced
+
+Output format:
+A. summary
+B. files changed
+C. metadata action UI
+D. data sourcing
+E. CTA behavior
+F. fallback states
+G. verification evidence
