@@ -1028,9 +1028,34 @@ function RecommendationsContent() {
   const handleApprovalAction = useCallback(async (opportunityId: string, candidateId: string | null, action: 'approve' | 'reject') => {
     try {
       if (action === 'approve') {
+        let proposedValue: string | undefined;
+        let targetPageUrl: string | undefined;
+        if (!candidateId && selectedDetail && selectedDetail.opportunity_id === opportunityId) {
+          const p1 = selectedDetail as unknown as Phase1DetailResponse;
+          const isMetadata =
+            selectedDetail.primary_remedy === 'metadata_ctr_optimization' ||
+            p1.phase1_strategic_intent === 'improve_ctr' ||
+            p1.phase1_strategic_intent === 'strengthen_page';
+          if (isMetadata) {
+            const meta = generateProposedMetadata(
+              selectedDetail.topic_cluster,
+              p1.phase1_commercial_tier || null,
+              p1.phase1_target_page_bucket || null,
+              p1.phase1_recommended_target_page || null,
+              selectedDetail.nsd_page_url || null,
+              p1.current_page_url,
+              p1.current_seo_title,
+              p1.current_meta_description,
+            );
+            proposedValue = meta.proposedMeta || undefined;
+            targetPageUrl = meta.targetPage || undefined;
+          }
+        }
         await approveEngineCandidate({
           candidate_id: candidateId || undefined,
           opportunity_id: !candidateId ? opportunityId : undefined,
+          proposed_value: proposedValue,
+          target_page_url: targetPageUrl,
         });
       } else {
         await rejectEngineCandidate({
@@ -1049,7 +1074,7 @@ function RecommendationsContent() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [loadData, phase1Only]);
+  }, [loadData, phase1Only, selectedDetail]);
 
   const totalItems = useMemo(() => sections.reduce((sum, s) => sum + s.items.length, 0), [sections]);
 
