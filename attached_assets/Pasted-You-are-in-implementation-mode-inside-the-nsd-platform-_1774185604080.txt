@@ -1,0 +1,67 @@
+You are in implementation mode inside the nsd-platform-shell repo.
+
+Mission:
+Turn SEO recommendation approval into a clear execution handoff so approved recommendations no longer disappear into an implicit backend state.
+
+Problem:
+Today, operators can review and approve recommendations, but approval does not create an obvious human-facing execution artifact inside the workflow. This makes it hard to move quickly from decision to implementation.
+
+Goal:
+When a recommendation is approved, create or expose a visible execution task/handoff state in the UI so the operator can see:
+- what was approved
+- what needs to be done
+- where it should be done
+- whether it has been completed
+
+Critical policy:
+- Do NOT redesign the app.
+- Do NOT add a new large workflow system.
+- Reuse existing SEO pages/panels if possible.
+- Keep changes narrow and additive.
+- Do NOT implement CMS publishing here.
+
+Desired behavior:
+For approved Phase-1 recommendations, show:
+- target page URL
+- recommendation type
+- execution summary
+- current execution status
+- approval timestamp
+- owner/reviewer if available
+
+Preferred implementation path:
+A. Reuse an existing page like `/dashboard/seo/outcomes` or existing recommendation detail panel if possible
+B. If needed, add a compact “Execution Task” section to the recommendation detail
+C. Do NOT add a new route unless absolutely necessary
+
+Required tasks:
+1. Verify what execution/task status fields already exist in the current SEO data path
+2. Reuse existing engine-backed approval/execution status if already available
+3. Add a visible execution-handoff section for approved recommendations
+4. Make approved recommendations clearly distinguishable from unapproved ones
+5. Preserve current approval/reject flow
+
+Files to inspect:
+- app/dashboard/seo/recommendations/page.tsx
+- app/dashboard/seo/outcomes/page.tsx
+- app/api/proxy/seo/intelligence/route.ts
+- lib/seoApi.ts
+- any existing execution status/badge helpers
+
+Deliverables:
+1. concise summary
+2. exact files changed
+3. where execution handoff is shown
+4. what fields are displayed
+5. verification evidence
+
+Acceptance criteria:
+- approving a recommendation results in a visible execution handoff state
+- operators can tell what action now needs to happen
+- no major redesign or new workflow system was introduced
+
+Output format:
+A. summary
+B. files changed
+C. execution handoff behavior
+D. verification evidence
