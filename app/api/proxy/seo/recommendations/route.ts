@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, action, feedback_text, candidate_id, opportunity_id, review_notes, target } = body;
+  const { id, action, feedback_text, candidate_id, opportunity_id, review_notes, target, proposed_value, target_page_url } = body;
 
   if (!action) {
     return NextResponse.json({ error: 'Missing required field: action' }, { status: 400 });
@@ -47,7 +47,10 @@ export async function POST(req: NextRequest) {
         if (candidate_id) {
           await approveExecutionCandidate(candidate_id, review_notes);
         } else if (opportunity_id) {
-          const result = await approveByOpportunityId(opportunity_id, review_notes);
+          const result = await approveByOpportunityId(opportunity_id, review_notes, {
+            proposed_value: typeof proposed_value === 'string' && proposed_value ? proposed_value : undefined,
+            target_page_url: typeof target_page_url === 'string' && target_page_url ? target_page_url : undefined,
+          });
           console.log(`[seo/recommendations] Approve by opportunity: mode=${result.mode}, rows=${result.rowCount}`);
         } else {
           return NextResponse.json({ error: 'candidate_id or opportunity_id required for engine approval', mode: 'engine' }, { status: 400 });
