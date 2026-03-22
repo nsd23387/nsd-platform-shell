@@ -204,63 +204,138 @@ export async function rejectRecommendation(id: string) {
 export async function approveExecutionCandidate(candidateId: string, reviewNotes?: string) {
   const p = getPool();
   const upd = await p.query(
-    `UPDATE analytics.seo_execution_queue
+    `UPDATE analytics.seo_execution_candidate
      SET approval_status = 'approved',
-         awaiting_approval = false,
+         execution_status = 'approved',
          reviewer_id = 'operator',
          reviewed_at = NOW(),
          review_notes = $2
-     WHERE candidate_id = $1::uuid`,
+     WHERE candidate_id = $1::uuid
+       AND execution_status = 'proposed'
+       AND approval_status = 'pending'`,
     [candidateId, reviewNotes || null]
   );
-  if (upd.rowCount === 0) throw new Error('Execution candidate not found');
+  if (upd.rowCount === 0) throw new Error('Execution candidate not found or already reviewed');
 }
 
 export async function rejectExecutionCandidate(candidateId: string, reviewNotes?: string) {
   const p = getPool();
   const upd = await p.query(
-    `UPDATE analytics.seo_execution_queue
+    `UPDATE analytics.seo_execution_candidate
      SET approval_status = 'rejected',
-         awaiting_approval = false,
+         execution_status = 'rejected',
          reviewer_id = 'operator',
          reviewed_at = NOW(),
          review_notes = $2
-     WHERE candidate_id = $1::uuid`,
+     WHERE candidate_id = $1::uuid
+       AND execution_status = 'proposed'
+       AND approval_status = 'pending'`,
     [candidateId, reviewNotes || null]
   );
-  if (upd.rowCount === 0) throw new Error('Execution candidate not found');
+  if (upd.rowCount === 0) throw new Error('Execution candidate not found or already reviewed');
 }
 
 export async function approveByOpportunityId(opportunityId: string, reviewNotes?: string) {
   const p = getPool();
-  const upd = await p.query(
-    `UPDATE analytics.seo_execution_queue
-     SET approval_status = 'approved',
-         awaiting_approval = false,
-         reviewer_id = 'operator',
-         reviewed_at = NOW(),
-         review_notes = $2
+  const existing = await p.query(
+    `SELECT candidate_id FROM analytics.seo_execution_candidate
      WHERE opportunity_id = $1
-       AND awaiting_approval = true`,
-    [opportunityId, reviewNotes || null]
+       AND execution_status = 'proposed'
+       AND approval_status = 'pending'`,
+    [opportunityId]
   );
-  if (upd.rowCount === 0) throw new Error('No pending execution candidate found for this opportunity');
+  if (existing.rowCount && existing.rowCount > 0) {
+    const upd = await p.query(
+      `UPDATE analytics.seo_execution_candidate
+       SET approval_status = 'approved',
+           execution_status = 'approved',
+           reviewer_id = 'operator',
+           reviewed_at = NOW(),
+           review_notes = $2
+       WHERE opportunity_id = $1
+         AND execution_status = 'proposed'
+         AND approval_status = 'pending'`,
+      [opportunityId, reviewNotes || null]
+    );
+    return { mode: 'updated', rowCount: upd.rowCount };
+  }
+  const phase1 = await p.query(
+    `SELECT opportunity_id, topic_cluster, strategic_intent, max_keyword_score,
+            urgency_band, confidence_score, recommended_target_page,
+            bottleneck_primary, resolved_existing_page_url
+     FROM analytics.seo_phase1_opportunity
+     WHERE opportunity_id = $1`,
+    [opportunityId]
+  );
+  if (!phase1.rowCount || phase1.rowCount === 0) {
+    throw new Error(`Opportunity ${opportunityId} not found in phase1 or execution queue`);
+  }
+  const opp = phase1.rows[0];
+  const intentToMutation: Record<string, { mutation_type: string; target_field: string; family: string }> = {
+    improve_ctr: { mutation_type: 'meta_description_update', target_field: 'meta_description', family: 'page' },
+    strengthen_page: { mutation_type: 'title_tag_refinement', target_field: 'title_tag', family: 'page' },
+    add_internal_links: { mutation_type: 'internal_link_insertion', target_field: 'body_anchor', family: 'query' },
+    create_page: { mutation_type: 'meta_description_update', target_field: 'meta_description', family: 'page' },
+  };
+  const mapping = intentToMutation[opp.strategic_intent] || intentToMutation.improve_ctr;
+  const targetUrl = opp.recommended_target_page || opp.resolved_existing_page_url || '';
+  const proposedValue = opp.bottleneck_primary || opp.strategic_intent || 'see_recommendation';
+  const evidenceSummary = `Phase-1 opportunity: ${opp.strategic_intent} for cluster "${opp.topic_cluster || 'unknown'}"`;
+  await p.query(
+    `INSERT INTO analytics.seo_execution_candidate
+       (generation_run_id, created_reason,
+        opportunity_id, opportunity_family, opportunity_score,
+        primary_remedy, source_confidence, mutation_type,
+        target_page_url, target_field, proposed_value, evidence_summary,
+        execution_status, approval_status, approval_required,
+        reviewer_id, reviewed_at, review_notes)
+     VALUES (
+        'shell-phase1-' || to_char(NOW(), 'YYYYMMDD-HH24MISS'), 'shell_phase1_approval',
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        'approved', 'approved', true,
+        'operator', NOW(), $11)`,
+    [
+      opp.opportunity_id,
+      mapping.family,
+      Number(opp.max_keyword_score) || 0,
+      opp.strategic_intent || 'improve_ctr',
+      opp.confidence_score ? String(opp.confidence_score) : 'medium',
+      mapping.mutation_type,
+      targetUrl,
+      mapping.target_field,
+      proposedValue,
+      evidenceSummary,
+      reviewNotes || null,
+    ]
+  );
+  return { mode: 'inserted', rowCount: 1 };
 }
 
 export async function rejectByOpportunityId(opportunityId: string, reviewNotes?: string) {
   const p = getPool();
-  const upd = await p.query(
-    `UPDATE analytics.seo_execution_queue
-     SET approval_status = 'rejected',
-         awaiting_approval = false,
-         reviewer_id = 'operator',
-         reviewed_at = NOW(),
-         review_notes = $2
+  const existing = await p.query(
+    `SELECT candidate_id FROM analytics.seo_execution_candidate
      WHERE opportunity_id = $1
-       AND awaiting_approval = true`,
-    [opportunityId, reviewNotes || null]
+       AND execution_status = 'proposed'
+       AND approval_status = 'pending'`,
+    [opportunityId]
   );
-  if (upd.rowCount === 0) throw new Error('No pending execution candidate found for this opportunity');
+  if (existing.rowCount && existing.rowCount > 0) {
+    const upd = await p.query(
+      `UPDATE analytics.seo_execution_candidate
+       SET approval_status = 'rejected',
+           execution_status = 'rejected',
+           reviewer_id = 'operator',
+           reviewed_at = NOW(),
+           review_notes = $2
+       WHERE opportunity_id = $1
+         AND execution_status = 'proposed'
+         AND approval_status = 'pending'`,
+      [opportunityId, reviewNotes || null]
+    );
+    return { mode: 'updated', rowCount: upd.rowCount };
+  }
+  throw new Error('No pending execution candidate found for this opportunity');
 }
 
 export async function submitFeedback(id: string, feedbackText: string) {

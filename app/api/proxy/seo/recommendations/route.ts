@@ -39,24 +39,30 @@ export async function POST(req: NextRequest) {
 
   try {
     if (target === 'engine' || candidate_id || opportunity_id) {
+      const approvalMode = candidate_id ? 'candidate' : 'opportunity';
+      const identifier = candidate_id || opportunity_id;
+      console.log(`[seo/recommendations] Engine ${action} | mode=${approvalMode} | id=${identifier}`);
+
       if (action === 'approve') {
         if (candidate_id) {
           await approveExecutionCandidate(candidate_id, review_notes);
         } else if (opportunity_id) {
-          await approveByOpportunityId(opportunity_id, review_notes);
+          const result = await approveByOpportunityId(opportunity_id, review_notes);
+          console.log(`[seo/recommendations] Approve by opportunity: mode=${result.mode}, rows=${result.rowCount}`);
         } else {
-          return NextResponse.json({ error: 'candidate_id or opportunity_id required for engine approval' }, { status: 400 });
+          return NextResponse.json({ error: 'candidate_id or opportunity_id required for engine approval', mode: 'engine' }, { status: 400 });
         }
       } else if (action === 'reject') {
         if (candidate_id) {
           await rejectExecutionCandidate(candidate_id, review_notes);
         } else if (opportunity_id) {
-          await rejectByOpportunityId(opportunity_id, review_notes);
+          const result = await rejectByOpportunityId(opportunity_id, review_notes);
+          console.log(`[seo/recommendations] Reject by opportunity: mode=${result.mode}, rows=${result.rowCount}`);
         } else {
-          return NextResponse.json({ error: 'candidate_id or opportunity_id required for engine rejection' }, { status: 400 });
+          return NextResponse.json({ error: 'candidate_id or opportunity_id required for engine rejection', mode: 'engine' }, { status: 400 });
         }
       } else {
-        return NextResponse.json({ error: 'Invalid action for engine target' }, { status: 400 });
+        return NextResponse.json({ error: 'Invalid action for engine target', mode: 'engine' }, { status: 400 });
       }
       return NextResponse.json({ success: true, action, candidate_id, opportunity_id, target: 'engine' });
     }
@@ -76,10 +82,11 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ success: true, id, action });
   } catch (err: any) {
-    console.error('[seo/recommendations] POST Error:', err.message);
+    const approvalMode = candidate_id ? 'candidate' : opportunity_id ? 'opportunity' : 'legacy';
+    console.error(`[seo/recommendations] POST Error | action=${action} mode=${approvalMode}:`, err.message);
     const notFound = err.message?.includes('not found');
     const status = notFound ? 404 : 500;
     const msg = notFound ? err.message : 'Failed to process recommendation action';
-    return NextResponse.json({ error: msg }, { status });
+    return NextResponse.json({ error: msg, action, mode: approvalMode }, { status });
   }
 }
