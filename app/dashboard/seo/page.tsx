@@ -79,8 +79,7 @@ function SeoOverviewContent() {
 
       <DashboardGrid columns={4}>
         <DashboardCard title="Pending Manual Review" value={loading ? undefined : String(kpis?.awaiting_approval ?? 0)} subtitle="Needs human approval" loading={loading} error={error} variant={(kpis?.awaiting_approval ?? 0) > 0 ? 'warning' : 'default'} />
-        <DashboardCard title="Auto-Approved (Today)" value={loading ? undefined : '—'} subtitle="High-confidence auto tier" loading={loading} error={error} />
-        {/* TODO: Query seo_execution_candidate WHERE confidence_tier='auto' AND reviewed_at::date = CURRENT_DATE */}
+        <DashboardCard title="Auto-Approved (Today)" value={loading ? undefined : String(kpis?.auto_approved_today ?? 0)} subtitle="High-confidence auto tier" loading={loading} error={error} />
         <DashboardCard title="Execution Queue" value={loading ? undefined : String(kpis?.approved ?? 0)} subtitle="Approved, awaiting apply" loading={loading} error={error} />
         <DashboardCard title="Published" value={loading ? undefined : String(kpis?.published ?? 0)} subtitle="Live on WordPress" loading={loading} error={error} />
       </DashboardGrid>
@@ -107,8 +106,9 @@ function SeoOverviewContent() {
               <div key={job.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${space['1.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
                 <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{job.label}</span>
                 <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.placeholder }}>
-                  {/* TODO: Query seo_cluster_generation_runs.run_at for actual timestamps */}
-                  Scheduled {job.time}
+                  {kpis?.last_pipeline_run_at
+                    ? `Last: ${new Date(kpis.last_pipeline_run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+                    : `Scheduled ${job.time}`}
                 </span>
               </div>
             ))}
@@ -118,26 +118,33 @@ function SeoOverviewContent() {
             <h3 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['3'] }}>
               Auto-Approve Status
             </h3>
-            {[
-              { label: 'SEO_AUTO_EXECUTE_ENABLED', value: 'ON', color: '#065f46', bg: '#d1fae5' },
-              { label: 'auto_approve_enabled (DB)', value: 'ON', color: '#065f46', bg: '#d1fae5' },
-              { label: 'Daily Cap', value: '—/25 used today', color: tc.text.secondary, bg: 'transparent' },
-              { label: 'Min Score Threshold', value: '6.0', color: tc.text.secondary, bg: 'transparent' },
-            ].map((row) => (
-              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${space['1.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
-                <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{row.label}</span>
-                <span style={{
-                  fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
-                  color: row.color,
-                  backgroundColor: row.bg,
-                  padding: row.bg !== 'transparent' ? `${space['0.5']} ${space['2']}` : '0',
-                  borderRadius: row.bg !== 'transparent' ? radius.full : '0',
-                }}>
-                  {/* TODO: Query seo_generation_settings and env for live values */}
-                  {row.value}
-                </span>
-              </div>
-            ))}
+            {(() => {
+              const envOn = kpis?.seo_auto_execute_env ?? false;
+              const dbOn = kpis?.auto_approve_enabled ?? false;
+              const cap = kpis?.auto_approve_daily_cap ?? 25;
+              const used = kpis?.auto_approved_today ?? 0;
+              const minScore = kpis?.auto_approve_min_score ?? 7.0;
+              const rows = [
+                { label: 'SEO_AUTO_EXECUTE_ENABLED', value: envOn ? 'ON' : 'OFF', color: envOn ? '#065f46' : '#991b1b', bg: envOn ? '#d1fae5' : '#fee2e2' },
+                { label: 'auto_approve_enabled (DB)', value: dbOn ? 'ON' : 'OFF', color: dbOn ? '#065f46' : '#991b1b', bg: dbOn ? '#d1fae5' : '#fee2e2' },
+                { label: 'Daily Cap', value: `${used}/${cap} used today`, color: tc.text.secondary, bg: 'transparent' },
+                { label: 'Min Score Threshold', value: String(minScore), color: tc.text.secondary, bg: 'transparent' },
+              ];
+              return rows.map((row) => (
+                <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${space['1.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
+                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{row.label}</span>
+                  <span style={{
+                    fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
+                    color: row.color,
+                    backgroundColor: row.bg,
+                    padding: row.bg !== 'transparent' ? `${space['0.5']} ${space['2']}` : '0',
+                    borderRadius: row.bg !== 'transparent' ? radius.full : '0',
+                  }}>
+                    {row.value}
+                  </span>
+                </div>
+              ));
+            })()}
           </div>
         </div>
       )}

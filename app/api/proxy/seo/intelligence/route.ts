@@ -13,7 +13,7 @@ const pool = new Pool({
 });
 
 async function getOverviewKpis() {
-  const [engineCounts, pageOpts, internalLinks, contentArtifacts, ahrefsKw, pageIndex, execQueue] = await Promise.all([
+  const [engineCounts, pageOpts, internalLinks, contentArtifacts, ahrefsKw, pageIndex, execQueue, pipelineRuns, autoApproveSettings, autoApprovedToday] = await Promise.all([
     pool.query(`
       SELECT
         COUNT(*)::int AS total_opportunities,
@@ -44,10 +44,32 @@ async function getOverviewKpis() {
         COUNT(*) FILTER (WHERE execution_status = 'published')::int AS published
       FROM analytics.seo_execution_queue
     `),
+    pool.query(`
+      SELECT run_at
+      FROM analytics.seo_cluster_generation_runs
+      ORDER BY run_at DESC
+      LIMIT 1
+    `).catch(() => ({ rows: [] })),
+    pool.query(`
+      SELECT auto_approve_enabled, auto_approve_daily_cap, auto_approve_min_score
+      FROM analytics.seo_generation_settings
+      ORDER BY id ASC
+      LIMIT 1
+    `).catch(() => ({ rows: [] })),
+    pool.query(`
+      SELECT COUNT(*)::int AS cnt
+      FROM analytics.seo_execution_candidate
+      WHERE confidence_tier = 'auto'
+        AND reviewed_at::date = CURRENT_DATE
+        AND approval_status = 'approved'
+    `).catch(() => ({ rows: [{ cnt: 0 }] })),
   ]);
 
   const eng = engineCounts.rows[0];
   const exec = execQueue.rows[0];
+  const lastRun = pipelineRuns.rows[0]?.run_at ?? null;
+  const autoSettings = autoApproveSettings.rows[0] ?? null;
+  const autoTodayCount = autoApprovedToday.rows[0]?.cnt ?? 0;
 
   return {
     total_clusters: eng.total_clusters,
@@ -64,6 +86,15 @@ async function getOverviewKpis() {
     awaiting_approval: exec.awaiting_approval,
     approved: exec.approved,
     published: exec.published,
+    // Phase 2 pipeline fields
+    last_pipeline_run_at: lastRun,
+    auto_approve_enabled: autoSettings?.auto_approve_enabled ?? false,
+    auto_approve_daily_cap: autoSettings?.auto_approve_daily_cap ?? 25,
+    auto_approve_min_score: autoSettings?.auto_approve_min_score != null
+      ? parseFloat(String(autoSettings.auto_approve_min_score))
+      : 7.0,
+    auto_approved_today: autoTodayCount,
+    seo_auto_execute_env: process.env.SEO_AUTO_EXECUTE_ENABLED === 'true',
   };
 }
 
@@ -630,7 +661,7 @@ async function getPhase1RecommendationDetail(opportunityId: string) {
            proposed_value, approval_required, reviewer_id, reviewed_at,
            review_notes, rollback_available, execution_timestamp,
            awaiting_approval, ready_to_execute, rollback_eligible,
-           created_at
+           created_at, confidence_tier
     FROM analytics.seo_execution_queue
     WHERE opportunity_id::text = $1
     ORDER BY created_at DESC
@@ -757,7 +788,7 @@ async function getEngineRecommendationDetail(opportunityId: string) {
            proposed_value, approval_required, reviewer_id, reviewed_at,
            review_notes, rollback_available, execution_timestamp,
            awaiting_approval, ready_to_execute, rollback_eligible,
-           created_at
+           created_at, confidence_tier
     FROM analytics.seo_execution_queue
     WHERE opportunity_id = $1
     ORDER BY created_at DESC

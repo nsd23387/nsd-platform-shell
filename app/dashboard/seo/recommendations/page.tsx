@@ -777,15 +777,15 @@ function DetailPanel({
                     <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
                       Approval: {ec.approval_status}
                     </span>
-                    {(ec as any).confidence_tier && (
+                    {ec.confidence_tier && (
                       <span style={{
                         fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.medium,
-                        color: (ec as any).confidence_tier === 'auto' ? '#065f46' : tc.text.muted,
-                        backgroundColor: (ec as any).confidence_tier === 'auto' ? '#d1fae5' : 'transparent',
-                        padding: (ec as any).confidence_tier === 'auto' ? `0 ${space['1.5']}` : '0',
+                        color: ec.confidence_tier === 'auto' ? '#065f46' : tc.text.muted,
+                        backgroundColor: ec.confidence_tier === 'auto' ? '#d1fae5' : 'transparent',
+                        padding: ec.confidence_tier === 'auto' ? `0 ${space['1.5']}` : '0',
                         borderRadius: radius.full,
                       }}>
-                        Tier: {(ec as any).confidence_tier}
+                        Tier: {ec.confidence_tier}
                       </span>
                     )}
                     {ec.rollback_status && (
@@ -886,14 +886,14 @@ function DetailPanel({
                             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{new Date(ec.execution_timestamp).toLocaleString()}</p>
                           </div>
                         )}
-                        {(ec as any).confidence_tier && (
+                        {ec.confidence_tier && (
                           <div>
                             <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Confidence Tier</p>
                             <p style={{
                               fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
-                              color: (ec as any).confidence_tier === 'auto' ? '#065f46' : tc.text.primary,
+                              color: ec.confidence_tier === 'auto' ? '#065f46' : tc.text.primary,
                             }}>
-                              {(ec as any).confidence_tier}
+                              {ec.confidence_tier}
                             </p>
                           </div>
                         )}

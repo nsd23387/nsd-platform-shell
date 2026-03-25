@@ -9,17 +9,11 @@ import { space, radius } from '../../../../design/tokens/spacing';
 import { getOutcomes } from '../../../../lib/seoApi';
 import type { SeoOutcome } from '../../../../lib/seoApi';
 
-// TODO: Extend SeoOutcome type in seoApi.ts to include these fields
-// once the proxy endpoint returns them from seo_execution_log join
-interface OutcomeWithMeasurement extends SeoOutcome {
-  measured_at_14d?: string | null;
-  measured_at_30d?: string | null;
-  measured_at_90d?: string | null;
-}
+// SeoOutcome now includes measured_at_14d/30d/90d from seoApi.ts
 
 function OutcomesContent() {
   const tc = useThemeColors();
-  const [outcomes, setOutcomes] = useState<OutcomeWithMeasurement[]>([]);
+  const [outcomes, setOutcomes] = useState<SeoOutcome[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
