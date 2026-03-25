@@ -531,3 +531,67 @@ export async function rejectEngineCandidate(opts: {
     }),
   });
 }
+
+// =============================================================================
+// Content Pipeline — Page Briefs
+// =============================================================================
+
+export interface PageBriefSummary {
+  id: string;
+  cluster_id: string | null;
+  cluster_keyword: string | null;
+  target_keyword: string;
+  suggested_title: string | null;
+  status: string;
+  total_word_count_target: number;
+  wp_draft_url: string | null;
+  trigger_source: string | null;
+  created_at: string;
+}
+
+export async function getPageBriefs(status?: string): Promise<PageBriefSummary[]> {
+  const params = status ? `?status=${status}` : '';
+  const data = await seoFetch<{ data: PageBriefSummary[] }>(`/api/proxy/seo/page-briefs${params}`);
+  return data.data ?? [];
+}
+
+export async function updateBriefStatus(briefId: string, status: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/page-briefs', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'update-status', briefId, status }),
+  });
+}
+
+export async function generateBriefFromGap(targetKeyword: string, clusterId?: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/page-briefs', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'generate', targetKeyword, clusterId, triggerSource: 'manual' }),
+  });
+}
+
+// =============================================================================
+// Content Pipeline — Competitor Gaps
+// =============================================================================
+
+export interface CompetitorGapSummary {
+  id: string;
+  competitor_url: string;
+  gap_type: string;
+  keyword: string | null;
+  competitor_ranking_position: number | null;
+  our_ranking_position: number | null;
+  competitor_page_url: string | null;
+  cluster_keyword: string | null;
+  opportunity_score: number | null;
+  status: string;
+  discovered_at: string;
+}
+
+export async function getCompetitorGaps(type?: string, status?: string): Promise<CompetitorGapSummary[]> {
+  const params = new URLSearchParams();
+  if (type) params.set('type', type);
+  if (status) params.set('status', status);
+  const qs = params.toString();
+  const data = await seoFetch<{ data: CompetitorGapSummary[] }>(`/api/proxy/seo/competitor-gaps${qs ? `?${qs}` : ''}`);
+  return data.data ?? [];
+}

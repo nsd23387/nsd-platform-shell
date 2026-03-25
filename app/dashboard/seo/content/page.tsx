@@ -6,37 +6,8 @@ import { AccessDenied } from '../../../../components/dashboard';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
-
-// =============================================================================
-// Types
-// =============================================================================
-
-interface PageBrief {
-  id: string;
-  cluster_id: string | null;
-  cluster_keyword: string | null;
-  target_keyword: string;
-  suggested_title: string | null;
-  status: string;
-  total_word_count_target: number;
-  wp_draft_url: string | null;
-  trigger_source: string | null;
-  created_at: string;
-}
-
-interface CompetitorGap {
-  id: string;
-  competitor_url: string;
-  gap_type: string;
-  keyword: string | null;
-  competitor_ranking_position: number | null;
-  our_ranking_position: number | null;
-  competitor_page_url: string | null;
-  cluster_keyword: string | null;
-  opportunity_score: number | null;
-  status: string;
-  discovered_at: string;
-}
+import { getPageBriefs, updateBriefStatus, generateBriefFromGap, getCompetitorGaps } from '../../../../lib/seoApi';
+import type { PageBriefSummary, CompetitorGapSummary } from '../../../../lib/seoApi';
 
 // =============================================================================
 // Status Badges
@@ -78,37 +49,31 @@ function Badge({ label, colors }: { label: string; colors: { bg: string; text: s
 
 function ContentPipelineContent() {
   const tc = useThemeColors();
-  const [briefs, setBriefs] = useState<PageBrief[]>([]);
-  const [gaps, setGaps] = useState<CompetitorGap[]>([]);
+  const [briefs, setBriefs] = useState<PageBriefSummary[]>([]);
+  const [gaps, setGaps] = useState<CompetitorGapSummary[]>([]);
   const [loadingBriefs, setLoadingBriefs] = useState(true);
   const [loadingGaps, setLoadingGaps] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadBriefs = useCallback(() => {
     setLoadingBriefs(true);
-    fetch('/api/proxy/seo/page-briefs')
-      .then(r => r.json())
-      .then(data => { setBriefs(data.data ?? []); setLoadingBriefs(false); })
+    getPageBriefs()
+      .then(data => { setBriefs(data); setLoadingBriefs(false); })
       .catch(err => { setError(err.message); setLoadingBriefs(false); });
   }, []);
 
   const loadGaps = useCallback(() => {
     setLoadingGaps(true);
-    fetch('/api/proxy/seo/competitor-gaps')
-      .then(r => r.json())
-      .then(data => { setGaps(data.data ?? []); setLoadingGaps(false); })
+    getCompetitorGaps()
+      .then(data => { setGaps(data); setLoadingGaps(false); })
       .catch(err => { setError(err.message); setLoadingGaps(false); });
   }, []);
 
   useEffect(() => { loadBriefs(); loadGaps(); }, [loadBriefs, loadGaps]);
 
-  const handleBriefAction = async (briefId: string, action: string) => {
+  const handleBriefAction = async (briefId: string, newStatus: string) => {
     try {
-      await fetch('/api/proxy/seo/page-briefs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update-status', briefId, status: action }),
-      });
+      await updateBriefStatus(briefId, newStatus);
       loadBriefs();
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -116,18 +81,12 @@ function ContentPipelineContent() {
     }
   };
 
-  const handleCreateBriefFromGap = async (gap: CompetitorGap) => {
+  const handleCreateBriefFromGap = async (gap: CompetitorGapSummary) => {
     try {
-      await fetch('/api/proxy/seo/page-briefs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'generate',
-          targetKeyword: gap.keyword || gap.cluster_keyword || 'unknown',
-          clusterId: gap.id, // TODO: Use actual cluster_id from gap
-          triggerSource: 'manual',
-        }),
-      });
+      await generateBriefFromGap(
+        gap.keyword || gap.cluster_keyword || 'unknown',
+        undefined, // cluster_id not directly available on gap row
+      );
       loadBriefs();
     } catch (err) {
       // eslint-disable-next-line no-console
