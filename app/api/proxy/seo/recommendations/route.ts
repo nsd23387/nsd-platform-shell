@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
-  const { id, action, feedback_text, candidate_id, opportunity_id, review_notes, target } = body || {};
+  const { id, action, feedback_text, candidate_id, opportunity_id, review_notes, target, proposed_value, target_page_url } = body || {};
 
   console.log(`[seo/recommendations] POST received | action=${action} target=${target} candidate_id=${candidate_id || 'none'} opportunity_id=${opportunity_id || 'none'} id=${id || 'none'}`);
 
