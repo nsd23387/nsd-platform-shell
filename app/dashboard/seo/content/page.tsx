@@ -20,6 +20,12 @@ const BRIEF_STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   rejected: { bg: '#fee2e2', text: '#991b1b' },
 };
 
+const CONTENT_TYPE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  blog_post: { bg: '#f3e8ff', text: '#6b21a8', label: 'Blog Post' },
+  landing_page: { bg: '#dbeafe', text: '#1e40af', label: 'Landing Page' },
+  category_page: { bg: '#fef3c7', text: '#92400e', label: 'Category Page' },
+};
+
 const GAP_TYPE_STYLES: Record<string, { bg: string; text: string }> = {
   keyword: { bg: '#e0e7ff', text: '#3730a3' },
   content: { bg: '#fef3c7', text: '#92400e' },
@@ -51,6 +57,7 @@ function ContentPipelineContent() {
   const tc = useThemeColors();
   const [briefs, setBriefs] = useState<PageBriefSummary[]>([]);
   const [gaps, setGaps] = useState<CompetitorGapSummary[]>([]);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [loadingBriefs, setLoadingBriefs] = useState(true);
   const [loadingGaps, setLoadingGaps] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -148,19 +155,52 @@ function ContentPipelineContent() {
         )}
 
         {!loadingBriefs && briefs.length > 0 && (
-          <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, overflow: 'hidden' }}>
+          <>
+            <div style={{ display: 'flex', gap: space['1'], marginBottom: space['3'], borderBottom: `1px solid ${tc.border.default}` }}>
+              {[
+                { key: null, label: 'All' },
+                { key: 'blog_post', label: 'Blog Posts' },
+                { key: 'landing_page', label: 'Landing Pages' },
+                { key: 'category_page', label: 'Category Pages' },
+              ].map(tab => (
+                <button
+                  key={tab.label}
+                  onClick={() => setTypeFilter(tab.key)}
+                  style={{
+                    padding: `${space['2']} ${space['4']}`,
+                    fontFamily: fontFamily.body, fontSize: fontSize.sm,
+                    fontWeight: typeFilter === tab.key ? fontWeight.semibold : fontWeight.normal,
+                    color: typeFilter === tab.key ? tc.text.primary : tc.text.muted,
+                    backgroundColor: 'transparent', border: 'none',
+                    borderBottom: typeFilter === tab.key ? '2px solid #6366f1' : '2px solid transparent',
+                    cursor: 'pointer',
+                  }}
+                >{tab.label}</button>
+              ))}
+            </div>
+            <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${tc.border.default}` }}>
-                  {['Target Keyword', 'Cluster', 'Status', 'Words', 'WP Draft', 'Created', 'Actions'].map(h => (
+                  {['Target Keyword', 'Type', 'Cluster', 'Status', 'Words', 'WP Draft', 'Created', 'Actions'].map(h => (
                     <th key={h} style={{ ...tdStyle, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'left' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {briefs.map(brief => (
+                {briefs.filter(b => !typeFilter || b.content_type === typeFilter).map(brief => {
+                  const ct = CONTENT_TYPE_STYLES[brief.content_type ?? 'landing_page'] ?? CONTENT_TYPE_STYLES.landing_page;
+                  return (
                   <tr key={brief.id} style={{ borderBottom: `1px solid ${tc.border.subtle}` }} data-testid={`row-brief-${brief.id}`}>
                     <td style={{ ...tdStyle, fontWeight: fontWeight.medium, color: tc.text.primary }}>{brief.target_keyword}</td>
+                    <td style={tdStyle}>
+                      <Badge label={ct.label} colors={ct} />
+                      {brief.content_type_confidence && (
+                        <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '10px', color: tc.text.placeholder, marginTop: '2px' }}>
+                          {brief.content_type_confidence} confidence
+                        </span>
+                      )}
+                    </td>
                     <td style={tdStyle}>{brief.cluster_keyword || '—'}</td>
                     <td style={tdStyle}><Badge label={brief.status} colors={BRIEF_STATUS_STYLES[brief.status] || BRIEF_STATUS_STYLES.draft} /></td>
                     <td style={tdStyle}>{brief.total_word_count_target}</td>
@@ -199,10 +239,12 @@ function ContentPipelineContent() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
