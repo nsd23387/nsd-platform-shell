@@ -43,6 +43,9 @@ export interface OpportunityRow {
   rollback_status: string | null;
   awaiting_approval: boolean | null;
   ready_to_execute: boolean | null;
+  recommendation_source?: string | null;
+  coverage_validated?: boolean | null;
+  recommendation_quality_score?: number | null;
 }
 
 export interface RecommendationCard {
@@ -82,6 +85,9 @@ export interface RecommendationCard {
   candidate_id: string | null;
   mutation_type: string | null;
   rollback_status: string | null;
+  recommendation_source?: string | null;
+  coverage_validated?: boolean | null;
+  recommendation_quality_score?: number | null;
 }
 
 export type RecommendationSection = {
@@ -316,6 +322,9 @@ export function toRecommendationCard(row: OpportunityRow): RecommendationCard {
     candidate_id: row.candidate_id,
     mutation_type: row.mutation_type,
     rollback_status: row.rollback_status,
+    recommendation_source: row.recommendation_source ?? null,
+    coverage_validated: row.coverage_validated ?? null,
+    recommendation_quality_score: row.recommendation_quality_score != null ? Number(row.recommendation_quality_score) : null,
   };
 }
 

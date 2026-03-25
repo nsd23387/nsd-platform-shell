@@ -358,6 +358,9 @@ export interface EngineRecommendationCard {
   candidate_id: string | null;
   mutation_type: string | null;
   rollback_status: string | null;
+  recommendation_source?: 'cluster_engine' | 'phase1' | 'manual';
+  coverage_validated?: boolean;
+  recommendation_quality_score?: number | null;
 }
 
 export interface EngineRecommendationSection {
@@ -485,6 +488,8 @@ export async function approveEngineCandidate(opts: {
   candidate_id?: string;
   opportunity_id?: string;
   review_notes?: string;
+  proposed_value?: string;
+  target_page_url?: string;
 }): Promise<void> {
   await seoFetch('/api/proxy/seo/recommendations', {
     method: 'POST',
@@ -494,6 +499,8 @@ export async function approveEngineCandidate(opts: {
       candidate_id: opts.candidate_id,
       opportunity_id: opts.opportunity_id,
       review_notes: opts.review_notes,
+      proposed_value: opts.proposed_value,
+      target_page_url: opts.target_page_url,
     }),
   });
 }

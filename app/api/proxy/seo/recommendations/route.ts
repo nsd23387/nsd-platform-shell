@@ -65,7 +65,10 @@ export async function POST(req: NextRequest) {
           await approveExecutionCandidate(candidate_id, review_notes);
           console.log(`[seo/recommendations] Approved candidate ${candidate_id}`);
         } else if (opportunity_id) {
-          const result = await approveByOpportunityId(opportunity_id, review_notes);
+          const result = await approveByOpportunityId(opportunity_id, review_notes, {
+            proposed_value: typeof proposed_value === 'string' && proposed_value ? proposed_value : undefined,
+            target_page_url: typeof target_page_url === 'string' && target_page_url ? target_page_url : undefined,
+          });
           console.log(`[seo/recommendations] Approve by opportunity: mode=${result.mode}, rows=${result.rowCount}`);
         } else {
           return NextResponse.json({

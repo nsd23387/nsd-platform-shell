@@ -235,7 +235,7 @@ export async function rejectExecutionCandidate(candidateId: string, reviewNotes?
   if (upd.rowCount === 0) throw new Error('Execution candidate not found or already reviewed');
 }
 
-export async function approveByOpportunityId(opportunityId: string, reviewNotes?: string) {
+export async function approveByOpportunityId(opportunityId: string, reviewNotes?: string, opts?: { proposed_value?: string; target_page_url?: string }) {
   const p = getPool();
   const existing = await p.query(
     `SELECT candidate_id FROM analytics.seo_execution_candidate
@@ -278,8 +278,8 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
     create_page: { mutation_type: 'meta_description_update', target_field: 'meta_description', family: 'page' },
   };
   const mapping = intentToMutation[opp.strategic_intent] || intentToMutation.improve_ctr;
-  const targetUrl = opp.recommended_target_page || opp.resolved_existing_page_url || '';
-  const proposedValue = opp.bottleneck_primary || opp.strategic_intent || 'see_recommendation';
+  const targetUrl = opts?.target_page_url || opp.recommended_target_page || opp.resolved_existing_page_url || '';
+  const proposedValue = opts?.proposed_value || opp.bottleneck_primary || opp.strategic_intent || 'see_recommendation';
   const evidenceSummary = `Phase-1 opportunity: ${opp.strategic_intent} for cluster "${opp.topic_cluster || 'unknown'}"`;
   await p.query(
     `INSERT INTO analytics.seo_execution_candidate

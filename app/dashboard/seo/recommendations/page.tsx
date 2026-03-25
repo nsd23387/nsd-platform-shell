@@ -268,6 +268,26 @@ function RecommendationCardRow({
         </div>
       </div>
 
+      {card.coverage_validated === false && card.recommendation_source === 'cluster_engine' && (
+        <div
+          data-testid="banner-coverage-unverified"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: space['2'],
+            backgroundColor: '#FEF3C7',
+            borderLeft: '3px solid #F59E0B',
+            borderRadius: 0,
+            padding: `${space['2']} ${space['3']}`,
+            marginBottom: space['2'],
+          }}
+        >
+          <span style={{ fontSize: fontSize.sm, color: '#92400e', fontFamily: fontFamily.body }}>
+            Coverage unverified — confirm no existing page before actioning
+          </span>
+        </div>
+      )}
+
       <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, marginBottom: space['3'], lineHeight: lineHeight.relaxed }}>
         {card.recommendation_summary}
       </div>
@@ -278,6 +298,25 @@ function RecommendationCardRow({
         <Badge label={`confidence: ${card.data_confidence}`} colors={confidenceColor} />
         <Badge label={`freshness: ${card.source_freshness_label}`} colors={freshnessColor} />
         {card.opportunity_family && <Badge label={card.opportunity_family} colors={{ bg: '#f5f5f5', text: '#525252' }} />}
+        {card.recommendation_source === 'cluster_engine' && (
+          <Badge label="Cluster engine" colors={{ bg: '#F1EFE8', text: '#5F5E5A' }} />
+        )}
+        {card.recommendation_source === 'phase1' && (
+          <Badge label="Phase 1" colors={{ bg: '#EEEDFE', text: '#534AB7' }} />
+        )}
+        {card.recommendation_quality_score != null && (
+          <span style={{
+            fontSize: fontSize.sm,
+            fontFamily: fontFamily.body,
+            color: card.recommendation_quality_score >= 7.0
+              ? tc.semantic.success.dark
+              : card.recommendation_quality_score >= 4.0
+                ? '#92400e'
+                : tc.semantic.danger.dark,
+          }}>
+            Quality: {Number(card.recommendation_quality_score).toFixed(1)} / 10
+          </span>
+        )}
       </div>
 
       {card.confidence_reason && (
@@ -349,6 +388,26 @@ function DetailPanel({
           <Badge label={`confidence: ${detail.data_confidence}`} colors={CONFIDENCE_COLORS[detail.data_confidence] || CONFIDENCE_COLORS.medium} />
           <Badge label={`freshness: ${detail.source_freshness_label}`} colors={FRESHNESS_COLORS[detail.source_freshness_label] || FRESHNESS_COLORS.stale} />
         </div>
+
+        {detail.coverage_validated === false && detail.recommendation_source === 'cluster_engine' && (
+          <div
+            data-testid="banner-coverage-unverified"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: space['2'],
+              backgroundColor: '#FEF3C7',
+              borderLeft: '3px solid #F59E0B',
+              borderRadius: 0,
+              padding: `${space['2']} ${space['3']}`,
+              marginBottom: space['2'],
+            }}
+          >
+            <span style={{ fontSize: fontSize.sm, color: '#92400e', fontFamily: fontFamily.body }}>
+              Coverage unverified — confirm no existing page before actioning
+            </span>
+          </div>
+        )}
 
         <div style={{ marginBottom: space['6'] }}>
           <p style={fieldLabel}>Recommendation</p>
@@ -1028,9 +1087,34 @@ function RecommendationsContent() {
   const handleApprovalAction = useCallback(async (opportunityId: string, candidateId: string | null, action: 'approve' | 'reject') => {
     try {
       if (action === 'approve') {
+        let proposedValue: string | undefined;
+        let targetPageUrl: string | undefined;
+        if (!candidateId && selectedDetail && selectedDetail.opportunity_id === opportunityId) {
+          const p1 = selectedDetail as unknown as Phase1DetailResponse;
+          const isMetadata =
+            selectedDetail.primary_remedy === 'metadata_ctr_optimization' ||
+            p1.phase1_strategic_intent === 'improve_ctr' ||
+            p1.phase1_strategic_intent === 'strengthen_page';
+          if (isMetadata) {
+            const meta = generateProposedMetadata(
+              selectedDetail.topic_cluster,
+              p1.phase1_commercial_tier || null,
+              p1.phase1_target_page_bucket || null,
+              p1.phase1_recommended_target_page || null,
+              selectedDetail.nsd_page_url || null,
+              p1.current_page_url,
+              p1.current_seo_title,
+              p1.current_meta_description,
+            );
+            proposedValue = meta.proposedMeta || undefined;
+            targetPageUrl = meta.targetPage || undefined;
+          }
+        }
         await approveEngineCandidate({
           candidate_id: candidateId || undefined,
           opportunity_id: !candidateId ? opportunityId : undefined,
+          proposed_value: proposedValue,
+          target_page_url: targetPageUrl,
         });
       } else {
         await rejectEngineCandidate({
@@ -1049,7 +1133,7 @@ function RecommendationsContent() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [loadData, phase1Only]);
+  }, [loadData, phase1Only, selectedDetail]);
 
   const totalItems = useMemo(() => sections.reduce((sum, s) => sum + s.items.length, 0), [sections]);
 
