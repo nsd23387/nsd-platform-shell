@@ -595,3 +595,91 @@ export async function getCompetitorGaps(type?: string, status?: string): Promise
   const data = await seoFetch<{ data: CompetitorGapSummary[] }>(`/api/proxy/seo/competitor-gaps${qs ? `?${qs}` : ''}`);
   return data.data ?? [];
 }
+
+// =============================================================================
+// Phase 4 — Schema Markup
+// =============================================================================
+
+export interface SchemaMarkupRow {
+  id: string;
+  page_path: string;
+  schema_type: string;
+  schema_json: Record<string, unknown>;
+  status: string;
+  wp_page_id: number | null;
+  applied_at: string | null;
+  created_at: string;
+}
+
+export async function getSchemaMarkup(status?: string): Promise<SchemaMarkupRow[]> {
+  const qs = status ? `?status=${status}` : '';
+  const data = await seoFetch<{ data: SchemaMarkupRow[] }>(`/api/proxy/seo/schema${qs}`);
+  return data.data ?? [];
+}
+
+export async function updateSchemaMarkupStatus(id: string, status: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/schema', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'update-status', id, status }),
+  });
+}
+
+export async function applySchemaMarkup(id: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/schema', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'apply', id }),
+  });
+}
+
+// =============================================================================
+// Phase 4 — Signals (Decay, Cannibalization, Topical Authority)
+// =============================================================================
+
+export interface DecaySignalRow {
+  id: string;
+  page_path: string;
+  keyword: string;
+  position_30d_ago: number | null;
+  position_now: number | null;
+  position_delta: number | null;
+  traffic_delta_pct: number | null;
+  decay_score: number | null;
+  status: string;
+  detected_at: string;
+}
+
+export interface CannibalizationRow {
+  id: string;
+  keyword: string;
+  page_path_a: string;
+  page_path_b: string;
+  overlap_score: number | null;
+  suggested_canonical: string | null;
+  canonical_confidence: string | null;
+  status: string;
+  detected_at: string;
+}
+
+export interface TopicalGapRow {
+  id: string;
+  topic: string;
+  subtopic: string | null;
+  gap_type: string;
+  related_cluster_id: string | null;
+  opportunity_score: number | null;
+  status: string;
+  discovered_at: string;
+}
+
+export async function getSignals(type: 'decay' | 'cannibalization' | 'topical-gaps', params?: Record<string, string>): Promise<unknown[]> {
+  const qs = new URLSearchParams({ type, ...(params || {}) }).toString();
+  const data = await seoFetch<{ data: unknown[] }>(`/api/proxy/seo/signals?${qs}`);
+  return data.data ?? [];
+}
+
+export async function updateSignalStatus(signalType: string, id: string, status: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/signals', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'update-status', signalType, id, status }),
+  });
+}
