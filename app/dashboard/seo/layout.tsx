@@ -10,6 +10,7 @@ import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typogra
 import { space, radius, duration, easing } from '../../../design/tokens/spacing';
 import { Icon } from '../../../design/components/Icon';
 import { isApiDisabled } from '../../../config/appConfig';
+import { getSeoOverviewKpis } from '../../../lib/seoApi';
 
 interface NavItem {
   href: string;
@@ -40,6 +41,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/seo/recommendations', label: 'Recommendations', icon: 'review' },
       { href: '/dashboard/seo/internal-links', label: 'Internal Links', icon: 'code' },
+      { href: '/dashboard/seo/execution-log', label: 'Execution Log', icon: 'timeline' },
+      { href: '/dashboard/seo/content', label: 'Content Pipeline', icon: 'edit' },
     ],
   },
   {
@@ -64,6 +67,34 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
 
   const [isMobile, setIsMobile] = useState(false);
   const [mobileSubNavOpen, setMobileSubNavOpen] = useState(false);
+  const [pipelineHealthColor, setPipelineHealthColor] = useState('#10b981');
+  const [pipelineHealthLabel, setPipelineHealthLabel] = useState('Pipeline: checking...');
+
+  useEffect(() => {
+    getSeoOverviewKpis()
+      .then((kpis) => {
+        if (!kpis.last_pipeline_run_at) {
+          setPipelineHealthColor('#f59e0b');
+          setPipelineHealthLabel('Pipeline: no runs yet');
+          return;
+        }
+        const hoursAgo = (Date.now() - new Date(kpis.last_pipeline_run_at).getTime()) / (1000 * 60 * 60);
+        if (hoursAgo < 25) {
+          setPipelineHealthColor('#10b981');
+          setPipelineHealthLabel(`Pipeline: healthy (${Math.round(hoursAgo)}h ago)`);
+        } else if (hoursAgo < 48) {
+          setPipelineHealthColor('#f59e0b');
+          setPipelineHealthLabel(`Pipeline: stale (${Math.round(hoursAgo)}h ago)`);
+        } else {
+          setPipelineHealthColor('#ef4444');
+          setPipelineHealthLabel(`Pipeline: offline (${Math.round(hoursAgo)}h ago)`);
+        }
+      })
+      .catch(() => {
+        setPipelineHealthColor('#f59e0b');
+        setPipelineHealthLabel('Pipeline: unknown');
+      });
+  }, []);
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -273,18 +304,31 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
               marginBottom: space['3'],
             }}
           >
-            <h3
-              style={{
-                fontFamily: fontFamily.display,
-                fontSize: fontSize.base,
-                fontWeight: fontWeight.semibold,
-                color: tc.text.primary,
-                marginBottom: space['0.5'],
-                whiteSpace: 'nowrap',
-              }}
-            >
-              SEO Intelligence
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginBottom: space['0.5'] }}>
+              <h3
+                style={{
+                  fontFamily: fontFamily.display,
+                  fontSize: fontSize.base,
+                  fontWeight: fontWeight.semibold,
+                  color: tc.text.primary,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                SEO Intelligence
+              </h3>
+              <span
+                title={pipelineHealthLabel}
+                style={{
+                  display: 'inline-block',
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: pipelineHealthColor,
+                  flexShrink: 0,
+                }}
+                data-testid="indicator-pipeline-health"
+              />
+            </div>
             <p
               style={{
                 fontFamily: fontFamily.body,

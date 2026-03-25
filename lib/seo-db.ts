@@ -368,10 +368,14 @@ export async function getOutcomes() {
         ELSE 0
       END AS ctr_change,
       COALESCE(slo.measured_clicks, 0) - COALESCE(slo.baseline_clicks, 0) AS traffic_change,
-      slo.measurement_date AS execution_date
+      slo.measurement_date AS execution_date,
+      el.measured_at_14d,
+      el.measured_at_30d,
+      el.measured_at_90d
     FROM analytics.seo_learning_outcomes slo
     LEFT JOIN analytics.seo_recommendations sr ON sr.id = slo.recommendation_id
     LEFT JOIN analytics.keyword_clusters kc ON kc.id::text = (sr.supporting_data->>'cluster_id')
+    LEFT JOIN analytics.seo_execution_log el ON el.recommendation_id = slo.recommendation_id
     ORDER BY slo.measurement_date DESC
   `);
   return result.rows.map(r => ({
@@ -380,5 +384,8 @@ export async function getOutcomes() {
     new_position: Number(r.new_position),
     ctr_change: Number(r.ctr_change),
     traffic_change: Number(r.traffic_change),
+    measured_at_14d: r.measured_at_14d ?? null,
+    measured_at_30d: r.measured_at_30d ?? null,
+    measured_at_90d: r.measured_at_90d ?? null,
   }));
 }

@@ -777,6 +777,17 @@ function DetailPanel({
                     <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
                       Approval: {ec.approval_status}
                     </span>
+                    {ec.confidence_tier && (
+                      <span style={{
+                        fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.medium,
+                        color: ec.confidence_tier === 'auto' ? '#065f46' : tc.text.muted,
+                        backgroundColor: ec.confidence_tier === 'auto' ? '#d1fae5' : 'transparent',
+                        padding: ec.confidence_tier === 'auto' ? `0 ${space['1.5']}` : '0',
+                        borderRadius: radius.full,
+                      }}>
+                        Tier: {ec.confidence_tier}
+                      </span>
+                    )}
                     {ec.rollback_status && (
                       <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
                         Rollback: {ec.rollback_status}
@@ -867,6 +878,23 @@ function DetailPanel({
                           <div>
                             <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Reviewer</p>
                             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{ec.reviewer_id}</p>
+                          </div>
+                        )}
+                        {ec.execution_timestamp && (
+                          <div>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Applied At</p>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{new Date(ec.execution_timestamp).toLocaleString()}</p>
+                          </div>
+                        )}
+                        {ec.confidence_tier && (
+                          <div>
+                            <p style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'] }}>Confidence Tier</p>
+                            <p style={{
+                              fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
+                              color: ec.confidence_tier === 'auto' ? '#065f46' : tc.text.primary,
+                            }}>
+                              {ec.confidence_tier}
+                            </p>
                           </div>
                         )}
                       </div>

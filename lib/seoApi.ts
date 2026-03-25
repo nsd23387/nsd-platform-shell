@@ -59,6 +59,9 @@ export interface SeoOutcome {
   ctr_change: number;
   traffic_change: number;
   execution_date: string;
+  measured_at_14d: string | null;
+  measured_at_30d: string | null;
+  measured_at_90d: string | null;
 }
 
 function getAuthHeaders(): HeadersInit {
@@ -154,6 +157,12 @@ export interface SeoOverviewKpis {
   awaiting_approval: number;
   approved: number;
   published: number;
+  last_pipeline_run_at: string | null;
+  auto_approve_enabled: boolean;
+  auto_approve_daily_cap: number;
+  auto_approve_min_score: number;
+  auto_approved_today: number;
+  seo_auto_execute_env: boolean;
 }
 
 export interface PageQueryPerformance {
@@ -391,6 +400,7 @@ export interface EngineRecommendationDetail extends EngineRecommendationCard {
     ready_to_execute: boolean | null;
     rollback_eligible: boolean | null;
     created_at: string | null;
+    confidence_tier: string | null;
   }>;
 }
 

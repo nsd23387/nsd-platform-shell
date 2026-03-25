@@ -9,6 +9,8 @@ import { space, radius } from '../../../../design/tokens/spacing';
 import { getOutcomes } from '../../../../lib/seoApi';
 import type { SeoOutcome } from '../../../../lib/seoApi';
 
+// SeoOutcome now includes measured_at_14d/30d/90d from seoApi.ts
+
 function OutcomesContent() {
   const tc = useThemeColors();
   const [outcomes, setOutcomes] = useState<SeoOutcome[]>([]);
@@ -58,6 +60,23 @@ function OutcomesContent() {
         </p>
       </div>
 
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: space['2'],
+          backgroundColor: tc.background.muted,
+          borderRadius: radius.md,
+          padding: `${space['2']} ${space['3']}`,
+          marginBottom: space['4'],
+        }}
+        data-testid="banner-measurement-lag"
+      >
+        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
+          Measurement data populates 14, 30, and 90 days after execution. Recent changes will show as Pending.
+        </span>
+      </div>
+
       {loading && (
         <div style={{ padding: space['8'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>
           Loading outcomes...
@@ -94,7 +113,7 @@ function OutcomesContent() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${tc.border.default}` }}>
-                {['Cluster Topic', 'Keyword', 'Page URL', 'Old Position', 'New Position', 'CTR Change', 'Traffic Change', 'Executed'].map((h) => (
+                {['Cluster Topic', 'Keyword', 'Page URL', 'Old Position', 'New Position', 'CTR Change', 'Traffic Change', 'Executed', 'Measured 14d', 'Measured 30d', 'Measured 90d'].map((h) => (
                   <th key={h} style={{ ...tdStyle, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'left' }}>{h}</th>
                 ))}
               </tr>
@@ -116,6 +135,21 @@ function OutcomesContent() {
                     <td style={tdStyle}>{formatChange(out.ctr_change, '%')}</td>
                     <td style={tdStyle}>{formatChange(out.traffic_change)}</td>
                     <td style={tdStyle}>{new Date(out.execution_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</td>
+                    <td style={tdStyle}>
+                      {out.measured_at_14d
+                        ? <span style={{ color: '#065f46' }}>{new Date(out.measured_at_14d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        : <span style={{ color: tc.text.placeholder }}>Pending</span>}
+                    </td>
+                    <td style={tdStyle}>
+                      {out.measured_at_30d
+                        ? <span style={{ color: '#065f46' }}>{new Date(out.measured_at_30d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        : <span style={{ color: tc.text.placeholder }}>Pending</span>}
+                    </td>
+                    <td style={tdStyle}>
+                      {out.measured_at_90d
+                        ? <span style={{ color: '#065f46' }}>{new Date(out.measured_at_90d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        : <span style={{ color: tc.text.placeholder }}>Pending</span>}
+                    </td>
                   </tr>
                 );
               })}
