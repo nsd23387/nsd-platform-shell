@@ -42,6 +42,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/dashboard/seo/recommendations', label: 'Recommendations', icon: 'review' },
       { href: '/dashboard/seo/internal-links', label: 'Internal Links', icon: 'code' },
       { href: '/dashboard/seo/execution-log', label: 'Execution Log', icon: 'timeline' },
+      { href: '/dashboard/seo/content', label: 'Content Pipeline', icon: 'edit' },
     ],
   },
   {
