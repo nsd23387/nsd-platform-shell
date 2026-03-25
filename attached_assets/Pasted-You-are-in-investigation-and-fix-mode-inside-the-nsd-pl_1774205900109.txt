@@ -1,0 +1,112 @@
+You are in investigation-and-fix mode inside the nsd-platform-shell repo.
+
+Mission:
+Find why production at https://analytics.neonsignsdepot.com is still returning HTTP 500 on POST /api/proxy/seo/recommendations even after the recent approval-path fix.
+
+Known context:
+A recent fix corrected writes from the proxy/DB layer so approvals target analytics.seo_execution_candidate instead of the non-writable view analytics.seo_execution_queue. That fix also added insert logic for opportunity-based "Approve as Execution Task" flows and improved diagnostics.
+
+However, production is still returning:
+POST /api/proxy/seo/recommendations → 500
+
+This means one of these is likely true:
+1. production is not running the fixed code
+2. the deployed frontend bundle is sending a different payload than what was tested
+3. a different approval branch is still broken
+4. environment/config differences in production are causing the route to fail
+
+Critical policy:
+- Investigate production-path truth first.
+- Make the smallest safe fix only.
+- Do NOT redesign the SEO workflow.
+- Add precise diagnostics where missing.
+
+Required tasks:
+
+1. Verify deployment/version truth
+Determine whether analytics.neonsignsdepot.com is actually running the fixed code.
+Check:
+- deployed commit / build SHA if available
+- whether the structured diagnostic logging added in the prior fix is present in the deployed route
+- whether the route code in production matches the branch that was tested
+
+If production is not on the fixed commit, state that plainly as root cause.
+
+2. Add or verify production-safe diagnostics in the route
+In:
+- app/api/proxy/seo/recommendations/route.ts
+
+Ensure the route logs, for every POST:
+- action
+- target
+- mode (candidate vs opportunity)
+- candidate_id if present
+- opportunity_id if present
+- whether request body is missing required fields
+- exact failing helper name
+- caught error message
+
+Return structured JSON on failure:
+{ error, action, mode, target, has_candidate_id, has_opportunity_id }
+
+Do not expose secrets or raw SQL.
+
+3. Trace the actual UI payload(s)
+Inspect:
+- app/dashboard/seo/recommendations/page.tsx
+- lib/seoApi.ts
+
+Identify every code path that can POST to /api/proxy/seo/recommendations:
+- approve existing candidate
+- approve as execution task
+- reject existing candidate
+- reject opportunity if supported
+- promoted recommendation paths
+
+For each, document the exact request body sent.
+
+4. Verify route branching matches all UI payload shapes
+Check whether the POST handler correctly handles every payload shape currently emitted by the page.
+Pay special attention to:
+- promoted recommendations
+- rows without execution candidates
+- rows with missing/undefined identifiers
+- action naming differences
+- target='engine' assumptions
+
+5. Verify production env assumptions
+Check for any production-only differences that could trigger 500:
+- missing env vars
+- DB client initialization differences
+- API mode differences
+- auth/session differences in the proxy route
+
+6. Fix the exact failing path
+Implement the minimum safe fix once the exact failing production branch is known.
+
+7. Verify against the real failing scenario
+Provide evidence specifically for the path that is still failing in production.
+
+Files to inspect:
+- app/api/proxy/seo/recommendations/route.ts
+- app/dashboard/seo/recommendations/page.tsx
+- lib/seoApi.ts
+- lib/seo-db.ts
+- any deployment/env helper relevant to this route
+
+Deliverables:
+1. root cause
+2. whether production was on the fixed code
+3. exact failing payload/branch
+4. files changed
+5. diagnostics added
+6. fix implemented
+7. verification evidence for the production-failing path
+
+Output format:
+A. root cause
+B. deployment truth
+C. failing payload/branch
+D. files changed
+E. diagnostics/fix
+F. verification evidence
