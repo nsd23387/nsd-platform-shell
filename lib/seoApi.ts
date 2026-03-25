@@ -546,6 +546,8 @@ export interface PageBriefSummary {
   total_word_count_target: number;
   wp_draft_url: string | null;
   trigger_source: string | null;
+  content_type: string | null;
+  content_type_confidence: string | null;
   created_at: string;
 }
 
