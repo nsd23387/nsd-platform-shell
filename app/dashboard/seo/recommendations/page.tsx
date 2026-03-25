@@ -268,6 +268,26 @@ function RecommendationCardRow({
         </div>
       </div>
 
+      {card.coverage_validated === false && card.recommendation_source === 'cluster_engine' && (
+        <div
+          data-testid="banner-coverage-unverified"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: space['2'],
+            backgroundColor: '#FEF3C7',
+            borderLeft: '3px solid #F59E0B',
+            borderRadius: 0,
+            padding: `${space['2']} ${space['3']}`,
+            marginBottom: space['2'],
+          }}
+        >
+          <span style={{ fontSize: fontSize.sm, color: '#92400e', fontFamily: fontFamily.body }}>
+            Coverage unverified — confirm no existing page before actioning
+          </span>
+        </div>
+      )}
+
       <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, marginBottom: space['3'], lineHeight: lineHeight.relaxed }}>
         {card.recommendation_summary}
       </div>
@@ -278,6 +298,25 @@ function RecommendationCardRow({
         <Badge label={`confidence: ${card.data_confidence}`} colors={confidenceColor} />
         <Badge label={`freshness: ${card.source_freshness_label}`} colors={freshnessColor} />
         {card.opportunity_family && <Badge label={card.opportunity_family} colors={{ bg: '#f5f5f5', text: '#525252' }} />}
+        {card.recommendation_source === 'cluster_engine' && (
+          <Badge label="Cluster engine" colors={{ bg: '#F1EFE8', text: '#5F5E5A' }} />
+        )}
+        {card.recommendation_source === 'phase1' && (
+          <Badge label="Phase 1" colors={{ bg: '#EEEDFE', text: '#534AB7' }} />
+        )}
+        {card.recommendation_quality_score != null && (
+          <span style={{
+            fontSize: fontSize.sm,
+            fontFamily: fontFamily.body,
+            color: card.recommendation_quality_score >= 7.0
+              ? tc.semantic.success.dark
+              : card.recommendation_quality_score >= 4.0
+                ? '#92400e'
+                : tc.semantic.danger.dark,
+          }}>
+            Quality: {Number(card.recommendation_quality_score).toFixed(1)} / 10
+          </span>
+        )}
       </div>
 
       {card.confidence_reason && (
@@ -349,6 +388,26 @@ function DetailPanel({
           <Badge label={`confidence: ${detail.data_confidence}`} colors={CONFIDENCE_COLORS[detail.data_confidence] || CONFIDENCE_COLORS.medium} />
           <Badge label={`freshness: ${detail.source_freshness_label}`} colors={FRESHNESS_COLORS[detail.source_freshness_label] || FRESHNESS_COLORS.stale} />
         </div>
+
+        {detail.coverage_validated === false && detail.recommendation_source === 'cluster_engine' && (
+          <div
+            data-testid="banner-coverage-unverified"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: space['2'],
+              backgroundColor: '#FEF3C7',
+              borderLeft: '3px solid #F59E0B',
+              borderRadius: 0,
+              padding: `${space['2']} ${space['3']}`,
+              marginBottom: space['2'],
+            }}
+          >
+            <span style={{ fontSize: fontSize.sm, color: '#92400e', fontFamily: fontFamily.body }}>
+              Coverage unverified — confirm no existing page before actioning
+            </span>
+          </div>
+        )}
 
         <div style={{ marginBottom: space['6'] }}>
           <p style={fieldLabel}>Recommendation</p>
