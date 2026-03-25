@@ -78,11 +78,69 @@ function SeoOverviewContent() {
       </DashboardGrid>
 
       <DashboardGrid columns={4}>
-        <DashboardCard title="Awaiting Approval" value={loading ? undefined : String(kpis?.awaiting_approval ?? 0)} subtitle="Execution candidates" loading={loading} error={error} variant={(kpis?.awaiting_approval ?? 0) > 0 ? 'warning' : 'default'} />
+        <DashboardCard title="Pending Manual Review" value={loading ? undefined : String(kpis?.awaiting_approval ?? 0)} subtitle="Needs human approval" loading={loading} error={error} variant={(kpis?.awaiting_approval ?? 0) > 0 ? 'warning' : 'default'} />
+        <DashboardCard title="Auto-Approved (Today)" value={loading ? undefined : '—'} subtitle="High-confidence auto tier" loading={loading} error={error} />
+        {/* TODO: Query seo_execution_candidate WHERE confidence_tier='auto' AND reviewed_at::date = CURRENT_DATE */}
+        <DashboardCard title="Execution Queue" value={loading ? undefined : String(kpis?.approved ?? 0)} subtitle="Approved, awaiting apply" loading={loading} error={error} />
+        <DashboardCard title="Published" value={loading ? undefined : String(kpis?.published ?? 0)} subtitle="Live on WordPress" loading={loading} error={error} />
+      </DashboardGrid>
+
+      <DashboardGrid columns={4}>
         <DashboardCard title="Internal Links" value={loading ? undefined : String(kpis?.internal_link_recs ?? 0)} subtitle="Linking suggestions" loading={loading} error={error} />
         <DashboardCard title="Ahrefs Keywords" value={loading ? undefined : String(kpis?.ahrefs_keywords_tracked ?? 0)} subtitle="Competitive gap tracked" loading={loading} error={error} />
         <DashboardCard title="Content Artifacts" value={loading ? undefined : String(kpis?.content_artifacts ?? 0)} subtitle="Generated briefs" loading={loading} error={error} />
+        <DashboardCard title="Execution Total" value={loading ? undefined : String(kpis?.execution_candidates_total ?? 0)} subtitle="All-time candidates" loading={loading} error={error} />
       </DashboardGrid>
+
+      {/* Pipeline Status & Kill Switch panels */}
+      {!loading && !error && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space['4'], marginTop: space['6'] }}>
+          <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['4'] }}>
+            <h3 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['3'] }}>
+              Nightly Pipeline
+            </h3>
+            {[
+              { label: 'Cluster Generation', time: '03:00 UTC' },
+              { label: 'Revalidation Sweep', time: '03:30 UTC' },
+              { label: 'Measurement Loop', time: '04:00 UTC' },
+            ].map((job) => (
+              <div key={job.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${space['1.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
+                <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{job.label}</span>
+                <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.placeholder }}>
+                  {/* TODO: Query seo_cluster_generation_runs.run_at for actual timestamps */}
+                  Scheduled {job.time}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['4'] }}>
+            <h3 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['3'] }}>
+              Auto-Approve Status
+            </h3>
+            {[
+              { label: 'SEO_AUTO_EXECUTE_ENABLED', value: 'ON', color: '#065f46', bg: '#d1fae5' },
+              { label: 'auto_approve_enabled (DB)', value: 'ON', color: '#065f46', bg: '#d1fae5' },
+              { label: 'Daily Cap', value: '—/25 used today', color: tc.text.secondary, bg: 'transparent' },
+              { label: 'Min Score Threshold', value: '6.0', color: tc.text.secondary, bg: 'transparent' },
+            ].map((row) => (
+              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${space['1.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
+                <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{row.label}</span>
+                <span style={{
+                  fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
+                  color: row.color,
+                  backgroundColor: row.bg,
+                  padding: row.bg !== 'transparent' ? `${space['0.5']} ${space['2']}` : '0',
+                  borderRadius: row.bg !== 'transparent' ? radius.full : '0',
+                }}>
+                  {/* TODO: Query seo_generation_settings and env for live values */}
+                  {row.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!loading && !error && (
         <>

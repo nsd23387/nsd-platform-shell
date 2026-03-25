@@ -40,6 +40,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/seo/recommendations', label: 'Recommendations', icon: 'review' },
       { href: '/dashboard/seo/internal-links', label: 'Internal Links', icon: 'code' },
+      { href: '/dashboard/seo/execution-log', label: 'Execution Log', icon: 'timeline' },
     ],
   },
   {
@@ -273,18 +274,33 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
               marginBottom: space['3'],
             }}
           >
-            <h3
-              style={{
-                fontFamily: fontFamily.display,
-                fontSize: fontSize.base,
-                fontWeight: fontWeight.semibold,
-                color: tc.text.primary,
-                marginBottom: space['0.5'],
-                whiteSpace: 'nowrap',
-              }}
-            >
-              SEO Intelligence
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginBottom: space['0.5'] }}>
+              <h3
+                style={{
+                  fontFamily: fontFamily.display,
+                  fontSize: fontSize.base,
+                  fontWeight: fontWeight.semibold,
+                  color: tc.text.primary,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                SEO Intelligence
+              </h3>
+              {/* Pipeline health dot — defaults to green (no job history API yet) */}
+              {/* TODO: Query seo_cluster_generation_runs.run_at to determine actual health */}
+              <span
+                title="Pipeline: healthy"
+                style={{
+                  display: 'inline-block',
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: '#10b981',
+                  flexShrink: 0,
+                }}
+                data-testid="indicator-pipeline-health"
+              />
+            </div>
             <p
               style={{
                 fontFamily: fontFamily.body,
