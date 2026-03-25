@@ -358,6 +358,9 @@ export interface EngineRecommendationCard {
   candidate_id: string | null;
   mutation_type: string | null;
   rollback_status: string | null;
+  recommendation_source?: 'cluster_engine' | 'phase1' | 'manual';
+  coverage_validated?: boolean;
+  recommendation_quality_score?: number | null;
 }
 
 export interface EngineRecommendationSection {
