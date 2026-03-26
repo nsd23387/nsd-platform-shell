@@ -123,7 +123,7 @@ function RecommendationsContent() {
     try {
       setLoading(true);
       const data = await getPhase1Recommendations();
-      setSections(Array.isArray(data) ? [{ section_id: 'all', section_title: 'All', section_description: '', items: data as unknown as EngineRecommendationCard[] }] : data);
+      setSections(data.sections ?? []);
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load');
