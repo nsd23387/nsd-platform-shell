@@ -936,15 +936,20 @@ export async function GET(req: NextRequest) {
       case 'recommendation-detail': {
         const oppId = req.nextUrl.searchParams.get('opportunity_id');
         if (!oppId) return NextResponse.json({ error: 'opportunity_id required' }, { status: 400 });
-        const detail = await getEngineRecommendationDetail(oppId);
-        if (!detail) return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 });
-        const execCandidates = (detail as Record<string, unknown>).execution_candidates as Array<Record<string, unknown>> | undefined;
-        const latestExec = execCandidates && execCandidates.length > 0 ? execCandidates[0] : null;
-        const detailWithExec = latestExec
-          ? { ...detail, execution_status: latestExec.execution_status, approval_status: latestExec.approval_status, candidate_id: latestExec.candidate_id, mutation_type: latestExec.mutation_type, rollback_status: latestExec.rollback_status, awaiting_approval: latestExec.awaiting_approval, ready_to_execute: latestExec.ready_to_execute }
-          : detail;
-        const card = toRecommendationCard(detailWithExec as unknown as OpportunityRow);
-        result = { ...card, evidence_summary_long: (detail as Record<string, unknown>).evidence_summary_long, execution_candidates: execCandidates };
+        try {
+          const detail = await getEngineRecommendationDetail(oppId);
+          if (!detail) return NextResponse.json({ error: 'detail_not_found', opportunity_id: oppId, message: 'Could not load recommendation detail' }, { status: 404 });
+          const execCandidates = (detail as Record<string, unknown>).execution_candidates as Array<Record<string, unknown>> | undefined;
+          const latestExec = execCandidates && execCandidates.length > 0 ? execCandidates[0] : null;
+          const detailWithExec = latestExec
+            ? { ...detail, execution_status: latestExec.execution_status, approval_status: latestExec.approval_status, candidate_id: latestExec.candidate_id, mutation_type: latestExec.mutation_type, rollback_status: latestExec.rollback_status, awaiting_approval: latestExec.awaiting_approval, ready_to_execute: latestExec.ready_to_execute }
+            : detail;
+          const card = toRecommendationCard(detailWithExec as unknown as OpportunityRow);
+          result = { ...card, evidence_summary_long: (detail as Record<string, unknown>).evidence_summary_long, execution_candidates: execCandidates };
+        } catch (detailErr: any) {
+          console.error(`[intelligence] recommendation-detail error for ${oppId}:`, detailErr.message);
+          return NextResponse.json({ error: 'detail_not_found', opportunity_id: oppId, message: 'Could not load recommendation detail' }, { status: 404 });
+        }
         break;
       }
       default:
