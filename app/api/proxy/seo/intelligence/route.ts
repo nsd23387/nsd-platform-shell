@@ -655,17 +655,42 @@ async function getPhase1RecommendationDetail(opportunityId: string) {
 
   if (rows.length === 0) return null;
 
-  const { rows: execRows } = await pool.query(`
-    SELECT candidate_id::text, execution_status, approval_status,
-           mutation_type, rollback_status, target_page_url, target_field,
-           proposed_value, approval_required, reviewer_id, reviewed_at,
-           review_notes, rollback_available, execution_timestamp,
-           awaiting_approval, ready_to_execute, rollback_eligible,
-           created_at, confidence_tier
-    FROM analytics.seo_execution_queue
-    WHERE opportunity_id::text = $1
-    ORDER BY created_at DESC
-  `, [opportunityId]);
+  // Query execution candidates from the table directly (not the view)
+  // to access columns added after the view was created (e.g. confidence_tier)
+  let execRows: any[] = [];
+  try {
+    const execResult = await pool.query(`
+      SELECT candidate_id::text, execution_status, approval_status,
+             mutation_type, rollback_status, target_page_url, target_field,
+             proposed_value, approval_required, reviewer_id, reviewed_at,
+             review_notes, rollback_available, execution_timestamp,
+             created_at, confidence_tier,
+             (execution_status = 'proposed' AND approval_status = 'pending') AS awaiting_approval,
+             (execution_status = 'approved' AND approval_status = 'approved') AS ready_to_execute,
+             (execution_status IN ('published', 'draft_applied') AND rollback_available) AS rollback_eligible
+      FROM analytics.seo_execution_candidate
+      WHERE opportunity_id::text = $1
+      ORDER BY created_at DESC
+    `, [opportunityId]);
+    execRows = execResult.rows;
+  } catch (err: any) {
+    console.error(`[intelligence] Failed to fetch exec candidates for ${opportunityId}:`, err.message);
+    // Fallback: try the view without confidence_tier
+    try {
+      const fallback = await pool.query(`
+        SELECT candidate_id::text, execution_status, approval_status,
+               mutation_type, rollback_status, target_page_url, target_field,
+               proposed_value, approval_required, reviewer_id, reviewed_at,
+               review_notes, rollback_available, execution_timestamp,
+               awaiting_approval, ready_to_execute, rollback_eligible,
+               created_at
+        FROM analytics.seo_execution_queue
+        WHERE opportunity_id::text = $1
+        ORDER BY created_at DESC
+      `, [opportunityId]);
+      execRows = fallback.rows.map(r => ({ ...r, confidence_tier: null }));
+    } catch { /* both failed — return empty candidates */ }
+  }
 
   const mapped = mapPhase1RowToOpportunityShape(rows[0], 0);
   return { ...mapped, execution_candidates: execRows };
@@ -782,17 +807,39 @@ async function getEngineRecommendationDetail(opportunityId: string) {
   if (rows.length === 0) return null;
   const opp = rows[0];
 
-  const { rows: execRows } = await pool.query(`
-    SELECT candidate_id::text, execution_status, approval_status,
-           mutation_type, rollback_status, target_page_url, target_field,
-           proposed_value, approval_required, reviewer_id, reviewed_at,
-           review_notes, rollback_available, execution_timestamp,
-           awaiting_approval, ready_to_execute, rollback_eligible,
-           created_at, confidence_tier
-    FROM analytics.seo_execution_queue
-    WHERE opportunity_id = $1
-    ORDER BY created_at DESC
-  `, [opportunityId]);
+  // Query from table directly to access confidence_tier (not on the view)
+  let execRows: any[] = [];
+  try {
+    const execResult = await pool.query(`
+      SELECT candidate_id::text, execution_status, approval_status,
+             mutation_type, rollback_status, target_page_url, target_field,
+             proposed_value, approval_required, reviewer_id, reviewed_at,
+             review_notes, rollback_available, execution_timestamp,
+             created_at, confidence_tier,
+             (execution_status = 'proposed' AND approval_status = 'pending') AS awaiting_approval,
+             (execution_status = 'approved' AND approval_status = 'approved') AS ready_to_execute,
+             (execution_status IN ('published', 'draft_applied') AND rollback_available) AS rollback_eligible
+      FROM analytics.seo_execution_candidate
+      WHERE opportunity_id = $1
+      ORDER BY created_at DESC
+    `, [opportunityId]);
+    execRows = execResult.rows;
+  } catch {
+    // Fallback to view without confidence_tier
+    try {
+      const fallback = await pool.query(`
+        SELECT candidate_id::text, execution_status, approval_status,
+               mutation_type, rollback_status, target_page_url, target_field,
+               proposed_value, approval_required, reviewer_id, reviewed_at,
+               review_notes, rollback_available, execution_timestamp,
+               awaiting_approval, ready_to_execute, rollback_eligible, created_at
+        FROM analytics.seo_execution_queue
+        WHERE opportunity_id = $1
+        ORDER BY created_at DESC
+      `, [opportunityId]);
+      execRows = fallback.rows.map(r => ({ ...r, confidence_tier: null }));
+    } catch { /* both failed */ }
+  }
 
   return { ...opp, execution_candidates: execRows };
 }
@@ -865,16 +912,21 @@ export async function GET(req: NextRequest) {
       case 'phase1-detail': {
         const p1OppId = req.nextUrl.searchParams.get('opportunity_id');
         if (!p1OppId) return NextResponse.json({ error: 'opportunity_id required' }, { status: 400 });
-        const p1Detail = await getPhase1RecommendationDetail(p1OppId);
-        if (!p1Detail) return NextResponse.json({ error: 'Phase-1 opportunity not found' }, { status: 404 });
-        const p1Enriched = await enrichWithCurrentMetadata(p1Detail as Record<string, unknown>);
-        const p1ExecCandidates = p1Enriched.execution_candidates as Array<Record<string, unknown>> | undefined;
-        const p1LatestExec = p1ExecCandidates && p1ExecCandidates.length > 0 ? p1ExecCandidates[0] : null;
-        const p1DetailWithExec = p1LatestExec
-          ? { ...p1Enriched, execution_status: p1LatestExec.execution_status, approval_status: p1LatestExec.approval_status, candidate_id: p1LatestExec.candidate_id, mutation_type: p1LatestExec.mutation_type, rollback_status: p1LatestExec.rollback_status, awaiting_approval: p1LatestExec.awaiting_approval, ready_to_execute: p1LatestExec.ready_to_execute }
-          : p1Enriched;
-        const p1Card = toRecommendationCard(p1DetailWithExec as unknown as OpportunityRow);
-        result = { ...p1Card, evidence_summary_long: null, execution_candidates: p1ExecCandidates, ...extractPhase1Fields(p1Detail), current_page_url: p1Enriched.current_page_url || null, current_seo_title: p1Enriched.current_seo_title || null, current_meta_description: p1Enriched.current_meta_description || null };
+        try {
+          const p1Detail = await getPhase1RecommendationDetail(p1OppId);
+          if (!p1Detail) return NextResponse.json({ error: 'detail_not_found', opportunity_id: p1OppId, message: 'Could not load detail for this recommendation' }, { status: 404 });
+          const p1Enriched = await enrichWithCurrentMetadata(p1Detail as Record<string, unknown>);
+          const p1ExecCandidates = p1Enriched.execution_candidates as Array<Record<string, unknown>> | undefined;
+          const p1LatestExec = p1ExecCandidates && p1ExecCandidates.length > 0 ? p1ExecCandidates[0] : null;
+          const p1DetailWithExec = p1LatestExec
+            ? { ...p1Enriched, execution_status: p1LatestExec.execution_status, approval_status: p1LatestExec.approval_status, candidate_id: p1LatestExec.candidate_id, mutation_type: p1LatestExec.mutation_type, rollback_status: p1LatestExec.rollback_status, awaiting_approval: p1LatestExec.awaiting_approval, ready_to_execute: p1LatestExec.ready_to_execute }
+            : p1Enriched;
+          const p1Card = toRecommendationCard(p1DetailWithExec as unknown as OpportunityRow);
+          result = { ...p1Card, evidence_summary_long: null, execution_candidates: p1ExecCandidates, ...extractPhase1Fields(p1Detail), current_page_url: p1Enriched.current_page_url || null, current_seo_title: p1Enriched.current_seo_title || null, current_meta_description: p1Enriched.current_meta_description || null };
+        } catch (detailErr: any) {
+          console.error(`[intelligence] phase1-detail error for ${p1OppId}:`, detailErr.message);
+          return NextResponse.json({ error: 'detail_not_found', opportunity_id: p1OppId, message: 'Could not load detail for this recommendation' }, { status: 404 });
+        }
         break;
       }
       case 'phase1-suppressed': {
