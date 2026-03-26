@@ -528,6 +528,30 @@ function RecommendationsContent() {
 }
 
 // =============================================================================
+// Proposed copy generator
+// =============================================================================
+
+function generateProposedCopy(topicCluster: string): { title: string; metaDescription: string } {
+  const tc = topicCluster.replace(/\b\w/g, c => c.toUpperCase());
+  return {
+    title: `${tc} | Custom LED Neon Signs | Neon Signs Depot`,
+    metaDescription: `Shop ${topicCluster.toLowerCase()} at Neon Signs Depot. Browse custom LED neon signs — free design consultation, free shipping & 2-year warranty. Order online today.`,
+  };
+}
+
+function charCountLabel(value: string, type: 'title' | 'meta'): { text: string; color: string } {
+  const len = value.length;
+  if (type === 'title') {
+    if (len < 30) return { text: `Too short (${len} chars)`, color: '#92400e' };
+    if (len <= 60) return { text: `Good length (${len} chars)`, color: '#065f46' };
+    return { text: `Too long — may be truncated (${len} chars)`, color: '#991b1b' };
+  }
+  if (len < 120) return { text: `Too short (${len} chars)`, color: '#92400e' };
+  if (len <= 160) return { text: `Good length (${len} chars)`, color: '#065f46' };
+  return { text: `Too long — may be truncated (${len} chars)`, color: '#991b1b' };
+}
+
+// =============================================================================
 // Expanded card (inline detail)
 // =============================================================================
 
@@ -556,6 +580,10 @@ function ExpandedCard({
   const badge = card.action_state_badge || 'recommendation';
   const statusPill = STATUS_PILL[badge];
   const candidates = detail?.execution_candidates ?? [];
+  const p1 = detail as any; // Phase1DetailResponse fields
+
+  const isMetadataRemedy = card.primary_remedy === 'metadata_ctr_optimization';
+  const generatedCopy = generateProposedCopy(card.topic_cluster || 'neon signs');
 
   if (isLoading) {
     return (
@@ -564,6 +592,95 @@ function ExpandedCard({
       </div>
     );
   }
+
+  // Build the change blocks to render
+  type ChangeBlock = { label: string; currentValue: string; proposedValue: string; type: 'title' | 'meta'; isPreview: boolean };
+  const changeBlocks: ChangeBlock[] = [];
+
+  if (candidates.length > 0) {
+    // Render from actual candidates
+    for (const ec of candidates) {
+      const mt = ec.mutation_type || '';
+      const isTitleMutation = mt.includes('title');
+      const proposed = ec.proposed_value
+        || (isTitleMutation ? generatedCopy.title : generatedCopy.metaDescription);
+      const current = (ec as any).current_value_snapshot
+        || (isTitleMutation ? p1?.current_seo_title : p1?.current_meta_description)
+        || null;
+      changeBlocks.push({
+        label: mutationTypeLabel(ec.mutation_type),
+        currentValue: current || 'Current value not retrieved',
+        proposedValue: proposed,
+        type: isTitleMutation ? 'title' : 'meta',
+        isPreview: !ec.proposed_value,
+      });
+    }
+  } else if (isMetadataRemedy) {
+    // No candidates yet — generate preview for both title and meta
+    changeBlocks.push({
+      label: 'Title tag',
+      currentValue: p1?.current_seo_title || 'Current value not retrieved',
+      proposedValue: generatedCopy.title,
+      type: 'title',
+      isPreview: true,
+    });
+    changeBlocks.push({
+      label: 'Meta description',
+      currentValue: p1?.current_meta_description || 'Current value not retrieved',
+      proposedValue: generatedCopy.metaDescription,
+      type: 'meta',
+      isPreview: true,
+    });
+  }
+
+  // For non-metadata remedies with no candidates, generate a plain English description
+  const targetPage = card.nsd_page_url?.replace('https://neonsignsdepot.com', '') || p1?.current_page_url?.replace('https://neonsignsdepot.com', '') || 'the target page';
+  const cluster = card.topic_cluster || 'this topic';
+
+  const nonMetaDescription: string | null = (() => {
+    if (changeBlocks.length > 0) return null;
+    switch (card.primary_remedy) {
+      case 'strengthen_existing_page':
+        return `The system will review ${targetPage} and generate updated content recommendations targeting '${cluster}' keywords.`;
+      case 'create_new_page':
+        return `The system will generate a content brief for a new page targeting '${cluster}' and create a WordPress draft for your review.`;
+      case 'add_internal_links':
+        return `The system will identify pages on your site that mention '${cluster}' and add links pointing to ${targetPage}.`;
+      case 'pursue_backlinks':
+        return `The system will identify backlink opportunities from competitor domains ranking for '${cluster}'.`;
+      default:
+        return `This recommendation targets '${cluster}' for SEO improvement.`;
+    }
+  })();
+
+  // Helper to render a single change block
+  const renderChangeBlock = (block: ChangeBlock, i: number) => {
+    const charInfo = charCountLabel(block.proposedValue, block.type);
+    const currentMissing = block.currentValue === 'Current value not retrieved';
+    return (
+      <div key={i} style={{ marginBottom: space['3'], border: `1px solid ${tc.border.default}`, borderRadius: radius.md, overflow: 'hidden' }}>
+        <div style={{ padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.muted, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          {block.label}
+        </div>
+        {/* CURRENT */}
+        <div style={{ padding: space['3'] }}>
+          <div style={{ fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'], fontWeight: fontWeight.medium, textTransform: 'uppercase', letterSpacing: '0.03em' }}>CURRENT</div>
+          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: currentMissing ? tc.text.placeholder : tc.text.secondary, fontStyle: currentMissing ? 'italic' : 'normal', lineHeight: lineHeight.relaxed }}>
+            {block.currentValue}
+          </div>
+          {currentMissing && <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.placeholder, marginTop: space['0.5'] }}>Values shown at execution time</div>}
+        </div>
+        {/* PROPOSED */}
+        <div style={{ padding: space['3'], borderLeft: '3px solid #10b981', borderTop: `1px solid ${tc.border.default}` }}>
+          <div style={{ fontSize: '11px', color: '#065f46', marginBottom: space['0.5'], fontWeight: fontWeight.medium, textTransform: 'uppercase', letterSpacing: '0.03em' }}>PROPOSED</div>
+          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary, fontWeight: fontWeight.medium, lineHeight: lineHeight.relaxed }}>
+            {block.proposedValue}
+          </div>
+          <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: charInfo.color, marginTop: space['1'] }}>{charInfo.text}</div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ padding: `0 ${space['5']} ${space['5']}`, borderTop: `1px solid ${tc.border.default}` }}>
@@ -576,33 +693,29 @@ function ExpandedCard({
         </div>
       </div>
 
-      {/* BLOCK 2 — Proposed changes */}
-      {candidates.length > 0 && (
-        <div style={{ marginBottom: space['4'] }}>
-          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['2'] }}>Proposed change</div>
-          {candidates.map((ec, i) => (
-            <div key={ec.candidate_id || i} style={{ marginBottom: space['3'], border: `1px solid ${tc.border.default}`, borderRadius: radius.md, overflow: 'hidden' }}>
-              <div style={{ padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.muted, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {mutationTypeLabel(ec.mutation_type)}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', fontSize: fontSize.sm, fontFamily: fontFamily.body }}>
-                <div style={{ padding: space['3'], borderRight: `1px solid ${tc.border.default}` }}>
-                  <div style={{ fontSize: '11px', color: tc.text.muted, marginBottom: space['1'], fontWeight: fontWeight.medium }}>CURRENT</div>
-                  <div style={{ color: tc.text.secondary, fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {(ec as any).current_value_snapshot || 'Not set'}
-                  </div>
-                </div>
-                <div style={{ padding: space['3'], backgroundColor: '#f0fdf4' }}>
-                  <div style={{ fontSize: '11px', color: '#065f46', marginBottom: space['1'], fontWeight: fontWeight.medium }}>PROPOSED</div>
-                  <div style={{ color: '#065f46', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {ec.proposed_value || '—'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* BLOCK 2 — What will change */}
+      <div style={{ marginBottom: space['4'] }}>
+        <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['2'] }}>
+          What will change on your website
         </div>
-      )}
+
+        {changeBlocks.length > 0 && (
+          <>
+            {changeBlocks.map((block, i) => renderChangeBlock(block, i))}
+            {changeBlocks.some(b => b.isPreview) && (
+              <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.placeholder, fontStyle: 'italic', marginTop: space['1'] }}>
+                * Exact copy generated at execution time — this is a preview
+              </div>
+            )}
+          </>
+        )}
+
+        {nonMetaDescription && (
+          <div style={{ padding: space['3'], backgroundColor: tc.background.muted, borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, lineHeight: lineHeight.relaxed }}>
+            {nonMetaDescription}
+          </div>
+        )}
+      </div>
 
       {/* BLOCK 3 — Evidence (collapsible) */}
       <div style={{ marginBottom: space['4'] }}>
