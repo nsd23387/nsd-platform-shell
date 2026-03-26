@@ -589,7 +589,7 @@ function ExpandedCard({
                 <div style={{ padding: space['3'], borderRight: `1px solid ${tc.border.default}` }}>
                   <div style={{ fontSize: '11px', color: tc.text.muted, marginBottom: space['1'], fontWeight: fontWeight.medium }}>CURRENT</div>
                   <div style={{ color: tc.text.secondary, fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {ec.current_value_snapshot || 'Not set'}
+                    {(ec as any).current_value_snapshot || 'Not set'}
                   </div>
                 </div>
                 <div style={{ padding: space['3'], backgroundColor: '#f0fdf4' }}>
