@@ -313,6 +313,8 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
 
 export async function rejectByOpportunityId(opportunityId: string, reviewNotes?: string) {
   const p = getPool();
+
+  // Try rejecting execution candidates first
   const existing = await p.query(
     `SELECT candidate_id FROM analytics.seo_execution_candidate
      WHERE opportunity_id = $1
@@ -335,7 +337,25 @@ export async function rejectByOpportunityId(opportunityId: string, reviewNotes?:
     );
     return { mode: 'updated', rowCount: upd.rowCount };
   }
-  throw new Error('No pending execution candidate found for this opportunity');
+
+  // Fallback: reject the recommendation directly (Phase 1 opportunities without candidates)
+  try {
+    const recUpd = await p.query(
+      `UPDATE analytics.seo_recommendations
+       SET status = 'rejected'
+       WHERE (supporting_data->>'cluster_id' = $1 OR id::text = $1)
+         AND status IN ('pending', 'pending_review', 'approved')`,
+      [opportunityId]
+    );
+    if (recUpd.rowCount && recUpd.rowCount > 0) {
+      return { mode: 'recommendation_rejected', rowCount: recUpd.rowCount };
+    }
+  } catch {
+    // Recommendation table query failed — continue to graceful return
+  }
+
+  // Nothing found — return success with no_candidates instead of throwing
+  return { mode: 'no_candidates', rowCount: 0 };
 }
 
 export async function submitFeedback(id: string, feedbackText: string) {
