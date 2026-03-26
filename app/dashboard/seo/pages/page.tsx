@@ -101,12 +101,9 @@ function PagePerformanceContent() {
       {criticalIssues.length > 0 && (
         <div
           style={{
-            borderLeft: '3px solid #EF4444',
-            borderRadius: 0,
             backgroundColor: tc.background.surface,
             border: `1px solid ${tc.border.default}`,
-            borderLeftWidth: '3px',
-            borderLeftColor: '#EF4444',
+            borderLeft: '3px solid #EF4444',
             borderRadius: radius.lg,
             marginBottom: space['6'],
             overflow: 'hidden',
