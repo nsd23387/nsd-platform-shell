@@ -215,8 +215,11 @@ function RecommendationsContent() {
     setActionLoading(null);
   }, []);
 
+  const [rejectError, setRejectError] = useState<string | null>(null);
+
   const handleReject = useCallback(async (card: EngineRecommendationCard, candidateId?: string | null) => {
     setActionLoading(card.opportunity_id);
+    setRejectError(null);
     try {
       if (candidateId) {
         await rejectEngineCandidate({ candidate_id: candidateId });
@@ -232,6 +235,7 @@ function RecommendationsContent() {
       })));
     } catch (err) {
       console.error('Reject failed:', err);
+      setRejectError(card.opportunity_id);
     }
     setActionLoading(null);
   }, []);
@@ -474,9 +478,24 @@ function RecommendationsContent() {
                         </span>
                       </>
                     )}
+                    {card.source_freshness_label === 'stale' && (
+                      <>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.placeholder }}>&middot;</span>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: '#92400e' }}>Aging — review priority</span>
+                      </>
+                    )}
+                    {card.source_freshness_label === 'expired' && (
+                      <>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.placeholder }}>&middot;</span>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: '#991b1b' }}>May be outdated</span>
+                      </>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: space['2'], alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                    {rejectError === card.opportunity_id && (
+                      <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: '#991b1b' }}>Failed — try again</span>
+                    )}
                     {statusPill ? (
                       <span style={{ display: 'inline-block', padding: `${space['0.5']} ${space['2.5']}`, borderRadius: radius.full, fontSize: fontSize.sm, fontWeight: fontWeight.medium, backgroundColor: statusPill.bg, color: statusPill.text, fontFamily: fontFamily.body }}>
                         {statusPill.label}
@@ -575,6 +594,8 @@ function ExpandedCard({
   const [showEvidence, setShowEvidence] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState('');
+  const [rejectConfirm, setRejectConfirm] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const needsAction = cardNeedsAction(card);
   const badge = card.action_state_badge || 'recommendation';
@@ -633,23 +654,39 @@ function ExpandedCard({
     });
   }
 
-  // For non-metadata remedies with no candidates, generate a plain English description
-  const targetPage = card.nsd_page_url?.replace('https://neonsignsdepot.com', '') || p1?.current_page_url?.replace('https://neonsignsdepot.com', '') || 'the target page';
+  // For non-metadata remedies, build a current state + proposed action pair
+  const targetPage = card.nsd_page_url?.replace('https://neonsignsdepot.com', '') || p1?.current_page_url?.replace('https://neonsignsdepot.com', '') || '';
+  const targetPageFull = card.nsd_page_url || p1?.current_page_url || p1?.phase1_recommended_target_page || null;
   const cluster = card.topic_cluster || 'this topic';
+  const posLabel = card.gsc_best_position != null ? `position ${Number(card.gsc_best_position).toFixed(1)}` : null;
+  const impLabel = card.gsc_impressions != null ? `${Number(card.gsc_impressions).toLocaleString()} impressions` : null;
 
-  const nonMetaDescription: string | null = (() => {
+  type NonMetaBlock = { currentState: string; proposedAction: string } | null;
+  const nonMetaBlock: NonMetaBlock = (() => {
     if (changeBlocks.length > 0) return null;
     switch (card.primary_remedy) {
-      case 'strengthen_existing_page':
-        return `The system will review ${targetPage} and generate updated content recommendations targeting '${cluster}' keywords.`;
+      case 'strengthen_existing_page': {
+        const parts = [`Current page: ${targetPageFull || targetPage || 'unknown'}`];
+        if (posLabel || impLabel) parts.push(`Currently ranking: ${[posLabel, `for '${cluster}'`, impLabel ? `with ${impLabel}` : ''].filter(Boolean).join(' ')}`);
+        return { currentState: parts.join('\n'), proposedAction: `The system will review ${targetPage || 'the page'} and generate updated content recommendations targeting '${cluster}' keywords.` };
+      }
       case 'create_new_page':
-        return `The system will generate a content brief for a new page targeting '${cluster}' and create a WordPress draft for your review.`;
+        return {
+          currentState: `No page exists for '${cluster}'${card.competitor_domain ? `\nCompetitors ranking: ${card.competitor_domain}${posLabel ? ` at ${posLabel}` : ''}` : ''}`,
+          proposedAction: `The system will generate a content brief for a new page targeting '${cluster}' and create a WordPress draft for your review.`,
+        };
       case 'add_internal_links':
-        return `The system will identify pages on your site that mention '${cluster}' and add links pointing to ${targetPage}.`;
+        return {
+          currentState: `Current internal links to this topic: 0 detected${targetPageFull ? `\nTarget page: ${targetPageFull}` : ''}`,
+          proposedAction: `The system will identify pages on your site that mention '${cluster}' and add links pointing to ${targetPage || 'the target page'}.`,
+        };
       case 'pursue_backlinks':
-        return `The system will identify backlink opportunities from competitor domains ranking for '${cluster}'.`;
+        return {
+          currentState: `Current backlink profile for '${cluster}'${card.competitor_referring_domains ? `: competitor has ${card.competitor_referring_domains} referring domains` : ''}`,
+          proposedAction: `The system will identify backlink opportunities from competitor domains ranking for '${cluster}'.`,
+        };
       default:
-        return `This recommendation targets '${cluster}' for SEO improvement.`;
+        return { currentState: `Topic: ${cluster}`, proposedAction: `This recommendation targets '${cluster}' for SEO improvement.` };
     }
   })();
 
@@ -710,9 +747,20 @@ function ExpandedCard({
           </>
         )}
 
-        {nonMetaDescription && (
-          <div style={{ padding: space['3'], backgroundColor: tc.background.muted, borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, lineHeight: lineHeight.relaxed }}>
-            {nonMetaDescription}
+        {nonMetaBlock && (
+          <div style={{ border: `1px solid ${tc.border.default}`, borderRadius: radius.md, overflow: 'hidden' }}>
+            <div style={{ padding: space['3'] }}>
+              <div style={{ fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'], fontWeight: fontWeight.medium, textTransform: 'uppercase', letterSpacing: '0.03em' }}>CURRENT STATE</div>
+              <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, lineHeight: lineHeight.relaxed, whiteSpace: 'pre-line' }}>
+                {nonMetaBlock.currentState}
+              </div>
+            </div>
+            <div style={{ padding: space['3'], borderTop: `1px solid ${tc.border.default}`, borderLeft: '3px solid #10b981' }}>
+              <div style={{ fontSize: '11px', color: '#065f46', marginBottom: space['0.5'], fontWeight: fontWeight.medium, textTransform: 'uppercase', letterSpacing: '0.03em' }}>WHAT WILL CHANGE</div>
+              <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary, fontWeight: fontWeight.medium, lineHeight: lineHeight.relaxed }}>
+                {nonMetaBlock.proposedAction}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -757,27 +805,55 @@ function ExpandedCard({
               style={{ width: '100%', padding: space['2'], fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary, backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, marginBottom: space['2'], resize: 'vertical', minHeight: '60px' }}
             />
           )}
+          {actionError && (
+            <div style={{ padding: `${space['2']} ${space['3']}`, backgroundColor: '#fee2e2', borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: '#991b1b', marginBottom: space['2'] }}>
+              {actionError}
+            </div>
+          )}
           <button
             disabled={isActionLoading}
-            onClick={() => {
+            onClick={async () => {
+              setActionError(null);
               const cid = candidates.find(c => c.awaiting_approval)?.candidate_id || card.candidate_id;
-              onApprove(card, cid);
+              try { await onApprove(card, cid); } catch { setActionError('Failed to approve — try again'); }
             }}
             style={{ width: '100%', padding: `${space['2.5']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#fff', backgroundColor: '#059669', border: 'none', borderRadius: radius.md, cursor: isActionLoading ? 'wait' : 'pointer', opacity: isActionLoading ? 0.6 : 1, marginBottom: space['2'] }}
           >
             {isActionLoading ? 'Processing...' : '✓ Approve this recommendation'}
           </button>
           <div style={{ textAlign: 'center' }}>
-            <button
-              disabled={isActionLoading}
-              onClick={() => {
-                const cid = candidates.find(c => c.awaiting_approval)?.candidate_id || card.candidate_id;
-                onReject(card, cid);
-              }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: fontFamily.body, fontSize: fontSize.sm, color: '#991b1b' }}
-            >
-              ✗ Reject
-            </button>
+            {!rejectConfirm ? (
+              <button
+                disabled={isActionLoading}
+                onClick={() => setRejectConfirm(true)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: fontFamily.body, fontSize: fontSize.sm, color: '#991b1b' }}
+              >
+                ✗ Reject
+              </button>
+            ) : (
+              <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>
+                Confirm reject?{' '}
+                <button
+                  disabled={isActionLoading}
+                  onClick={async () => {
+                    setActionError(null);
+                    const cid = candidates.find(c => c.awaiting_approval)?.candidate_id || card.candidate_id;
+                    try { await onReject(card, cid); } catch { setActionError('Failed to reject — try again'); }
+                    setRejectConfirm(false);
+                  }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#991b1b' }}
+                >
+                  Yes, reject
+                </button>
+                {' '}
+                <button
+                  onClick={() => setRejectConfirm(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}
+                >
+                  Cancel
+                </button>
+              </span>
+            )}
           </div>
         </div>
       )}
