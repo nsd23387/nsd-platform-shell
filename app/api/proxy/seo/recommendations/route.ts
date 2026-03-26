@@ -84,6 +84,9 @@ export async function POST(req: NextRequest) {
         } else if (opportunity_id) {
           const result = await rejectByOpportunityId(opportunity_id, review_notes);
           console.log(`[seo/recommendations] Reject by opportunity: mode=${result.mode}, rows=${result.rowCount}`);
+          if (result.mode === 'error') {
+            return NextResponse.json({ success: false, action: 'reject', opportunity_id, reason: result.error || 'Unknown error' }, { status: 200 });
+          }
         } else {
           return NextResponse.json({
             error: 'candidate_id or opportunity_id required for engine rejection',

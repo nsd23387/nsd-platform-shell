@@ -311,51 +311,56 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
   return { mode: 'inserted', rowCount: 1 };
 }
 
-export async function rejectByOpportunityId(opportunityId: string, reviewNotes?: string) {
-  const p = getPool();
+export async function rejectByOpportunityId(opportunityId: string, reviewNotes?: string): Promise<{ mode: string; rowCount: number | null; error?: string }> {
+  try {
+    const p = getPool();
 
-  // Try rejecting execution candidates first
-  const existing = await p.query(
-    `SELECT candidate_id FROM analytics.seo_execution_candidate
-     WHERE opportunity_id = $1
-       AND execution_status = 'proposed'
-       AND approval_status = 'pending'`,
-    [opportunityId]
-  );
-  if (existing.rowCount && existing.rowCount > 0) {
-    const upd = await p.query(
-      `UPDATE analytics.seo_execution_candidate
-       SET approval_status = 'rejected',
-           execution_status = 'rejected',
-           reviewer_id = 'operator',
-           reviewed_at = NOW(),
-           review_notes = $2
+    // Try rejecting execution candidates first
+    const existing = await p.query(
+      `SELECT candidate_id FROM analytics.seo_execution_candidate
        WHERE opportunity_id = $1
          AND execution_status = 'proposed'
          AND approval_status = 'pending'`,
-      [opportunityId, reviewNotes || null]
-    );
-    return { mode: 'updated', rowCount: upd.rowCount };
-  }
-
-  // Fallback: reject the recommendation directly (Phase 1 opportunities without candidates)
-  try {
-    const recUpd = await p.query(
-      `UPDATE analytics.seo_recommendations
-       SET status = 'rejected'
-       WHERE (supporting_data->>'cluster_id' = $1 OR id::text = $1)
-         AND status IN ('pending', 'pending_review', 'approved')`,
       [opportunityId]
     );
-    if (recUpd.rowCount && recUpd.rowCount > 0) {
-      return { mode: 'recommendation_rejected', rowCount: recUpd.rowCount };
+    if (existing.rowCount && existing.rowCount > 0) {
+      const upd = await p.query(
+        `UPDATE analytics.seo_execution_candidate
+         SET approval_status = 'rejected',
+             execution_status = 'rejected',
+             reviewer_id = 'operator',
+             reviewed_at = NOW(),
+             review_notes = $2
+         WHERE opportunity_id = $1
+           AND execution_status = 'proposed'
+           AND approval_status = 'pending'`,
+        [opportunityId, reviewNotes || null]
+      );
+      return { mode: 'updated', rowCount: upd.rowCount };
     }
-  } catch {
-    // Recommendation table query failed — continue to graceful return
-  }
 
-  // Nothing found — return success with no_candidates instead of throwing
-  return { mode: 'no_candidates', rowCount: 0 };
+    // Fallback: reject the recommendation directly
+    // seo_recommendations has no opportunity_id column — match via supporting_data or id
+    try {
+      const recUpd = await p.query(
+        `UPDATE analytics.seo_recommendations
+         SET status = 'rejected'
+         WHERE (supporting_data->>'cluster_id' = $1 OR id::text = $1)
+           AND status IN ('pending', 'pending_review', 'approved')`,
+        [opportunityId]
+      );
+      if (recUpd.rowCount && recUpd.rowCount > 0) {
+        return { mode: 'recommendation_rejected', rowCount: recUpd.rowCount };
+      }
+    } catch {
+      // Query failed — continue to not_found return
+    }
+
+    return { mode: 'not_found', rowCount: 0 };
+  } catch (err) {
+    console.error('[seo-db] rejectByOpportunityId error:', err instanceof Error ? err.message : err);
+    return { mode: 'error', rowCount: 0, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 export async function submitFeedback(id: string, feedbackText: string) {
