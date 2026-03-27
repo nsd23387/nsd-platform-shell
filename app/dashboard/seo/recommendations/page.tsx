@@ -59,6 +59,30 @@ function mutationTypeLabel(mt: string | null): string {
   }
 }
 
+// =============================================================================
+// Proposed value validation
+// =============================================================================
+
+const INVALID_PROPOSED_VALUES = new Set([
+  'improve_ctr', 'strengthen_page', 'add_internal_links',
+  'create_new_page', 'pursue_backlinks',
+  'strengthen_existing_page', 'metadata_ctr_optimization',
+  'see_recommendation',
+]);
+
+function isValidProposedValue(value: string | null | undefined, mutationType: string): boolean {
+  if (!value) return false;
+  if (INVALID_PROPOSED_VALUES.has(value)) return false;
+  if ((mutationType === 'meta_description_update' || mutationType === 'title_tag_refinement') && value.length < 20) return false;
+  return true;
+}
+
+function cardHasValidContent(card: EngineRecommendationCard): boolean {
+  // Heuristic: low score + non-high confidence likely has invalid proposed values
+  if ((card.recommendation_quality_score ?? 0) < 3.0 && card.data_confidence !== 'high') return false;
+  return true;
+}
+
 type ShowFilter = 'needs_action' | 'approved' | 'all';
 
 function cardNeedsAction(card: EngineRecommendationCard): boolean {
@@ -501,22 +525,31 @@ function RecommendationsContent() {
                         {statusPill.label}
                       </span>
                     ) : needsAction && (isAwaiting || hasCandidate) ? (
-                      <>
+                      cardHasValidContent(card) ? (
+                        <>
+                          <button
+                            disabled={isActionLoading}
+                            onClick={() => handleApprove(card, card.candidate_id)}
+                            style={{ padding: `${space['1']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#fff', backgroundColor: '#059669', border: 'none', borderRadius: radius.md, cursor: isActionLoading ? 'wait' : 'pointer', opacity: isActionLoading ? 0.6 : 1 }}
+                          >
+                            {isActionLoading ? '...' : '✓ Approve'}
+                          </button>
+                          <button
+                            disabled={isActionLoading}
+                            onClick={() => handleReject(card, card.candidate_id)}
+                            style={{ padding: `${space['1']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: '#991b1b', backgroundColor: '#fee2e2', border: 'none', borderRadius: radius.md, cursor: isActionLoading ? 'wait' : 'pointer', opacity: isActionLoading ? 0.6 : 1 }}
+                          >
+                            ✗ Reject
+                          </button>
+                        </>
+                      ) : (
                         <button
-                          disabled={isActionLoading}
-                          onClick={() => handleApprove(card, card.candidate_id)}
-                          style={{ padding: `${space['1']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#fff', backgroundColor: '#059669', border: 'none', borderRadius: radius.md, cursor: isActionLoading ? 'wait' : 'pointer', opacity: isActionLoading ? 0.6 : 1 }}
+                          onClick={() => handleExpand(card)}
+                          style={{ padding: `${space['1']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: '#92400e', backgroundColor: '#FEF3C7', border: 'none', borderRadius: radius.md, cursor: 'pointer' }}
                         >
-                          {isActionLoading ? '...' : '✓ Approve'}
+                          Review required
                         </button>
-                        <button
-                          disabled={isActionLoading}
-                          onClick={() => handleReject(card, card.candidate_id)}
-                          style={{ padding: `${space['1']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: '#991b1b', backgroundColor: '#fee2e2', border: 'none', borderRadius: radius.md, cursor: isActionLoading ? 'wait' : 'pointer', opacity: isActionLoading ? 0.6 : 1 }}
-                        >
-                          ✗ Reject
-                        </button>
-                      </>
+                      )
                     ) : (
                       <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: violet[500] }}>
                         Review &rarr;
@@ -618,23 +651,40 @@ function ExpandedCard({
   type ChangeBlock = { label: string; currentValue: string; proposedValue: string; type: 'title' | 'meta'; isPreview: boolean };
   const changeBlocks: ChangeBlock[] = [];
 
+  let hasInvalidContent = false;
+
   if (candidates.length > 0) {
-    // Render from actual candidates
+    // Render from actual candidates — validate proposed_value
     for (const ec of candidates) {
       const mt = ec.mutation_type || '';
       const isTitleMutation = mt.includes('title');
-      const proposed = ec.proposed_value
-        || (isTitleMutation ? generatedCopy.title : generatedCopy.metaDescription);
-      const current = (ec as any).current_value_snapshot
-        || (isTitleMutation ? p1?.current_seo_title : p1?.current_meta_description)
-        || null;
-      changeBlocks.push({
-        label: mutationTypeLabel(ec.mutation_type),
-        currentValue: current || 'Current value not retrieved',
-        proposedValue: proposed,
-        type: isTitleMutation ? 'title' : 'meta',
-        isPreview: !ec.proposed_value,
-      });
+
+      if (!isValidProposedValue(ec.proposed_value, mt)) {
+        // Invalid proposed_value — use generated copy as fallback
+        hasInvalidContent = true;
+        const fallback = isTitleMutation ? generatedCopy.title : generatedCopy.metaDescription;
+        const current = (ec as any).current_value_snapshot
+          || (isTitleMutation ? p1?.current_seo_title : p1?.current_meta_description)
+          || null;
+        changeBlocks.push({
+          label: mutationTypeLabel(ec.mutation_type),
+          currentValue: current || 'Current value not retrieved',
+          proposedValue: fallback,
+          type: isTitleMutation ? 'title' : 'meta',
+          isPreview: true,
+        });
+      } else {
+        const current = (ec as any).current_value_snapshot
+          || (isTitleMutation ? p1?.current_seo_title : p1?.current_meta_description)
+          || null;
+        changeBlocks.push({
+          label: mutationTypeLabel(ec.mutation_type),
+          currentValue: current || 'Current value not retrieved',
+          proposedValue: ec.proposed_value!,
+          type: isTitleMutation ? 'title' : 'meta',
+          isPreview: false,
+        });
+      }
     }
   } else if (isMetadataRemedy) {
     // No candidates yet — generate preview for both title and meta
@@ -736,6 +786,17 @@ function ExpandedCard({
           What will change on your website
         </div>
 
+        {hasInvalidContent && (
+          <div style={{ padding: space['3'], backgroundColor: '#fef2f2', border: '1px solid #fca5a5', borderRadius: radius.md, marginBottom: space['3'] }}>
+            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#991b1b', marginBottom: space['1'] }}>
+              Content not yet generated
+            </div>
+            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: '#7f1d1d' }}>
+              This recommendation needs copy generated before it can be approved. The proposed value shown below is a preview — the actual content will be generated at execution time.
+            </div>
+          </div>
+        )}
+
         {changeBlocks.length > 0 && (
           <>
             {changeBlocks.map((block, i) => renderChangeBlock(block, i))}
@@ -811,15 +872,16 @@ function ExpandedCard({
             </div>
           )}
           <button
-            disabled={isActionLoading}
+            disabled={isActionLoading || hasInvalidContent}
+            title={hasInvalidContent ? 'Generate valid content before approving' : undefined}
             onClick={async () => {
               setActionError(null);
               const cid = candidates.find(c => c.awaiting_approval)?.candidate_id || card.candidate_id;
               try { await onApprove(card, cid); } catch { setActionError('Failed to approve — try again'); }
             }}
-            style={{ width: '100%', padding: `${space['2.5']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#fff', backgroundColor: '#059669', border: 'none', borderRadius: radius.md, cursor: isActionLoading ? 'wait' : 'pointer', opacity: isActionLoading ? 0.6 : 1, marginBottom: space['2'] }}
+            style={{ width: '100%', padding: `${space['2.5']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#fff', backgroundColor: hasInvalidContent ? '#9CA3AF' : '#059669', border: 'none', borderRadius: radius.md, cursor: hasInvalidContent ? 'not-allowed' : isActionLoading ? 'wait' : 'pointer', opacity: (isActionLoading || hasInvalidContent) ? 0.5 : 1, marginBottom: space['2'] }}
           >
-            {isActionLoading ? 'Processing...' : '✓ Approve this recommendation'}
+            {isActionLoading ? 'Processing...' : hasInvalidContent ? 'Generate valid content before approving' : '✓ Approve this recommendation'}
           </button>
           <div style={{ textAlign: 'center' }}>
             {!rejectConfirm ? (
