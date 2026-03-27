@@ -651,17 +651,21 @@ function ExpandedCard({
   type ChangeBlock = { label: string; currentValue: string; proposedValue: string; type: 'title' | 'meta'; isPreview: boolean };
   const changeBlocks: ChangeBlock[] = [];
 
-  let hasInvalidContent = false;
+  let invalidCandidateCount = 0;
+  let validCandidateCount = 0;
+  let has404Target = false;
 
   if (candidates.length > 0) {
+    // Check for 404 target URLs
+    has404Target = candidates.some(ec => (ec as any).target_url_validated === false);
+
     // Render from actual candidates — validate proposed_value
     for (const ec of candidates) {
       const mt = ec.mutation_type || '';
       const isTitleMutation = mt.includes('title');
 
       if (!isValidProposedValue(ec.proposed_value, mt)) {
-        // Invalid proposed_value — use generated copy as fallback
-        hasInvalidContent = true;
+        invalidCandidateCount++;
         const fallback = isTitleMutation ? generatedCopy.title : generatedCopy.metaDescription;
         const current = (ec as any).current_value_snapshot
           || (isTitleMutation ? p1?.current_seo_title : p1?.current_meta_description)
@@ -674,6 +678,7 @@ function ExpandedCard({
           isPreview: true,
         });
       } else {
+        validCandidateCount++;
         const current = (ec as any).current_value_snapshot
           || (isTitleMutation ? p1?.current_seo_title : p1?.current_meta_description)
           || null;
@@ -686,7 +691,12 @@ function ExpandedCard({
         });
       }
     }
-  } else if (isMetadataRemedy) {
+  }
+
+  // Only block approval if ALL candidates have invalid content (not just some)
+  const hasInvalidContent = candidates.length > 0 && validCandidateCount === 0 && invalidCandidateCount > 0;
+  // Block approval if target URL is a 404
+  const isBlocked = hasInvalidContent || has404Target; else if (isMetadataRemedy) {
     // No candidates yet — generate preview for both title and meta
     changeBlocks.push({
       label: 'Title tag',
@@ -786,7 +796,18 @@ function ExpandedCard({
           What will change on your website
         </div>
 
-        {hasInvalidContent && (
+        {has404Target && (
+          <div style={{ padding: space['3'], backgroundColor: '#fef2f2', border: '1px solid #fca5a5', borderRadius: radius.md, marginBottom: space['3'] }}>
+            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#991b1b', marginBottom: space['1'] }}>
+              Target page not found (404)
+            </div>
+            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: '#7f1d1d' }}>
+              This recommendation targets a URL that returned a 404. It should be rejected.
+            </div>
+          </div>
+        )}
+
+        {hasInvalidContent && !has404Target && (
           <div style={{ padding: space['3'], backgroundColor: '#fef2f2', border: '1px solid #fca5a5', borderRadius: radius.md, marginBottom: space['3'] }}>
             <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#991b1b', marginBottom: space['1'] }}>
               Content not yet generated
@@ -872,16 +893,16 @@ function ExpandedCard({
             </div>
           )}
           <button
-            disabled={isActionLoading || hasInvalidContent}
-            title={hasInvalidContent ? 'Generate valid content before approving' : undefined}
+            disabled={isActionLoading || isBlocked}
+            title={has404Target ? 'Target page returned 404 — reject this recommendation' : hasInvalidContent ? 'Generate valid content before approving' : undefined}
             onClick={async () => {
               setActionError(null);
               const cid = candidates.find(c => c.awaiting_approval)?.candidate_id || card.candidate_id;
               try { await onApprove(card, cid); } catch { setActionError('Failed to approve — try again'); }
             }}
-            style={{ width: '100%', padding: `${space['2.5']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#fff', backgroundColor: hasInvalidContent ? '#9CA3AF' : '#059669', border: 'none', borderRadius: radius.md, cursor: hasInvalidContent ? 'not-allowed' : isActionLoading ? 'wait' : 'pointer', opacity: (isActionLoading || hasInvalidContent) ? 0.5 : 1, marginBottom: space['2'] }}
+            style={{ width: '100%', padding: `${space['2.5']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#fff', backgroundColor: isBlocked ? '#9CA3AF' : '#059669', border: 'none', borderRadius: radius.md, cursor: isBlocked ? 'not-allowed' : isActionLoading ? 'wait' : 'pointer', opacity: (isActionLoading || isBlocked) ? 0.5 : 1, marginBottom: space['2'] }}
           >
-            {isActionLoading ? 'Processing...' : hasInvalidContent ? 'Generate valid content before approving' : '✓ Approve this recommendation'}
+            {isActionLoading ? 'Processing...' : has404Target ? 'Target page is 404 — reject instead' : hasInvalidContent ? 'Generate valid content before approving' : '✓ Approve this recommendation'}
           </button>
           <div style={{ textAlign: 'center' }}>
             {!rejectConfirm ? (
