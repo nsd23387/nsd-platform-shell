@@ -87,7 +87,8 @@ type ShowFilter = 'needs_action' | 'approved' | 'all';
 
 function cardNeedsAction(card: EngineRecommendationCard): boolean {
   const badge = card.action_state_badge || 'recommendation';
-  return ['recommendation', 'candidate_generated', 'awaiting_approval'].includes(badge);
+  // Only show cards with actual candidates to act on — exclude raw opportunities with no candidate
+  return ['candidate_generated', 'awaiting_approval'].includes(badge);
 }
 
 function cardIsApproved(card: EngineRecommendationCard): boolean {
