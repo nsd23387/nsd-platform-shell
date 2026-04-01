@@ -28,7 +28,7 @@ function req(path: string): NextRequest {
 
 function stubEmpty() {
   mockQuery.mockImplementation((sql: string) => {
-    if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('generate_series') || sql.includes('metrics_search_console_query')) {
+    if (sql.includes('FULL OUTER JOIN') || sql.includes('generate_series') || sql.includes('metrics_search_console_query')) {
       return Promise.resolve({ rows: [] });
     }
     if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
@@ -62,7 +62,7 @@ function stubWithData() {
     ] });
     if (sql.includes('metrics_search_console_query') && !sql.includes('_daily')) return Promise.resolve({ rows: [{ query: 'neon signs', clicks: '200', impressions: '5000', ctr: '0.04', avg_position: '5.2', submissions: '3', pipeline_value_usd: '4500' }] });
     if (sql.includes('FULL OUTER JOIN') && sql.includes('metrics_page_engagement_daily')) return Promise.resolve({ rows: [{ page_url: '/products', sessions: '800', page_views: '1200', bounce_rate: '0.35', avg_time_on_page_seconds: '45', clicks: '300', impressions: '5000', ctr: '0.06', submissions: '20', pipeline_value_usd: '30000' }] });
-    if (sql.includes('dashboard_sources')) return Promise.resolve({ rows: [{ submission_source: 'Google', submissions: '50', pipeline_value_usd: '75000' }, { submission_source: 'direct', submissions: '35', pipeline_value_usd: '50000' }] });
+    if (sql.includes('submission_source') && sql.includes('raw_qms_deals')) return Promise.resolve({ rows: [{ submission_source: 'Google', submissions: '50', pipeline_value_usd: '75000' }, { submission_source: 'direct', submissions: '35', pipeline_value_usd: '50000' }] });
 
     if (sql.includes('raw_search_console') && sql.includes('device')) return Promise.resolve({ rows: [
       { device: 'DESKTOP', impressions: '3170', clicks: '1', ctr: '0.00032' },
@@ -112,7 +112,7 @@ function stubAnomalySpike() {
     if (sql.includes('STDDEV') && sql.includes('sessions')) return Promise.resolve({ rows: [{ n: 10, mean: 100, stddev: 10, latest_val: 250 }] });
     if (sql.includes('STDDEV') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ n: 10, mean: 5, stddev: 1, latest_val: 20 }] });
     if (sql.includes('STDDEV') && sql.includes('total_pipeline_value_usd')) return Promise.resolve({ rows: [{ n: 10, mean: 1000, stddev: 100, latest_val: 5000 }] });
-    if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
+    if (sql.includes('FULL OUTER JOIN') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
     if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
     if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
     if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
@@ -126,7 +126,7 @@ function stubNegativeAndNaN() {
     if (sql.includes('metrics_page_engagement_daily') && !sql.includes('FULL OUTER') && !sql.includes('STDDEV') && !sql.includes('generate_series')) return Promise.resolve({ rows: [{ sessions: '-5', page_views: 'NaN', bounce_rate: '1.5', avg_time_on_page_seconds: '-10' }] });
     if (sql.includes('conversion_metrics_daily') && !sql.includes('STDDEV') && !sql.includes('generate_series')) return Promise.resolve({ rows: [{ total_submissions: 'Infinity', total_pipeline_value_usd: null }] });
     if (sql.includes('metrics_search_console_page') && !sql.includes('FULL OUTER') && !sql.includes('STDDEV')) return Promise.resolve({ rows: [{ organic_clicks: '-1', impressions: undefined, avg_position: '-3' }] });
-    if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
+    if (sql.includes('FULL OUTER JOIN') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
     if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
     if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
     if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
