@@ -34,6 +34,7 @@ import type {
   Core4EngineComparison,
   Core4Summary,
   Core4Engine,
+  ColdOutreachKPIs,
 } from '../types/activity-spine';
 
 // ============================================
@@ -811,6 +812,22 @@ const RUN_PAID_ADS_SESSIONS_SQL = `
 `;
 
 // ============================================
+// T016: Cold outreach pipeline attribution from QMS deals
+// ============================================
+
+const COLD_OUTREACH_PIPELINE_SQL = `
+  SELECT
+    COUNT(*) AS quotes,
+    COALESCE(SUM(total_price_cents), 0) / 100.0 AS pipeline_value_usd
+  FROM analytics.raw_qms_deals
+  WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
+    AND (
+      LOWER(COALESCE(utm_source, '')) IN ('cold-outreach', 'cold_outreach', 'outbound', 'apollo', 'smartlead')
+      OR LOWER(COALESCE(utm_medium, '')) IN ('cold-email', 'cold_email', 'outbound')
+    )
+`;
+
+// ============================================
 // Row helpers
 // ============================================
 
@@ -1049,6 +1066,7 @@ export interface MarketingQueryResult {
   google_ads_overview: MarketingGoogleAdsOverview;
   google_ads_campaigns: MarketingGoogleAdsCampaign[];
   core4_summary: Core4Summary;
+  cold_outreach_pipeline: { quotes: number; pipeline_value_usd: number };
 }
 
 export async function executeMarketingQueries(
@@ -1148,15 +1166,17 @@ export async function executeMarketingQueries(
     /* 41 */ db.query(QMS_KPI_PIPELINE_SQL, prevParams),
     /* 42 */ db.query(KPI_SEARCH_SQL, prevParams),
     /* 43 */ db.query(POST_FREE_CONTENT_SQL, prevParams),
+    /* 44 */ db.query(COLD_OUTREACH_PIPELINE_SQL, curParams),
+    /* 45 */ db.query(COLD_OUTREACH_PIPELINE_SQL, prevParams),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 44 */ db.query(fTsSessSql, curEngP),
-      /* 45 */ db.query(fTsSubSql, curConvP),
-      /* 46 */ db.query(fTsPipeSql, curParams),
-      /* 47 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
-      /* 48 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
+      /* 46 */ db.query(fTsSessSql, curEngP),
+      /* 47 */ db.query(fTsSubSql, curConvP),
+      /* 48 */ db.query(fTsPipeSql, curParams),
+      /* 49 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
+      /* 50 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
     );
   }
 
@@ -1445,13 +1465,13 @@ export async function executeMarketingQueries(
     }));
 
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 44) {
+  if (opts.includeTimeseries && results.length > 46) {
     timeseries = {
-      sessions: mapTimeseries(results[44].rows),
-      submissions: mapTimeseries(results[45].rows),
-      pipeline_value_usd: mapTimeseries(results[46].rows),
-      impressions: mapTimeseries(results[47].rows),
-      clicks: mapTimeseries(results[48].rows),
+      sessions: mapTimeseries(results[46].rows),
+      submissions: mapTimeseries(results[47].rows),
+      pipeline_value_usd: mapTimeseries(results[48].rows),
+      impressions: mapTimeseries(results[49].rows),
+      clicks: mapTimeseries(results[50].rows),
     };
   }
 
@@ -1514,8 +1534,25 @@ export async function executeMarketingQueries(
     spend: nonNegative(toNumber(paidAdsPrevRow.spend)),
   });
 
-  const coldCurrent = zeroCore4Metrics('cold_outreach');
-  const coldPrevious = zeroCore4Metrics('cold_outreach');
+  // Cold outreach pipeline attribution from QMS deals.
+  // Engagement metrics (contacts_sourced, emails_sent, etc.) are fetched
+  // from the sales-engine API and merged at the API route level.
+  const coldPipelineCur = results[44].rows[0] ?? {};
+  const coldPipelinePrev = results[45].rows[0] ?? {};
+  const coldCurrent = buildCore4EngineMetrics('cold_outreach', {
+    sessions: 0, // populated from sales-engine API (contacts_sourced)
+    clicks: 0,   // populated from sales-engine API (emails_sent)
+    quotes: nonNegative(toNumber(coldPipelineCur.quotes)),
+    pipeline_value_usd: nonNegative(toNumber(coldPipelineCur.pipeline_value_usd)),
+    spend: 0,
+  });
+  const coldPrevious = buildCore4EngineMetrics('cold_outreach', {
+    sessions: 0,
+    clicks: 0,
+    quotes: nonNegative(toNumber(coldPipelinePrev.quotes)),
+    pipeline_value_usd: nonNegative(toNumber(coldPipelinePrev.pipeline_value_usd)),
+    spend: 0,
+  });
 
   const core4_summary: Core4Summary = {
     warm_outreach: buildCore4Comparison(warmCurrent, warmPrevious),
@@ -1545,5 +1582,9 @@ export async function executeMarketingQueries(
     google_ads_overview,
     google_ads_campaigns,
     core4_summary,
+    cold_outreach_pipeline: {
+      quotes: nonNegative(toNumber(coldPipelineCur.quotes)),
+      pipeline_value_usd: nonNegative(toNumber(coldPipelineCur.pipeline_value_usd)),
+    },
   };
 }
