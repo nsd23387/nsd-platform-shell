@@ -33,9 +33,62 @@ import type {
   MarketingAnomalies,
   ActivitySpineResponse,
   Core4Summary,
+  ColdOutreachKPIs,
 } from '../../../../../types/activity-spine';
 import { executeMarketingQueries } from '../../../../../services/marketingQueries';
 import type { MarketingFilters } from '../../../../../services/marketingQueries';
+
+// ============================================
+// Cold outreach — fetch from sales-engine
+// ============================================
+
+const EMPTY_COLD_OUTREACH: ColdOutreachKPIs = {
+  contacts_sourced: 0, emails_sent: 0, emails_delivered: 0,
+  deliverability_rate: 0, replies: 0, reply_rate: 0,
+  positive_replies: 0, positive_reply_rate: 0, pipeline_value_usd: 0,
+};
+
+async function fetchColdOutreachFromSalesEngine(
+  start: string,
+  end: string,
+): Promise<ColdOutreachKPIs> {
+  const SALES_ENGINE_URL = process.env.SALES_ENGINE_URL;
+  if (!SALES_ENGINE_URL) return EMPTY_COLD_OUTREACH;
+
+  try {
+    const url = new URL(`${SALES_ENGINE_URL}/api/analytics/cold-outreach-summary`);
+    url.searchParams.set('start', start);
+    url.searchParams.set('end', end);
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.SALES_ENGINE_API_TOKEN && {
+          'Authorization': `Bearer ${process.env.SALES_ENGINE_API_TOKEN}`,
+        }),
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) return EMPTY_COLD_OUTREACH;
+
+    const data = await response.json();
+    return {
+      contacts_sourced: Number(data.contacts_sourced ?? data.contactsSourced ?? 0),
+      emails_sent: Number(data.emails_sent ?? data.emailsSent ?? 0),
+      emails_delivered: Number(data.emails_delivered ?? data.emailsDelivered ?? 0),
+      deliverability_rate: Number(data.deliverability_rate ?? data.deliverabilityRate ?? 0),
+      replies: Number(data.replies ?? 0),
+      reply_rate: Number(data.reply_rate ?? data.replyRate ?? 0),
+      positive_replies: Number(data.positive_replies ?? data.positiveReplies ?? 0),
+      positive_reply_rate: Number(data.positive_reply_rate ?? data.positiveReplyRate ?? 0),
+      pipeline_value_usd: 0, // merged from DB query below
+    };
+  } catch {
+    return EMPTY_COLD_OUTREACH;
+  }
+}
 
 // ============================================
 // Connection pool
@@ -304,6 +357,7 @@ export async function GET(request: NextRequest) {
           post_free_content: { current: { engine: 'post_free_content', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, previous: { engine: 'post_free_content', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, deltas: { sessions_pct: 0, clicks_pct: 0, quotes_pct: 0, pipeline_value_usd_pct: 0, spend_pct: 0, cac_pct: 0, roas_pct: 0, quote_rate_pct: 0 } },
           run_paid_ads: { current: { engine: 'run_paid_ads', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, previous: { engine: 'run_paid_ads', sessions: 0, clicks: 0, quotes: 0, pipeline_value_usd: 0, spend: 0, cac: 0, roas: 0, quote_rate: 0 }, deltas: { sessions_pct: 0, clicks_pct: 0, quotes_pct: 0, pipeline_value_usd_pct: 0, spend_pct: 0, cac_pct: 0, roas_pct: 0, quote_rate_pct: 0 } },
         },
+        cold_outreach_kpis: EMPTY_COLD_OUTREACH,
       },
       timestamp: new Date().toISOString(),
       orgId: 'unconfigured',
@@ -317,16 +371,34 @@ export async function GET(request: NextRequest) {
 
     const filters = parseFilters(request.nextUrl.searchParams);
 
-    const result = await executeMarketingQueries(db, {
-      startDate: start,
-      endDate: end,
-      prevStartDate: prevStart,
-      prevEndDate: prevEnd,
-      includeTimeseries,
-      filters,
-    });
+    // Fetch DB metrics and sales-engine cold outreach data in parallel
+    const [result, coldOutreach] = await Promise.all([
+      executeMarketingQueries(db, {
+        startDate: start,
+        endDate: end,
+        prevStartDate: prevStart,
+        prevEndDate: prevEnd,
+        includeTimeseries,
+        filters,
+      }),
+      fetchColdOutreachFromSalesEngine(start, end),
+    ]);
 
     const queryMs = Math.round(performance.now() - t0);
+
+    // Merge cold outreach sales-engine data into Core4 engine metrics
+    const core4 = result.core4_summary;
+    const coldEngine = core4.cold_outreach.current;
+    coldEngine.sessions = coldOutreach.contacts_sourced;
+    coldEngine.clicks = coldOutreach.emails_sent;
+    // Recalculate derived metrics with merged data
+    coldEngine.quote_rate = coldEngine.sessions > 0 ? coldEngine.quotes / coldEngine.sessions : 0;
+
+    // Build cold outreach KPIs combining both sources
+    const coldOutreachKpis: ColdOutreachKPIs = {
+      ...coldOutreach,
+      pipeline_value_usd: result.cold_outreach_pipeline.pipeline_value_usd,
+    };
 
     const meta: MarketingMeta = {
       query_execution_ms: queryMs,
@@ -355,7 +427,8 @@ export async function GET(request: NextRequest) {
       ga4_funnel: result.ga4_funnel,
       google_ads_overview: result.google_ads_overview,
       google_ads_campaigns: result.google_ads_campaigns,
-      core4_summary: result.core4_summary,
+      core4_summary: core4,
+      cold_outreach_kpis: coldOutreachKpis,
     };
 
     if (result.timeseries) {

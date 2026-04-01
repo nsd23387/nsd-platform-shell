@@ -697,7 +697,9 @@ function ExpandedCard({
   // Only block approval if ALL candidates have invalid content (not just some)
   const hasInvalidContent = candidates.length > 0 && validCandidateCount === 0 && invalidCandidateCount > 0;
   // Block approval if target URL is a 404
-  const isBlocked = hasInvalidContent || has404Target; else if (isMetadataRemedy) {
+  const isBlocked = hasInvalidContent || has404Target;
+
+  if (candidates.length === 0 && isMetadataRemedy) {
     // No candidates yet — generate preview for both title and meta
     changeBlocks.push({
       label: 'Title tag',
