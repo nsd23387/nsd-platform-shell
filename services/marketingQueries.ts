@@ -116,17 +116,16 @@ const QMS_KPI_PIPELINE_SQL = `
 `;
 
 /**
- * Period-filtered Search Console KPIs from the daily table.
- * Uses metrics_search_console_page_daily (date column: "date").
+ * Period-filtered Search Console KPIs from the daily aggregate table.
+ * Uses metrics_search_console_daily (date column: "date").
+ * This table has site-level clicks/impressions but no avg_position.
  */
 const KPI_SEARCH_SQL = `
   SELECT
     COALESCE(SUM(clicks), 0)      AS organic_clicks,
     COALESCE(SUM(impressions), 0) AS impressions,
-    CASE WHEN SUM(impressions) > 0
-      THEN SUM(avg_position * impressions) / SUM(impressions)
-      ELSE 0 END                  AS avg_position
-  FROM analytics.metrics_search_console_page_daily
+    0                             AS avg_position
+  FROM analytics.metrics_search_console_daily
   WHERE date BETWEEN $1 AND $2
 `;
 
@@ -191,8 +190,7 @@ const PAGES_SQL = `
       CASE WHEN SUM(impressions::int) > 0
         THEN SUM(clicks::int)::numeric / SUM(impressions::int)
         ELSE 0 END           AS ctr
-    FROM analytics.metrics_search_console_page_daily
-    WHERE date BETWEEN $1 AND $2
+    FROM analytics.metrics_search_console_page
     GROUP BY 1
   ),
   conv_attributed AS (
@@ -275,8 +273,10 @@ const FRESHNESS_SQL = `
 // ============================================
 
 /**
- * Period-filtered SEO query intelligence from the daily table.
- * Uses metrics_search_console_query_daily (date column: "metric_date").
+ * SEO query intelligence from the lifetime view.
+ * metrics_search_console_query has no date column — returns lifetime totals.
+ * The daily table (metrics_search_console_query_daily) only has query/impressions
+ * columns, so we use the lifetime view for full click/position data.
  */
 const SEO_QUERIES_SQL = `
   SELECT
@@ -291,8 +291,7 @@ const SEO_QUERIES_SQL = `
       ELSE 0 END                     AS avg_position,
     0                                AS submissions,
     0                                AS pipeline_value_usd
-  FROM analytics.metrics_search_console_query_daily q
-  WHERE q.metric_date BETWEEN $1 AND $2
+  FROM analytics.metrics_search_console_query q
   GROUP BY q.query
   ORDER BY SUM(q.clicks) DESC
   LIMIT 50
@@ -759,7 +758,7 @@ const POST_FREE_CONTENT_SQL = `
   SELECT
     COALESCE(SUM(clicks), 0) AS clicks,
     COALESCE(SUM(impressions), 0) AS impressions
-  FROM analytics.metrics_search_console_page_daily
+  FROM analytics.metrics_search_console_daily
   WHERE date BETWEEN $1 AND $2
 `;
 
@@ -1130,7 +1129,7 @@ export async function executeMarketingQueries(
     /* 5  */ db.query(FRESHNESS_SQL),
     /* 6  */ db.query(fEngSql, prevEngP),
     /* 7  */ db.query(fConvSql, prevConvP),
-    /* 8  */ db.query(SEO_QUERIES_SQL, curParams),
+    /* 8  */ db.query(SEO_QUERIES_SQL),
     /* 9  */ db.query(fAnomSessSql, curEngP),
     /* 10 */ db.query(fAnomSubSql, curConvP),
     /* 11 */ db.query(fAnomPipeSql, curParams),
