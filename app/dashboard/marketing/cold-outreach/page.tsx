@@ -1,76 +1,64 @@
 'use client';
 
-import React, { useContext } from 'react';
+import React from 'react';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
 import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
 import { DashboardGrid } from '../../../../components/dashboard/DashboardGrid';
-import { SkeletonCard } from '../../../../components/dashboard';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
+import { Icon } from '../../../../design/components/Icon';
 import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
-import { MarketingContext } from '../lib/MarketingContext';
-import { formatNumber, formatPercent, formatCurrency } from '../lib/format';
-import type { ColdOutreachKPIs } from '../../../../types/activity-spine';
 
-interface KPICardProps {
-  label: string;
-  value: string;
-  testId: string;
-}
-
-function KPICard({ label, value, testId }: KPICardProps) {
+function ConnectCard({ title, description, integration }: { title: string; description: string; integration: string }) {
   const tc = useThemeColors();
   return (
     <div
       style={{
-        padding: space['4'],
-        border: `1px solid ${tc.border.subtle}`,
+        padding: space['6'],
+        border: `1px dashed ${tc.border.default}`,
         borderRadius: radius.lg,
-        backgroundColor: tc.background.surface,
+        backgroundColor: tc.background.muted,
+        textAlign: 'center' as const,
       }}
-      data-testid={testId}
+      data-testid={`card-connect-${integration}`}
     >
-      <p style={{
-        fontFamily: fontFamily.body,
-        fontSize: fontSize['2xl'],
-        fontWeight: fontWeight.semibold,
-        color: tc.text.primary,
-      }}>
-        {value}
+      <div style={{ marginBottom: space['3'] }}>
+        <Icon name="send" size={24} color={tc.text.placeholder} />
+      </div>
+      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.secondary, marginBottom: space['2'] }}>
+        {title}
       </p>
-      <p style={{
-        fontFamily: fontFamily.body,
-        fontSize: fontSize.sm,
-        color: tc.text.muted,
-        marginTop: space['1'],
-      }}>
-        {label}
+      <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['4'] }}>
+        {description}
       </p>
+      <span
+        style={{
+          display: 'inline-block',
+          padding: `${space['1.5']} ${space['4']}`,
+          fontFamily: fontFamily.body,
+          fontSize: fontSize.sm,
+          fontWeight: fontWeight.medium,
+          color: tc.text.placeholder,
+          border: `1px solid ${tc.border.default}`,
+          borderRadius: radius.full,
+        }}
+      >
+        Connect {integration}
+      </span>
     </div>
   );
 }
 
-function buildKPICards(kpis: ColdOutreachKPIs): { label: string; value: string; testId: string }[] {
-  return [
-    { label: 'Contacts Sourced', value: formatNumber(kpis.contacts_sourced), testId: 'cold-kpi-contacts' },
-    { label: 'Emails Sent', value: formatNumber(kpis.emails_sent), testId: 'cold-kpi-emails-sent' },
-    { label: 'Deliverability Rate', value: formatPercent(kpis.deliverability_rate), testId: 'cold-kpi-deliverability' },
-    { label: 'Reply Rate', value: formatPercent(kpis.reply_rate), testId: 'cold-kpi-reply-rate' },
-    { label: 'Positive Reply Rate', value: formatPercent(kpis.positive_reply_rate), testId: 'cold-kpi-positive-reply' },
-    { label: 'Pipeline Created', value: formatCurrency(kpis.pipeline_value_usd), testId: 'cold-kpi-pipeline' },
-  ];
-}
+const KPIS = [
+  'Contacts Sourced', 'Emails Sent', 'Deliverability Rate', 'Reply Rate',
+  'Positive Reply Rate', 'Meetings Booked', 'Pipeline Created', 'CAC Equivalent',
+];
 
 export default function ColdOutreachPage() {
   const tc = useThemeColors();
-  const { data, loading } = useContext(MarketingContext);
-
-  const kpis = data?.cold_outreach_kpis;
-  const hasData = kpis && (
-    kpis.contacts_sourced > 0 || kpis.emails_sent > 0 || kpis.pipeline_value_usd > 0
-  );
 
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
@@ -91,44 +79,43 @@ export default function ColdOutreachPage() {
             Cold Outreach
           </h1>
           <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
-            Email sequences, reply rates, and pipeline from outbound campaigns.
+            Email sequences, reply rates, and meeting pipeline from outbound campaigns.
           </p>
         </div>
 
-        {loading ? (
-          <DashboardSection title="Outreach Performance" description="Campaign metrics from Sales Engine." index={0}>
-            <DashboardGrid columns={{ sm: 2, md: 3, lg: 3 }}>
-              {[0, 1, 2, 3, 4, 5].map((i) => <SkeletonCard key={i} height={80} />)}
-            </DashboardGrid>
-          </DashboardSection>
-        ) : hasData ? (
-          <DashboardSection title="Outreach Performance" description="Campaign metrics from Sales Engine and pipeline attribution." index={0}>
-            <DashboardGrid columns={{ sm: 2, md: 3, lg: 3 }}>
-              {buildKPICards(kpis).map((card) => (
-                <KPICard key={card.testId} {...card} />
-              ))}
-            </DashboardGrid>
-          </DashboardSection>
-        ) : (
-          <DashboardSection title="No Data Yet" description="Cold outreach metrics will appear once the Sales Engine integration is active and campaigns have been run." index={0}>
-            <div
-              style={{
-                padding: space['6'],
-                border: `1px dashed ${tc.border.default}`,
-                borderRadius: radius.lg,
-                backgroundColor: tc.background.muted,
-                textAlign: 'center' as const,
-              }}
-            >
-              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted, marginBottom: space['2'] }}>
-                No cold outreach data available for the selected period.
-              </p>
-              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.placeholder }}>
-                Ensure SALES_ENGINE_URL is configured and campaigns have been executed.
-              </p>
-            </div>
-          </DashboardSection>
-        )}
+        <DashboardSection title="Integration Required" description="Connect a sales engagement platform to populate this dashboard." index={0}>
+          <DashboardGrid columns={{ sm: 1, md: 2, lg: 2 }}>
+            <ConnectCard
+              title="Sales Engine Integration"
+              description="Connect your NSD Sales Engine to track outbound campaign performance, email deliverability, and pipeline attribution."
+              integration="Sales Engine"
+            />
+            <ConnectCard
+              title="Apollo Integration"
+              description="Connect Apollo.io to import sequence data, contact engagement metrics, and meeting bookings."
+              integration="Apollo"
+            />
+          </DashboardGrid>
+        </DashboardSection>
+
+        <DashboardSection title="KPIs Available After Integration" description="These metrics will populate once a data source is connected." index={1}>
+          <DashboardGrid columns={{ sm: 2, md: 4, lg: 4 }}>
+            {KPIS.map((kpi) => (
+              <div
+                key={kpi}
+                style={{
+                  padding: space['4'],
+                  border: `1px solid ${tc.border.subtle}`,
+                  borderRadius: radius.lg,
+                  backgroundColor: tc.background.surface,
+                }}
+              >
+                <p style={{ fontFamily: fontFamily.body, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: tc.text.disabled }}>—</p>
+                <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['1'] }}>{kpi}</p>
+              </div>
+            ))}
+          </DashboardGrid>
+        </DashboardSection>
       </div>
     </DashboardGuard>
   );
