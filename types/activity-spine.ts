@@ -389,18 +389,6 @@ export interface Core4Summary {
   run_paid_ads: Core4EngineComparison;
 }
 
-export interface ColdOutreachKPIs {
-  contacts_sourced: number;
-  emails_sent: number;
-  emails_delivered: number;
-  deliverability_rate: number;
-  replies: number;
-  reply_rate: number;
-  positive_replies: number;
-  positive_reply_rate: number;
-  pipeline_value_usd: number;
-}
-
 export interface MarketingOverviewResponse {
   period: MarketingPeriodBlock;
   generated_at: string;
@@ -424,7 +412,6 @@ export interface MarketingOverviewResponse {
   google_ads_overview: MarketingGoogleAdsOverview;
   google_ads_campaigns: MarketingGoogleAdsCampaign[];
   core4_summary?: Core4Summary;
-  cold_outreach_kpis?: ColdOutreachKPIs;
 }
 
 // ============================================

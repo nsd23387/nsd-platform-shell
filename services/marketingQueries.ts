@@ -34,7 +34,6 @@ import type {
   Core4EngineComparison,
   Core4Summary,
   Core4Engine,
-  ColdOutreachKPIs,
 } from '../types/activity-spine';
 
 // ============================================
@@ -116,8 +115,10 @@ const QMS_KPI_PIPELINE_SQL = `
 `;
 
 /**
- * Period-filtered Search Console KPIs from the daily table.
- * Uses metrics_search_console_page_daily (date column: "date").
+ * LIFETIME VIEW — metrics_search_console_page has no date column.
+ * This query returns lifetime totals, not period-filtered values.
+ * Comparisons for organic_clicks/impressions will show delta_pct=0
+ * because both current and previous periods see identical data.
  */
 const KPI_SEARCH_SQL = `
   SELECT
@@ -126,8 +127,7 @@ const KPI_SEARCH_SQL = `
     CASE WHEN SUM(impressions) > 0
       THEN SUM(avg_position * impressions) / SUM(impressions)
       ELSE 0 END                  AS avg_position
-  FROM analytics.metrics_search_console_page_daily
-  WHERE date BETWEEN $1 AND $2
+  FROM analytics.metrics_search_console_page
 `;
 
 // ============================================
@@ -191,8 +191,7 @@ const PAGES_SQL = `
       CASE WHEN SUM(impressions::int) > 0
         THEN SUM(clicks::int)::numeric / SUM(impressions::int)
         ELSE 0 END           AS ctr
-    FROM analytics.metrics_search_console_page_daily
-    WHERE date BETWEEN $1 AND $2
+    FROM analytics.metrics_search_console_page
     GROUP BY 1
   ),
   conv_attributed AS (
@@ -208,7 +207,6 @@ const PAGES_SQL = `
                 AS pipeline_value_usd
     FROM analytics.raw_web_events
     WHERE event_type = 'conversion'
-      AND occurred_at >= $1::date AND occurred_at < ($2::date + INTERVAL '1 day')
     GROUP BY 1
   )
   SELECT
@@ -244,18 +242,16 @@ const PAGES_SQL = `
 // ============================================
 
 /**
- * Period-filtered source breakdown from raw_qms_deals.
- * Replaces the lifetime dashboard_sources view.
+ * LIFETIME VIEW — dashboard_sources has no date column.
+ * Returns lifetime submission/pipeline totals by source.
  */
 const SOURCES_SQL = `
   SELECT
-    COALESCE(NULLIF(utm_source, ''), NULLIF(referrer, ''), 'direct') AS submission_source,
-    COUNT(*) AS submissions,
-    COALESCE(SUM(total_price_cents), 0) / 100.0 AS pipeline_value_usd
-  FROM analytics.raw_qms_deals
-  WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
-  GROUP BY 1
-  ORDER BY pipeline_value_usd DESC
+    submission_source,
+    COALESCE(submissions, 0)        AS submissions,
+    COALESCE(pipeline_value_usd, 0) AS pipeline_value_usd
+  FROM analytics.dashboard_sources
+  ORDER BY COALESCE(pipeline_value_usd, 0) DESC
 `;
 
 // ============================================
@@ -275,8 +271,9 @@ const FRESHNESS_SQL = `
 // ============================================
 
 /**
- * Period-filtered SEO query intelligence from the daily table.
- * Uses metrics_search_console_query_daily (date column: "metric_date").
+ * LIFETIME VIEW — metrics_search_console_query has no date column.
+ * dashboard_pages also has no date column.
+ * Returns lifetime totals per query.
  */
 const SEO_QUERIES_SQL = `
   SELECT
@@ -291,8 +288,7 @@ const SEO_QUERIES_SQL = `
       ELSE 0 END                     AS avg_position,
     0                                AS submissions,
     0                                AS pipeline_value_usd
-  FROM analytics.metrics_search_console_query_daily q
-  WHERE q.metric_date BETWEEN $1 AND $2
+  FROM analytics.metrics_search_console_query q
   GROUP BY q.query
   ORDER BY SUM(q.clicks) DESC
   LIMIT 50
@@ -505,7 +501,6 @@ const PIPELINE_CATEGORY_SQL = `
     COALESCE(SUM(total_price_cents), 0) / 100.0 AS pipeline_value_usd
   FROM analytics.raw_qms_deals
   WHERE quote_active
-    AND created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
   GROUP BY COALESCE(NULLIF(sign_type, ''), 'Unknown')
   ORDER BY pipeline_value_usd DESC
 `;
@@ -597,8 +592,8 @@ const FUNNEL_SQL = `
     COALESCE(conversion_rate, 0) AS conversion_rate,
     COALESCE(pipeline_value_usd, 0) AS pipeline_value_usd
   FROM analytics.dashboard_funnel_daily
-  WHERE event_date BETWEEN $1 AND $2
   ORDER BY event_date DESC
+  LIMIT 30
 `;
 
 // ============================================
@@ -738,11 +733,6 @@ const WARM_OUTREACH_SQL = `
     COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) / 100.0 AS won_revenue_usd
   FROM analytics.raw_qms_deals
   WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
-    AND (
-      LOWER(COALESCE(utm_source, '')) IN ('', 'direct', 'email', 'newsletter')
-      OR LOWER(COALESCE(utm_medium, '')) IN ('email', 'referral')
-      OR (utm_source IS NULL AND referrer IS NULL)
-    )
 `;
 
 const WARM_OUTREACH_SESSIONS_SQL = `
@@ -759,8 +749,7 @@ const POST_FREE_CONTENT_SQL = `
   SELECT
     COALESCE(SUM(clicks), 0) AS clicks,
     COALESCE(SUM(impressions), 0) AS impressions
-  FROM analytics.metrics_search_console_page_daily
-  WHERE date BETWEEN $1 AND $2
+  FROM analytics.metrics_search_console_page
 `;
 
 const POST_FREE_CONTENT_SESSIONS_SQL = `
@@ -809,22 +798,6 @@ const RUN_PAID_ADS_SESSIONS_SQL = `
     AND source_system = 'ga4-api'
     AND payload->>'channel' IN ('Paid Search', 'Paid Social', 'Paid Video', 'Display')
     AND occurred_at::date BETWEEN $1 AND $2
-`;
-
-// ============================================
-// T016: Cold outreach pipeline attribution from QMS deals
-// ============================================
-
-const COLD_OUTREACH_PIPELINE_SQL = `
-  SELECT
-    COUNT(*) AS quotes,
-    COALESCE(SUM(total_price_cents), 0) / 100.0 AS pipeline_value_usd
-  FROM analytics.raw_qms_deals
-  WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
-    AND (
-      LOWER(COALESCE(utm_source, '')) IN ('cold-outreach', 'cold_outreach', 'outbound', 'apollo', 'smartlead')
-      OR LOWER(COALESCE(utm_medium, '')) IN ('cold-email', 'cold_email', 'outbound')
-    )
 `;
 
 // ============================================
@@ -1066,7 +1039,6 @@ export interface MarketingQueryResult {
   google_ads_overview: MarketingGoogleAdsOverview;
   google_ads_campaigns: MarketingGoogleAdsCampaign[];
   core4_summary: Core4Summary;
-  cold_outreach_pipeline: { quotes: number; pipeline_value_usd: number };
 }
 
 export async function executeMarketingQueries(
@@ -1124,13 +1096,13 @@ export async function executeMarketingQueries(
   const queries: Promise<{ rows: Row[] }>[] = [
     /* 0  */ db.query(fEngSql, curEngP),
     /* 1  */ db.query(fConvSql, curConvP),
-    /* 2  */ db.query(KPI_SEARCH_SQL, curParams),
+    /* 2  */ db.query(KPI_SEARCH_SQL),
     /* 3  */ db.query(PAGES_SQL, curParams),
-    /* 4  */ db.query(SOURCES_SQL, curParams),
+    /* 4  */ db.query(SOURCES_SQL),
     /* 5  */ db.query(FRESHNESS_SQL),
     /* 6  */ db.query(fEngSql, prevEngP),
     /* 7  */ db.query(fConvSql, prevConvP),
-    /* 8  */ db.query(SEO_QUERIES_SQL, curParams),
+    /* 8  */ db.query(SEO_QUERIES_SQL),
     /* 9  */ db.query(fAnomSessSql, curEngP),
     /* 10 */ db.query(fAnomSubSql, curConvP),
     /* 11 */ db.query(fAnomPipeSql, curParams),
@@ -1140,10 +1112,10 @@ export async function executeMarketingQueries(
     /* 15 */ db.query(fCntGa4Sql, curGa4P),
     /* 16 */ db.query(fDevScSql, curScP),
     /* 17 */ db.query(fCntScSql, curScP),
-    /* 18 */ db.query(PIPELINE_CATEGORY_SQL, curParams),
+    /* 18 */ db.query(PIPELINE_CATEGORY_SQL),
     /* 19 */ db.query(RECENT_CONVERSIONS_SQL),
     /* 20 */ db.query(SEO_MOVERS_SQL, curParams),
-    /* 21 */ db.query(FUNNEL_SQL, curParams),
+    /* 21 */ db.query(FUNNEL_SQL),
     /* 22 */ db.query(PIPELINE_HEALTH_SQL),
     /* 23 */ db.query(fChanPerfSql, curGa4P),
     /* 24 */ db.query(fGa4FunnelSql, curGa4P),
@@ -1152,7 +1124,7 @@ export async function executeMarketingQueries(
     /* 27 */ db.query(WARM_OUTREACH_SQL, curParams),
     /* 28 */ db.query(fWarmSessSql, curGa4P),
     /* 29 */ db.query(fWarmSessSql, prevGa4P),
-    /* 30 */ db.query(POST_FREE_CONTENT_SQL, curParams),
+    /* 30 */ db.query(POST_FREE_CONTENT_SQL),
     /* 31 */ db.query(fPfcSessSql, curGa4P),
     /* 32 */ db.query(fPfcSessSql, prevGa4P),
     /* 33 */ db.query(fPfcConvSql, curWebP),
@@ -1164,26 +1136,21 @@ export async function executeMarketingQueries(
     /* 39 */ db.query(WARM_OUTREACH_SQL, prevParams),
     /* 40 */ db.query(QMS_KPI_PIPELINE_SQL, curParams),
     /* 41 */ db.query(QMS_KPI_PIPELINE_SQL, prevParams),
-    /* 42 */ db.query(KPI_SEARCH_SQL, prevParams),
-    /* 43 */ db.query(POST_FREE_CONTENT_SQL, prevParams),
-    /* 44 */ db.query(COLD_OUTREACH_PIPELINE_SQL, curParams),
-    /* 45 */ db.query(COLD_OUTREACH_PIPELINE_SQL, prevParams),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 46 */ db.query(fTsSessSql, curEngP),
-      /* 47 */ db.query(fTsSubSql, curConvP),
-      /* 48 */ db.query(fTsPipeSql, curParams),
-      /* 49 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
-      /* 50 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
+      /* 42 */ db.query(fTsSessSql, curEngP),
+      /* 43 */ db.query(fTsSubSql, curConvP),
+      /* 44 */ db.query(fTsPipeSql, curParams),
+      /* 45 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
+      /* 46 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
     );
   }
 
   const results = await Promise.all(queries);
 
   const searchRow = results[2].rows[0] ?? {};
-  const prevSearchRow = results[42].rows[0] ?? {};
   const funnelFallback = results[12].rows[0] ?? {};
   const prevFunnelFallback = results[13].rows[0] ?? {};
 
@@ -1197,25 +1164,17 @@ export async function executeMarketingQueries(
   const prevKpis = buildKPIs(
     results[6].rows[0] ?? {},
     results[7].rows[0] ?? {},
-    prevSearchRow,
+    searchRow,
     prevFunnelFallback,
   );
 
-  // Always use QMS deals as the authoritative pipeline source for consistency
-  // with timeseries, Core 4 engines, and per-page breakdowns.
   const qmsKpiCur = results[40].rows[0] ?? {};
   const qmsKpiPrev = results[41].rows[0] ?? {};
   const qmsPipelineCur = nonNegative(toNumber(qmsKpiCur.pipeline_cents)) / 100;
   const qmsPipelinePrev = nonNegative(toNumber(qmsKpiPrev.pipeline_cents)) / 100;
 
-  kpis.total_pipeline_value_usd = qmsPipelineCur;
-  prevKpis.total_pipeline_value_usd = qmsPipelinePrev;
-
-  // Recompute derived metrics that depend on pipeline value
-  kpis.revenue_per_session = safeDivide(kpis.total_pipeline_value_usd, kpis.sessions);
-  kpis.revenue_per_click = safeDivide(kpis.total_pipeline_value_usd, kpis.organic_clicks);
-  prevKpis.revenue_per_session = safeDivide(prevKpis.total_pipeline_value_usd, prevKpis.sessions);
-  prevKpis.revenue_per_click = safeDivide(prevKpis.total_pipeline_value_usd, prevKpis.organic_clicks);
+  kpis.total_pipeline_value_usd = qmsPipelineCur > 0 ? qmsPipelineCur : kpis.total_pipeline_value_usd;
+  prevKpis.total_pipeline_value_usd = qmsPipelinePrev > 0 ? qmsPipelinePrev : prevKpis.total_pipeline_value_usd;
 
   const comparisons: MarketingKPIComparisons = {
     sessions: buildComparison(kpis.sessions, prevKpis.sessions),
@@ -1465,13 +1424,13 @@ export async function executeMarketingQueries(
     }));
 
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 46) {
+  if (opts.includeTimeseries && results.length > 42) {
     timeseries = {
-      sessions: mapTimeseries(results[46].rows),
-      submissions: mapTimeseries(results[47].rows),
-      pipeline_value_usd: mapTimeseries(results[48].rows),
-      impressions: mapTimeseries(results[49].rows),
-      clicks: mapTimeseries(results[50].rows),
+      sessions: mapTimeseries(results[42].rows),
+      submissions: mapTimeseries(results[43].rows),
+      pipeline_value_usd: mapTimeseries(results[44].rows),
+      impressions: mapTimeseries(results[45].rows),
+      clicks: mapTimeseries(results[46].rows),
     };
   }
 
@@ -1494,22 +1453,24 @@ export async function executeMarketingQueries(
     spend: 0,
   });
 
-  const contentSearchRowCur = results[30].rows[0] ?? {};
-  const contentSearchRowPrev = results[43].rows[0] ?? {};
+  // Note: POST_FREE_CONTENT_SQL queries metrics_search_console_page (lifetime view, no date column).
+  // Clicks/impressions are identical for current and previous — deltas will be 0%.
+  // Sessions and conversions ARE date-filtered (indices 31-34).
+  const contentSearchRow = results[30].rows[0] ?? {};
   const contentSessionsCur = results[31].rows[0] ?? {};
   const contentSessionsPrev = results[32].rows[0] ?? {};
   const contentConvCur = results[33].rows[0] ?? {};
   const contentConvPrev = results[34].rows[0] ?? {};
   const contentCurrent = buildCore4EngineMetrics('post_free_content', {
     sessions: nonNegative(toNumber(contentSessionsCur.sessions)),
-    clicks: nonNegative(toNumber(contentSearchRowCur.clicks)),
+    clicks: nonNegative(toNumber(contentSearchRow.clicks)),
     quotes: nonNegative(toNumber(contentConvCur.quotes)),
     pipeline_value_usd: nonNegative(toNumber(contentConvCur.pipeline_value_usd)),
     spend: 0,
   });
   const contentPrevious = buildCore4EngineMetrics('post_free_content', {
     sessions: nonNegative(toNumber(contentSessionsPrev.sessions)),
-    clicks: nonNegative(toNumber(contentSearchRowPrev.clicks)),
+    clicks: nonNegative(toNumber(contentSearchRow.clicks)),
     quotes: nonNegative(toNumber(contentConvPrev.quotes)),
     pipeline_value_usd: nonNegative(toNumber(contentConvPrev.pipeline_value_usd)),
     spend: 0,
@@ -1534,25 +1495,8 @@ export async function executeMarketingQueries(
     spend: nonNegative(toNumber(paidAdsPrevRow.spend)),
   });
 
-  // Cold outreach pipeline attribution from QMS deals.
-  // Engagement metrics (contacts_sourced, emails_sent, etc.) are fetched
-  // from the sales-engine API and merged at the API route level.
-  const coldPipelineCur = results[44].rows[0] ?? {};
-  const coldPipelinePrev = results[45].rows[0] ?? {};
-  const coldCurrent = buildCore4EngineMetrics('cold_outreach', {
-    sessions: 0, // populated from sales-engine API (contacts_sourced)
-    clicks: 0,   // populated from sales-engine API (emails_sent)
-    quotes: nonNegative(toNumber(coldPipelineCur.quotes)),
-    pipeline_value_usd: nonNegative(toNumber(coldPipelineCur.pipeline_value_usd)),
-    spend: 0,
-  });
-  const coldPrevious = buildCore4EngineMetrics('cold_outreach', {
-    sessions: 0,
-    clicks: 0,
-    quotes: nonNegative(toNumber(coldPipelinePrev.quotes)),
-    pipeline_value_usd: nonNegative(toNumber(coldPipelinePrev.pipeline_value_usd)),
-    spend: 0,
-  });
+  const coldCurrent = zeroCore4Metrics('cold_outreach');
+  const coldPrevious = zeroCore4Metrics('cold_outreach');
 
   const core4_summary: Core4Summary = {
     warm_outreach: buildCore4Comparison(warmCurrent, warmPrevious),
@@ -1582,9 +1526,5 @@ export async function executeMarketingQueries(
     google_ads_overview,
     google_ads_campaigns,
     core4_summary,
-    cold_outreach_pipeline: {
-      quotes: nonNegative(toNumber(coldPipelineCur.quotes)),
-      pipeline_value_usd: nonNegative(toNumber(coldPipelineCur.pipeline_value_usd)),
-    },
   };
 }
