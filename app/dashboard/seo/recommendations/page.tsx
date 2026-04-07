@@ -255,7 +255,14 @@ function RecommendationsContent() {
     setActionLoading(card.opportunity_id);
     try {
       if (candidateId) {
-        await approveEngineCandidate({ candidate_id: candidateId });
+        try {
+          await approveEngineCandidate({ candidate_id: candidateId });
+        } catch (candidateErr: any) {
+          // Candidate may be stale/already reviewed — fall back to opportunity_id path
+          // which will find or create a fresh candidate
+          console.warn('Candidate approve failed, falling back to opportunity_id:', candidateErr.message);
+          await approveEngineCandidate({ opportunity_id: card.opportunity_id });
+        }
       } else {
         await approveEngineCandidate({ opportunity_id: card.opportunity_id });
       }
@@ -287,7 +294,12 @@ function RecommendationsContent() {
     setRejectError(null);
     try {
       if (candidateId) {
-        await rejectEngineCandidate({ candidate_id: candidateId });
+        try {
+          await rejectEngineCandidate({ candidate_id: candidateId });
+        } catch (candidateErr: any) {
+          console.warn('Candidate reject failed, falling back to opportunity_id:', candidateErr.message);
+          await rejectEngineCandidate({ opportunity_id: card.opportunity_id });
+        }
       } else {
         await rejectEngineCandidate({ opportunity_id: card.opportunity_id });
       }
@@ -1033,7 +1045,9 @@ function ExpandedCard({
             title={has404Target ? 'Target page returned 404 — reject this recommendation' : undefined}
             onClick={async () => {
               setActionError(null);
-              const cid = candidates.find(c => c.awaiting_approval)?.candidate_id || card.candidate_id;
+              // Use an awaiting candidate if available; otherwise pass null to trigger opportunity_id path
+              const awaitingCandidate = candidates.find(c => c.awaiting_approval);
+              const cid = awaitingCandidate?.candidate_id || null;
               try { await onApprove(card, cid); } catch { setActionError('Failed to approve — try again'); }
             }}
             style={{ width: '100%', padding: `${space['2.5']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#fff', backgroundColor: isBlocked ? '#9CA3AF' : '#059669', border: 'none', borderRadius: radius.md, cursor: isBlocked ? 'not-allowed' : isActionLoading ? 'wait' : 'pointer', opacity: (isActionLoading || isBlocked) ? 0.5 : 1, marginBottom: space['2'] }}
@@ -1056,8 +1070,8 @@ function ExpandedCard({
                   disabled={isActionLoading}
                   onClick={async () => {
                     setActionError(null);
-                    const cid = candidates.find(c => c.awaiting_approval)?.candidate_id || card.candidate_id;
-                    try { await onReject(card, cid); } catch { setActionError('Failed to reject — try again'); }
+                    const awaitingCid = candidates.find(c => c.awaiting_approval)?.candidate_id || null;
+                    try { await onReject(card, awaitingCid); } catch { setActionError('Failed to reject — try again'); }
                     setRejectConfirm(false);
                   }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#991b1b' }}
