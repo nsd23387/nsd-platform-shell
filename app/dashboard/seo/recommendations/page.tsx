@@ -183,6 +183,46 @@ function RecommendationsContent() {
 
   const pendingCount = allCards.filter(cardNeedsAction).length;
 
+  // Deduplication / overlap detection: find cards sharing keyword or target URL
+  const duplicateMap = useMemo(() => {
+    const byCluster = new Map<string, string[]>();
+    const byUrl = new Map<string, string[]>();
+    for (const c of allCards) {
+      const cluster = c.topic_cluster?.toLowerCase();
+      if (cluster) {
+        if (!byCluster.has(cluster)) byCluster.set(cluster, []);
+        byCluster.get(cluster)!.push(c.opportunity_id);
+      }
+      const url = c.nsd_page_url;
+      if (url) {
+        if (!byUrl.has(url)) byUrl.set(url, []);
+        byUrl.get(url)!.push(c.opportunity_id);
+      }
+    }
+    const warnings = new Map<string, string[]>();
+    for (const c of allCards) {
+      const msgs: string[] = [];
+      const cluster = c.topic_cluster?.toLowerCase();
+      if (cluster) {
+        const siblings = byCluster.get(cluster) || [];
+        if (siblings.length > 1) {
+          const otherCount = siblings.length - 1;
+          msgs.push(`${otherCount} other recommendation${otherCount > 1 ? 's' : ''} for "${c.topic_cluster}"`);
+        }
+      }
+      const url = c.nsd_page_url;
+      if (url) {
+        const siblings = byUrl.get(url) || [];
+        if (siblings.length > 1) {
+          const otherCount = siblings.length - 1;
+          msgs.push(`${otherCount} other change${otherCount > 1 ? 's' : ''} targeting the same page`);
+        }
+      }
+      if (msgs.length > 0) warnings.set(c.opportunity_id, msgs);
+    }
+    return warnings;
+  }, [allCards]);
+
   // ── Bulk eligible ──────────────────────────────────────────────────────
   const bulkEligible = useMemo(() =>
     allCards.filter(c =>
@@ -462,14 +502,28 @@ function RecommendationsContent() {
                 </div>
 
                 {/* ROW 2 — Summary */}
-                <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, lineHeight: lineHeight.relaxed, marginBottom: space['2'], overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, lineHeight: lineHeight.relaxed, marginBottom: space['1'], overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {card.recommendation_summary}
                 </div>
+
+                {/* ROW 2b — Target URL (always visible) */}
+                {card.nsd_page_url && (
+                  <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.placeholder, marginBottom: space['2'], overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {card.nsd_page_url.replace('https://neonsignsdepot.com', '')}
+                  </div>
+                )}
 
                 {/* Coverage warning */}
                 {card.coverage_validated === false && card.recommendation_source === 'cluster_engine' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: space['1.5'], backgroundColor: '#FEF3C7', borderLeft: '3px solid #F59E0B', borderRadius: 0, padding: `${space['1.5']} ${space['2.5']}`, marginBottom: space['2'], fontSize: fontSize.sm, color: '#92400e', fontFamily: fontFamily.body }}>
                     Verify no existing page before actioning
+                  </div>
+                )}
+
+                {/* Overlap / duplication warning */}
+                {duplicateMap.has(card.opportunity_id) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: space['1.5'], backgroundColor: '#EFF6FF', borderLeft: '3px solid #3B82F6', padding: `${space['1.5']} ${space['2.5']}`, marginBottom: space['2'], fontSize: '12px', color: '#1E40AF', fontFamily: fontFamily.body }}>
+                    Related: {duplicateMap.get(card.opportunity_id)!.join(' · ')}
                   </div>
                 )}
 
@@ -648,19 +702,21 @@ function ExpandedCard({
     );
   }
 
-  // Build the change blocks to render
-  type ChangeBlock = { label: string; currentValue: string; proposedValue: string; type: 'title' | 'meta'; isPreview: boolean };
-  const changeBlocks: ChangeBlock[] = [];
+  // Build the comparison rows for the side-by-side table
+  type ComparisonRow = { field: string; currentValue: string | null; proposedValue: string | null; type: 'title' | 'meta' | 'keyword'; isPreview: boolean; isEmpty: boolean; changed: boolean };
+  const comparisonRows: ComparisonRow[] = [];
 
   let invalidCandidateCount = 0;
   let validCandidateCount = 0;
   let has404Target = false;
 
+  // Always populate focus keyword row from detail
+  const currentFocusKeyword = p1?.current_focus_keyword || null;
+  const proposedFocusKeyword = p1?.proposed_focus_keyword || card.topic_cluster?.toLowerCase() || null;
+
   if (candidates.length > 0) {
-    // Check for 404 target URLs
     has404Target = candidates.some(ec => (ec as any).target_url_validated === false);
 
-    // Render from actual candidates — validate proposed_value
     for (const ec of candidates) {
       const mt = ec.mutation_type || '';
       const isTitleMutation = mt.includes('title');
@@ -671,24 +727,28 @@ function ExpandedCard({
         const current = (ec as any).current_value_snapshot
           || (isTitleMutation ? p1?.current_seo_title : p1?.current_meta_description)
           || null;
-        changeBlocks.push({
-          label: mutationTypeLabel(ec.mutation_type),
-          currentValue: current || 'Current value not retrieved',
+        comparisonRows.push({
+          field: mutationTypeLabel(ec.mutation_type),
+          currentValue: current,
           proposedValue: fallback,
           type: isTitleMutation ? 'title' : 'meta',
           isPreview: true,
+          isEmpty: !current,
+          changed: current !== fallback,
         });
       } else {
         validCandidateCount++;
         const current = (ec as any).current_value_snapshot
           || (isTitleMutation ? p1?.current_seo_title : p1?.current_meta_description)
           || null;
-        changeBlocks.push({
-          label: mutationTypeLabel(ec.mutation_type),
-          currentValue: current || 'Current value not retrieved',
+        comparisonRows.push({
+          field: mutationTypeLabel(ec.mutation_type),
+          currentValue: current,
           proposedValue: ec.proposed_value!,
           type: isTitleMutation ? 'title' : 'meta',
           isPreview: false,
+          isEmpty: !current,
+          changed: current !== ec.proposed_value,
         });
       }
     }
@@ -701,19 +761,38 @@ function ExpandedCard({
 
   if (candidates.length === 0 && isMetadataRemedy) {
     // No candidates yet — generate preview for both title and meta
-    changeBlocks.push({
-      label: 'Title tag',
-      currentValue: p1?.current_seo_title || 'Current value not retrieved',
+    const currentTitle = p1?.current_seo_title || null;
+    const currentMeta = p1?.current_meta_description || null;
+    comparisonRows.push({
+      field: 'Title tag',
+      currentValue: currentTitle,
       proposedValue: generatedCopy.title,
       type: 'title',
       isPreview: true,
+      isEmpty: !currentTitle,
+      changed: currentTitle !== generatedCopy.title,
     });
-    changeBlocks.push({
-      label: 'Meta description',
-      currentValue: p1?.current_meta_description || 'Current value not retrieved',
+    comparisonRows.push({
+      field: 'Meta description',
+      currentValue: currentMeta,
       proposedValue: generatedCopy.metaDescription,
       type: 'meta',
       isPreview: true,
+      isEmpty: !currentMeta,
+      changed: currentMeta !== generatedCopy.metaDescription,
+    });
+  }
+
+  // Always add Focus Keyword row when we have metadata changes
+  if (comparisonRows.length > 0 || isMetadataRemedy) {
+    comparisonRows.push({
+      field: 'Focus keyword',
+      currentValue: currentFocusKeyword,
+      proposedValue: proposedFocusKeyword,
+      type: 'keyword',
+      isPreview: !proposedFocusKeyword,
+      isEmpty: !currentFocusKeyword,
+      changed: currentFocusKeyword !== proposedFocusKeyword,
     });
   }
 
@@ -753,31 +832,60 @@ function ExpandedCard({
     }
   })();
 
-  // Helper to render a single change block
-  const renderChangeBlock = (block: ChangeBlock, i: number) => {
-    const charInfo = charCountLabel(block.proposedValue, block.type);
-    const currentMissing = block.currentValue === 'Current value not retrieved';
+  // Side-by-side comparison table renderer
+  const renderComparisonTable = () => {
+    if (comparisonRows.length === 0) return null;
+    const thStyle: React.CSSProperties = { padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.medium, color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'left', borderBottom: `2px solid ${tc.border.default}` };
+    const tdStyle: React.CSSProperties = { padding: `${space['2.5']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, lineHeight: lineHeight.relaxed, verticalAlign: 'top', borderBottom: `1px solid ${tc.border.default}` };
     return (
-      <div key={i} style={{ marginBottom: space['3'], border: `1px solid ${tc.border.default}`, borderRadius: radius.md, overflow: 'hidden' }}>
-        <div style={{ padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.muted, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          {block.label}
-        </div>
-        {/* CURRENT */}
-        <div style={{ padding: space['3'] }}>
-          <div style={{ fontSize: '11px', color: tc.text.muted, marginBottom: space['0.5'], fontWeight: fontWeight.medium, textTransform: 'uppercase', letterSpacing: '0.03em' }}>CURRENT</div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: currentMissing ? tc.text.placeholder : tc.text.secondary, fontStyle: currentMissing ? 'italic' : 'normal', lineHeight: lineHeight.relaxed }}>
-            {block.currentValue}
-          </div>
-          {currentMissing && <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.placeholder, marginTop: space['0.5'] }}>Values shown at execution time</div>}
-        </div>
-        {/* PROPOSED */}
-        <div style={{ padding: space['3'], borderLeft: '3px solid #10b981', borderTop: `1px solid ${tc.border.default}` }}>
-          <div style={{ fontSize: '11px', color: '#065f46', marginBottom: space['0.5'], fontWeight: fontWeight.medium, textTransform: 'uppercase', letterSpacing: '0.03em' }}>PROPOSED</div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary, fontWeight: fontWeight.medium, lineHeight: lineHeight.relaxed }}>
-            {block.proposedValue}
-          </div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: charInfo.color, marginTop: space['1'] }}>{charInfo.text}</div>
-        </div>
+      <div style={{ border: `1px solid ${tc.border.default}`, borderRadius: radius.md, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: tc.background.muted }}>
+              <th style={{ ...thStyle, width: '20%' }}>Field</th>
+              <th style={{ ...thStyle, width: '40%' }}>Current (live)</th>
+              <th style={{ ...thStyle, width: '40%' }}>Proposed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {comparisonRows.map((row, i) => {
+              const charInfo = row.type === 'keyword' ? null : charCountLabel(row.proposedValue || '', row.type);
+              return (
+                <tr key={i} style={{ backgroundColor: i % 2 === 0 ? tc.background.surface : tc.background.muted }}>
+                  <td style={{ ...tdStyle, fontWeight: fontWeight.medium, color: tc.text.primary, fontSize: '12px' }}>
+                    {row.field}
+                  </td>
+                  <td style={{ ...tdStyle, color: row.isEmpty ? '#991b1b' : tc.text.secondary }}>
+                    {row.isEmpty ? (
+                      <span style={{ fontStyle: 'italic', color: '#991b1b', fontWeight: fontWeight.medium }}>
+                        ⚠ Not set
+                      </span>
+                    ) : (
+                      <span>{row.currentValue}</span>
+                    )}
+                  </td>
+                  <td style={{ ...tdStyle, color: tc.text.primary, fontWeight: row.changed ? fontWeight.medium : fontWeight.regular }}>
+                    {row.proposedValue ? (
+                      <>
+                        <span style={{ borderLeft: row.changed ? '3px solid #10b981' : 'none', paddingLeft: row.changed ? space['2'] : '0' }}>
+                          {row.proposedValue}
+                        </span>
+                        {charInfo && (
+                          <div style={{ fontSize: '11px', color: charInfo.color, marginTop: space['0.5'] }}>{charInfo.text}</div>
+                        )}
+                        {row.isPreview && (
+                          <div style={{ fontSize: '11px', color: tc.text.placeholder, fontStyle: 'italic', marginTop: space['0.5'] }}>Preview — final copy at execution</div>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ fontStyle: 'italic', color: tc.text.placeholder }}>—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     );
   };
@@ -821,10 +929,20 @@ function ExpandedCard({
           </div>
         )}
 
-        {changeBlocks.length > 0 && (
+        {/* Target page — always visible */}
+        {targetPageFull && (
+          <div style={{ marginBottom: space['3'], padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.muted, borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
+            <span style={{ color: tc.text.muted, fontWeight: fontWeight.medium }}>Target page: </span>
+            <a href={targetPageFull} target="_blank" rel="noopener noreferrer" style={{ color: violet[500], textDecoration: 'none' }}>
+              {targetPageFull.replace('https://neonsignsdepot.com', '')}
+            </a>
+          </div>
+        )}
+
+        {comparisonRows.length > 0 && (
           <>
-            {changeBlocks.map((block, i) => renderChangeBlock(block, i))}
-            {changeBlocks.some(b => b.isPreview) && (
+            {renderComparisonTable()}
+            {comparisonRows.some(b => b.isPreview) && (
               <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.placeholder, fontStyle: 'italic', marginTop: space['1'] }}>
                 * Exact copy generated at execution time — this is a preview
               </div>

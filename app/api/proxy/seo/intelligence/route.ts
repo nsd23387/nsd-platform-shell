@@ -579,8 +579,8 @@ function isAllowedMetadataUrl(url: string): boolean {
   }
 }
 
-async function fetchLivePageMetadata(url: string): Promise<{ title: string | null; metaDescription: string | null }> {
-  if (!isAllowedMetadataUrl(url)) return { title: null, metaDescription: null };
+async function fetchLivePageMetadata(url: string): Promise<{ title: string | null; metaDescription: string | null; focusKeyword: string | null }> {
+  if (!isAllowedMetadataUrl(url)) return { title: null, metaDescription: null, focusKeyword: null };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 6000);
   try {
@@ -589,12 +589,12 @@ async function fetchLivePageMetadata(url: string): Promise<{ title: string | nul
       headers: { 'User-Agent': 'NSD-SEO-Shell/1.0 (metadata-check)' },
       redirect: 'follow',
     });
-    if (!resp.ok) return { title: null, metaDescription: null };
+    if (!resp.ok) return { title: null, metaDescription: null, focusKeyword: null };
     const chunks: Uint8Array[] = [];
     let totalBytes = 0;
     const maxBytes = 512 * 1024;
     const reader = resp.body?.getReader();
-    if (!reader) return { title: null, metaDescription: null };
+    if (!reader) return { title: null, metaDescription: null, focusKeyword: null };
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -610,18 +610,21 @@ async function fetchLivePageMetadata(url: string): Promise<{ title: string | nul
     const metaMatch = html.match(/<meta\s[^>]*name\s*=\s*["']description["'][^>]*content\s*=\s*["']([\s\S]*?)["'][^>]*\/?>/i)
                    || html.match(/<meta\s[^>]*content\s*=\s*["']([\s\S]*?)["'][^>]*name\s*=\s*["']description["'][^>]*\/?>/i);
     const metaDescription = metaMatch ? metaMatch[1].trim().replace(/\s+/g, ' ') : null;
-    return { title, metaDescription };
+    // Extract Rank Math focus keyword from article:tag or rankmath meta
+    const focusKwMatch = html.match(/<meta\s[^>]*property\s*=\s*["']article:tag["'][^>]*content\s*=\s*["']([\s\S]*?)["'][^>]*\/?>/i)
+                      || html.match(/<meta\s[^>]*name\s*=\s*["']keywords["'][^>]*content\s*=\s*["']([\s\S]*?)["'][^>]*\/?>/i);
+    const focusKeyword = focusKwMatch ? focusKwMatch[1].trim().replace(/\s+/g, ' ') : null;
+    return { title, metaDescription, focusKeyword };
   } catch {
-    return { title: null, metaDescription: null };
+    return { title: null, metaDescription: null, focusKeyword: null };
   } finally {
     clearTimeout(timeout);
   }
 }
 
 async function enrichWithCurrentMetadata(detail: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const primaryRemedy = detail.primary_remedy as string | null;
-  if (primaryRemedy !== 'metadata_ctr_optimization') return detail;
-
+  // Resolve page URL for ALL remedy types, not just metadata_ctr_optimization.
+  // Every recommendation needs current state context for informed decision-making.
   let pageUrl = (detail.nsd_page_url as string | null)
     || (detail.phase1_recommended_target_page as string | null)
     || null;
@@ -639,11 +642,25 @@ async function enrichWithCurrentMetadata(detail: Record<string, unknown>): Promi
   }
 
   if (!pageUrl) {
-    return { ...detail, current_page_url: null, current_seo_title: null, current_meta_description: null };
+    return {
+      ...detail,
+      current_page_url: null,
+      current_seo_title: null,
+      current_meta_description: null,
+      current_focus_keyword: null,
+      proposed_focus_keyword: (detail.topic_cluster as string | null)?.toLowerCase() || null,
+    };
   }
 
-  const { title, metaDescription } = await fetchLivePageMetadata(pageUrl);
-  return { ...detail, current_page_url: pageUrl, current_seo_title: title, current_meta_description: metaDescription };
+  const { title, metaDescription, focusKeyword } = await fetchLivePageMetadata(pageUrl);
+  return {
+    ...detail,
+    current_page_url: pageUrl,
+    current_seo_title: title,
+    current_meta_description: metaDescription,
+    current_focus_keyword: focusKeyword,
+    proposed_focus_keyword: (detail.topic_cluster as string | null)?.toLowerCase() || null,
+  };
 }
 
 async function getPhase1RecommendationDetail(opportunityId: string) {
@@ -922,7 +939,7 @@ export async function GET(req: NextRequest) {
             ? { ...p1Enriched, execution_status: p1LatestExec.execution_status, approval_status: p1LatestExec.approval_status, candidate_id: p1LatestExec.candidate_id, mutation_type: p1LatestExec.mutation_type, rollback_status: p1LatestExec.rollback_status, awaiting_approval: p1LatestExec.awaiting_approval, ready_to_execute: p1LatestExec.ready_to_execute }
             : p1Enriched;
           const p1Card = toRecommendationCard(p1DetailWithExec as unknown as OpportunityRow);
-          result = { ...p1Card, evidence_summary_long: null, execution_candidates: p1ExecCandidates, ...extractPhase1Fields(p1Detail), current_page_url: p1Enriched.current_page_url || null, current_seo_title: p1Enriched.current_seo_title || null, current_meta_description: p1Enriched.current_meta_description || null };
+          result = { ...p1Card, evidence_summary_long: null, execution_candidates: p1ExecCandidates, ...extractPhase1Fields(p1Detail), current_page_url: p1Enriched.current_page_url || null, current_seo_title: p1Enriched.current_seo_title || null, current_meta_description: p1Enriched.current_meta_description || null, current_focus_keyword: p1Enriched.current_focus_keyword || null, proposed_focus_keyword: p1Enriched.proposed_focus_keyword || null };
         } catch (detailErr: any) {
           console.error(`[intelligence] phase1-detail error for ${p1OppId}:`, detailErr.message);
           return NextResponse.json({ error: 'detail_not_found', opportunity_id: p1OppId, message: 'Could not load detail for this recommendation' }, { status: 404 });
