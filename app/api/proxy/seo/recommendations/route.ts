@@ -85,7 +85,10 @@ export async function POST(req: NextRequest) {
           const result = await rejectByOpportunityId(opportunity_id, review_notes);
           console.log(`[seo/recommendations] Reject by opportunity: mode=${result.mode}, rows=${result.rowCount}`);
           if (result.mode === 'error') {
-            return NextResponse.json({ success: false, action: 'reject', opportunity_id, reason: result.error || 'Unknown error' }, { status: 200 });
+            return NextResponse.json({ success: false, action: 'reject', opportunity_id, reason: result.error || 'Unknown error' }, { status: 500 });
+          }
+          if (result.mode === 'not_found') {
+            return NextResponse.json({ success: false, action: 'reject', opportunity_id, reason: 'Opportunity not found in execution queue or recommendations' }, { status: 404 });
           }
         } else {
           return NextResponse.json({
