@@ -864,7 +864,7 @@ function ExpandedCard({
                       <span>{row.currentValue}</span>
                     )}
                   </td>
-                  <td style={{ ...tdStyle, color: tc.text.primary, fontWeight: row.changed ? fontWeight.medium : fontWeight.regular }}>
+                  <td style={{ ...tdStyle, color: tc.text.primary, fontWeight: row.changed ? fontWeight.medium : fontWeight.normal }}>
                     {row.proposedValue ? (
                       <>
                         <span style={{ borderLeft: row.changed ? '3px solid #10b981' : 'none', paddingLeft: row.changed ? space['2'] : '0' }}>
