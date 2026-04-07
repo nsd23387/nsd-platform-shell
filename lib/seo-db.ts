@@ -237,14 +237,16 @@ export async function rejectExecutionCandidate(candidateId: string, reviewNotes?
 
 export async function approveByOpportunityId(opportunityId: string, reviewNotes?: string, opts?: { proposed_value?: string; target_page_url?: string }) {
   const p = getPool();
-  const existing = await p.query(
+
+  // Phase 1: Check for pending candidates — approve them directly
+  const pending = await p.query(
     `SELECT candidate_id FROM analytics.seo_execution_candidate
      WHERE opportunity_id = $1
        AND execution_status = 'proposed'
        AND approval_status = 'pending'`,
     [opportunityId]
   );
-  if (existing.rowCount && existing.rowCount > 0) {
+  if (pending.rowCount && pending.rowCount > 0) {
     const upd = await p.query(
       `UPDATE analytics.seo_execution_candidate
        SET approval_status = 'approved',
@@ -259,6 +261,37 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
     );
     return { mode: 'updated', rowCount: upd.rowCount };
   }
+
+  // Phase 2: Check for already-reviewed candidates (previously rejected or failed)
+  // Re-approve them instead of trying to INSERT (which would violate unique constraint)
+  const reviewed = await p.query(
+    `SELECT candidate_id, execution_status, approval_status FROM analytics.seo_execution_candidate
+     WHERE opportunity_id = $1
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [opportunityId]
+  );
+  if (reviewed.rowCount && reviewed.rowCount > 0) {
+    const row = reviewed.rows[0];
+    // If already approved/published, nothing to do
+    if (row.approval_status === 'approved' && ['approved', 'draft_applied', 'published'].includes(row.execution_status)) {
+      return { mode: 'already_approved', rowCount: 0 };
+    }
+    // Re-approve the existing candidate (e.g. was rejected, now re-approving)
+    const upd = await p.query(
+      `UPDATE analytics.seo_execution_candidate
+       SET approval_status = 'approved',
+           execution_status = 'approved',
+           reviewer_id = 'operator',
+           reviewed_at = NOW(),
+           review_notes = $2
+       WHERE candidate_id = $1`,
+      [row.candidate_id, reviewNotes || null]
+    );
+    return { mode: 're_approved', rowCount: upd.rowCount };
+  }
+
+  // Phase 3: No candidate exists at all — create from Phase 1 opportunity
   const phase1 = await p.query(
     `SELECT opportunity_id, topic_cluster, strategic_intent, max_keyword_score,
             urgency_band, confidence_score, recommended_target_page,
@@ -315,15 +348,15 @@ export async function rejectByOpportunityId(opportunityId: string, reviewNotes?:
   try {
     const p = getPool();
 
-    // Try rejecting execution candidates first
-    const existing = await p.query(
+    // Phase 1: Try rejecting pending execution candidates
+    const pending = await p.query(
       `SELECT candidate_id FROM analytics.seo_execution_candidate
        WHERE opportunity_id = $1
          AND execution_status = 'proposed'
          AND approval_status = 'pending'`,
       [opportunityId]
     );
-    if (existing.rowCount && existing.rowCount > 0) {
+    if (pending.rowCount && pending.rowCount > 0) {
       const upd = await p.query(
         `UPDATE analytics.seo_execution_candidate
          SET approval_status = 'rejected',
@@ -339,8 +372,33 @@ export async function rejectByOpportunityId(opportunityId: string, reviewNotes?:
       return { mode: 'updated', rowCount: upd.rowCount };
     }
 
-    // Fallback: reject the recommendation directly
-    // seo_recommendations has no opportunity_id column — match via supporting_data or id
+    // Phase 2: Try rejecting any existing candidate (already approved, re-rejecting)
+    const any = await p.query(
+      `SELECT candidate_id, execution_status, approval_status FROM analytics.seo_execution_candidate
+       WHERE opportunity_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [opportunityId]
+    );
+    if (any.rowCount && any.rowCount > 0) {
+      const row = any.rows[0];
+      if (row.approval_status === 'rejected') {
+        return { mode: 'already_rejected', rowCount: 0 };
+      }
+      const upd = await p.query(
+        `UPDATE analytics.seo_execution_candidate
+         SET approval_status = 'rejected',
+             execution_status = 'rejected',
+             reviewer_id = 'operator',
+             reviewed_at = NOW(),
+             review_notes = $2
+         WHERE candidate_id = $1`,
+        [row.candidate_id, reviewNotes || null]
+      );
+      return { mode: 'rejected', rowCount: upd.rowCount };
+    }
+
+    // Phase 3: No execution candidate — try seo_recommendations table
     try {
       const recUpd = await p.query(
         `UPDATE analytics.seo_recommendations
