@@ -622,22 +622,35 @@ async function fetchLivePageMetadata(url: string): Promise<{ title: string | nul
   }
 }
 
+function normalizeToFullUrl(url: string | null): string | null {
+  if (!url) return null;
+  // Already a full URL
+  if (url.startsWith('https://')) return url;
+  if (url.startsWith('http://')) return url;
+  // Bare path like /shop/business-neon-signs/ — prepend domain
+  if (url.startsWith('/')) return `https://neonsignsdepot.com${url}`;
+  // Slug without leading slash
+  return `https://neonsignsdepot.com/${url}`;
+}
+
 async function enrichWithCurrentMetadata(detail: Record<string, unknown>): Promise<Record<string, unknown>> {
   // Resolve page URL for ALL remedy types, not just metadata_ctr_optimization.
   // Every recommendation needs current state context for informed decision-making.
-  let pageUrl = (detail.nsd_page_url as string | null)
+  let pageUrl = normalizeToFullUrl(
+    (detail.nsd_page_url as string | null)
     || (detail.phase1_recommended_target_page as string | null)
-    || null;
+    || null
+  );
 
   const bucket = detail.phase1_target_page_bucket as string | null;
   if (!pageUrl && bucket && bucket.startsWith('existing:')) {
-    pageUrl = bucket.replace('existing:', '');
+    pageUrl = normalizeToFullUrl(bucket.replace('existing:', ''));
   }
 
   if (!pageUrl) {
     const cluster = detail.topic_cluster as string | null;
     if (cluster) {
-      pageUrl = await resolveGscPageForCluster(cluster);
+      pageUrl = normalizeToFullUrl(await resolveGscPageForCluster(cluster));
     }
   }
 
