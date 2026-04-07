@@ -805,7 +805,7 @@ function ExpandedCard({
 
   type NonMetaBlock = { currentState: string; proposedAction: string } | null;
   const nonMetaBlock: NonMetaBlock = (() => {
-    if (changeBlocks.length > 0) return null;
+    if (comparisonRows.length > 0) return null;
     switch (card.primary_remedy) {
       case 'strengthen_existing_page': {
         const parts = [`Current page: ${targetPageFull || targetPage || 'unknown'}`];
