@@ -457,6 +457,8 @@ export interface Phase1DetailResponse extends EngineRecommendationDetail, Phase1
   current_page_url: string | null;
   current_seo_title: string | null;
   current_meta_description: string | null;
+  current_focus_keyword: string | null;
+  proposed_focus_keyword: string | null;
 }
 
 export interface Phase1SuppressedRow {
