@@ -507,7 +507,7 @@ function RecommendationsContent() {
                 </div>
 
                 {/* ROW 2b — Target URL (always visible) */}
-                {card.nsd_page_url && (
+                {card.nsd_page_url && card.nsd_page_url !== 'https://neonsignsdepot.com/' && (
                   <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.placeholder, marginBottom: space['2'], overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {card.nsd_page_url.replace('https://neonsignsdepot.com', '')}
                   </div>
@@ -757,30 +757,41 @@ function ExpandedCard({
   // Only block approval if ALL candidates have invalid content (not just some)
   const hasInvalidContent = candidates.length > 0 && validCandidateCount === 0 && invalidCandidateCount > 0;
   // Block approval if target URL is a 404
-  const isBlocked = hasInvalidContent || has404Target;
+  const isBlocked = has404Target;
 
-  if (candidates.length === 0 && isMetadataRemedy) {
-    // No candidates yet — generate preview for both title and meta
+  // For metadata remedies, always ensure both title + meta rows exist in the comparison.
+  // Candidates may only cover one field (e.g. meta_description_update but no title_tag_refinement).
+  if (isMetadataRemedy) {
+    const hasTitle = comparisonRows.some(r => r.type === 'title');
+    const hasMeta = comparisonRows.some(r => r.type === 'meta');
     const currentTitle = p1?.current_seo_title || null;
     const currentMeta = p1?.current_meta_description || null;
-    comparisonRows.push({
-      field: 'Title tag',
-      currentValue: currentTitle,
-      proposedValue: generatedCopy.title,
-      type: 'title',
-      isPreview: true,
-      isEmpty: !currentTitle,
-      changed: currentTitle !== generatedCopy.title,
-    });
-    comparisonRows.push({
-      field: 'Meta description',
-      currentValue: currentMeta,
-      proposedValue: generatedCopy.metaDescription,
-      type: 'meta',
-      isPreview: true,
-      isEmpty: !currentMeta,
-      changed: currentMeta !== generatedCopy.metaDescription,
-    });
+
+    if (!hasTitle) {
+      // Insert title row at the beginning
+      comparisonRows.unshift({
+        field: 'Title tag',
+        currentValue: currentTitle,
+        proposedValue: generatedCopy.title,
+        type: 'title',
+        isPreview: true,
+        isEmpty: !currentTitle,
+        changed: currentTitle !== generatedCopy.title,
+      });
+    }
+    if (!hasMeta) {
+      // Insert meta row after title
+      const insertIdx = comparisonRows.findIndex(r => r.type === 'title');
+      comparisonRows.splice(insertIdx + 1, 0, {
+        field: 'Meta description',
+        currentValue: currentMeta,
+        proposedValue: generatedCopy.metaDescription,
+        type: 'meta',
+        isPreview: true,
+        isEmpty: !currentMeta,
+        changed: currentMeta !== generatedCopy.metaDescription,
+      });
+    }
   }
 
   // Always add Focus Keyword row when we have metadata changes
@@ -919,12 +930,12 @@ function ExpandedCard({
         )}
 
         {hasInvalidContent && !has404Target && (
-          <div style={{ padding: space['3'], backgroundColor: '#fef2f2', border: '1px solid #fca5a5', borderRadius: radius.md, marginBottom: space['3'] }}>
-            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#991b1b', marginBottom: space['1'] }}>
-              Content not yet generated
+          <div style={{ padding: space['3'], backgroundColor: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: radius.md, marginBottom: space['3'] }}>
+            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#92400e', marginBottom: space['1'] }}>
+              Proposed copy is a preview
             </div>
-            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: '#7f1d1d' }}>
-              This recommendation needs copy generated before it can be approved. The proposed value shown below is a preview — the actual content will be generated at execution time.
+            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: '#78350f' }}>
+              The exact title and meta description will be generated at execution time. Review the current vs. proposed comparison below — you can still approve based on the preview.
             </div>
           </div>
         )}
@@ -933,9 +944,13 @@ function ExpandedCard({
         {targetPageFull && (
           <div style={{ marginBottom: space['3'], padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.muted, borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
             <span style={{ color: tc.text.muted, fontWeight: fontWeight.medium }}>Target page: </span>
-            <a href={targetPageFull} target="_blank" rel="noopener noreferrer" style={{ color: violet[500], textDecoration: 'none' }}>
-              {targetPageFull.replace('https://neonsignsdepot.com', '')}
-            </a>
+            {targetPageFull === 'https://neonsignsdepot.com/' || targetPageFull.replace('https://neonsignsdepot.com', '') === '/' ? (
+              <span style={{ color: '#991b1b', fontStyle: 'italic' }}>Could not resolve target page — needs manual review</span>
+            ) : (
+              <a href={targetPageFull} target="_blank" rel="noopener noreferrer" style={{ color: violet[500], textDecoration: 'none' }}>
+                {targetPageFull.replace('https://neonsignsdepot.com', '')}
+              </a>
+            )}
           </div>
         )}
 
@@ -1015,7 +1030,7 @@ function ExpandedCard({
           )}
           <button
             disabled={isActionLoading || isBlocked}
-            title={has404Target ? 'Target page returned 404 — reject this recommendation' : hasInvalidContent ? 'Generate valid content before approving' : undefined}
+            title={has404Target ? 'Target page returned 404 — reject this recommendation' : undefined}
             onClick={async () => {
               setActionError(null);
               const cid = candidates.find(c => c.awaiting_approval)?.candidate_id || card.candidate_id;
@@ -1023,7 +1038,7 @@ function ExpandedCard({
             }}
             style={{ width: '100%', padding: `${space['2.5']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#fff', backgroundColor: isBlocked ? '#9CA3AF' : '#059669', border: 'none', borderRadius: radius.md, cursor: isBlocked ? 'not-allowed' : isActionLoading ? 'wait' : 'pointer', opacity: (isActionLoading || isBlocked) ? 0.5 : 1, marginBottom: space['2'] }}
           >
-            {isActionLoading ? 'Processing...' : has404Target ? 'Target page is 404 — reject instead' : hasInvalidContent ? 'Generate valid content before approving' : '✓ Approve this recommendation'}
+            {isActionLoading ? 'Processing...' : has404Target ? 'Target page is 404 — reject instead' : '✓ Approve this recommendation'}
           </button>
           <div style={{ textAlign: 'center' }}>
             {!rejectConfirm ? (
