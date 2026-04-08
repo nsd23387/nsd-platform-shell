@@ -241,7 +241,7 @@ export default function ColdOutreachPage() {
         {error && !loading && (
           <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted }}>
             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base }}>Failed to load: {error}</p>
-            <button onClick={fetchData} style={{ marginTop: space['3'], cursor: 'pointer', color: tc.text.link, background: 'none', border: 'none', fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
+            <button onClick={fetchData} style={{ marginTop: space['3'], cursor: 'pointer', color: tc.text.primary, background: 'none', textDecoration: 'underline', border: 'none', fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
               Retry
             </button>
           </div>
