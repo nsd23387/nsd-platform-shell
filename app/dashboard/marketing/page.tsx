@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useContext, useMemo } from 'react';
+import React, { useContext, useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../hooks/useRBAC';
 import { DashboardCard, AccessDenied, MarketingPerformanceScore } from '../../../components/dashboard';
@@ -61,6 +61,30 @@ function generateNarrative(
   }
 
   return parts.join(' ');
+}
+
+function ColdOutreachEngineCard() {
+  const [outreach, setOutreach] = useState<{ emailsSent: number; replyRate: number; leadsPushed: number } | null>(null);
+  useEffect(() => {
+    fetch('/api/proxy/cold-outreach-summary?window=30d')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) setOutreach({ emailsSent: d.emailsSent ?? 0, replyRate: d.replyRate ?? 0, leadsPushed: d.leadsPushed ?? 0 });
+      })
+      .catch(() => {});
+  }, []);
+
+  return (
+    <EngineCard
+      title={ENGINE_COLORS.cold_outreach.label}
+      accentColor={ENGINE_COLORS.cold_outreach.accent}
+      metrics={[
+        { label: 'Emails Sent', value: formatNumber(outreach?.emailsSent ?? 0) },
+        { label: 'Reply Rate', value: `${((outreach?.replyRate ?? 0) * 100).toFixed(1)}%` },
+        { label: 'Leads Pushed', value: formatNumber(outreach?.leadsPushed ?? 0) },
+      ]}
+    />
+  );
 }
 
 export default function MarketingExecutiveOverview() {
@@ -296,16 +320,7 @@ export default function MarketingExecutiveOverview() {
                 />
               </Link>
               <Link href={ENGINE_COLORS.cold_outreach.href} style={{ textDecoration: 'none' }}>
-                <EngineCard
-                  title={ENGINE_COLORS.cold_outreach.label}
-                  accentColor={ENGINE_COLORS.cold_outreach.accent}
-                  metrics={[
-                    { label: 'Sessions', value: formatNumber(core4.cold_outreach?.current?.sessions ?? 0) },
-                    { label: 'Quotes', value: formatNumber(core4.cold_outreach?.current?.quotes ?? 0) },
-                    { label: 'Pipeline', value: formatCurrency(core4.cold_outreach?.current?.pipeline_value_usd ?? 0) },
-                  ]}
-                  deltaPercent={core4.cold_outreach?.deltas?.sessions_pct}
-                />
+                <ColdOutreachEngineCard />
               </Link>
               <Link href={ENGINE_COLORS.post_free_content.href} style={{ textDecoration: 'none' }}>
                 <EngineCard
