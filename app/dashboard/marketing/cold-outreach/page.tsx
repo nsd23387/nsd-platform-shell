@@ -232,7 +232,7 @@ export default function ColdOutreachPage() {
         {/* Loading state */}
         {loading && (
           <div style={{ textAlign: 'center', padding: space['12'], color: tc.text.muted }}>
-            <Icon name="loader" size={24} color={tc.text.muted} />
+            <Icon name="refresh" size={24} color={tc.text.muted} />
             <p style={{ marginTop: space['3'], fontFamily: fontFamily.body, fontSize: fontSize.sm }}>Loading outreach metrics...</p>
           </div>
         )}
