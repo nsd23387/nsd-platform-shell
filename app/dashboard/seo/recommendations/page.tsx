@@ -726,11 +726,16 @@ function ExpandedCard({
   const currentFocusKeyword = p1?.current_focus_keyword || null;
   const proposedFocusKeyword = p1?.proposed_focus_keyword || card.topic_cluster?.toLowerCase() || null;
 
+  // Only build comparison rows from candidates for metadata mutations.
+  // Internal link and other non-metadata candidates should NOT appear in the comparison table.
   if (candidates.length > 0) {
     has404Target = candidates.some(ec => (ec as any).target_url_validated === false);
 
     for (const ec of candidates) {
       const mt = ec.mutation_type || '';
+      // Skip non-metadata candidates — they don't belong in the title/meta comparison
+      if (mt === 'internal_link_insertion' || mt === 'image_alt_text_improvement') continue;
+
       const isTitleMutation = mt.includes('title');
 
       if (!isValidProposedValue(ec.proposed_value, mt)) {
@@ -806,8 +811,8 @@ function ExpandedCard({
     }
   }
 
-  // Always add Focus Keyword row when we have metadata changes
-  if (comparisonRows.length > 0 || isMetadataRemedy) {
+  // Add Focus Keyword row only for metadata remedies
+  if (isMetadataRemedy && (comparisonRows.length > 0)) {
     comparisonRows.push({
       field: 'Focus keyword',
       currentValue: currentFocusKeyword,
@@ -828,7 +833,9 @@ function ExpandedCard({
 
   type NonMetaBlock = { currentState: string; proposedAction: string } | null;
   const nonMetaBlock: NonMetaBlock = (() => {
-    if (comparisonRows.length > 0) return null;
+    // Show contextual block for non-metadata remedies (internal links, backlinks, etc.)
+    // even if comparison rows exist — those are for title/meta only
+    if (isMetadataRemedy && comparisonRows.length > 0) return null;
     switch (card.primary_remedy) {
       case 'strengthen_existing_page': {
         const parts = [`Current page: ${targetPageFull || targetPage || 'unknown'}`];
@@ -941,7 +948,7 @@ function ExpandedCard({
           </div>
         )}
 
-        {hasInvalidContent && !has404Target && (
+        {hasInvalidContent && !has404Target && isMetadataRemedy && (
           <div style={{ padding: space['3'], backgroundColor: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: radius.md, marginBottom: space['3'] }}>
             <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#92400e', marginBottom: space['1'] }}>
               Proposed copy is a preview
