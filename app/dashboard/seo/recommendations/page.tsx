@@ -329,12 +329,8 @@ function RecommendationsContent() {
       setBulkProgress({ current: i + 1, total: eligible.length });
       try {
         const card = eligible[i];
-        const candidateId = card.candidate_id;
-        if (candidateId) {
-          await approveEngineCandidate({ candidate_id: candidateId });
-        } else {
-          await approveEngineCandidate({ opportunity_id: card.opportunity_id });
-        }
+        // Always use opportunity_id path — avoids stale candidate_id issues
+        await approveEngineCandidate({ opportunity_id: card.opportunity_id });
         setSections(prev => prev.map(s => ({
           ...s,
           items: s.items.map(c => c.opportunity_id === card.opportunity_id
@@ -596,14 +592,14 @@ function RecommendationsContent() {
                         <>
                           <button
                             disabled={isActionLoading}
-                            onClick={() => handleApprove(card, card.candidate_id)}
+                            onClick={() => handleApprove(card, null)}
                             style={{ padding: `${space['1']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: '#fff', backgroundColor: '#059669', border: 'none', borderRadius: radius.md, cursor: isActionLoading ? 'wait' : 'pointer', opacity: isActionLoading ? 0.6 : 1 }}
                           >
                             {isActionLoading ? '...' : '✓ Approve'}
                           </button>
                           <button
                             disabled={isActionLoading}
-                            onClick={() => handleReject(card, card.candidate_id)}
+                            onClick={() => handleReject(card, null)}
                             style={{ padding: `${space['1']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: '#991b1b', backgroundColor: '#fee2e2', border: 'none', borderRadius: radius.md, cursor: isActionLoading ? 'wait' : 'pointer', opacity: isActionLoading ? 0.6 : 1 }}
                           >
                             ✗ Reject
