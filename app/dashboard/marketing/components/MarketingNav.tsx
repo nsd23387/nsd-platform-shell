@@ -39,6 +39,12 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    title: 'Automation',
+    items: [
+      { href: '/dashboard/marketing/social', label: 'Social Automation', icon: 'campaign' },
+    ],
+  },
+  {
     title: 'Deep Dives',
     items: [
       { href: '/dashboard/marketing/seo', label: 'SEO Command Center', icon: 'search' },
