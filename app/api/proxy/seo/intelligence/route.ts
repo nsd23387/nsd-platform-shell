@@ -158,12 +158,36 @@ async function getPageOptimizations() {
 }
 
 async function getInternalLinks() {
+  // Filter out low-value internal link recommendations:
+  // - Exclude product→product sibling links (deep /shop/.../ → /shop/.../)
+  //   These are circular siblings that provide minimal SEO value
+  // - Prioritize cross-category links (blog→page, page→category, root→hub)
+  //   These actually move authority and improve crawl depth
+  // Cap at 50 to prevent the noise that comes with 900+ undifferentiated recs
   const { rows } = await pool.query(`
-    SELECT id, source_page, target_page, anchor_text, reason, priority, rule_source, created_at
+    SELECT id, source_page, target_page, anchor_text, reason, priority, rule_source, created_at,
+      CASE
+        -- Strategic value scoring: higher = more impact per link
+        WHEN source_page LIKE '%/blog/%' OR source_page LIKE '%/the-ultimate-guide%' THEN 100  -- blog → anywhere
+        WHEN source_page = 'https://neonsignsdepot.com/' OR source_page LIKE '%neonsignsdepot.com/' THEN 90  -- homepage → anywhere
+        WHEN source_page LIKE '%/create-sign%' OR source_page LIKE '%/custom-designs%' THEN 80  -- design tools → anywhere
+        WHEN source_page LIKE '%/collections/%' AND target_page LIKE '%/shop/%' THEN 70  -- category → product
+        WHEN source_page NOT LIKE '%/shop/%' AND target_page LIKE '%/shop/%' THEN 60  -- non-product → product
+        WHEN source_page LIKE '%/shop/%' AND target_page LIKE '%/collections/%' THEN 50  -- product → category
+        WHEN source_page LIKE '%/shop/%' AND target_page LIKE '%/shop/%' THEN 5  -- product → product (low value)
+        ELSE 30
+      END AS strategic_score
     FROM analytics.internal_link_recommendations
+    WHERE
+      -- Exclude product→product sibling pairs (circular, low value)
+      NOT (source_page LIKE '%/shop/%' AND target_page LIKE '%/shop/%'
+           AND split_part(regexp_replace(source_page, '^https?://[^/]+', ''), '/', 3)
+             = split_part(regexp_replace(target_page, '^https?://[^/]+', ''), '/', 3))
     ORDER BY
+      strategic_score DESC,
       CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
       created_at DESC
+    LIMIT 50
   `);
 
   return rows.map(r => ({

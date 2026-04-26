@@ -178,8 +178,50 @@ function RecommendationsContent() {
     else if (showFilter === 'approved') result = result.filter(cardIsApproved);
     if (urgencyFilter !== 'all') result = result.filter(c => c.urgency_band === urgencyFilter);
     if (typeFilter !== 'all') result = result.filter(c => c.primary_remedy === typeFilter);
-    return result;
+
+    // Consolidate by page URL: keep only the highest-scored card per (URL, cluster) pair.
+    // This reduces fragmentation where the same page gets 4-5 separate cards (title, meta,
+    // internal links, content) — they're all the same underlying optimization.
+    // Cards without nsd_page_url use topic_cluster as the grouping key.
+    const seen = new Map<string, EngineRecommendationCard>();
+    for (const card of result) {
+      const url = card.nsd_page_url || '';
+      const cluster = card.topic_cluster?.toLowerCase() || '';
+      // Group key: prefer URL when present, otherwise cluster
+      const key = url ? `url:${url}` : `cluster:${cluster}`;
+      const existing = seen.get(key);
+      if (!existing || (card.total_opportunity_score ?? 0) > (existing.total_opportunity_score ?? 0)) {
+        seen.set(key, card);
+      }
+    }
+    return Array.from(seen.values()).sort(
+      (a, b) => (b.total_opportunity_score ?? 0) - (a.total_opportunity_score ?? 0)
+    );
   }, [allCards, showFilter, urgencyFilter, typeFilter]);
+
+  // Build a per-card "secondary actions" map: for each consolidated card, list
+  // the other actions queued for the same page/cluster (shown as a chip in the UI).
+  const secondaryActionsMap = useMemo(() => {
+    const groups = new Map<string, EngineRecommendationCard[]>();
+    for (const card of allCards) {
+      const url = card.nsd_page_url || '';
+      const cluster = card.topic_cluster?.toLowerCase() || '';
+      const key = url ? `url:${url}` : `cluster:${cluster}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(card);
+    }
+    const result = new Map<string, string[]>();
+    for (const card of allCards) {
+      const url = card.nsd_page_url || '';
+      const cluster = card.topic_cluster?.toLowerCase() || '';
+      const key = url ? `url:${url}` : `cluster:${cluster}`;
+      const siblings = (groups.get(key) || []).filter(c => c.opportunity_id !== card.opportunity_id);
+      if (siblings.length > 0) {
+        result.set(card.opportunity_id, siblings.map(c => plainEnglishRemedy(c.primary_remedy)));
+      }
+    }
+    return result;
+  }, [allCards]);
 
   const pendingCount = allCards.filter(cardNeedsAction).length;
 
@@ -528,10 +570,15 @@ function RecommendationsContent() {
                   </div>
                 )}
 
-                {/* Overlap / duplication warning */}
-                {duplicateMap.has(card.opportunity_id) && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: space['1.5'], backgroundColor: '#EFF6FF', borderLeft: '3px solid #3B82F6', padding: `${space['1.5']} ${space['2.5']}`, marginBottom: space['2'], fontSize: '12px', color: '#1E40AF', fontFamily: fontFamily.body }}>
-                    Related: {duplicateMap.get(card.opportunity_id)!.join(' · ')}
+                {/* Page also needs (consolidated actions for the same page) */}
+                {secondaryActionsMap.has(card.opportunity_id) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: space['1.5'], backgroundColor: '#F0FDF4', borderLeft: '3px solid #10B981', padding: `${space['1.5']} ${space['2.5']}`, marginBottom: space['2'], fontSize: '12px', color: '#065F46', fontFamily: fontFamily.body, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: fontWeight.medium }}>This page also needs:</span>
+                    {secondaryActionsMap.get(card.opportunity_id)!.map((action, i) => (
+                      <span key={i} style={{ padding: `${space['0.5']} ${space['1.5']}`, backgroundColor: '#D1FAE5', borderRadius: radius.sm, fontSize: '11px' }}>
+                        {action}
+                      </span>
+                    ))}
                   </div>
                 )}
 
