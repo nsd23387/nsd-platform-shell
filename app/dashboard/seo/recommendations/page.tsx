@@ -38,7 +38,7 @@ function plainEnglishTitle(card: EngineRecommendationCard): string {
   }
 }
 
-function plainEnglishRemedy(remedy: string): string {
+function plainEnglishRemedy(remedy: string | null | undefined): string {
   switch (remedy) {
     case 'metadata_ctr_optimization': return 'Fix title & description';
     case 'strengthen_existing_page': return 'Improve existing page';
@@ -46,7 +46,7 @@ function plainEnglishRemedy(remedy: string): string {
     case 'add_internal_links': return 'Add internal links';
     case 'pursue_backlinks': return 'Build backlinks';
     case 'maintain_paid_support': return 'Maintain paid support';
-    default: return remedy.replace(/_/g, ' ');
+    default: return (remedy || 'SEO action').replace(/_/g, ' ');
   }
 }
 
