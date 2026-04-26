@@ -687,3 +687,62 @@ export async function updateSignalStatus(signalType: string, id: string, status:
     body: JSON.stringify({ action: 'update-status', signalType, id, status }),
   });
 }
+
+// =============================================================================
+// SEO Progress (Today's Brief + Weekly/Monthly Scoreboard)
+// =============================================================================
+
+export interface SeoProgressDelta {
+  current: number;
+  prior: number;
+  delta_pct: number;
+}
+
+export interface SeoProgressPositionDelta {
+  current: number | null;
+  prior: number | null;
+  delta: number | null;
+}
+
+export interface SeoProgressResponse {
+  today: {
+    actions_yesterday: {
+      applied: number;
+      approved: number;
+      rejected: number;
+      pages: string[];
+    };
+    needs_attention: {
+      decay_count: number;
+      cannibalization_count: number;
+      awaiting_approval: number;
+      urgent_pages: number;
+      top_decay_page: string | null;
+    };
+    pipeline_health: {
+      last_cluster_run: string | null;
+      last_decay_detection: string | null;
+      last_execution: string | null;
+      last_gsc_date: string | null;
+    };
+  };
+  week: {
+    organic_clicks: SeoProgressDelta;
+    organic_impressions: SeoProgressDelta;
+    avg_position: SeoProgressPositionDelta;
+    pages_optimized: number;
+    pages_measuring: number;
+  };
+  month: {
+    organic_clicks: SeoProgressDelta;
+    organic_impressions: SeoProgressDelta;
+    avg_position: SeoProgressPositionDelta;
+    pages_optimized: number;
+    win_rate_pct: number | null;
+    win_sample_size: number;
+  };
+}
+
+export async function getSeoProgress(): Promise<SeoProgressResponse> {
+  return seoFetch<SeoProgressResponse>('/api/proxy/seo/progress');
+}
