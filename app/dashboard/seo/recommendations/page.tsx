@@ -220,7 +220,7 @@ function RecommendationsContent() {
       const siblings = (groups.get(key) || []).filter(c => c.opportunity_id !== card.opportunity_id);
       if (siblings.length > 0) {
         // Deduplicate remedy labels (e.g., multiple "Add internal links" → show once)
-        const uniqueRemedies = [...new Set(siblings.map(c => plainEnglishRemedy(c.primary_remedy)))];
+        const uniqueRemedies = Array.from(new Set(siblings.map(c => plainEnglishRemedy(c.primary_remedy))));
         result.set(card.opportunity_id, uniqueRemedies);
       }
     }
