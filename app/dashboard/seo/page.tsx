@@ -9,8 +9,8 @@ import { useThemeColors } from '../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
 import { violet } from '../../../design/tokens/colors';
-import { getSeoOverviewKpis, getPagePerformance } from '../../../lib/seoApi';
-import type { SeoOverviewKpis, PageQueryPerformance } from '../../../lib/seoApi';
+import { getSeoOverviewKpis, getPagePerformance, getGscPipelineHealth } from '../../../lib/seoApi';
+import type { SeoOverviewKpis, PageQueryPerformance, GscPipelineHealth } from '../../../lib/seoApi';
 
 // =============================================================================
 // Overview Page — Action-first layout
@@ -20,6 +20,7 @@ function SeoOverviewContent() {
   const tc = useThemeColors();
   const [kpis, setKpis] = useState<SeoOverviewKpis | null>(null);
   const [topPages, setTopPages] = useState<PageQueryPerformance[]>([]);
+  const [gscHealth, setGscHealth] = useState<GscPipelineHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [systemExpanded, setSystemExpanded] = useState(false);
@@ -28,12 +29,13 @@ function SeoOverviewContent() {
     let cancelled = false;
     async function load() {
       try {
-        const [k, tp] = await Promise.all([
+        const [k, tp, gh] = await Promise.all([
           getSeoOverviewKpis(),
           getPagePerformance('impressions', 50),
+          getGscPipelineHealth().catch(() => null),
         ]);
         if (!cancelled) {
-          setKpis(k); setTopPages(tp); setLoading(false);
+          setKpis(k); setTopPages(tp); setGscHealth(gh); setLoading(false);
         }
       } catch (err: unknown) {
         if (!cancelled) { setError(err instanceof Error ? err.message : 'Unknown error'); setLoading(false); }
@@ -96,6 +98,36 @@ function SeoOverviewContent() {
           {pipelineRunLabel}
         </p>
       </div>
+
+      {/* GSC pipeline health banner — only shown when data is stale or degraded */}
+      {gscHealth && gscHealth.status !== 'healthy' && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: space['3'],
+          padding: `${space['3']} ${space['4']}`,
+          marginBottom: space['6'],
+          borderRadius: radius.md,
+          backgroundColor: gscHealth.status === 'stale' ? '#fef2f2' : '#fffbeb',
+          border: `1px solid ${gscHealth.status === 'stale' ? '#fecaca' : '#fde68a'}`,
+          fontFamily: fontFamily.body,
+          fontSize: fontSize.sm,
+          color: gscHealth.status === 'stale' ? '#991b1b' : '#92400e',
+        }}>
+          <span style={{ flexShrink: 0 }}>
+            {gscHealth.status === 'stale' ? '●' : '◐'}
+          </span>
+          <span>
+            <strong>GSC:</strong>{' '}
+            {gscHealth.days_behind !== null
+              ? `${gscHealth.days_behind}d behind`
+              : 'no data'}{' '}
+            — last ingested{' '}
+            {gscHealth.raw_data_last_date ?? 'never'}.
+            {gscHealth.last_error && ` Last error: ${gscHealth.last_error}`}
+          </span>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* SECTION A — Actions needed today                                  */}
