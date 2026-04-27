@@ -688,6 +688,20 @@ export async function updateSignalStatus(signalType: string, id: string, status:
   });
 }
 
+export interface GscPipelineHealth {
+  status: 'healthy' | 'warning' | 'stale' | 'credential_error';
+  credentials_valid?: boolean;
+  last_run_at: string | null;
+  last_successful_run: string | null;
+  last_error: string | null;
+  raw_data_last_date: string | null;
+  days_behind: number | null;
+}
+
+export async function getGscPipelineHealth(): Promise<GscPipelineHealth> {
+  return seoFetch<GscPipelineHealth>('/api/proxy/seo/pipeline-health');
+}
+
 // =============================================================================
 // SEO Progress (Today's Brief + Weekly/Monthly Scoreboard)
 // =============================================================================
