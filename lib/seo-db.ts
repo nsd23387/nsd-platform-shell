@@ -312,7 +312,21 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
   };
   const mapping = intentToMutation[opp.strategic_intent] || intentToMutation.improve_ctr;
   const targetUrl = opts?.target_page_url || opp.recommended_target_page || opp.resolved_existing_page_url || '';
-  const proposedValue = opts?.proposed_value || opp.bottleneck_primary || opp.strategic_intent || 'see_recommendation';
+  const topicKw = (opp.topic_cluster || 'neon signs').replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+  // Generate real proposed copy using the same templates as generate_execution_candidates()
+  let proposedValue = opts?.proposed_value || '';
+  if (!proposedValue || proposedValue.length < 30) {
+    if (mapping.mutation_type === 'meta_description_update') {
+      proposedValue = `Shop ${topicKw} at Neon Signs Depot. Browse custom LED & neon signs — free design consultation, free shipping & 2-year warranty. Order online today.`;
+    } else if (mapping.mutation_type === 'title_tag_refinement') {
+      proposedValue = `${topicKw} | Custom LED Neon Signs | Neon Signs Depot`;
+    } else if (mapping.mutation_type === 'internal_link_insertion') {
+      proposedValue = opp.topic_cluster || 'custom neon signs';
+    } else {
+      proposedValue = `Shop ${topicKw} at Neon Signs Depot.`;
+    }
+  }
   const evidenceSummary = `Phase-1 opportunity: ${opp.strategic_intent} for cluster "${opp.topic_cluster || 'unknown'}"`;
   await p.query(
     `INSERT INTO analytics.seo_execution_candidate
