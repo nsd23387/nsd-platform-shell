@@ -8,6 +8,7 @@ import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { violet } from '../../../../design/tokens/colors';
+import { getSeoActions, approveSeoAction, rejectSeoAction } from '../../../../lib/seoApi';
 
 // =============================================================================
 // Types
@@ -147,7 +148,7 @@ function ActionCard({
           {action.gsc_impressions != null && <span>{action.gsc_impressions.toLocaleString()} imp</span>}
           {action.gsc_clicks != null && <span>{action.gsc_clicks} clicks</span>}
           {action.gsc_position != null && <span>pos {action.gsc_position.toFixed(1)}</span>}
-          {action.source_keyword && <span>"{action.source_keyword}"</span>}
+          {action.source_keyword && <span>&ldquo;{action.source_keyword}&rdquo;</span>}
           <span>{timeAgo(action.created_at)}</span>
         </div>
       </div>
@@ -260,9 +261,7 @@ function ActionsContent() {
   const loadActions = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/proxy/seo/actions?status=${statusMap[tab]}&limit=50`);
-      const data = await res.json();
-      let rows = data.data || [];
+      let rows = await getSeoActions(statusMap[tab], 50) as SeoAction[];
       if (tab === 'measured') {
         rows = rows.filter((a: SeoAction) => a.outcome_label != null);
       }
@@ -278,11 +277,7 @@ function ActionsContent() {
   const handleApprove = async (id: string) => {
     setActionLoading(id);
     try {
-      await fetch('/api/proxy/seo/actions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action: 'approve' }),
-      });
+      await approveSeoAction(id);
       loadActions();
     } catch (err) {
       console.error('Approve failed:', err);
@@ -293,11 +288,7 @@ function ActionsContent() {
   const handleReject = async (id: string) => {
     setActionLoading(id);
     try {
-      await fetch('/api/proxy/seo/actions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action: 'reject' }),
-      });
+      await rejectSeoAction(id);
       loadActions();
     } catch (err) {
       console.error('Reject failed:', err);
