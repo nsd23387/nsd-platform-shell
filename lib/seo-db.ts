@@ -327,34 +327,67 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
     }
   }
   const evidenceSummary = `Phase-1 opportunity: ${opp.strategic_intent} for cluster "${opp.topic_cluster || 'unknown'}"`;
-  await p.query(
-    `INSERT INTO analytics.seo_execution_candidate
-       (generation_run_id, created_reason,
-        opportunity_id, opportunity_family, opportunity_score,
-        primary_remedy, source_confidence, mutation_type,
-        target_page_url, target_field, proposed_value, evidence_summary,
-        execution_status, approval_status, approval_required,
-        reviewer_id, reviewed_at, review_notes)
-     VALUES (
-        'shell-phase1-' || to_char(NOW(), 'YYYYMMDD-HH24MISS'), 'shell_phase1_approval',
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-        'approved', 'approved', true,
-        'operator', NOW(), $11)`,
-    [
-      opp.opportunity_id,
-      mapping.family,
-      Number(opp.max_keyword_score) || 0,
-      opp.strategic_intent || 'improve_ctr',
-      opp.confidence_score ? String(opp.confidence_score) : 'medium',
-      mapping.mutation_type,
-      targetUrl,
-      mapping.target_field,
-      proposedValue,
-      evidenceSummary,
-      reviewNotes || null,
-    ]
-  );
-  return { mode: 'inserted', rowCount: 1 };
+  // Try INSERT first; if it conflicts on any unique constraint (uq_candidate_opp_mutation
+  // OR uq_candidate_page_mutation_active), find the existing candidate and approve it instead.
+  try {
+    await p.query(
+      `INSERT INTO analytics.seo_execution_candidate
+         (generation_run_id, created_reason,
+          opportunity_id, opportunity_family, opportunity_score,
+          primary_remedy, source_confidence, mutation_type,
+          target_page_url, target_field, proposed_value, evidence_summary,
+          execution_status, approval_status, approval_required,
+          reviewer_id, reviewed_at, review_notes)
+       VALUES (
+          'shell-phase1-' || to_char(NOW(), 'YYYYMMDD-HH24MISS'), 'shell_phase1_approval',
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+          'approved', 'approved', true,
+          'operator', NOW(), $11)`,
+      [
+        opp.opportunity_id,
+        mapping.family,
+        Number(opp.max_keyword_score) || 0,
+        opp.strategic_intent || 'improve_ctr',
+        opp.confidence_score ? String(opp.confidence_score) : 'medium',
+        mapping.mutation_type,
+        targetUrl,
+        mapping.target_field,
+        proposedValue,
+        evidenceSummary,
+        reviewNotes || null,
+      ]
+    );
+    return { mode: 'inserted', rowCount: 1 };
+  } catch (insertErr: any) {
+    // Unique constraint violation — a candidate already exists for this page+mutation.
+    // Find it and approve it directly.
+    if (insertErr.code === '23505') {
+      const existing = await p.query(
+        `SELECT candidate_id, execution_status, approval_status
+         FROM analytics.seo_execution_candidate
+         WHERE (opportunity_id = $1::text OR (target_page_url = $2 AND mutation_type = $3))
+           AND execution_status NOT IN ('rejected', 'rolled_back', 'failed')
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [opp.opportunity_id, targetUrl, mapping.mutation_type]
+      );
+      if (existing.rowCount && existing.rowCount > 0) {
+        const row = existing.rows[0];
+        if (row.approval_status === 'approved') {
+          return { mode: 'already_approved', rowCount: 0 };
+        }
+        await p.query(
+          `UPDATE analytics.seo_execution_candidate
+           SET approval_status = 'approved', execution_status = 'approved',
+               reviewer_id = 'operator', reviewed_at = NOW(), review_notes = $2
+           WHERE candidate_id = $1`,
+          [row.candidate_id, reviewNotes || null]
+        );
+        return { mode: 'conflict_approved', rowCount: 1 };
+      }
+    }
+    throw insertErr;
+  }
 }
 
 export async function rejectByOpportunityId(opportunityId: string, reviewNotes?: string): Promise<{ mode: string; rowCount: number | null; error?: string }> {
