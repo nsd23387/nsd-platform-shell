@@ -289,8 +289,9 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
     return { mode: 're_approved', rowCount: upd.rowCount };
   }
 
-  // Phase 3: No candidate exists at all — create from Phase 1 opportunity
-  // seo_phase1_opportunity.opportunity_id is UUID; cast for comparison
+  // Phase 3: No candidate found by opportunity_id — search by page+mutation
+  // The candidate may have been created by generate_execution_candidates() with
+  // a different opportunity_id (MD5 hash from scoring queue, not Phase 1 UUID).
   const phase1 = await p.query(
     `SELECT opportunity_id::text, topic_cluster, strategic_intent, max_keyword_score,
             urgency_band, confidence_score, recommended_target_page,
@@ -310,39 +311,21 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
     create_page: { mutation_type: 'meta_description_update', target_field: 'meta_description', family: 'page' },
   };
   const mapping = intentToMutation[opp.strategic_intent] || intentToMutation.improve_ctr;
-  const targetUrl = opts?.target_page_url || opp.recommended_target_page || opp.resolved_existing_page_url || '';
-  const topicKw = (opp.topic_cluster || 'neon signs').replace(/\b\w/g, (c: string) => c.toUpperCase());
+  const targetUrl = opp.recommended_target_page || opp.resolved_existing_page_url || '';
 
-  // Generate real proposed copy using the same templates as generate_execution_candidates()
-  let proposedValue = opts?.proposed_value || '';
-  if (!proposedValue || proposedValue.length < 30) {
-    if (mapping.mutation_type === 'meta_description_update') {
-      proposedValue = `Shop ${topicKw} at Neon Signs Depot. Browse custom LED & neon signs — free design consultation, free shipping & 2-year warranty. Order online today.`;
-    } else if (mapping.mutation_type === 'title_tag_refinement') {
-      proposedValue = `${topicKw} | Custom LED Neon Signs | Neon Signs Depot`;
-    } else if (mapping.mutation_type === 'internal_link_insertion') {
-      proposedValue = opp.topic_cluster || 'custom neon signs';
-    } else {
-      proposedValue = `Shop ${topicKw} at Neon Signs Depot.`;
-    }
-  }
-  const evidenceSummary = `Phase-1 opportunity: ${opp.strategic_intent} for cluster "${opp.topic_cluster || 'unknown'}"`;
-
-  // Pre-check: does a candidate already exist for this page+mutation (from generate_execution_candidates)?
-  // The candidate may have a DIFFERENT opportunity_id than the Phase 1 UUID, so we match by page+mutation.
+  // Search for any existing candidate matching this page+mutation (any opportunity_id)
   if (targetUrl) {
     const pageMatch = await p.query(
       `SELECT candidate_id, execution_status, approval_status
        FROM analytics.seo_execution_candidate
        WHERE target_page_url = $1 AND mutation_type = $2
-         AND execution_status NOT IN ('rejected', 'rolled_back', 'failed')
        ORDER BY created_at DESC
        LIMIT 1`,
       [targetUrl, mapping.mutation_type]
     );
     if (pageMatch.rowCount && pageMatch.rowCount > 0) {
       const row = pageMatch.rows[0];
-      if (row.approval_status === 'approved') {
+      if (row.approval_status === 'approved' && ['approved', 'draft_applied', 'published'].includes(row.execution_status)) {
         return { mode: 'already_approved', rowCount: 0 };
       }
       await p.query(
@@ -356,20 +339,60 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
     }
   }
 
-  // No candidate exists at all — safe to INSERT
+  // Also try matching by attributed_cluster + mutation_type (for candidates without a target URL)
+  if (opp.topic_cluster) {
+    const clusterMatch = await p.query(
+      `SELECT candidate_id, execution_status, approval_status
+       FROM analytics.seo_execution_candidate
+       WHERE attributed_cluster = $1 AND mutation_type = $2
+         AND execution_status NOT IN ('rejected', 'rolled_back', 'failed')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [opp.topic_cluster, mapping.mutation_type]
+    );
+    if (clusterMatch.rowCount && clusterMatch.rowCount > 0) {
+      const row = clusterMatch.rows[0];
+      if (row.approval_status === 'approved') {
+        return { mode: 'already_approved', rowCount: 0 };
+      }
+      await p.query(
+        `UPDATE analytics.seo_execution_candidate
+         SET approval_status = 'approved', execution_status = 'approved',
+             reviewer_id = 'operator', reviewed_at = NOW(), review_notes = $2
+         WHERE candidate_id = $1`,
+        [row.candidate_id, reviewNotes || null]
+      );
+      return { mode: 'cluster_match_approved', rowCount: 1 };
+    }
+  }
+
+  // No candidate exists anywhere — create one with ON CONFLICT DO NOTHING
+  const topicKw = (opp.topic_cluster || 'neon signs').replace(/\b\w/g, (c: string) => c.toUpperCase());
+  let proposedValue = '';
+  if (mapping.mutation_type === 'meta_description_update') {
+    proposedValue = `Shop ${topicKw} at Neon Signs Depot. Browse custom LED & neon signs — free design consultation, free shipping & 2-year warranty. Order online today.`;
+  } else if (mapping.mutation_type === 'title_tag_refinement') {
+    proposedValue = `${topicKw} | Custom LED Neon Signs | Neon Signs Depot`;
+  } else if (mapping.mutation_type === 'internal_link_insertion') {
+    proposedValue = opp.topic_cluster || 'custom neon signs';
+  } else {
+    proposedValue = `Shop ${topicKw} at Neon Signs Depot.`;
+  }
+  const evidenceSummary = `Phase-1 opportunity: ${opp.strategic_intent} for cluster "${opp.topic_cluster || 'unknown'}"`;
   await p.query(
     `INSERT INTO analytics.seo_execution_candidate
        (generation_run_id, created_reason,
         opportunity_id, opportunity_family, opportunity_score,
         primary_remedy, source_confidence, mutation_type,
         target_page_url, target_field, proposed_value, evidence_summary,
+        attributed_cluster,
         execution_status, approval_status, approval_required,
         reviewer_id, reviewed_at, review_notes)
      VALUES (
         'shell-phase1-' || to_char(NOW(), 'YYYYMMDD-HH24MISS'), 'shell_phase1_approval',
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
         'approved', 'approved', true,
-        'operator', NOW(), $11)
+        'operator', NOW(), $12)
      ON CONFLICT DO NOTHING`,
     [
       opp.opportunity_id,
@@ -382,6 +405,7 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
       mapping.target_field,
       proposedValue,
       evidenceSummary,
+      opp.topic_cluster || null,
       reviewNotes || null,
     ]
   );
