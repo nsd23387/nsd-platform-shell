@@ -239,9 +239,10 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
   const p = getPool();
 
   // Phase 1: Check for pending candidates — approve them directly
+  // Cast opportunity_id to text for comparison (column is text, but UI may send UUID format)
   const pending = await p.query(
     `SELECT candidate_id FROM analytics.seo_execution_candidate
-     WHERE opportunity_id = $1
+     WHERE opportunity_id = $1::text
        AND execution_status = 'proposed'
        AND approval_status = 'pending'`,
     [opportunityId]
@@ -254,7 +255,7 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
            reviewer_id = 'operator',
            reviewed_at = NOW(),
            review_notes = $2
-       WHERE opportunity_id = $1
+       WHERE opportunity_id = $1::text
          AND execution_status = 'proposed'
          AND approval_status = 'pending'`,
       [opportunityId, reviewNotes || null]
@@ -263,21 +264,18 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
   }
 
   // Phase 2: Check for already-reviewed candidates (previously rejected or failed)
-  // Re-approve them instead of trying to INSERT (which would violate unique constraint)
   const reviewed = await p.query(
     `SELECT candidate_id, execution_status, approval_status FROM analytics.seo_execution_candidate
-     WHERE opportunity_id = $1
+     WHERE opportunity_id = $1::text
      ORDER BY created_at DESC
      LIMIT 1`,
     [opportunityId]
   );
   if (reviewed.rowCount && reviewed.rowCount > 0) {
     const row = reviewed.rows[0];
-    // If already approved/published, nothing to do
     if (row.approval_status === 'approved' && ['approved', 'draft_applied', 'published'].includes(row.execution_status)) {
       return { mode: 'already_approved', rowCount: 0 };
     }
-    // Re-approve the existing candidate (e.g. was rejected, now re-approving)
     const upd = await p.query(
       `UPDATE analytics.seo_execution_candidate
        SET approval_status = 'approved',
@@ -292,12 +290,13 @@ export async function approveByOpportunityId(opportunityId: string, reviewNotes?
   }
 
   // Phase 3: No candidate exists at all — create from Phase 1 opportunity
+  // seo_phase1_opportunity.opportunity_id is UUID; cast for comparison
   const phase1 = await p.query(
-    `SELECT opportunity_id, topic_cluster, strategic_intent, max_keyword_score,
+    `SELECT opportunity_id::text, topic_cluster, strategic_intent, max_keyword_score,
             urgency_band, confidence_score, recommended_target_page,
             bottleneck_primary, resolved_existing_page_url
      FROM analytics.seo_phase1_opportunity
-     WHERE opportunity_id = $1`,
+     WHERE opportunity_id::text = $1`,
     [opportunityId]
   );
   if (!phase1.rowCount || phase1.rowCount === 0) {

@@ -136,13 +136,14 @@ export async function POST(req: NextRequest) {
       : opportunity_id
       ? (action === 'approve' ? 'approveByOpportunityId' : 'rejectByOpportunityId')
       : (action === 'approve' ? 'approveRecommendation' : action === 'reject' ? 'rejectRecommendation' : 'submitFeedback');
-    console.error(`[seo/recommendations] POST Error | action=${action} mode=${approvalMode} helper=${helperName}:`, err.message);
+    console.error(`[seo/recommendations] POST Error | action=${action} mode=${approvalMode} helper=${helperName}:`, err.message, err.stack?.split('\n')[1]);
     const notFound = err.message?.includes('not found');
     const status = notFound ? 404 : 500;
     const msg = notFound ? err.message : 'Failed to process recommendation action';
     return NextResponse.json({
       error: msg, action, mode: approvalMode, target: target || null,
       has_candidate_id: !!candidate_id, has_opportunity_id: !!opportunity_id,
+      debug_error: err.message,
     }, { status });
   }
 }
