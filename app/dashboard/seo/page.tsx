@@ -217,7 +217,7 @@ function SeoOverviewContent() {
                   <>
                     {progress.today.needs_attention.awaiting_approval > 0 && (
                       <div>
-                        <Link href="/dashboard/seo/recommendations" style={{ color: violet[500], textDecoration: 'none', fontWeight: fontWeight.medium }}>
+                        <Link href="/dashboard/seo/actions" style={{ color: violet[500], textDecoration: 'none', fontWeight: fontWeight.medium }}>
                           {progress.today.needs_attention.awaiting_approval} recommendation{progress.today.needs_attention.awaiting_approval === 1 ? '' : 's'}
                         </Link>
                         {progress.today.needs_attention.urgent_pages > 0 && <span style={{ color: '#991b1b' }}> ({progress.today.needs_attention.urgent_pages} urgent)</span>}
@@ -332,7 +332,7 @@ function SeoOverviewContent() {
             </div>
           )}
           <Link
-            href="/dashboard/seo/recommendations"
+            href="/dashboard/seo/actions"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: space['1'],
               fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
@@ -423,7 +423,7 @@ function SeoOverviewContent() {
                     </div>
                   </div>
                   <Link
-                    href="/dashboard/seo/recommendations"
+                    href="/dashboard/seo/actions"
                     style={{
                       fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
                       color: violet[500], textDecoration: 'none', whiteSpace: 'nowrap', marginLeft: space['3'],
