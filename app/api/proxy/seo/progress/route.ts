@@ -99,19 +99,25 @@ export async function GET() {
     const p = getPool();
 
     // ── TODAY: actions taken in last 24h ─────────────────────────────────────
+    // Query both old pipeline (seo_execution_log) and new pipeline (seo_action)
     const yesterdayApplied = await p.query<{ count: string; target_url: string | null }>(
-      `SELECT COUNT(*) AS count, target_url
-       FROM analytics.seo_execution_log
-       WHERE executed_at >= NOW() - INTERVAL '24 hours'
+      `SELECT COUNT(*) AS count, target_url FROM (
+         SELECT target_url FROM analytics.seo_execution_log WHERE executed_at >= NOW() - INTERVAL '24 hours'
+         UNION ALL
+         SELECT target_url FROM analytics.seo_action WHERE executed_at >= NOW() - INTERVAL '24 hours' AND status IN ('published', 'measuring')
+       ) combined
        GROUP BY target_url`,
     ).catch(() => ({ rows: [] as Array<{ count: string; target_url: string | null }> }));
 
     const yesterdayApprovals = await p.query<{ approved: string; rejected: string }>(
       `SELECT
-         COUNT(*) FILTER (WHERE approval_status = 'approved')::text AS approved,
-         COUNT(*) FILTER (WHERE approval_status = 'rejected')::text AS rejected
-       FROM analytics.seo_execution_candidate
-       WHERE reviewed_at >= NOW() - INTERVAL '24 hours'`,
+         COUNT(*) FILTER (WHERE status = 'approved' OR status = 'published')::text AS approved,
+         COUNT(*) FILTER (WHERE status = 'rejected')::text AS rejected
+       FROM (
+         SELECT approval_status AS status, reviewed_at FROM analytics.seo_execution_candidate WHERE reviewed_at >= NOW() - INTERVAL '24 hours'
+         UNION ALL
+         SELECT status, human_decided_at AS reviewed_at FROM analytics.seo_action WHERE (human_decided_at >= NOW() - INTERVAL '24 hours' OR agent_reviewed_at >= NOW() - INTERVAL '24 hours')
+       ) combined`,
     ).catch(() => ({ rows: [{ approved: '0', rejected: '0' }] }));
 
     // ── TODAY: needs attention ──────────────────────────────────────────────
@@ -127,18 +133,14 @@ export async function GET() {
        WHERE status = 'new' AND canonical_confidence = 'high'`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
+    // Count from both old pipeline and new seo_action table
     const awaitingApproval = await p.query<{ count: string; urgent: string }>(
       `SELECT
-         COUNT(*)::text AS count,
-         COUNT(*) FILTER (WHERE
-           EXISTS (
-             SELECT 1 FROM analytics.seo_phase1_opportunity p
-             WHERE p.opportunity_id::text = c.opportunity_id::text
-               AND p.urgency_band = 'high'
-           )
-         )::text AS urgent
-       FROM analytics.seo_execution_candidate c
-       WHERE c.execution_status = 'proposed' AND c.approval_status = 'pending'`,
+         (COALESCE(old.cnt, 0) + COALESCE(new.cnt, 0))::text AS count,
+         COALESCE(new.cnt, 0)::text AS urgent
+       FROM
+         (SELECT COUNT(*) AS cnt FROM analytics.seo_execution_candidate WHERE execution_status = 'proposed' AND approval_status = 'pending') old,
+         (SELECT COUNT(*) AS cnt FROM analytics.seo_action WHERE status IN ('proposed', 'reviewed')) new`,
     ).catch(() => ({ rows: [{ count: '0', urgent: '0' }] }));
 
     // Pipeline health: when did each major job last run?
@@ -167,33 +169,41 @@ export async function GET() {
     const month = await gscWindow(p, 30, 0);
     const monthPrior = await gscWindow(p, 60, 30);
 
+    // Pages optimized: union old + new pipelines
     const pagesOptimizedWeek = await p.query<{ count: string }>(
-      `SELECT COUNT(DISTINCT target_url)::text AS count
-       FROM analytics.seo_execution_log
-       WHERE executed_at >= NOW() - INTERVAL '7 days'`,
+      `SELECT COUNT(DISTINCT target_url)::text AS count FROM (
+         SELECT target_url FROM analytics.seo_execution_log WHERE executed_at >= NOW() - INTERVAL '7 days'
+         UNION ALL
+         SELECT target_url FROM analytics.seo_action WHERE executed_at >= NOW() - INTERVAL '7 days' AND status IN ('published', 'measuring')
+       ) u`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
     const pagesOptimizedMonth = await p.query<{ count: string }>(
-      `SELECT COUNT(DISTINCT target_url)::text AS count
-       FROM analytics.seo_execution_log
-       WHERE executed_at >= NOW() - INTERVAL '30 days'`,
+      `SELECT COUNT(DISTINCT target_url)::text AS count FROM (
+         SELECT target_url FROM analytics.seo_execution_log WHERE executed_at >= NOW() - INTERVAL '30 days'
+         UNION ALL
+         SELECT target_url FROM analytics.seo_action WHERE executed_at >= NOW() - INTERVAL '30 days' AND status IN ('published', 'measuring')
+       ) u`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
     const pagesMeasuring = await p.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count
-       FROM analytics.seo_execution_log
-       WHERE measured_at_14d IS NULL
-         AND executed_at >= NOW() - INTERVAL '14 days'`,
+      `SELECT COUNT(*)::text AS count FROM (
+         SELECT 1 FROM analytics.seo_execution_log WHERE measured_at_14d IS NULL AND executed_at >= NOW() - INTERVAL '14 days'
+         UNION ALL
+         SELECT 1 FROM analytics.seo_action WHERE measured_at_14d IS NULL AND executed_at >= NOW() - INTERVAL '14 days' AND status IN ('published', 'measuring')
+       ) u`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
-    // Win rate: % of measured outcomes labeled 'positive' over last 90 days
+    // Win rate: from both old learning_outcomes AND new seo_action
     const winRate = await p.query<{ positive: string; total: string }>(
       `SELECT
-         COUNT(*) FILTER (WHERE outcome_label = 'positive')::text AS positive,
+         COUNT(*) FILTER (WHERE label = 'positive')::text AS positive,
          COUNT(*)::text AS total
-       FROM analytics.seo_learning_outcomes
-       WHERE measurement_date >= CURRENT_DATE - INTERVAL '90 days'
-         AND outcome_label IN ('positive', 'negative', 'neutral')`,
+       FROM (
+         SELECT outcome_label AS label FROM analytics.seo_learning_outcomes WHERE measurement_date >= CURRENT_DATE - INTERVAL '90 days' AND outcome_label IN ('positive', 'negative', 'neutral')
+         UNION ALL
+         SELECT outcome_label AS label FROM analytics.seo_action WHERE measured_at_14d IS NOT NULL AND outcome_label IN ('positive', 'negative', 'neutral')
+       ) u`,
     ).catch(() => ({ rows: [{ positive: '0', total: '0' }] }));
 
     const winTotal = parseInt(winRate.rows[0]?.total || '0', 10);
