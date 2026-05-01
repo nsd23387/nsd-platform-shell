@@ -692,6 +692,29 @@ export async function updateSignalStatus(signalType: string, id: string, status:
 // SEO Progress (Today's Brief + Weekly/Monthly Scoreboard)
 // =============================================================================
 
+// =============================================================================
+// SEO Actions (simplified pipeline)
+// =============================================================================
+
+export async function getSeoActions(status: string, limit = 50): Promise<unknown[]> {
+  const data = await seoFetch<{ data: unknown[] }>(`/api/proxy/seo/actions?status=${status}&limit=${limit}`);
+  return data.data ?? [];
+}
+
+export async function approveSeoAction(id: string, notes?: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/actions', {
+    method: 'POST',
+    body: JSON.stringify({ id, action: 'approve', notes }),
+  });
+}
+
+export async function rejectSeoAction(id: string, notes?: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/actions', {
+    method: 'POST',
+    body: JSON.stringify({ id, action: 'reject', notes }),
+  });
+}
+
 export interface SeoProgressDelta {
   current: number;
   prior: number;
