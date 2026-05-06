@@ -361,6 +361,7 @@ function GoogleAdsPerformanceSection() {
 function GoogleAdsQualitySection() {
   const { data, loading, error } = useAttributionData<QualityRow>('marketing/attribution', { view: 'google-ads-quality' });
   const { th, td } = useTableStyles();
+  const tc = useThemeColors();
 
   if (loading) return <LoadingState />;
   if (error) return <DashboardCard title="Error" error={error} />;
@@ -369,7 +370,6 @@ function GoogleAdsQualitySection() {
   const totalQuotes = data.reduce((s, r) => s + r.total_submitted_quotes, 0);
   const exactQuotes = data.filter(r => r.join_confidence === 'exact_campaign_id' || r.join_confidence === 'exact_campaign_adgroup_id').reduce((s, r) => s + r.total_submitted_quotes, 0);
   const exactPct = totalQuotes > 0 ? ((exactQuotes / totalQuotes) * 100).toFixed(1) : '0.0';
-  const tc = useThemeColors();
 
   return (
     <div>

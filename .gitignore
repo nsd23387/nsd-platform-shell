@@ -37,3 +37,4 @@ next-env.d.ts
 
 # Package lock (optional - include if you want reproducible builds)
 # package-lock.json
+.vercel
