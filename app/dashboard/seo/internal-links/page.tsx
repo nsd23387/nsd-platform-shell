@@ -57,7 +57,7 @@ function InternalLinksContent() {
           Internal Link Recommendations
         </h1>
         <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.lg, color: tc.text.muted, lineHeight: lineHeight.normal }}>
-          Topic-cluster and crawl-depth based linking suggestions. {data.length} recommendations.
+          Top {data.length} strategic linking opportunities. Filtered to exclude low-value product-to-product sibling links.
         </p>
       </div>
 

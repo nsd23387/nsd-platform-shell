@@ -38,7 +38,7 @@ function plainEnglishTitle(card: EngineRecommendationCard): string {
   }
 }
 
-function plainEnglishRemedy(remedy: string): string {
+function plainEnglishRemedy(remedy: string | null | undefined): string {
   switch (remedy) {
     case 'metadata_ctr_optimization': return 'Fix title & description';
     case 'strengthen_existing_page': return 'Improve existing page';
@@ -46,7 +46,7 @@ function plainEnglishRemedy(remedy: string): string {
     case 'add_internal_links': return 'Add internal links';
     case 'pursue_backlinks': return 'Build backlinks';
     case 'maintain_paid_support': return 'Maintain paid support';
-    default: return remedy.replace(/_/g, ' ');
+    default: return (remedy || 'SEO action').replace(/_/g, ' ');
   }
 }
 
@@ -174,12 +174,58 @@ function RecommendationsContent() {
   // ── Filtered cards ─────────────────────────────────────────────────────
   const filteredCards = useMemo(() => {
     let result = allCards;
+
+    // Exclude internal links — they belong on the Internal Links page, not here.
+    // Each IL opportunity targets a different page URL, creating dozens of near-identical
+    // cards that bury the actionable metadata/content recommendations.
+    result = result.filter(c => c.primary_remedy !== 'add_internal_links');
+
     if (showFilter === 'needs_action') result = result.filter(cardNeedsAction);
     else if (showFilter === 'approved') result = result.filter(cardIsApproved);
     if (urgencyFilter !== 'all') result = result.filter(c => c.urgency_band === urgencyFilter);
     if (typeFilter !== 'all') result = result.filter(c => c.primary_remedy === typeFilter);
-    return result;
+
+    // Consolidate by topic cluster: keep only the highest-scored card per cluster.
+    // One cluster = one page plan. Secondary actions (strengthen, fix meta, etc.)
+    // for the same cluster are shown as chips on the primary card.
+    const seen = new Map<string, EngineRecommendationCard>();
+    for (const card of result) {
+      const cluster = (card.topic_cluster || '').toLowerCase();
+      const key = cluster || card.opportunity_id; // fallback to ID for unclustered
+      const existing = seen.get(key);
+      if (!existing || (card.total_opportunity_score ?? 0) > (existing.total_opportunity_score ?? 0)) {
+        seen.set(key, card);
+      }
+    }
+    return Array.from(seen.values()).sort(
+      (a, b) => (b.total_opportunity_score ?? 0) - (a.total_opportunity_score ?? 0)
+    );
   }, [allCards, showFilter, urgencyFilter, typeFilter]);
+
+  // Build a per-card "secondary actions" map: for each consolidated card, list
+  // the other actions queued for the same cluster (shown as a chip in the UI).
+  const secondaryActionsMap = useMemo(() => {
+    // Include all allCards (including IL) so secondary chips show "Add internal links"
+    const groups = new Map<string, EngineRecommendationCard[]>();
+    for (const card of allCards) {
+      const cluster = (card.topic_cluster || '').toLowerCase();
+      const key = cluster || card.opportunity_id;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(card);
+    }
+    const result = new Map<string, string[]>();
+    for (const card of allCards) {
+      const cluster = (card.topic_cluster || '').toLowerCase();
+      const key = cluster || card.opportunity_id;
+      const siblings = (groups.get(key) || []).filter(c => c.opportunity_id !== card.opportunity_id);
+      if (siblings.length > 0) {
+        // Deduplicate remedy labels (e.g., multiple "Add internal links" → show once)
+        const uniqueRemedies = Array.from(new Set(siblings.map(c => plainEnglishRemedy(c.primary_remedy))));
+        result.set(card.opportunity_id, uniqueRemedies);
+      }
+    }
+    return result;
+  }, [allCards]);
 
   const pendingCount = allCards.filter(cardNeedsAction).length;
 
@@ -448,7 +494,7 @@ function RecommendationsContent() {
           <option value="metadata_ctr_optimization">Fix title &amp; description</option>
           <option value="strengthen_existing_page">Improve existing page</option>
           <option value="create_new_page">Create new page</option>
-          <option value="add_internal_links">Add internal links</option>
+          {/* Internal links excluded — shown on Internal Links page */}
           <option value="pursue_backlinks">Build backlinks</option>
         </select>
       </div>
@@ -528,10 +574,15 @@ function RecommendationsContent() {
                   </div>
                 )}
 
-                {/* Overlap / duplication warning */}
-                {duplicateMap.has(card.opportunity_id) && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: space['1.5'], backgroundColor: '#EFF6FF', borderLeft: '3px solid #3B82F6', padding: `${space['1.5']} ${space['2.5']}`, marginBottom: space['2'], fontSize: '12px', color: '#1E40AF', fontFamily: fontFamily.body }}>
-                    Related: {duplicateMap.get(card.opportunity_id)!.join(' · ')}
+                {/* Page also needs (consolidated actions for the same page) */}
+                {secondaryActionsMap.has(card.opportunity_id) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: space['1.5'], backgroundColor: '#F0FDF4', borderLeft: '3px solid #10B981', padding: `${space['1.5']} ${space['2.5']}`, marginBottom: space['2'], fontSize: '12px', color: '#065F46', fontFamily: fontFamily.body, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: fontWeight.medium }}>This page also needs:</span>
+                    {secondaryActionsMap.get(card.opportunity_id)!.map((action, i) => (
+                      <span key={i} style={{ padding: `${space['0.5']} ${space['1.5']}`, backgroundColor: '#D1FAE5', borderRadius: radius.sm, fontSize: '11px' }}>
+                        {action}
+                      </span>
+                    ))}
                   </div>
                 )}
 

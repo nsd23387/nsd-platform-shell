@@ -687,3 +687,99 @@ export async function updateSignalStatus(signalType: string, id: string, status:
     body: JSON.stringify({ action: 'update-status', signalType, id, status }),
   });
 }
+
+export interface GscPipelineHealth {
+  status: 'healthy' | 'warning' | 'stale' | 'credential_error';
+  credentials_valid?: boolean;
+  last_run_at: string | null;
+  last_successful_run: string | null;
+  last_error: string | null;
+  raw_data_last_date: string | null;
+  days_behind: number | null;
+}
+
+export async function getGscPipelineHealth(): Promise<GscPipelineHealth> {
+  return seoFetch<GscPipelineHealth>('/api/proxy/seo/pipeline-health');
+}
+
+// =============================================================================
+// SEO Progress (Today's Brief + Weekly/Monthly Scoreboard)
+// =============================================================================
+
+// =============================================================================
+// SEO Actions (simplified pipeline)
+// =============================================================================
+
+export async function getSeoActions(status: string, limit = 50): Promise<unknown[]> {
+  const data = await seoFetch<{ data: unknown[] }>(`/api/proxy/seo/actions?status=${status}&limit=${limit}`);
+  return data.data ?? [];
+}
+
+export async function approveSeoAction(id: string, notes?: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/actions', {
+    method: 'POST',
+    body: JSON.stringify({ id, action: 'approve', notes }),
+  });
+}
+
+export async function rejectSeoAction(id: string, notes?: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/actions', {
+    method: 'POST',
+    body: JSON.stringify({ id, action: 'reject', notes }),
+  });
+}
+
+export interface SeoProgressDelta {
+  current: number;
+  prior: number;
+  delta_pct: number;
+}
+
+export interface SeoProgressPositionDelta {
+  current: number | null;
+  prior: number | null;
+  delta: number | null;
+}
+
+export interface SeoProgressResponse {
+  today: {
+    actions_yesterday: {
+      applied: number;
+      approved: number;
+      rejected: number;
+      pages: string[];
+    };
+    needs_attention: {
+      decay_count: number;
+      cannibalization_count: number;
+      awaiting_approval: number;
+      urgent_pages: number;
+      top_decay_page: string | null;
+    };
+    pipeline_health: {
+      last_cluster_run: string | null;
+      last_decay_detection: string | null;
+      last_execution: string | null;
+      last_gsc_date: string | null;
+    };
+  };
+  week: {
+    organic_clicks: SeoProgressDelta;
+    organic_impressions: SeoProgressDelta;
+    avg_position: SeoProgressPositionDelta;
+    pages_optimized: number;
+    pages_measuring: number;
+  };
+  month: {
+    organic_clicks: SeoProgressDelta;
+    organic_impressions: SeoProgressDelta;
+    avg_position: SeoProgressPositionDelta;
+    pages_optimized: number;
+    win_rate_pct: number | null;
+    win_sample_size: number;
+  };
+}
+
+export async function getSeoProgress(): Promise<SeoProgressResponse> {
+  return seoFetch<SeoProgressResponse>('/api/proxy/seo/progress');
+}
