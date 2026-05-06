@@ -437,6 +437,110 @@ export async function getSalesDashboardData(period: TimePeriod = '30d') {
 }
 
 // ============================================
+// Attribution APIs
+// ============================================
+
+/**
+ * GET /activity-spine/marketing/attribution?view=source-funnel
+ * All-time source-to-paid funnel aggregated by source_group.
+ * Optional filter: source_group
+ */
+export async function getSourceToPaidFunnel(
+  params: Record<string, string> = {}
+): Promise<{ data: unknown[]; meta: { view: string } }> {
+  if (isApiDisabled) return { data: [], meta: { view: 'source-funnel' } };
+  const sp = new URLSearchParams({ view: 'source-funnel', ...params });
+  const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
+    method: 'GET',
+    headers: buildHeaders(),
+  });
+  if (!res.ok) throw new ActivitySpineError(`Attribution source-funnel: ${res.status}`, res.status);
+  return res.json();
+}
+
+/**
+ * GET /activity-spine/marketing/attribution?view=channel-revenue
+ * Daily channel revenue. Defaults to last 30 days.
+ * Optional filters: start, end, source_group
+ */
+export async function getChannelRevenueDaily(
+  params: Record<string, string> = {}
+): Promise<{ data: unknown[]; meta: { view: string } }> {
+  if (isApiDisabled) return { data: [], meta: { view: 'channel-revenue' } };
+  const sp = new URLSearchParams({ view: 'channel-revenue', ...params });
+  const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
+    method: 'GET',
+    headers: buildHeaders(),
+  });
+  if (!res.ok) throw new ActivitySpineError(`Attribution channel-revenue: ${res.status}`, res.status);
+  return res.json();
+}
+
+/**
+ * GET /activity-spine/marketing/attribution?view=google-ads-performance
+ * Google Ads × QMS join with join_confidence tiers. Defaults to last 30 days.
+ * Optional filters: start, end, join_confidence
+ */
+export async function getGoogleAdsQuotePerformance(
+  params: Record<string, string> = {}
+): Promise<{ data: unknown[]; meta: { view: string } }> {
+  if (isApiDisabled) return { data: [], meta: { view: 'google-ads-performance' } };
+  const sp = new URLSearchParams({ view: 'google-ads-performance', ...params });
+  const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
+    method: 'GET',
+    headers: buildHeaders(),
+  });
+  if (!res.ok) throw new ActivitySpineError(`Attribution google-ads-performance: ${res.status}`, res.status);
+  return res.json();
+}
+
+/**
+ * GET /activity-spine/marketing/attribution?view=google-ads-quality
+ * Attribution precision diagnostic — all-time confidence tier breakdown.
+ */
+export async function getGoogleAdsAttributionQuality(): Promise<{ data: unknown[]; meta: { view: string } }> {
+  if (isApiDisabled) return { data: [], meta: { view: 'google-ads-quality' } };
+  const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?view=google-ads-quality`, {
+    method: 'GET',
+    headers: buildHeaders(),
+  });
+  if (!res.ok) throw new ActivitySpineError(`Attribution google-ads-quality: ${res.status}`, res.status);
+  return res.json();
+}
+
+/**
+ * GET /activity-spine/seo/attribution?view=page-performance
+ * SEO pages with Search Console + quote outcome data. Ordered by revenue DESC.
+ * Optional params: limit, page
+ */
+export async function getSeoPageQuotePerformance(
+  params: Record<string, string> = {}
+): Promise<{ data: unknown[]; meta: { view: string } }> {
+  if (isApiDisabled) return { data: [], meta: { view: 'page-performance' } };
+  const sp = new URLSearchParams({ view: 'page-performance', ...params });
+  const res = await fetch(`${sdkConfig.activitySpineUrl}/seo/attribution?${sp}`, {
+    method: 'GET',
+    headers: buildHeaders(),
+  });
+  if (!res.ok) throw new ActivitySpineError(`Attribution seo page-performance: ${res.status}`, res.status);
+  return res.json();
+}
+
+/**
+ * GET /activity-spine/seo/attribution?view=cluster-performance
+ * Topic cluster rollup with revenue and top pages.
+ */
+export async function getSeoClusterQuotePerformance(): Promise<{ data: unknown[]; meta: { view: string } }> {
+  if (isApiDisabled) return { data: [], meta: { view: 'cluster-performance' } };
+  const res = await fetch(`${sdkConfig.activitySpineUrl}/seo/attribution?view=cluster-performance`, {
+    method: 'GET',
+    headers: buildHeaders(),
+  });
+  if (!res.ok) throw new ActivitySpineError(`Attribution seo cluster-performance: ${res.status}`, res.status);
+  return res.json();
+}
+
+// ============================================
 // Marketing Metrics API
 // ============================================
 

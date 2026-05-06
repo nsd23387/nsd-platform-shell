@@ -39,11 +39,18 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    title: 'Automation',
+    items: [
+      { href: '/dashboard/marketing/social', label: 'Social Automation', icon: 'campaign' },
+    ],
+  },
+  {
     title: 'Deep Dives',
     items: [
       { href: '/dashboard/marketing/seo', label: 'SEO Command Center', icon: 'search' },
       { href: '/dashboard/marketing/google-ads', label: 'Google Ads War Room', icon: 'target' },
       { href: '/dashboard/marketing/ahrefs', label: 'Ahrefs Intelligence', icon: 'trending' },
+      { href: '/dashboard/marketing/attribution', label: 'Attribution Intelligence', icon: 'metrics' },
     ],
   },
   {
