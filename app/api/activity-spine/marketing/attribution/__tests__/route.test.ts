@@ -42,8 +42,8 @@ describe('GET /api/activity-spine/marketing/attribution', () => {
         paid_quotes: '40',
         paid_conversion_rate: '33.3',
         paid_revenue_cents: '500000',
+        avg_paid_value_cents: '12500',
         test_quotes: '5',
-        quotes_with_origin_page: '110',
       }],
     });
 
@@ -60,11 +60,11 @@ describe('GET /api/activity-spine/marketing/attribution', () => {
     expect(row.submitted_quotes).toBe(120);
     expect(row.paid_quotes).toBe(40);
     expect(row.paid_revenue_usd).toBeCloseTo(5000, 2);
-    // Derived in the route until ODS exposes it directly.
+    // Sourced from metrics.source_to_paid_funnel.avg_paid_value_cents.
     expect(row.avg_paid_value_usd_approx).toBeCloseTo(125, 2);
   });
 
-  it('source-funnel: avg_paid_value_usd_approx is 0 when paid_quotes is 0', async () => {
+  it('source-funnel: avg_paid_value_usd_approx is 0 when avg_paid_value_cents is null', async () => {
     mockQuery.mockResolvedValueOnce({
       rows: [{
         source_group: 'organic',
@@ -72,8 +72,8 @@ describe('GET /api/activity-spine/marketing/attribution', () => {
         paid_quotes: '0',
         paid_conversion_rate: '0',
         paid_revenue_cents: '0',
+        avg_paid_value_cents: null,
         test_quotes: '0',
-        quotes_with_origin_page: '50',
       }],
     });
     const res = await GET(req('/o?view=source-funnel'));
@@ -90,7 +90,6 @@ describe('GET /api/activity-spine/marketing/attribution', () => {
         paid_quotes: '3',
         paid_conversion_rate: '30.0',
         paid_revenue_cents: '120000',
-        test_quotes: '0',
         quotes_with_origin_page: '8',
       }],
     });
