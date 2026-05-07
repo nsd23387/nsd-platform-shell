@@ -14,7 +14,10 @@ type View =
   | 'source-funnel'
   | 'channel-revenue'
   | 'google-ads-performance'
-  | 'google-ads-quality';
+  | 'google-ads-quality'
+  | 'review-snapshot';
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function defaultWindow30d() {
   const end = new Date();
@@ -40,6 +43,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ data: await getGoogleAdsPerformance(sp), meta: { view } });
       case 'google-ads-quality':
         return NextResponse.json({ data: await getGoogleAdsQuality(), meta: { view } });
+      case 'review-snapshot':
+        return await getReviewSnapshotResponse(sp);
       default:
         return NextResponse.json({ error: `Unknown view: ${view}` }, { status: 400 });
     }
@@ -215,4 +220,51 @@ async function getGoogleAdsQuality() {
     pct_of_quotes: r.pct_of_quotes !== null ? Number(r.pct_of_quotes) : null,
     pct_of_spend: r.pct_of_spend !== null ? Number(r.pct_of_spend) : null,
   }));
+}
+
+async function getReviewSnapshotResponse(sp: URLSearchParams): Promise<NextResponse> {
+  const startParam = sp.get('start_date');
+  const endParam = sp.get('end_date');
+
+  if (startParam !== null && !ISO_DATE_RE.test(startParam)) {
+    return NextResponse.json({ error: 'start_date must be YYYY-MM-DD' }, { status: 400 });
+  }
+  if (endParam !== null && !ISO_DATE_RE.test(endParam)) {
+    return NextResponse.json({ error: 'end_date must be YYYY-MM-DD' }, { status: 400 });
+  }
+
+  const { start, end } = startParam && endParam
+    ? { start: startParam, end: endParam }
+    : defaultWindow7d();
+
+  if (new Date(`${start}T00:00:00Z`).getTime() > new Date(`${end}T00:00:00Z`).getTime()) {
+    return NextResponse.json({ error: 'start_date must be on or before end_date' }, { status: 400 });
+  }
+
+  const { rows } = await pool.query(
+    `SELECT metrics.get_attribution_review_snapshot($1::date, $2::date) AS snapshot`,
+    [start, end]
+  );
+
+  const snapshot = rows[0]?.snapshot ?? null;
+  return NextResponse.json({
+    data: snapshot,
+    meta: {
+      view: 'review-snapshot',
+      window_start: start,
+      window_end: end,
+      generated_at: new Date().toISOString(),
+      source: 'metrics.get_attribution_review_snapshot',
+    },
+  });
+}
+
+function defaultWindow7d() {
+  const end = new Date();
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() - 7);
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
 }

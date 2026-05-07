@@ -147,3 +147,142 @@ export interface AttributionResponse<T> {
   data: T[];
   meta: { view: string };
 }
+
+// =============================================================================
+// Attribution Review Snapshot (P1.3)
+// =============================================================================
+
+export type AttributionPrecisionStatus = 'good' | 'transitioning' | 'weak' | 'no_data';
+
+export type AttributionWarningSeverity = 'info' | 'warning' | 'critical';
+
+export interface AttributionReviewWarning {
+  id: string;
+  severity: AttributionWarningSeverity;
+  message: string;
+}
+
+export type AttributionReviewItemGroup =
+  | 'paid_ads'
+  | 'seo'
+  | 'attribution_quality'
+  | 'data_pipeline';
+
+export interface AttributionReviewItem {
+  id: string;
+  group: AttributionReviewItemGroup;
+  severity: AttributionWarningSeverity;
+  title: string;
+  detail?: string | null;
+  /** Internal sort hint produced by the SQL function; not for display. */
+  sort_value?: string | null;
+}
+
+export interface SourceSummary {
+  total_submitted_quotes: number;
+  total_paid_quotes: number;
+  paid_conversion_rate: number | null;
+  paid_revenue_cents: number;
+  test_quotes: number;
+  top_source_group_by_revenue: string | null;
+  top_source_group_by_paid_quotes: string | null;
+  lowest_performing_source_group_by_conversion: string | null;
+  direct_submitted_quotes: number;
+  google_ads_submitted_quotes: number;
+  organic_search_submitted_quotes: number;
+  sales_engine_outbound_submitted_quotes: number;
+}
+
+export interface ChannelDailySummary {
+  window_start: string;
+  window_end: string;
+  total_paid_revenue_cents: number;
+  best_revenue_day: string | null;
+  worst_revenue_day: string | null;
+  revenue_by_source_group: Array<{
+    source_group: string;
+    submitted_quotes: number;
+    paid_quotes: number;
+    paid_revenue_cents: number;
+  }>;
+}
+
+export interface GoogleAdsCampaignRef {
+  google_campaign_id: string | null;
+  google_campaign_name: string | null;
+  paid_revenue_cents?: number;
+  spend_usd?: number;
+}
+
+export interface JoinConfidenceDistributionRow {
+  join_confidence: JoinConfidenceTier | string;
+  submitted_quotes: number;
+  paid_revenue_cents: number;
+  ad_cost_usd: number;
+}
+
+export interface GoogleAdsSummary {
+  google_ads_submitted_quotes: number;
+  google_ads_paid_quotes: number;
+  google_ads_paid_revenue_cents: number;
+  google_ads_spend_usd: number;
+  google_ads_estimated_roas: number | null;
+  cost_per_quote_usd: number | null;
+  cost_per_paid_quote_usd: number | null;
+  highest_revenue_campaign: GoogleAdsCampaignRef | null;
+  highest_spend_campaign: GoogleAdsCampaignRef | null;
+  campaigns_with_spend_no_quotes: number;
+  campaigns_with_quotes_no_paid: number;
+  join_confidence_distribution: JoinConfidenceDistributionRow[];
+  pct_exact_campaign_id_or_better: number | null;
+  pct_source_group_only: number | null;
+  attribution_precision_status: AttributionPrecisionStatus;
+}
+
+export interface SeoOriginPageRef {
+  canonical_page_url: string;
+  page_title: string | null;
+  paid_revenue_cents?: number;
+  submitted_quotes?: number;
+  search_console_clicks?: number;
+}
+
+export interface SeoClusterRef {
+  topic_cluster: string | null;
+  paid_revenue_cents?: number;
+  submitted_quotes?: number;
+  search_console_clicks?: number;
+}
+
+export interface SeoSummary {
+  seo_pages_with_quotes: number;
+  seo_pages_with_paid_quotes: number;
+  seo_paid_revenue_cents: number;
+  top_origin_page_by_revenue: SeoOriginPageRef | null;
+  top_origin_page_by_submitted_quotes: SeoOriginPageRef | null;
+  pages_with_clicks_no_quotes: SeoOriginPageRef[];
+  pages_with_quotes_no_paid: SeoOriginPageRef[];
+  top_cluster_by_revenue: SeoClusterRef | null;
+  top_cluster_by_quotes: SeoClusterRef | null;
+  clusters_with_clicks_no_quotes: SeoClusterRef[];
+}
+
+export interface AttributionReviewSnapshot {
+  source_summary: SourceSummary;
+  channel_daily_summary: ChannelDailySummary;
+  google_ads_summary: GoogleAdsSummary;
+  seo_summary: SeoSummary;
+  data_quality_warnings: AttributionReviewWarning[];
+  human_review_items: AttributionReviewItem[];
+}
+
+export interface AttributionReviewSnapshotResponse {
+  data: AttributionReviewSnapshot | null;
+  meta: {
+    view: string;
+    window_start: string;
+    window_end: string;
+    generated_at: string;
+    source: string;
+  };
+}

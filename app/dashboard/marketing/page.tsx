@@ -13,6 +13,7 @@ import { MarketingTimeseriesPanel } from './components/MarketingTimeseriesPanel'
 import { MarketingFunnelPanel } from './components/MarketingFunnelPanel';
 import { MarketingGA4FunnelPanel } from './components/MarketingGA4FunnelPanel';
 import { MarketingAnomaliesPanel } from './components/MarketingAnomaliesPanel';
+import { MarketingAttributionReviewPanel } from './components/MarketingAttributionReviewPanel';
 import { EngineCard } from './components/adminto/EngineCard';
 import { Sparkline } from '../../../components/dashboard/charts/Sparkline';
 import { ENGINE_COLORS } from './lib/engineColors';
@@ -291,6 +292,8 @@ export default function MarketingExecutiveOverview() {
           loading={loading}
           timeseries={data?.timeseries}
         />
+
+        <MarketingAttributionReviewPanel />
 
         {core4 && (
           <div style={{ marginBottom: space['6'] }}>

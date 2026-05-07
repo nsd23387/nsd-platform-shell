@@ -185,4 +185,111 @@ describe('GET /api/activity-spine/marketing/attribution', () => {
     expect((m as Record<string, unknown>).DELETE).toBeUndefined();
     expect((m as Record<string, unknown>).PATCH).toBeUndefined();
   });
+
+  describe('view=review-snapshot', () => {
+    function snapshotPayload() {
+      return {
+        source_summary: {
+          total_submitted_quotes: 100,
+          total_paid_quotes: 30,
+          paid_conversion_rate: 30,
+          paid_revenue_cents: 4_500_000,
+          test_quotes: 2,
+          top_source_group_by_revenue: 'google_ads',
+          top_source_group_by_paid_quotes: 'google_ads',
+          lowest_performing_source_group_by_conversion: 'direct',
+          direct_submitted_quotes: 30,
+          google_ads_submitted_quotes: 50,
+          organic_search_submitted_quotes: 15,
+          sales_engine_outbound_submitted_quotes: 5,
+        },
+        channel_daily_summary: {
+          window_start: '2026-04-30',
+          window_end: '2026-05-07',
+          total_paid_revenue_cents: 4_500_000,
+          best_revenue_day: '2026-05-03',
+          worst_revenue_day: '2026-05-01',
+          revenue_by_source_group: [],
+        },
+        google_ads_summary: {
+          google_ads_submitted_quotes: 50,
+          google_ads_paid_quotes: 15,
+          google_ads_paid_revenue_cents: 2_400_000,
+          google_ads_spend_usd: 1500,
+          google_ads_estimated_roas: 16,
+          cost_per_quote_usd: 30,
+          cost_per_paid_quote_usd: 100,
+          highest_revenue_campaign: null,
+          highest_spend_campaign: null,
+          campaigns_with_spend_no_quotes: 1,
+          campaigns_with_quotes_no_paid: 0,
+          join_confidence_distribution: [],
+          pct_exact_campaign_id_or_better: 75,
+          pct_source_group_only: 10,
+          attribution_precision_status: 'transitioning',
+        },
+        seo_summary: {
+          seo_pages_with_quotes: 5,
+          seo_pages_with_paid_quotes: 2,
+          seo_paid_revenue_cents: 800_000,
+          top_origin_page_by_revenue: null,
+          top_origin_page_by_submitted_quotes: null,
+          pages_with_clicks_no_quotes: [],
+          pages_with_quotes_no_paid: [],
+          top_cluster_by_revenue: null,
+          top_cluster_by_quotes: null,
+          clusters_with_clicks_no_quotes: [],
+        },
+        data_quality_warnings: [],
+        human_review_items: [],
+      };
+    }
+
+    it('200 with snapshot data, default window (no params)', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ snapshot: snapshotPayload() }] });
+      const res = await GET(req('/o?view=review-snapshot'));
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.meta.view).toBe('review-snapshot');
+      expect(body.meta.window_start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(body.meta.window_end).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(body.meta.source).toBe('metrics.get_attribution_review_snapshot');
+      expect(body.data.source_summary.total_submitted_quotes).toBe(100);
+      // Pool was called with the function and a date pair.
+      const [sql, params] = mockQuery.mock.calls[0] ?? [];
+      expect(String(sql)).toContain('metrics.get_attribution_review_snapshot');
+      expect(params).toHaveLength(2);
+    });
+
+    it('200 with explicit start_date and end_date', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ snapshot: snapshotPayload() }] });
+      const res = await GET(req('/o?view=review-snapshot&start_date=2026-04-01&end_date=2026-04-15'));
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.meta.window_start).toBe('2026-04-01');
+      expect(body.meta.window_end).toBe('2026-04-15');
+      expect(mockQuery.mock.calls[0]?.[1]).toEqual(['2026-04-01', '2026-04-15']);
+    });
+
+    it('400 on bad start_date format (no DB call)', async () => {
+      const res = await GET(req('/o?view=review-snapshot&start_date=2026/04/01'));
+      expect(res.status).toBe(400);
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
+    it('400 when start_date > end_date (no DB call)', async () => {
+      const res = await GET(req('/o?view=review-snapshot&start_date=2026-05-10&end_date=2026-05-01'));
+      expect(res.status).toBe(400);
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
+    it('500 on DB failure with generic error (no leak)', async () => {
+      mockQuery.mockRejectedValueOnce(new Error('connection refused on internal-host:5432'));
+      const res = await GET(req('/o?view=review-snapshot'));
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body.error).toBe('Internal server error');
+      expect(JSON.stringify(body)).not.toMatch(/connection refused/i);
+    });
+  });
 });

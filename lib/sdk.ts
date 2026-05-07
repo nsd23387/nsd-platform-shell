@@ -37,6 +37,7 @@ import type {
   AttributionQualityRow,
   SeoPagePerformanceRow,
   SeoClusterPerformanceRow,
+  AttributionReviewSnapshotResponse,
 } from '../types/attribution';
 import type { BootstrapResponse } from '../types/bootstrap';
 import { isApiDisabled } from '../config/appConfig';
@@ -546,6 +547,40 @@ export async function getSeoClusterQuotePerformance(): Promise<AttributionRespon
     headers: buildHeaders(),
   });
   if (!res.ok) throw new ActivitySpineError(`Attribution seo cluster-performance: ${res.status}`, res.status);
+  return res.json();
+}
+
+/**
+ * GET /activity-spine/marketing/attribution?view=review-snapshot
+ *
+ * Weekly attribution operating snapshot for the aggregated marketing
+ * dashboard. Source aggregation lives in the ODS function
+ * metrics.get_attribution_review_snapshot — this client just relays the
+ * window and returns the JSON document.
+ */
+export async function getAttributionReviewSnapshot(
+  params: { start_date?: string; end_date?: string } = {}
+): Promise<AttributionReviewSnapshotResponse> {
+  if (isApiDisabled) {
+    return {
+      data: null,
+      meta: {
+        view: 'review-snapshot',
+        window_start: params.start_date ?? '',
+        window_end: params.end_date ?? '',
+        generated_at: new Date().toISOString(),
+        source: 'mock',
+      },
+    };
+  }
+  const sp = new URLSearchParams({ view: 'review-snapshot' });
+  if (params.start_date) sp.set('start_date', params.start_date);
+  if (params.end_date) sp.set('end_date', params.end_date);
+  const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
+    method: 'GET',
+    headers: buildHeaders(),
+  });
+  if (!res.ok) throw new ActivitySpineError(`Attribution review-snapshot: ${res.status}`, res.status);
   return res.json();
 }
 
