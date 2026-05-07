@@ -9,94 +9,44 @@ import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { indigo, violet } from '../../../../design/tokens/colors';
+import {
+  getSourceToPaidFunnel,
+  getChannelRevenueDaily,
+  getGoogleAdsQuotePerformance,
+  getGoogleAdsAttributionQuality,
+  getSeoPageQuotePerformance,
+  getSeoClusterQuotePerformance,
+} from '../../../../lib/sdk';
+import {
+  JOIN_CONFIDENCE_DESCRIPTIONS,
+  type JoinConfidenceTier,
+  type SourceFunnelRow,
+  type ChannelRevenueRow,
+  type GoogleAdsPerformanceRow,
+  type AttributionQualityRow,
+  type SeoPagePerformanceRow,
+  type SeoClusterPerformanceRow,
+  type AttributionResponse,
+} from '../../../../types/attribution';
 
-// ── Type shapes from attribution API responses ─────────────────────────────
+// ── Generic SDK-backed fetch hook ─────────────────────────────────────────
 
-interface SourceFunnelRow {
-  source_group: string;
-  submitted_quotes: number;
-  paid_quotes: number;
-  paid_conversion_rate: number | null;
-  paid_revenue_cents: number;
-  paid_revenue_usd: number;
-  test_quotes: number;
-  quotes_with_origin_page: number;
-  avg_paid_value_usd: number;
-}
-
-interface ChannelRevenueRow {
-  date: string;
-  source_group: string;
-  submitted_quotes: number;
-  paid_quotes: number;
-  paid_conversion_rate: number | null;
-  paid_revenue_cents: number;
-  paid_revenue_usd: number;
-}
-
-interface GoogleAdsRow {
-  report_date: string | null;
-  utm_campaign: string | null;
-  google_campaign_id: string | null;
-  google_campaign_name: string | null;
-  ad_clicks: number;
-  ad_cost_usd: number;
-  submitted_quotes: number;
-  paid_quotes: number;
-  paid_revenue_usd: number;
-  estimated_roas_qms: number | null;
-  cost_per_paid_quote_usd: number | null;
-  join_confidence: string;
-}
-
-interface QualityRow {
-  join_confidence: string;
-  row_count: number;
-  total_submitted_quotes: number;
-  total_revenue_usd: number;
-  total_spend_usd: number;
-  pct_of_quotes: number | null;
-  pct_of_spend: number | null;
-}
-
-interface SeoPageRow {
-  canonical_page_url: string;
-  page_title: string | null;
-  topic_cluster: string | null;
-  search_console_clicks: number;
-  submitted_quotes: number;
-  paid_quotes: number;
-  paid_revenue_usd: number;
-}
-
-interface SeoClusterRow {
-  topic_cluster: string | null;
-  mapped_pages: number;
-  search_console_clicks: number;
-  submitted_quotes: number;
-  paid_quotes: number;
-  paid_revenue_usd: number;
-  top_revenue_page: string | null;
-}
-
-// ── Generic fetch hook ─────────────────────────────────────────────────────
-
-function useAttributionData<T>(path: string, params: Record<string, string> = {}) {
+function useAttributionData<T>(
+  loader: (params: Record<string, string>) => Promise<AttributionResponse<T>>,
+  params: Record<string, string> = {},
+) {
   const [data, setData] = useState<T[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const paramKey = JSON.stringify({ path, ...params });
+  const paramKey = JSON.stringify(params);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const sp = new URLSearchParams(params);
-      const res = await fetch(`/api/activity-spine/${path}?${sp}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      setData(json.data as T[]);
+      const res = await loader(params);
+      setData(res.data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -171,7 +121,7 @@ function fmtPct(v: number | null) {
 
 // ── Confidence tier badge ─────────────────────────────────────────────────
 
-const CONFIDENCE_COLORS: Record<string, string> = {
+const CONFIDENCE_COLORS: Record<JoinConfidenceTier, string> = {
   exact_campaign_adgroup_id: '#16a34a',
   exact_campaign_id: indigo[600],
   name_match: violet[500],
@@ -180,10 +130,25 @@ const CONFIDENCE_COLORS: Record<string, string> = {
   ads_only: '#ef4444',
 };
 
+const TIERS: JoinConfidenceTier[] = [
+  'exact_campaign_adgroup_id',
+  'exact_campaign_id',
+  'name_match',
+  'source_group_only',
+  'unavailable',
+  'ads_only',
+];
+
 function ConfidenceBadge({ tier }: { tier: string }) {
-  const color = CONFIDENCE_COLORS[tier] ?? '#9ca3af';
+  const color = CONFIDENCE_COLORS[tier as JoinConfidenceTier] ?? '#9ca3af';
+  const description = JOIN_CONFIDENCE_DESCRIPTIONS[tier as JoinConfidenceTier];
+  // source_group_only is shown explicitly as approximate so readers don't
+  // mistake a grey badge for a confirmed campaign-level attribution.
+  const isApproximate = tier === 'source_group_only';
+  const label = tier.replace(/_/g, ' ');
   return (
     <span
+      title={description}
       style={{
         display: 'inline-block',
         padding: `${space['0.5']} ${space['2']}`,
@@ -196,51 +161,100 @@ function ConfidenceBadge({ tier }: { tier: string }) {
         whiteSpace: 'nowrap',
       }}
     >
-      {tier.replace(/_/g, ' ')}
+      {isApproximate ? `${label} · approximate` : label}
     </span>
+  );
+}
+
+function ConfidenceLegend() {
+  const tc = useThemeColors();
+  return (
+    <div
+      data-testid="confidence-legend"
+      style={{
+        marginTop: space['4'],
+        padding: space['4'],
+        backgroundColor: tc.background.muted,
+        borderRadius: radius.lg,
+        border: `1px solid ${tc.border.subtle}`,
+        fontFamily: fontFamily.body,
+        fontSize: fontSize.sm,
+        color: tc.text.muted,
+      }}
+    >
+      <div style={{ fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['2'] }}>
+        Attribution confidence tiers
+      </div>
+      <ul style={{ margin: 0, paddingLeft: space['4'], display: 'grid', gap: space['1'] }}>
+        {TIERS.map(t => (
+          <li key={t}>
+            <ConfidenceBadge tier={t} />
+            <span style={{ marginLeft: space['2'] }}>{JOIN_CONFIDENCE_DESCRIPTIONS[t]}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
 // ── Section 1: Source-to-Paid Funnel ─────────────────────────────────────
 
 function SourceFunnelSection() {
-  const { data, loading, error } = useAttributionData<SourceFunnelRow>('marketing/attribution', { view: 'source-funnel' });
+  const { data, loading, error } = useAttributionData<SourceFunnelRow>(getSourceToPaidFunnel);
   const { th, td } = useTableStyles();
+  const tc = useThemeColors();
 
   if (loading) return <LoadingState />;
   if (error) return <DashboardCard title="Error" error={error} />;
   if (!data?.length) return <EmptyState message="No source funnel data available." />;
 
+  // TODO: totalRevenue and the % of Total column are computed in the client.
+  // Move to metrics.source_to_paid_funnel as pct_of_total_revenue so Platform
+  // Shell does not own the math. Until then, the column is labeled (client-side).
   const totalRevenue = data.reduce((s, r) => s + r.paid_revenue_usd, 0);
 
   return (
-    <div style={{ overflowX: 'auto' }} data-testid="table-source-funnel">
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th style={th('left')}>Source Group</th>
-            <th style={th()}>Submitted</th>
-            <th style={th()}>Paid</th>
-            <th style={th()}>Conv %</th>
-            <th style={th()}>Revenue</th>
-            <th style={th()}>% of Total</th>
-            <th style={th()}>Avg Order</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map(r => (
-            <tr key={r.source_group ?? 'unknown'}>
-              <td style={td('left')}>{r.source_group ?? '(unknown)'}</td>
-              <td style={td()}>{r.submitted_quotes.toLocaleString()}</td>
-              <td style={td()}>{r.paid_quotes.toLocaleString()}</td>
-              <td style={td()}>{fmtPct(r.paid_conversion_rate)}</td>
-              <td style={td()}>{fmtUsd(r.paid_revenue_usd)}</td>
-              <td style={td()}>{totalRevenue > 0 ? fmtPct((r.paid_revenue_usd / totalRevenue) * 100) : '—'}</td>
-              <td style={td()}>{r.paid_quotes > 0 ? fmtUsd(r.avg_paid_value_usd) : '—'}</td>
+    <div data-testid="source-funnel">
+      <div style={{ overflowX: 'auto' }} data-testid="table-source-funnel">
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={th('left')}>Source Group</th>
+              <th style={th()}>Submitted</th>
+              <th style={th()}>Paid</th>
+              <th style={th()} title="Paid quotes ÷ submitted quotes, computed in ODS.">Conv %</th>
+              <th style={th()}>Revenue</th>
+              <th style={th()} title="Computed client-side from paid_revenue_usd. Will move to ODS.">% of Total (client-side)</th>
+              <th style={th()} title="Approximate. Derived in the activity-spine route from paid_revenue_cents / paid_quotes until ODS exposes it directly.">
+                Avg Order (approx)
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.map(r => (
+              <tr key={r.source_group ?? 'unknown'}>
+                <td style={td('left')}>{r.source_group ?? '(unknown)'}</td>
+                <td style={td()}>{r.submitted_quotes.toLocaleString()}</td>
+                <td style={td()}>{r.paid_quotes.toLocaleString()}</td>
+                <td style={td()}>{fmtPct(r.paid_conversion_rate)}</td>
+                <td style={td()}>{fmtUsd(r.paid_revenue_usd)}</td>
+                <td style={td()}>{totalRevenue > 0 ? fmtPct((r.paid_revenue_usd / totalRevenue) * 100) : '—'}</td>
+                <td style={td()}>{r.paid_quotes > 0 ? fmtUsd(r.avg_paid_value_usd_approx) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p
+        style={{
+          marginTop: space['3'],
+          fontFamily: fontFamily.body,
+          fontSize: fontSize.xs,
+          color: tc.text.muted,
+        }}
+      >
+        Primary metrics exclude test quotes. Test quote count is shown separately by ODS where available.
+      </p>
     </div>
   );
 }
@@ -248,7 +262,7 @@ function SourceFunnelSection() {
 // ── Section 2: Channel Revenue Daily ────────────────────────────────────
 
 function ChannelRevenueSection() {
-  const { data, loading, error } = useAttributionData<ChannelRevenueRow>('marketing/attribution', { view: 'channel-revenue', limit: '500' });
+  const { data, loading, error } = useAttributionData<ChannelRevenueRow>(getChannelRevenueDaily, { limit: '500' });
   const { th, td } = useTableStyles();
 
   if (loading) return <LoadingState />;
@@ -264,7 +278,7 @@ function ChannelRevenueSection() {
             <th style={th('left')}>Source Group</th>
             <th style={th()}>Submitted</th>
             <th style={th()}>Paid</th>
-            <th style={th()}>Conv %</th>
+            <th style={th()} title="Paid quotes ÷ submitted quotes, computed in ODS.">Conv %</th>
             <th style={th()}>Revenue</th>
           </tr>
         </thead>
@@ -289,14 +303,12 @@ function ChannelRevenueSection() {
 
 function GoogleAdsPerformanceSection() {
   const [confidenceFilter, setConfidenceFilter] = useState('');
-  const params: Record<string, string> = { view: 'google-ads-performance', limit: '200' };
+  const params: Record<string, string> = { limit: '200' };
   if (confidenceFilter) params.join_confidence = confidenceFilter;
 
-  const { data, loading, error } = useAttributionData<GoogleAdsRow>('marketing/attribution', params);
+  const { data, loading, error } = useAttributionData<GoogleAdsPerformanceRow>(getGoogleAdsQuotePerformance, params);
   const { th, td } = useTableStyles();
   const tc = useThemeColors();
-
-  const TIERS = ['exact_campaign_adgroup_id', 'exact_campaign_id', 'name_match', 'source_group_only', 'unavailable', 'ads_only'];
 
   if (loading) return <LoadingState />;
   if (error) return <DashboardCard title="Error" error={error} />;
@@ -352,6 +364,7 @@ function GoogleAdsPerformanceSection() {
           </tbody>
         </table>
       </div>
+      <ConfidenceLegend />
     </div>
   );
 }
@@ -359,7 +372,7 @@ function GoogleAdsPerformanceSection() {
 // ── Section 4: Google Ads Attribution Quality ─────────────────────────────
 
 function GoogleAdsQualitySection() {
-  const { data, loading, error } = useAttributionData<QualityRow>('marketing/attribution', { view: 'google-ads-quality' });
+  const { data, loading, error } = useAttributionData<AttributionQualityRow>(getGoogleAdsAttributionQuality);
   const { th, td } = useTableStyles();
   const tc = useThemeColors();
 
@@ -367,8 +380,13 @@ function GoogleAdsQualitySection() {
   if (error) return <DashboardCard title="Error" error={error} />;
   if (!data?.length) return <EmptyState message="No attribution quality data available." />;
 
+  // TODO: exactPct headline is computed client-side from total_submitted_quotes
+  // across tiers. Move to marketing.google_ads_quote_attribution_quality (e.g.
+  // as pct_id_level_quotes) so Platform Shell stops owning the math.
   const totalQuotes = data.reduce((s, r) => s + r.total_submitted_quotes, 0);
-  const exactQuotes = data.filter(r => r.join_confidence === 'exact_campaign_id' || r.join_confidence === 'exact_campaign_adgroup_id').reduce((s, r) => s + r.total_submitted_quotes, 0);
+  const exactQuotes = data
+    .filter(r => r.join_confidence === 'exact_campaign_id' || r.join_confidence === 'exact_campaign_adgroup_id')
+    .reduce((s, r) => s + r.total_submitted_quotes, 0);
   const exactPct = totalQuotes > 0 ? ((exactQuotes / totalQuotes) * 100).toFixed(1) : '0.0';
 
   return (
@@ -386,7 +404,7 @@ function GoogleAdsQualitySection() {
         }}
         data-testid="quality-summary"
       >
-        <strong style={{ color: tc.text.primary }}>{exactPct}%</strong> of google_ads quotes attributed at ID-level precision (exact_campaign_id or exact_campaign_adgroup_id).
+        <strong style={{ color: tc.text.primary }}>{exactPct}%</strong> of google_ads quotes attributed at ID-level precision (client-side estimate from exact_campaign_id and exact_campaign_adgroup_id rows).
         Target after UTM template rollout: ≥ 90%.
       </div>
       <div style={{ overflowX: 'auto' }} data-testid="table-attribution-quality">
@@ -417,6 +435,7 @@ function GoogleAdsQualitySection() {
           </tbody>
         </table>
       </div>
+      <ConfidenceLegend />
     </div>
   );
 }
@@ -424,7 +443,7 @@ function GoogleAdsQualitySection() {
 // ── Section 5: SEO Page Performance ──────────────────────────────────────
 
 function SeoPagePerformanceSection() {
-  const { data, loading, error } = useAttributionData<SeoPageRow>('seo/attribution', { view: 'page-performance', limit: '200' });
+  const { data, loading, error } = useAttributionData<SeoPagePerformanceRow>(getSeoPageQuotePerformance, { limit: '200' });
   const { th, td } = useTableStyles();
 
   if (loading) return <LoadingState />;
@@ -436,7 +455,7 @@ function SeoPagePerformanceSection() {
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
-            <th style={th('left')}>Page</th>
+            <th style={th('left')}>Origin Page</th>
             <th style={th('left')}>Cluster</th>
             <th style={th()}>GSC Clicks</th>
             <th style={th()}>Submitted</th>
@@ -468,7 +487,7 @@ function SeoPagePerformanceSection() {
 // ── Section 6: SEO Cluster Performance ───────────────────────────────────
 
 function SeoClusterPerformanceSection() {
-  const { data, loading, error } = useAttributionData<SeoClusterRow>('seo/attribution', { view: 'cluster-performance' });
+  const { data, loading, error } = useAttributionData<SeoClusterPerformanceRow>(getSeoClusterQuotePerformance);
   const { th, td } = useTableStyles();
 
   if (loading) return <LoadingState />;
@@ -558,14 +577,14 @@ export default function AttributionDashboardPage() {
 
         <DashboardSection
           title="Google Ads × QMS Performance (Last 30 Days)"
-          description="Campaign-level ad spend joined to QMS quote outcomes. Use the confidence filter to isolate high-precision rows."
+          description="Campaign-level ad spend joined to QMS quote outcomes. Use the confidence filter to isolate high-precision rows. Tiers explained below the table."
           index={2}
         >
           <GoogleAdsPerformanceSection />
         </DashboardSection>
 
         <DashboardSection
-          title="Google Ads Attribution Quality"
+          title="Google Ads Attribution Quality (All-time)"
           description="Attribution precision breakdown by join_confidence tier. Target: ≥ 90% at exact_campaign_id after UTM template rollout."
           index={3}
         >
@@ -574,7 +593,7 @@ export default function AttributionDashboardPage() {
 
         <DashboardSection
           title="SEO Page Performance"
-          description="Search Console clicks + QMS quote outcomes by canonical page URL. Ordered by revenue descending."
+          description="Search Console clicks + QMS quote outcomes by canonical origin page URL, meaning the visitor entry page before the quote builder, not the quote landing URL. Ordered by revenue descending. Window: determined by ODS view."
           index={4}
         >
           <SeoPagePerformanceSection />
@@ -582,7 +601,7 @@ export default function AttributionDashboardPage() {
 
         <DashboardSection
           title="SEO Cluster Performance"
-          description="Topic cluster rollup: aggregated GSC and QMS metrics per cluster with top revenue page link."
+          description="Topic cluster rollup: aggregated GSC and QMS metrics per cluster with top revenue page link. Window: determined by ODS view."
           index={5}
         >
           <SeoClusterPerformanceSection />

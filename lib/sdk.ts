@@ -29,6 +29,15 @@ import type {
   TimePeriod,
   ActivitySpineResponse,
 } from '../types/activity-spine';
+import type {
+  AttributionResponse,
+  SourceFunnelRow,
+  ChannelRevenueRow,
+  GoogleAdsPerformanceRow,
+  AttributionQualityRow,
+  SeoPagePerformanceRow,
+  SeoClusterPerformanceRow,
+} from '../types/attribution';
 import type { BootstrapResponse } from '../types/bootstrap';
 import { isApiDisabled } from '../config/appConfig';
 
@@ -447,7 +456,7 @@ export async function getSalesDashboardData(period: TimePeriod = '30d') {
  */
 export async function getSourceToPaidFunnel(
   params: Record<string, string> = {}
-): Promise<{ data: unknown[]; meta: { view: string } }> {
+): Promise<AttributionResponse<SourceFunnelRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'source-funnel' } };
   const sp = new URLSearchParams({ view: 'source-funnel', ...params });
   const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
@@ -465,7 +474,7 @@ export async function getSourceToPaidFunnel(
  */
 export async function getChannelRevenueDaily(
   params: Record<string, string> = {}
-): Promise<{ data: unknown[]; meta: { view: string } }> {
+): Promise<AttributionResponse<ChannelRevenueRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'channel-revenue' } };
   const sp = new URLSearchParams({ view: 'channel-revenue', ...params });
   const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
@@ -483,7 +492,7 @@ export async function getChannelRevenueDaily(
  */
 export async function getGoogleAdsQuotePerformance(
   params: Record<string, string> = {}
-): Promise<{ data: unknown[]; meta: { view: string } }> {
+): Promise<AttributionResponse<GoogleAdsPerformanceRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'google-ads-performance' } };
   const sp = new URLSearchParams({ view: 'google-ads-performance', ...params });
   const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
@@ -498,7 +507,7 @@ export async function getGoogleAdsQuotePerformance(
  * GET /activity-spine/marketing/attribution?view=google-ads-quality
  * Attribution precision diagnostic — all-time confidence tier breakdown.
  */
-export async function getGoogleAdsAttributionQuality(): Promise<{ data: unknown[]; meta: { view: string } }> {
+export async function getGoogleAdsAttributionQuality(): Promise<AttributionResponse<AttributionQualityRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'google-ads-quality' } };
   const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?view=google-ads-quality`, {
     method: 'GET',
@@ -515,7 +524,7 @@ export async function getGoogleAdsAttributionQuality(): Promise<{ data: unknown[
  */
 export async function getSeoPageQuotePerformance(
   params: Record<string, string> = {}
-): Promise<{ data: unknown[]; meta: { view: string } }> {
+): Promise<AttributionResponse<SeoPagePerformanceRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'page-performance' } };
   const sp = new URLSearchParams({ view: 'page-performance', ...params });
   const res = await fetch(`${sdkConfig.activitySpineUrl}/seo/attribution?${sp}`, {
@@ -530,7 +539,7 @@ export async function getSeoPageQuotePerformance(
  * GET /activity-spine/seo/attribution?view=cluster-performance
  * Topic cluster rollup with revenue and top pages.
  */
-export async function getSeoClusterQuotePerformance(): Promise<{ data: unknown[]; meta: { view: string } }> {
+export async function getSeoClusterQuotePerformance(): Promise<AttributionResponse<SeoClusterPerformanceRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'cluster-performance' } };
   const res = await fetch(`${sdkConfig.activitySpineUrl}/seo/attribution?view=cluster-performance`, {
     method: 'GET',

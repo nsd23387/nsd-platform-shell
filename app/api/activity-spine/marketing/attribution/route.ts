@@ -68,6 +68,9 @@ async function getSourceFunnel(sp: URLSearchParams) {
     params
   );
 
+  // TODO: avg_paid_value_usd_approx is derived in the route from
+  // paid_revenue_cents / paid_quotes. Move to ODS view metrics.source_to_paid_funnel
+  // (e.g. as avg_paid_value_cents) so Platform Shell stops owning the math.
   return rows.map(r => ({
     source_group: r.source_group,
     submitted_quotes: Number(r.submitted_quotes),
@@ -77,7 +80,7 @@ async function getSourceFunnel(sp: URLSearchParams) {
     paid_revenue_usd: Number(r.paid_revenue_cents) / 100,
     test_quotes: Number(r.test_quotes),
     quotes_with_origin_page: Number(r.quotes_with_origin_page),
-    avg_paid_value_usd:
+    avg_paid_value_usd_approx:
       Number(r.paid_quotes) > 0
         ? Number(r.paid_revenue_cents) / 100 / Number(r.paid_quotes)
         : 0,
