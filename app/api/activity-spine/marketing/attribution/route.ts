@@ -66,16 +66,13 @@ async function getSourceFunnel(sp: URLSearchParams) {
 
   const { rows } = await pool.query(
     `SELECT source_group, submitted_quotes, paid_quotes, paid_conversion_rate,
-            paid_revenue_cents, test_quotes, quotes_with_origin_page
+            paid_revenue_cents, avg_paid_value_cents, test_quotes
      FROM metrics.source_to_paid_funnel
      ${where}
      ORDER BY COALESCE(paid_revenue_cents, 0) DESC`,
     params
   );
 
-  // TODO: avg_paid_value_usd_approx is derived in the route from
-  // paid_revenue_cents / paid_quotes. Move to ODS view metrics.source_to_paid_funnel
-  // (e.g. as avg_paid_value_cents) so Platform Shell stops owning the math.
   return rows.map(r => ({
     source_group: r.source_group,
     submitted_quotes: Number(r.submitted_quotes),
@@ -84,10 +81,11 @@ async function getSourceFunnel(sp: URLSearchParams) {
     paid_revenue_cents: Number(r.paid_revenue_cents),
     paid_revenue_usd: Number(r.paid_revenue_cents) / 100,
     test_quotes: Number(r.test_quotes),
-    quotes_with_origin_page: Number(r.quotes_with_origin_page),
+    // ODS now exposes avg_paid_value_cents directly on metrics.source_to_paid_funnel.
+    // Route does cents → USD formatting only; the math lives in the view.
     avg_paid_value_usd_approx:
-      Number(r.paid_quotes) > 0
-        ? Number(r.paid_revenue_cents) / 100 / Number(r.paid_quotes)
+      r.avg_paid_value_cents !== null && r.avg_paid_value_cents !== undefined
+        ? Number(r.avg_paid_value_cents) / 100
         : 0,
   }));
 }
@@ -112,7 +110,7 @@ async function getChannelRevenue(sp: URLSearchParams) {
 
   const { rows } = await pool.query(
     `SELECT date::text AS date, source_group, submitted_quotes, paid_quotes,
-            paid_conversion_rate, paid_revenue_cents, test_quotes, quotes_with_origin_page
+            paid_conversion_rate, paid_revenue_cents, quotes_with_origin_page
      FROM metrics.channel_revenue_daily
      WHERE ${conditions.join(' AND ')}
      ORDER BY date DESC, COALESCE(paid_revenue_cents, 0) DESC
@@ -128,7 +126,6 @@ async function getChannelRevenue(sp: URLSearchParams) {
     paid_conversion_rate: r.paid_conversion_rate !== null ? Number(r.paid_conversion_rate) : null,
     paid_revenue_cents: Number(r.paid_revenue_cents),
     paid_revenue_usd: Number(r.paid_revenue_cents) / 100,
-    test_quotes: Number(r.test_quotes),
     quotes_with_origin_page: Number(r.quotes_with_origin_page),
   }));
 }

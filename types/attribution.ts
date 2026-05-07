@@ -54,12 +54,10 @@ export interface SourceFunnelRow {
   paid_revenue_cents: number;
   paid_revenue_usd: number;
   test_quotes: number;
-  quotes_with_origin_page: number;
   /**
-   * Average paid order value in USD.
-   * NOTE: Currently derived in the activity-spine route from
-   * paid_revenue_cents / paid_quotes. Approximate until ODS exposes this
-   * directly on metrics.source_to_paid_funnel.
+   * Average paid order value in USD. Sourced from
+   * metrics.source_to_paid_funnel.avg_paid_value_cents and converted to USD
+   * by the route. The math is owned by ODS, not Platform Shell.
    */
   avg_paid_value_usd_approx: number;
 }
@@ -72,7 +70,6 @@ export interface ChannelRevenueRow {
   paid_conversion_rate: number | null;
   paid_revenue_cents: number;
   paid_revenue_usd: number;
-  test_quotes: number;
   quotes_with_origin_page: number;
 }
 
