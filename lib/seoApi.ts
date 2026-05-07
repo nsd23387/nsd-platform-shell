@@ -54,8 +54,8 @@ export interface SeoOutcome {
   cluster_topic: string;
   keyword: string;
   page_url: string;
-  old_position: number;
-  new_position: number;
+  old_position: number | null;
+  new_position: number | null;
   ctr_change: number;
   traffic_change: number;
   execution_date: string;
@@ -782,4 +782,11 @@ export interface SeoProgressResponse {
 
 export async function getSeoProgress(): Promise<SeoProgressResponse> {
   return seoFetch<SeoProgressResponse>('/api/proxy/seo/progress');
+}
+
+export async function markBacklinkContacted(domain: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/backlinks', {
+    method: 'POST',
+    body: JSON.stringify({ id: domain, status: 'contacted' }),
+  });
 }

@@ -22,20 +22,20 @@ async function getOverviewKpis() {
         COUNT(*) FILTER (WHERE urgency_band = 'medium')::int AS medium_urgency,
         COUNT(*) FILTER (WHERE urgency_band = 'low')::int AS low_urgency
       FROM analytics.seo_opportunity_queue_balanced
-    `),
-    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_page_optimization_recommendations`),
-    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.internal_link_recommendations`),
-    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_content_artifacts`),
+    `).catch(() => ({ rows: [{ total_opportunities: 0, total_clusters: 0, high_urgency: 0, medium_urgency: 0, low_urgency: 0 }] })),
+    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_page_optimization_recommendations`).catch(() => ({ rows: [{ cnt: 0 }] })),
+    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.internal_link_recommendations`).catch(() => ({ rows: [{ cnt: 0 }] })),
+    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_content_artifacts`).catch(() => ({ rows: [{ cnt: 0 }] })),
     pool.query(`
       WITH deduped AS (
         SELECT DISTINCT ON (payload->>'keyword', payload->>'competitor_domain')
           id
         FROM analytics.raw_ahrefs_keyword_gap
-        ORDER BY payload->>'keyword', payload->>'competitor_domain', ingestion_run_id DESC
+        ORDER BY payload->>'keyword', payload->>'competitor_domain', created_at DESC
       )
       SELECT COUNT(*)::int AS cnt FROM deduped
-    `),
-    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_page_index`),
+    `).catch(() => ({ rows: [{ cnt: 0 }] })),
+    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_page_index`).catch(() => ({ rows: [{ cnt: 0 }] })),
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
@@ -43,7 +43,7 @@ async function getOverviewKpis() {
         COUNT(*) FILTER (WHERE approval_status = 'approved')::int AS approved,
         COUNT(*) FILTER (WHERE execution_status = 'published')::int AS published
       FROM analytics.seo_execution_queue
-    `),
+    `).catch(() => ({ rows: [{ total: 0, awaiting_approval: 0, approved: 0, published: 0 }] })),
     pool.query(`
       SELECT run_at
       FROM analytics.seo_cluster_generation_runs

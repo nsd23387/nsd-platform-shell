@@ -19,15 +19,13 @@ function getPool(): Pool {
   return pool;
 }
 
-// Approved competitor list — must match nsd-integrations/integrations/ahrefs/ahrefsConfig.ts
-// Branded marketplaces (amazon, etsy, vistaprint, ebay) are explicitly excluded —
-// they are not real competitors for neon signs and produce noise in the gap analysis.
+// Phase 8 competitor set — matches competitorGapJob.ts in nsd-integrations
 const ALLOWED_COMPETITORS = [
-  'everythingneon.com',
-  'businesssignsandmore.com',
-  'kingsofneon.com',
-  'crazyneon.com',
-  'luckyneon.com',
+  'echoneon.com',
+  'neonmfg.com',
+  'voodooneon.com',
+  'neonpros.com',
+  'signs.com',
 ];
 
 // Branded keyword patterns to exclude — these are competitor brand searches that
@@ -82,7 +80,12 @@ export async function GET(req: NextRequest) {
     where += ` AND LENGTH(COALESCE(g.keyword, '')) >= 4`;
 
     const { rows } = await p.query(`
-      SELECT g.*, kc.primary_keyword as cluster_keyword
+      SELECT
+        g.*,
+        COALESCE(g.opportunity_score, null) AS opportunity_score,
+        COALESCE(g.keyword_difficulty, null) AS keyword_difficulty,
+        COALESCE(g.search_volume, null) AS search_volume,
+        kc.primary_keyword AS cluster_keyword
       FROM analytics.seo_competitor_gap g
       LEFT JOIN analytics.keyword_clusters kc ON kc.id = g.cluster_id
       ${where}

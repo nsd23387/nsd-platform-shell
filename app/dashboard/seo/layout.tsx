@@ -34,6 +34,8 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Analysis',
     items: [
       { href: '/dashboard/seo/pages', label: 'Page Performance', icon: 'search' },
+      { href: '/dashboard/seo/serp-features', label: 'SERP Features', icon: 'trending' },
+      { href: '/dashboard/seo/competitive', label: 'Competitive Intel', icon: 'chart' },
     ],
   },
   {
@@ -43,11 +45,14 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/dashboard/seo/recommendations', label: 'Recommendations (legacy)', icon: 'review' },
       { href: '/dashboard/seo/execution-log', label: 'Execution Log', icon: 'timeline' },
       { href: '/dashboard/seo/content', label: 'Content Pipeline', icon: 'edit' },
+      { href: '/dashboard/seo/backlinks', label: 'Backlinks', icon: 'search' },
     ],
   },
   {
     title: 'Results',
     items: [
+      { href: '/dashboard/seo/attribution', label: 'Revenue Attribution', icon: 'trending' },
+      { href: '/dashboard/seo/content-scores', label: 'Content Scores', icon: 'edit' },
       { href: '/dashboard/seo/outcomes', label: 'Outcomes', icon: 'trending' },
       { href: '/dashboard/seo/signals', label: 'Signals', icon: 'warning' },
     ],
