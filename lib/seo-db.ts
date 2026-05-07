@@ -508,8 +508,8 @@ export async function getOutcomes() {
       COALESCE(sr.target_query, kc.primary_keyword, 'Unknown') AS cluster_topic,
       COALESCE(sr.target_query, '') AS keyword,
       COALESCE(sr.target_url, '') AS page_url,
-      COALESCE(slo.baseline_position, 0)::numeric AS old_position,
-      COALESCE(slo.measured_position, 0)::numeric AS new_position,
+      slo.baseline_position::numeric AS old_position,
+      slo.measured_position::numeric AS new_position,
       CASE
         WHEN slo.baseline_impressions > 0 AND slo.measured_impressions > 0
           AND slo.baseline_clicks IS NOT NULL AND slo.measured_clicks IS NOT NULL
@@ -531,8 +531,8 @@ export async function getOutcomes() {
   `);
   return result.rows.map(r => ({
     ...r,
-    old_position: Number(r.old_position),
-    new_position: Number(r.new_position),
+    old_position: r.old_position != null ? Number(r.old_position) : null,
+    new_position: r.new_position != null ? Number(r.new_position) : null,
     ctr_change: Number(r.ctr_change),
     traffic_change: Number(r.traffic_change),
     measured_at_14d: r.measured_at_14d ?? null,

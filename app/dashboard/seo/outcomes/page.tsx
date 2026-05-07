@@ -32,6 +32,25 @@ function OutcomesContent() {
     color: tc.text.secondary,
   };
 
+  const pendingBadge = (
+    <span style={{
+      display: 'inline-block',
+      padding: `${space['0.5']} ${space['2']}`,
+      borderRadius: radius.full,
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      backgroundColor: '#fffbeb',
+      color: '#92400e',
+    }}>
+      Pending
+    </span>
+  );
+
+  const positionCell = (value: number | null) => {
+    if (value == null || value === 0) return pendingBadge;
+    return <span>{value.toFixed(1)}</span>;
+  };
+
   const formatChange = (value: number, suffix: string = '', invert: boolean = false) => {
     const positive = invert ? value < 0 : value > 0;
     const color = positive ? '#065f46' : value === 0 ? tc.text.muted : '#991b1b';
@@ -120,16 +139,16 @@ function OutcomesContent() {
             </thead>
             <tbody>
               {outcomes.map((out) => {
-                const posImproved = out.new_position < out.old_position;
+                const posImproved = out.new_position != null && out.old_position != null && out.new_position > 0 && out.old_position > 0 && out.new_position < out.old_position;
                 return (
                   <tr key={out.id} style={{ borderBottom: `1px solid ${tc.border.subtle}` }} data-testid={`row-outcome-${out.id}`}>
                     <td style={{ ...tdStyle, fontWeight: fontWeight.medium, color: tc.text.primary }}>{out.cluster_topic}</td>
                     <td style={tdStyle}>{out.keyword}</td>
                     <td style={{ ...tdStyle, maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{out.page_url}</td>
-                    <td style={tdStyle}>{out.old_position.toFixed(1)}</td>
+                    <td style={tdStyle}>{positionCell(out.old_position)}</td>
                     <td style={tdStyle}>
-                      <span style={{ color: posImproved ? '#065f46' : '#991b1b', fontWeight: fontWeight.medium }}>
-                        {out.new_position.toFixed(1)}
+                      <span style={{ color: posImproved ? '#065f46' : tc.text.secondary, fontWeight: fontWeight.medium }}>
+                        {positionCell(out.new_position)}
                       </span>
                     </td>
                     <td style={tdStyle}>{formatChange(out.ctr_change, '%')}</td>
