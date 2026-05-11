@@ -190,6 +190,38 @@ function tsOrNull(val: string | null | undefined): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+const ATTRIBUTION_PARAMS = [
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_content',
+  'utm_term',
+  'gclid',
+  'gbraid',
+  'wbraid',
+] as const;
+
+type AttributionField = (typeof ATTRIBUTION_PARAMS)[number];
+
+function extractAttributionFromUrl(url: string | null | undefined): Partial<Record<AttributionField, string>> {
+  if (!url) return {};
+  try {
+    const u = new URL(url);
+    const out: Partial<Record<AttributionField, string>> = {};
+    for (const key of ATTRIBUTION_PARAMS) {
+      const v = u.searchParams.get(key);
+      if (v && v.trim() !== '') out[key] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function isMissing(v: string | null | undefined): boolean {
+  return v == null || (typeof v === 'string' && v.trim() === '');
+}
+
 export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin');
   const cors = corsHeaders(origin);
@@ -212,6 +244,19 @@ export async function POST(request: NextRequest) {
     }
 
     const d = validation.data;
+
+    if (d.landing_page) {
+      const parsed = extractAttributionFromUrl(d.landing_page);
+      if (isMissing(d.utm_source))   d.utm_source   = parsed.utm_source;
+      if (isMissing(d.utm_medium))   d.utm_medium   = parsed.utm_medium;
+      if (isMissing(d.utm_campaign)) d.utm_campaign = parsed.utm_campaign;
+      if (isMissing(d.utm_content))  d.utm_content  = parsed.utm_content;
+      if (isMissing(d.utm_term))     d.utm_term     = parsed.utm_term;
+      if (isMissing(d.gclid))        d.gclid        = parsed.gclid;
+      if (isMissing(d.gbraid))       d.gbraid       = parsed.gbraid;
+      if (isMissing(d.wbraid))       d.wbraid       = parsed.wbraid;
+    }
+
     const db = getPool();
     await ensureTable(db);
 
