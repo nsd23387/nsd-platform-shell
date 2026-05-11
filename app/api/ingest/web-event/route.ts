@@ -173,19 +173,28 @@ export async function POST(request: NextRequest) {
       const utmSource = (eventData.utm_source as string) || data.source || null;
       const utmMedium = (eventData.utm_medium as string) || null;
       const utmCampaign = (eventData.utm_campaign as string) || null;
+      const utmContent = (eventData.utm_content as string) || null;
+      const utmTerm = (eventData.utm_term as string) || null;
       const gclid = (eventData.gclid as string) || null;
+      const gbraid = (eventData.gbraid as string) || null;
+      const wbraid = (eventData.wbraid as string) || null;
       const lpRaw = (eventData.landing_page as string) || resolvedLandingPage || null;
 
-      if (utmSource || gclid) {
+      if (utmSource || gclid || gbraid || wbraid) {
         try {
           const bridgeSql = `
             UPDATE analytics.raw_qms_deals
             SET
-              utm_source = COALESCE(NULLIF($2, ''), utm_source),
-              utm_medium = COALESCE(NULLIF($3, ''), utm_medium),
+              utm_source   = COALESCE(NULLIF($2, ''), utm_source),
+              utm_medium   = COALESCE(NULLIF($3, ''), utm_medium),
               utm_campaign = COALESCE(NULLIF($4, ''), utm_campaign),
-              landing_page = COALESCE(NULLIF($5, ''), landing_page),
-              referrer = COALESCE(NULLIF($6, ''), referrer)
+              utm_content  = COALESCE(NULLIF($5, ''), utm_content),
+              utm_term     = COALESCE(NULLIF($6, ''), utm_term),
+              gclid        = COALESCE(NULLIF($7, ''), gclid),
+              gbraid       = COALESCE(NULLIF($8, ''), gbraid),
+              wbraid       = COALESCE(NULLIF($9, ''), wbraid),
+              landing_page = COALESCE(NULLIF($10, ''), landing_page),
+              referrer     = COALESCE(NULLIF($11, ''), referrer)
             WHERE convex_quote_id = $1
               AND (utm_source IS NULL OR utm_source = '')
           `;
@@ -194,6 +203,11 @@ export async function POST(request: NextRequest) {
             utmSource,
             utmMedium,
             utmCampaign,
+            utmContent,
+            utmTerm,
+            gclid,
+            gbraid,
+            wbraid,
             lpRaw,
             data.referrer ?? null,
           ]);

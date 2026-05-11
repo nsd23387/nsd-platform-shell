@@ -83,6 +83,11 @@ async function ensureTable(db: Pool): Promise<void> {
       utm_source TEXT,
       utm_medium TEXT,
       utm_campaign TEXT,
+      utm_content TEXT,
+      utm_term TEXT,
+      gclid TEXT,
+      gbraid TEXT,
+      wbraid TEXT,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL,
       deposit_paid_at TIMESTAMPTZ,
@@ -131,6 +136,11 @@ interface QMSDealPayload {
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
+  utm_content?: string | null;
+  utm_term?: string | null;
+  gclid?: string | null;
+  gbraid?: string | null;
+  wbraid?: string | null;
   created_at: string;
   updated_at: string;
   deposit_paid_at?: string | null;
@@ -211,6 +221,7 @@ export async function POST(request: NextRequest) {
         total_price_cents, customer_name, customer_email, customer_company,
         customer_city, customer_state, sign_text, sign_type,
         landing_page, referrer, utm_source, utm_medium, utm_campaign,
+        utm_content, utm_term, gclid, gbraid, wbraid,
         created_at, updated_at, deposit_paid_at, quote_paid_at,
         cancel_reason, cancel_details,
         followup_lane, followup_count, followup_last_sent_at,
@@ -222,6 +233,7 @@ export async function POST(request: NextRequest) {
         $6, $7, $8, $9,
         $10, $11, $12, $13,
         $14, $15, $16, $17, $18,
+        $37, $38, $39, $40, $41,
         $19, $20, $21, $22,
         $23, $24,
         $25, $26, $27,
@@ -247,6 +259,11 @@ export async function POST(request: NextRequest) {
         utm_source = COALESCE(NULLIF(EXCLUDED.utm_source, ''), analytics.raw_qms_deals.utm_source),
         utm_medium = COALESCE(NULLIF(EXCLUDED.utm_medium, ''), analytics.raw_qms_deals.utm_medium),
         utm_campaign = COALESCE(NULLIF(EXCLUDED.utm_campaign, ''), analytics.raw_qms_deals.utm_campaign),
+        utm_content = COALESCE(NULLIF(EXCLUDED.utm_content, ''), analytics.raw_qms_deals.utm_content),
+        utm_term = COALESCE(NULLIF(EXCLUDED.utm_term, ''), analytics.raw_qms_deals.utm_term),
+        gclid = COALESCE(NULLIF(EXCLUDED.gclid, ''), analytics.raw_qms_deals.gclid),
+        gbraid = COALESCE(NULLIF(EXCLUDED.gbraid, ''), analytics.raw_qms_deals.gbraid),
+        wbraid = COALESCE(NULLIF(EXCLUDED.wbraid, ''), analytics.raw_qms_deals.wbraid),
         updated_at = EXCLUDED.updated_at,
         deposit_paid_at = EXCLUDED.deposit_paid_at,
         quote_paid_at = EXCLUDED.quote_paid_at,
@@ -305,6 +322,11 @@ export async function POST(request: NextRequest) {
       d.shipping_carrier ?? null,
       d.shipping_tracking_number ?? null,
       d.last_event ?? d.quote_activity,
+      d.utm_content ?? null,
+      d.utm_term ?? null,
+      d.gclid ?? null,
+      d.gbraid ?? null,
+      d.wbraid ?? null,
     ];
 
     const result = await db.query(sql, values);
@@ -317,11 +339,16 @@ export async function POST(request: NextRequest) {
         const enrichSql = `
           UPDATE analytics.raw_qms_deals AS qms
           SET
-            utm_source = COALESCE(NULLIF(we.event_data->>'utm_source', ''), NULLIF(we.payload->>'utm_source', ''), we.source),
-            utm_medium = COALESCE(NULLIF(we.event_data->>'utm_medium', ''), we.payload->>'utm_medium'),
+            utm_source   = COALESCE(NULLIF(we.event_data->>'utm_source', ''), NULLIF(we.payload->>'utm_source', ''), we.source),
+            utm_medium   = COALESCE(NULLIF(we.event_data->>'utm_medium', ''), we.payload->>'utm_medium'),
             utm_campaign = COALESCE(NULLIF(we.event_data->>'utm_campaign', ''), we.payload->>'utm_campaign'),
+            utm_content  = COALESCE(NULLIF(we.event_data->>'utm_content', ''), we.payload->>'utm_content'),
+            utm_term     = COALESCE(NULLIF(we.event_data->>'utm_term', ''), we.payload->>'utm_term'),
+            gclid        = COALESCE(NULLIF(we.event_data->>'gclid', ''), we.payload->>'gclid'),
+            gbraid       = COALESCE(NULLIF(we.event_data->>'gbraid', ''), we.payload->>'gbraid'),
+            wbraid       = COALESCE(NULLIF(we.event_data->>'wbraid', ''), we.payload->>'wbraid'),
             landing_page = COALESCE(NULLIF(we.event_data->>'landing_page', ''), NULLIF(we.payload->>'landing_page', '')),
-            referrer = we.referrer
+            referrer     = we.referrer
           FROM (
             SELECT payload, source, referrer, event_data
             FROM analytics.raw_web_events
@@ -332,7 +359,8 @@ export async function POST(request: NextRequest) {
               )
               AND (
                 COALESCE(NULLIF(event_data->>'utm_source', ''), NULLIF(payload->>'utm_source', ''), source) IS NOT NULL
-                AND COALESCE(NULLIF(event_data->>'utm_source', ''), NULLIF(payload->>'utm_source', ''), source) != ''
+                OR event_data->>'gclid' IS NOT NULL
+                OR event_data->>'gbraid' IS NOT NULL
               )
             ORDER BY occurred_at DESC
             LIMIT 1
