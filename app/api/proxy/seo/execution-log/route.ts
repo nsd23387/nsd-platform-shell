@@ -25,21 +25,26 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Migrated 2026-05-12: read from analytics.seo_action instead of the
+    // legacy seo_execution_log. seo_action.gsc_position/gsc_impressions are
+    // the at-creation baselines; mutation_type is the equivalent of
+    // execution_type. measured_at_90d isn't tracked in seo_action — null.
     const p = getPool();
     const { rows } = await p.query(`
       SELECT
-        el.id,
-        el.target_url,
-        el.execution_type,
-        el.executed_by,
-        el.executed_at,
-        el.baseline_position,
-        el.baseline_impressions,
-        el.measured_at_14d,
-        el.measured_at_30d,
-        el.measured_at_90d
-      FROM analytics.seo_execution_log el
-      ORDER BY el.executed_at DESC
+        sa.id,
+        sa.target_url,
+        sa.mutation_type AS execution_type,
+        sa.executed_by,
+        sa.executed_at,
+        sa.gsc_position::numeric AS baseline_position,
+        sa.gsc_impressions AS baseline_impressions,
+        sa.measured_at_14d,
+        sa.measured_at_30d,
+        NULL::timestamptz AS measured_at_90d
+      FROM analytics.seo_action sa
+      WHERE sa.executed_at IS NOT NULL
+      ORDER BY sa.executed_at DESC
       LIMIT 100
     `);
 

@@ -107,19 +107,51 @@ export async function getClusterById(id: string) {
   };
 }
 
+// Migrated 2026-05-12: these functions now read from analytics.seo_action
+// (the unified pipeline introduced by migration 20260501000035) instead of
+// the legacy seo_recommendations + seo_recommendation_approvals tables.
+//
+// The response shape is preserved so dashboard pages don't need UI changes:
+//   - cluster_id/cluster_topic   <- source_cluster
+//   - primary_keyword            <- source_keyword
+//   - recommended_action         <- mutation_type
+//   - recommended_title          <- proposed_value (when mutation is title)
+//   - recommended_meta_description <- proposed_value (when mutation is meta)
+//   - estimated_impact / priority  <- agent_review_score
+//   - rationale                  <- proposed_reason ?? agent_review_notes
+//   - status                     <- normalised lifecycle string
+
+const SEO_ACTION_STATUS_CASE = `
+  CASE
+    WHEN sa.human_decision = 'approved' THEN 'approved'
+    WHEN sa.human_decision = 'rejected' THEN 'rejected'
+    WHEN sa.executed_at IS NOT NULL THEN 'executed'
+    WHEN sa.status = 'reviewed' THEN 'pending_review'
+    WHEN sa.status = 'proposed' THEN 'pending_review'
+    ELSE sa.status
+  END`;
+
 export async function getClusterOpportunities() {
   const p = getPool();
   const result = await p.query(`
     SELECT
-      sr.id,
-      (sr.supporting_data->>'cluster_id') AS cluster_id,
-      sr.target_query AS cluster_topic,
-      sr.recommendation_type AS opportunity_type,
-      COALESCE((sr.supporting_data->>'total_impressions')::int, 0) AS total_impressions,
-      ROUND(COALESCE((sr.supporting_data->>'avg_position')::numeric, 0), 1) AS avg_position,
-      sr.suggested_action
-    FROM analytics.seo_recommendations sr
-    ORDER BY COALESCE((sr.supporting_data->>'total_impressions')::int, 0) DESC
+      MIN(sa.id::text) AS id,
+      sa.source_cluster AS cluster_id,
+      COALESCE(sa.source_cluster, sa.source_keyword, 'Unclustered') AS cluster_topic,
+      MIN(sa.mutation_type) AS opportunity_type,
+      COALESCE(SUM(sa.gsc_impressions), 0) AS total_impressions,
+      ROUND(
+        COALESCE(
+          SUM(sa.gsc_position * sa.gsc_impressions) / NULLIF(SUM(sa.gsc_impressions), 0),
+          0
+        ),
+        1
+      ) AS avg_position,
+      MIN(sa.proposed_reason) AS suggested_action
+    FROM analytics.seo_action sa
+    WHERE sa.source_cluster IS NOT NULL OR sa.source_keyword IS NOT NULL
+    GROUP BY sa.source_cluster, sa.source_keyword
+    ORDER BY total_impressions DESC
   `);
   return result.rows.map(r => ({
     ...r,
@@ -132,73 +164,53 @@ export async function getRecommendations() {
   const p = getPool();
   const result = await p.query(`
     SELECT
-      sr.id,
-      (sr.supporting_data->>'cluster_id') AS cluster_id,
-      sr.target_query AS cluster_topic,
-      sr.target_query AS primary_keyword,
-      sr.suggested_action AS recommended_action,
-      COALESCE(sr.target_url, '') AS recommended_url,
-      sr.title AS recommended_title,
-      sr.rationale AS recommended_meta_description,
-      COALESCE(sr.target_url, '') AS target_url,
-      sr.recommendation_type AS opportunity_type,
-      sr.expected_impact AS estimated_impact,
-      sr.status,
-      sr.rationale,
-      sr.priority,
-      sr.created_at
-    FROM analytics.seo_recommendations sr
-    ORDER BY sr.created_at DESC
+      sa.id,
+      sa.source_cluster AS cluster_id,
+      COALESCE(sa.source_cluster, sa.source_keyword, 'Unclustered') AS cluster_topic,
+      sa.source_keyword AS primary_keyword,
+      sa.mutation_type AS recommended_action,
+      COALESCE(sa.target_url, '') AS recommended_url,
+      CASE WHEN sa.mutation_type ILIKE '%title%'
+           THEN sa.proposed_value ELSE NULL END AS recommended_title,
+      CASE WHEN sa.mutation_type ILIKE '%meta%' OR sa.mutation_type ILIKE '%description%'
+           THEN sa.proposed_value ELSE NULL END AS recommended_meta_description,
+      COALESCE(sa.target_url, '') AS target_url,
+      sa.mutation_type AS opportunity_type,
+      sa.agent_review_score AS estimated_impact,
+      ${SEO_ACTION_STATUS_CASE} AS status,
+      COALESCE(sa.proposed_reason, sa.agent_review_notes) AS rationale,
+      sa.agent_review_score AS priority,
+      sa.created_at
+    FROM analytics.seo_action sa
+    ORDER BY sa.created_at DESC
   `);
   return result.rows;
 }
 
 export async function approveRecommendation(id: string) {
   const p = getPool();
-  const client = await p.connect();
-  try {
-    await client.query('BEGIN');
-    const upd = await client.query(
-      `UPDATE analytics.seo_recommendations SET status = 'approved' WHERE id = $1`, [id]
-    );
-    if (upd.rowCount === 0) throw new Error('Recommendation not found');
-    await client.query(`
-      INSERT INTO analytics.seo_recommendation_approvals
-        (recommendation_id, organization_id, decision, reviewer_type, review_note, created_at)
-      SELECT $1, sr.organization_id, 'approved', 'human', NULL, NOW()
-      FROM analytics.seo_recommendations sr WHERE sr.id = $1
-    `, [id]);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const upd = await p.query(
+    `UPDATE analytics.seo_action
+       SET human_decision = 'approved',
+           human_decided_at = NOW(),
+           status = 'approved'
+     WHERE id = $1::uuid`,
+    [id],
+  );
+  if (upd.rowCount === 0) throw new Error('Recommendation not found');
 }
 
 export async function rejectRecommendation(id: string) {
   const p = getPool();
-  const client = await p.connect();
-  try {
-    await client.query('BEGIN');
-    const upd = await client.query(
-      `UPDATE analytics.seo_recommendations SET status = 'rejected' WHERE id = $1`, [id]
-    );
-    if (upd.rowCount === 0) throw new Error('Recommendation not found');
-    await client.query(`
-      INSERT INTO analytics.seo_recommendation_approvals
-        (recommendation_id, organization_id, decision, reviewer_type, review_note, created_at)
-      SELECT $1, sr.organization_id, 'rejected', 'human', NULL, NOW()
-      FROM analytics.seo_recommendations sr WHERE sr.id = $1
-    `, [id]);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const upd = await p.query(
+    `UPDATE analytics.seo_action
+       SET human_decision = 'rejected',
+           human_decided_at = NOW(),
+           status = 'rejected'
+     WHERE id = $1::uuid`,
+    [id],
+  );
+  if (upd.rowCount === 0) throw new Error('Recommendation not found');
 }
 
 export async function approveExecutionCandidate(candidateId: string, reviewNotes?: string) {
@@ -490,44 +502,48 @@ export async function rejectByOpportunityId(opportunityId: string, reviewNotes?:
 }
 
 export async function submitFeedback(id: string, feedbackText: string) {
+  // Migrated 2026-05-12: write human notes onto seo_action directly.
   const p = getPool();
-  const result = await p.query(`
-    INSERT INTO analytics.seo_recommendation_approvals
-      (recommendation_id, organization_id, decision, reviewer_type, review_note, created_at)
-    SELECT $1, sr.organization_id, 'feedback', 'human', $2, NOW()
-    FROM analytics.seo_recommendations sr WHERE sr.id = $1
-  `, [id, feedbackText]);
+  const result = await p.query(
+    `UPDATE analytics.seo_action
+       SET human_notes = $2,
+           human_decided_at = COALESCE(human_decided_at, NOW())
+     WHERE id = $1::uuid`,
+    [id, feedbackText],
+  );
   if (result.rowCount === 0) throw new Error('Recommendation not found');
 }
 
 export async function getOutcomes() {
+  // Migrated 2026-05-12: outcomes now derive from seo_action's own outcome
+  // columns (outcome_position_delta, outcome_impressions_delta,
+  // outcome_ctr_delta, outcome_clicks_delta, measured_at_14d/30d) instead
+  // of the legacy seo_learning_outcomes + seo_recommendations + keyword_clusters
+  // + seo_execution_log four-way join.
+  //
+  // measured_at_90d isn't tracked in seo_action — returned as null.
   const p = getPool();
   const result = await p.query(`
     SELECT
-      slo.id,
-      COALESCE(sr.target_query, kc.primary_keyword, 'Unknown') AS cluster_topic,
-      COALESCE(sr.target_query, '') AS keyword,
-      COALESCE(sr.target_url, '') AS page_url,
-      slo.baseline_position::numeric AS old_position,
-      slo.measured_position::numeric AS new_position,
+      sa.id,
+      COALESCE(sa.source_cluster, sa.source_keyword, 'Unknown') AS cluster_topic,
+      COALESCE(sa.source_keyword, '') AS keyword,
+      COALESCE(sa.target_url, '') AS page_url,
+      sa.gsc_position::numeric AS old_position,
       CASE
-        WHEN slo.baseline_impressions > 0 AND slo.measured_impressions > 0
-          AND slo.baseline_clicks IS NOT NULL AND slo.measured_clicks IS NOT NULL
-        THEN ROUND(
-          ((slo.measured_clicks::numeric / NULLIF(slo.measured_impressions, 0)) -
-           (slo.baseline_clicks::numeric / NULLIF(slo.baseline_impressions, 0))) * 100, 1)
-        ELSE 0
-      END AS ctr_change,
-      COALESCE(slo.measured_clicks, 0) - COALESCE(slo.baseline_clicks, 0) AS traffic_change,
-      slo.measurement_date AS execution_date,
-      el.measured_at_14d,
-      el.measured_at_30d,
-      el.measured_at_90d
-    FROM analytics.seo_learning_outcomes slo
-    LEFT JOIN analytics.seo_recommendations sr ON sr.id = slo.recommendation_id
-    LEFT JOIN analytics.keyword_clusters kc ON kc.id::text = (sr.supporting_data->>'cluster_id')
-    LEFT JOIN analytics.seo_execution_log el ON el.recommendation_id = slo.recommendation_id
-    ORDER BY slo.measurement_date DESC
+        WHEN sa.gsc_position IS NOT NULL AND sa.outcome_position_delta IS NOT NULL
+        THEN (sa.gsc_position + sa.outcome_position_delta)::numeric
+        ELSE NULL
+      END AS new_position,
+      ROUND(COALESCE(sa.outcome_ctr_delta, 0)::numeric, 1) AS ctr_change,
+      COALESCE(sa.outcome_clicks_delta, 0) AS traffic_change,
+      COALESCE(sa.executed_at, sa.measured_at_14d) AS execution_date,
+      sa.measured_at_14d,
+      sa.measured_at_30d,
+      NULL::timestamptz AS measured_at_90d
+    FROM analytics.seo_action sa
+    WHERE sa.measured_at_14d IS NOT NULL OR sa.measured_at_30d IS NOT NULL
+    ORDER BY COALESCE(sa.measured_at_30d, sa.measured_at_14d) DESC
   `);
   return result.rows.map(r => ({
     ...r,
