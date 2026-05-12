@@ -42,7 +42,6 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Optimization',
     items: [
       { href: '/dashboard/seo/actions', label: 'SEO Actions', icon: 'review' },
-      { href: '/dashboard/seo/recommendations', label: 'Recommendations (legacy)', icon: 'review' },
       { href: '/dashboard/seo/execution-log', label: 'Execution Log', icon: 'timeline' },
       { href: '/dashboard/seo/content', label: 'Content Pipeline', icon: 'edit' },
       { href: '/dashboard/seo/backlinks', label: 'Backlinks', icon: 'search' },

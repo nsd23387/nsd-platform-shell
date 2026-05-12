@@ -48,7 +48,21 @@ export async function GET(req: NextRequest) {
          LIMIT $2`,
         [statuses, limit],
       );
-      rows = result.rows;
+      // pg returns NUMERIC columns as JS strings by default. The UI calls
+      // .toFixed() on these — coerce to number here so the API contract
+      // never leaks string-numerics.
+      rows = result.rows.map((r) => ({
+        ...r,
+        agent_review_score: r.agent_review_score != null ? Number(r.agent_review_score) : null,
+        gsc_position: r.gsc_position != null ? Number(r.gsc_position) : null,
+        gsc_ctr: r.gsc_ctr != null ? Number(r.gsc_ctr) : null,
+        gsc_impressions: r.gsc_impressions != null ? Number(r.gsc_impressions) : null,
+        gsc_clicks: r.gsc_clicks != null ? Number(r.gsc_clicks) : null,
+        outcome_position_delta: r.outcome_position_delta != null ? Number(r.outcome_position_delta) : null,
+        outcome_impressions_delta: r.outcome_impressions_delta != null ? Number(r.outcome_impressions_delta) : null,
+        outcome_ctr_delta: r.outcome_ctr_delta != null ? Number(r.outcome_ctr_delta) : null,
+        outcome_clicks_delta: r.outcome_clicks_delta != null ? Number(r.outcome_clicks_delta) : null,
+      }));
     } catch {
       // seo_action table may not exist yet — fall through to candidate fallback
     }

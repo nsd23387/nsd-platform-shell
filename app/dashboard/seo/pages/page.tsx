@@ -138,7 +138,7 @@ function PagePerformanceContent() {
                   </div>
                 </div>
                 <Link
-                  href={`/dashboard/seo/recommendations?query=${encodeURIComponent(pagePath)}`}
+                  href={`/dashboard/seo/actions?query=${encodeURIComponent(pagePath)}`}
                   style={{
                     fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
                     color: '#EF4444', textDecoration: 'none', whiteSpace: 'nowrap', marginLeft: space['3'],

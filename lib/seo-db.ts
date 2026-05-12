@@ -184,7 +184,12 @@ export async function getRecommendations() {
     FROM analytics.seo_action sa
     ORDER BY sa.created_at DESC
   `);
-  return result.rows;
+  // pg returns NUMERIC as string; UI calls .toFixed() and other math.
+  return result.rows.map((r) => ({
+    ...r,
+    estimated_impact: r.estimated_impact != null ? Number(r.estimated_impact) : null,
+    priority: r.priority != null ? Number(r.priority) : null,
+  }));
 }
 
 export async function approveRecommendation(id: string) {

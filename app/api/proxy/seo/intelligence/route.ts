@@ -814,7 +814,19 @@ async function getEngineRecommendations(limit: number, family?: string | null, r
     LIMIT $${paramIdx}
   `, [...params, limit]);
 
-  return rows;
+  // pg returns NUMERIC columns as strings; coerce so the UI's .toFixed()
+  // calls don't throw "is not a function".
+  const numericFields = [
+    'total_opportunity_score', 'demand_score', 'competitive_opportunity_score',
+    'authority_gap_score', 'paid_support_score', 'execution_readiness_score',
+    'gsc_impressions', 'gsc_best_position', 'ahrefs_cpc',
+    'competitor_domain_rating',
+  ];
+  return rows.map((r) => {
+    const out: Record<string, unknown> = { ...r };
+    for (const k of numericFields) if (out[k] != null) out[k] = Number(out[k]);
+    return out;
+  });
 }
 
 // Migrated 2026-05-12: single-table seo_action lookup.
@@ -910,7 +922,17 @@ async function getEngineRecommendationDetail(opportunityId: string) {
     rollback_eligible: !!opp.executed_at && !!opp.rollback_available,
   }];
 
-  return { ...opp, execution_candidates: execRows };
+  // Coerce numeric strings (pg returns NUMERIC as string)
+  const numericFields = [
+    'total_opportunity_score', 'demand_score', 'competitive_opportunity_score',
+    'authority_gap_score', 'paid_support_score', 'execution_readiness_score',
+    'gsc_impressions', 'gsc_best_position', 'ahrefs_cpc',
+    'competitor_domain_rating',
+  ];
+  const cleaned: Record<string, unknown> = { ...opp };
+  for (const k of numericFields) if (cleaned[k] != null) cleaned[k] = Number(cleaned[k]);
+
+  return { ...cleaned, execution_candidates: execRows };
 }
 
 export async function GET(req: NextRequest) {
