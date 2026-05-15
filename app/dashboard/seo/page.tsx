@@ -276,7 +276,7 @@ function CompetitorGapsPanel({
             </div>
           ))}
         </div>
-        <div style={{ marginTop: space['3'], padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.subtle, border: `1px solid ${tc.border.subtle}`, borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: lineHeight.relaxed }}>
+        <div style={{ marginTop: space['3'], padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.muted, border: `1px solid ${tc.border.subtle}`, borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: lineHeight.relaxed }}>
           Source: <strong style={{ color: tc.text.secondary }}>cluster engine</strong> (analytics.seo_competitor_gap), refreshed daily.
           Ahrefs is decommissioned — share-of-voice and backlink-gap views are no longer available.
         </div>
