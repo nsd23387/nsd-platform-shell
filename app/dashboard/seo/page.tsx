@@ -258,8 +258,7 @@ function DataFreshnessCard({
 // mockup: any negative or low-positive delta surfaces the warning.
 // =============================================================================
 
-function VelocityStallCallout({ tc, timeseries }: {
-  tc: ReturnType<typeof useThemeColors>;
+function VelocityStallCallout({ timeseries }: {
   timeseries: SeoTimeseriesResponse | null;
 }) {
   const delta = timeseries?.summary.half_over_half_delta_pct ?? null;
@@ -278,7 +277,6 @@ function VelocityStallCallout({ tc, timeseries }: {
         <strong>Velocity {delta < 0 ? 'decline' : 'stall'} detected:</strong>{' '}
         organic clicks are {delta >= 0 ? `only +${delta.toFixed(1)}%` : `${delta.toFixed(1)}%`} half-over-half on this window.
         Review the priority queue below — the highest-impact fixes should restore growth.
-        {tc.text /* keep tc referenced */ ? null : null}
       </div>
     </div>
   );
@@ -480,20 +478,26 @@ function SeoOverviewContent() {
 
   useEffect(() => {
     let cancelled = false;
+    // Use allSettled + per-request timeout so a single hanging upstream
+    // (e.g. cluster-engine cold start) cannot trap the page on Loading.
+    const withTimeout = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
+      Promise.race([
+        p,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+      ]);
     (async () => {
-      try {
-        const [k, gh, rs, cg] = await Promise.all([
-          getSeoOverviewKpis(),
-          getGscPipelineHealth().catch(() => null),
-          getRecommendations().catch(() => [] as SeoRecommendation[]),
-          getSeoCompetitorGaps().catch(() => [] as SeoCompetitorGap[]),
-        ]);
-        if (!cancelled) {
-          setKpis(k); setGscHealth(gh); setRecs(rs); setCompetitorGaps(cg); setLoading(false);
-        }
-      } catch (err) {
-        if (!cancelled) { setError(err instanceof Error ? err.message : 'Unknown error'); setLoading(false); }
-      }
+      const [kRes, ghRes, rsRes, cgRes] = await Promise.allSettled([
+        withTimeout(getSeoOverviewKpis(), 8000, null as SeoOverviewKpis | null),
+        withTimeout(getGscPipelineHealth(), 8000, null as GscPipelineHealth | null),
+        withTimeout(getRecommendations(), 8000, [] as SeoRecommendation[]),
+        withTimeout(getSeoCompetitorGaps(), 8000, [] as SeoCompetitorGap[]),
+      ]);
+      if (cancelled) return;
+      setKpis(kRes.status === 'fulfilled' ? kRes.value : null);
+      setGscHealth(ghRes.status === 'fulfilled' ? ghRes.value : null);
+      setRecs(rsRes.status === 'fulfilled' ? rsRes.value : []);
+      setCompetitorGaps(cgRes.status === 'fulfilled' ? cgRes.value : []);
+      setLoading(false);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -608,7 +612,7 @@ function SeoOverviewContent() {
             data-testid="button-diagnose-url"
             onClick={() => {
               const u = window.prompt('Diagnose a URL — paste the page path or full URL');
-              if (u) window.open(`/dashboard/seo/page-performance?url=${encodeURIComponent(u)}`, '_self');
+              if (u) window.open(`/dashboard/seo/pages?url=${encodeURIComponent(u)}`, '_self');
             }}
             style={{
               padding: '8px 14px', background: tc.background.surface,
@@ -650,9 +654,15 @@ function SeoOverviewContent() {
               <RangeBtn tc={tc} active={range === 'custom'} onClick={() => setRange('custom')} testId="button-range-custom">Custom</RangeBtn>
               {range === 'custom' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginLeft: space['2'] }}>
+                  <label htmlFor="seo-custom-days" style={{ position: 'absolute', left: -9999, width: 1, height: 1, overflow: 'hidden' }}>
+                    Custom timeline range in days
+                  </label>
                   <input
+                    id="seo-custom-days"
                     data-testid="input-custom-days"
                     type="range" min={7} max={90} value={customDays}
+                    aria-label="Custom timeline range in days"
+                    aria-valuemin={7} aria-valuemax={90} aria-valuenow={customDays}
                     onChange={(e) => setCustomDays(Number(e.target.value))}
                     style={{ width: 140 }}
                   />
@@ -663,7 +673,7 @@ function SeoOverviewContent() {
             <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>vs prior period</span>
           </div>
           <TimelineChart tc={tc} data={timeseries} />
-          <VelocityStallCallout tc={tc} timeseries={timeseries} />
+          <VelocityStallCallout timeseries={timeseries} />
         </div>
         <DataFreshnessCard tc={tc} gscHealth={gscHealth} kpis={kpis} />
       </div>
@@ -694,7 +704,7 @@ function SeoOverviewContent() {
         )}
         {totalPending > priorityQueue.length && (
           <div style={{ padding: space['3'], borderTop: `1px solid ${tc.border.subtle}`, textAlign: 'center', backgroundColor: tc.background.muted }}>
-            <a data-testid="link-view-all-recommendations" href="/dashboard/seo/recommendations"
+            <a data-testid="link-view-all-recommendations" href="/dashboard/seo/opportunities"
               style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }}
             >
               View all {totalPending} recommendations →
