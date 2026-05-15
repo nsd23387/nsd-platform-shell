@@ -202,18 +202,22 @@ function DataFreshnessCard({
   gscHealth: GscPipelineHealth | null;
   kpis: SeoOverviewKpis | null;
 }) {
-  const sources: { src: string; age: string; status: 'good' | 'bad' | 'unknown' }[] = [
+  // Match the approved mockup: GSC, GA4, Google Ads, Cluster engine.
+  // GA4/Ads ages aren't currently piped through this page; show "—" with
+  // an explicit "see Marketing dashboard" link rather than fabricating data.
+  const sources: { src: string; age: string; status: 'good' | 'bad' | 'stale' | 'unknown' }[] = [
     {
       src: 'Google Search Console',
       age: relativeAge(gscHealth?.last_successful_run ?? gscHealth?.last_run_at ?? null),
       status: gscHealth?.status === 'healthy' ? 'good' : gscHealth?.status ? 'bad' : 'unknown',
     },
+    { src: 'GA4', age: '—', status: 'unknown' },
+    { src: 'Google Ads', age: '—', status: 'unknown' },
     {
       src: 'Cluster engine',
       age: relativeAge(kpis?.last_pipeline_run_at ?? null),
       status: kpis?.last_pipeline_run_at ? 'good' : 'unknown',
     },
-    { src: 'Ahrefs', age: 'decommissioned', status: 'bad' },
   ];
 
   return (
@@ -229,7 +233,7 @@ function DataFreshnessCard({
         Data freshness
       </div>
       {sources.map((s) => {
-        const dotColor = s.status === 'good' ? PALETTE.good : s.status === 'bad' ? PALETTE.bad : tc.text.muted;
+        const dotColor = s.status === 'good' ? PALETTE.good : s.status === 'bad' ? PALETTE.bad : s.status === 'stale' ? PALETTE.warn : tc.text.muted;
         const ageColor = s.status === 'bad' ? PALETTE.bad : tc.text.muted;
         return (
           <div
@@ -245,8 +249,15 @@ function DataFreshnessCard({
           </div>
         );
       })}
-      <div style={{ marginTop: space['3'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: lineHeight.relaxed }}>
-        Sources update on the nightly cluster pipeline. Ahrefs has been retired — competitor coverage is now driven by the cluster engine.
+      <a
+        data-testid="link-resync-ads"
+        href="/dashboard/marketing"
+        style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, fontWeight: fontWeight.medium, marginTop: space['3'], display: 'inline-block', textDecoration: 'none' }}
+      >
+        Resync Ads →
+      </a>
+      <div style={{ marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: lineHeight.relaxed }}>
+        Sources update on the nightly cluster pipeline. GA4 and Google Ads freshness is tracked on the Marketing dashboard.
       </div>
     </div>
   );
@@ -348,17 +359,18 @@ function ActionRow({
         >
           {rec.status === 'approved' ? 'Approved' : busy ? 'Approving…' : 'Approve'}
         </button>
-        <button
+        <a
           data-testid={`button-details-${rec.id}`}
+          href={`/dashboard/seo/opportunities/${rec.id}`}
           style={{
             padding: '6px 12px', background: tc.background.surface, color: tc.text.primary,
             border: `1px solid ${tc.border.strong}`, borderRadius: radius.md,
             fontSize: '12px', cursor: 'pointer', fontFamily: fontFamily.body,
+            textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
           }}
-          onClick={() => window.open(url.startsWith('http') ? url : `https://${url}`, '_blank', 'noopener')}
         >
-          Open URL
-        </button>
+          Details
+        </a>
       </div>
     </div>
   );
@@ -368,22 +380,32 @@ function ActionRow({
 // Competitor Gaps — cluster-engine sourced (Ahrefs decommissioned).
 // =============================================================================
 
+// Mirrors the approved mockup layout: a leaderboard TABLE on the left
+// (Competitor / Share of voice / Overlap / Gap kw / 30d trend) and a
+// "Top competitor gaps" sidecar on the right. Real cluster-engine data
+// fills the columns we can compute; Ahrefs-only columns degrade to "—"
+// with a clear footer explanation.
 function CompetitorGapsPanel({ tc, gaps }: { tc: ReturnType<typeof useThemeColors>; gaps: SeoCompetitorGap[] }) {
-  const top = useMemo(
-    () => [...gaps].sort((a, b) => (b.opportunity_score ?? 0) - (a.opportunity_score ?? 0)).slice(0, 8),
-    [gaps],
-  );
-  const byCompetitor = useMemo(() => {
-    const m = new Map<string, { domain: string; count: number }>();
+  const leaderboard = useMemo(() => {
+    const m = new Map<string, { domain: string; count: number; topPos: number | null }>();
     for (const g of gaps) {
       const dom = (g.competitor_url || '').replace(/^https?:\/\//, '').split('/')[0];
       if (!dom) continue;
-      const cur = m.get(dom) ?? { domain: dom, count: 0 };
+      const cur = m.get(dom) ?? { domain: dom, count: 0, topPos: null };
       cur.count += 1;
+      const pos = g.competitor_ranking_position;
+      if (pos != null && (cur.topPos == null || pos < cur.topPos)) cur.topPos = pos;
       m.set(dom, cur);
     }
-    return Array.from(m.values()).sort((a, b) => b.count - a.count).slice(0, 6);
+    const rows = Array.from(m.values()).sort((a, b) => b.count - a.count);
+    const totalGaps = rows.reduce((s, r) => s + r.count, 0) || 1;
+    return rows.slice(0, 6).map((r) => ({ ...r, sovProxy: (r.count / totalGaps) * 100 }));
   }, [gaps]);
+
+  const topGaps = useMemo(
+    () => [...gaps].sort((a, b) => (b.opportunity_score ?? 0) - (a.opportunity_score ?? 0)).slice(0, 6),
+    [gaps],
+  );
 
   if (gaps.length === 0) {
     return (
@@ -393,64 +415,108 @@ function CompetitorGapsPanel({ tc, gaps }: { tc: ReturnType<typeof useThemeColor
     );
   }
 
+  const maxSov = Math.max(1, ...leaderboard.map((r) => r.sovProxy));
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: space['4'] }}>
-      <div>
-        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: space['2'] }}>
-          Top competitor gaps · ranked by opportunity score
-        </div>
-        <div>
-          {top.map((g, i) => {
-            const dom = (g.competitor_url || '').replace(/^https?:\/\//, '').split('/')[0];
-            const oursLabel = g.our_ranking_position ? `pos ${g.our_ranking_position}` : 'unranked';
-            return (
-              <div key={g.id} data-testid={`row-competitor-gap-${i}`}
-                style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-                  padding: `${space['2']} 0`, borderBottom: i < top.length - 1 ? `1px solid ${tc.border.subtle}` : 'none',
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary }}>
-                    {g.keyword || g.cluster_keyword || g.content_gap_notes || '—'}
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: space['4'] }}>
+      {/* Competitor leaderboard TABLE */}
+      <div style={{ overflow: 'hidden', border: `1px solid ${tc.border.subtle}`, borderRadius: radius.md }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '13px' }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${tc.border.subtle}`, textAlign: 'left', backgroundColor: tc.background.muted }}>
+              {['Competitor', 'Share of voice', 'Overlap', 'Gap kw', '30d trend'].map((h, i) => (
+                <th key={h} style={{
+                  padding: '10px 12px',
+                  fontWeight: fontWeight.semibold, color: tc.text.muted, fontSize: '11px',
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                  textAlign: i === 0 ? 'left' : 'right',
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {leaderboard.map((c) => (
+              <tr key={c.domain}
+                  data-testid={`row-competitor-leaderboard-${c.domain}`}
+                  style={{ borderBottom: `1px solid ${tc.border.subtle}` }}>
+                <td style={{ padding: '10px 12px', fontWeight: fontWeight.medium, color: tc.text.primary }}>
+                  {c.domain}
+                </td>
+                <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                  <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                    <span style={{ fontFamily: monoStack }}>{c.sovProxy.toFixed(1)}%</span>
+                    <span style={{ display: 'inline-block', width: 80, height: 4, background: tc.border.subtle, borderRadius: 2 }}>
+                      <span style={{ display: 'block', width: `${(c.sovProxy / maxSov) * 100}%`, height: '100%', background: PALETTE.violet, borderRadius: 2 }} />
+                    </span>
                   </div>
-                  <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px' }}>
-                    <span style={{ color: PALETTE.bad }}>{dom}</span>
-                    {g.competitor_ranking_position != null && <> ranks pos <span style={{ fontFamily: monoStack }}>{g.competitor_ranking_position}</span></>}
-                    {' · '}you&rsquo;re <span style={{ fontFamily: monoStack }}>{oursLabel}</span>
-                  </div>
-                </div>
-                {g.opportunity_score != null && (
-                  <div style={{ marginLeft: space['3'], textAlign: 'right' }}>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Score</div>
-                    <div style={{ fontFamily: monoStack, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-                      {g.opportunity_score.toFixed(2)}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                </td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', color: tc.text.muted, fontFamily: monoStack }}>—</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{c.count}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', color: tc.text.muted, fontFamily: monoStack }}>—</td>
+              </tr>
+            ))}
+            {/* "You" row — fixed neonsignsdepot identity row, mirrors mockup */}
+            <tr data-testid="row-competitor-leaderboard-you"
+                style={{ borderBottom: `1px solid ${tc.border.subtle}`, background: PALETTE.violetSoft }}>
+              <td style={{ padding: '10px 12px', fontWeight: fontWeight.semibold, color: PALETTE.violet }}>
+                You — neonsignsdepot.com
+              </td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', color: tc.text.muted, fontFamily: monoStack }}>—</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', color: tc.text.muted, fontFamily: monoStack }}>—</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.muted }}>0</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', color: tc.text.muted, fontFamily: monoStack }}>—</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style={{
+          padding: '10px 12px', borderTop: `1px solid ${tc.border.subtle}`,
+          fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, backgroundColor: tc.background.muted,
+          display: 'flex', justifyContent: 'space-between', gap: space['3'], flexWrap: 'wrap',
+        }}>
+          <span>Share of voice = % of tracked gap keywords each competitor ranks for. Overlap and 30d trend require Ahrefs (decommissioned).</span>
+          <a href="/dashboard/seo/competitive" style={{ color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }}>
+            View full SERP analysis →
+          </a>
         </div>
       </div>
+
+      {/* Top competitor gaps sidecar */}
       <div>
-        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: space['2'] }}>
-          Most-overlapping competitors
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
+          Top competitor gaps
         </div>
-        <div>
-          {byCompetitor.map((c) => (
-            <div key={c.domain} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: `${space['1.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
-              <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{c.domain}</span>
-              <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted }}>
-                {c.count} gap{c.count === 1 ? '' : 's'}
-              </span>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['3'] }}>
+          Queries competitors rank top-10 for, you don&rsquo;t
+        </div>
+        {topGaps.map((g, i) => {
+          const dom = (g.competitor_url || '').replace(/^https?:\/\//, '').split('/')[0];
+          return (
+            <div key={g.id} data-testid={`row-competitor-gap-${i}`}
+              style={{ padding: `${space['2.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2px', gap: space['2'] }}>
+                <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary, wordBreak: 'break-word' }}>
+                  {g.keyword || g.cluster_keyword || '—'}
+                </span>
+                {g.opportunity_score != null && (
+                  <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, whiteSpace: 'nowrap' }}>
+                    {g.opportunity_score.toFixed(2)}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
+                <span style={{ color: PALETTE.bad }}>{dom}</span>
+                {g.competitor_ranking_position != null && (
+                  <> ranks pos <span style={{ fontFamily: monoStack }}>{g.competitor_ranking_position}</span></>
+                )}
+                {' · '}you&rsquo;re <span style={{ fontFamily: monoStack }}>{g.our_ranking_position ? `pos ${g.our_ranking_position}` : 'unranked'}</span>
+              </div>
             </div>
-          ))}
-        </div>
-        <div style={{ marginTop: space['3'], padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.muted, border: `1px solid ${tc.border.subtle}`, borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: lineHeight.relaxed }}>
-          Source: <strong style={{ color: tc.text.secondary }}>cluster engine</strong> (analytics.seo_competitor_gap), refreshed daily.
-          Ahrefs is decommissioned — share-of-voice and backlink-gap views are no longer available.
-        </div>
+          );
+        })}
+        <a href="/dashboard/seo/opportunities"
+           style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, fontWeight: fontWeight.medium, marginTop: space['3'], display: 'inline-block', textDecoration: 'none' }}>
+          Generate page recommendations →
+        </a>
       </div>
     </div>
   );
@@ -587,10 +653,6 @@ function SeoOverviewContent() {
     padding: space['5'],
   };
 
-  // Greeting derived from local time (still locale-friendly).
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-
   return (
     <div style={{ padding: space['6'], maxWidth: 1280, margin: '0 auto', fontFamily: fontFamily.body, color: tc.text.primary }}>
       {/* ============================ HEADER ============================ */}
@@ -604,7 +666,7 @@ function SeoOverviewContent() {
           <div data-testid="text-header-subtitle"
             style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: space['1'] }}
           >
-            {greeting} — {headerSubtitle}
+            {headerSubtitle}
           </div>
         </div>
         <div style={{ display: 'flex', gap: space['2'] }}>
