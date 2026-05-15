@@ -79,12 +79,15 @@ export async function GET(req: NextRequest) {
     // Skip ultra-short/single-character queries (low intent, no ranking potential)
     where += ` AND LENGTH(COALESCE(g.keyword, '')) >= 4`;
 
+    // Note: seo_competitor_gap (post-Ahrefs source) does not carry search_volume
+    // or keyword_difficulty — those came from Ahrefs. We expose nulls so callers
+    // can degrade gracefully without breaking their type contracts.
     const { rows } = await p.query(`
       SELECT
         g.*,
         COALESCE(g.opportunity_score, null) AS opportunity_score,
-        COALESCE(g.keyword_difficulty, null) AS keyword_difficulty,
-        COALESCE(g.search_volume, null) AS search_volume,
+        NULL::int AS keyword_difficulty,
+        NULL::int AS search_volume,
         kc.primary_keyword AS cluster_keyword
       FROM analytics.seo_competitor_gap g
       LEFT JOIN analytics.keyword_clusters kc ON kc.id = g.cluster_id

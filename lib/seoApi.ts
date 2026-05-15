@@ -784,6 +784,67 @@ export async function getSeoProgress(): Promise<SeoProgressResponse> {
   return seoFetch<SeoProgressResponse>('/api/proxy/seo/progress');
 }
 
+// =============================================================================
+// SEO Timeseries (daily clicks/impressions, post-Ahrefs — sourced from GSC)
+// =============================================================================
+
+export interface SeoTimeseriesPoint {
+  date: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  avg_position: number | null;
+}
+
+export interface SeoTimeseriesResponse {
+  range_days: number;
+  start_date: string | null;
+  end_date: string | null;
+  series: SeoTimeseriesPoint[];
+  summary: {
+    total_clicks: number;
+    total_impressions: number;
+    half_over_half_delta_pct: number | null;
+  };
+}
+
+export async function getSeoTimeseries(days: number): Promise<SeoTimeseriesResponse> {
+  return seoFetch<SeoTimeseriesResponse>(`/api/proxy/seo/timeseries?days=${days}`);
+}
+
+// =============================================================================
+// Competitor Gaps (post-Ahrefs — sourced from analytics.seo_competitor_gap,
+// produced by the ODS cluster engine, not Ahrefs).
+// =============================================================================
+
+export interface SeoCompetitorGap {
+  id: string;
+  competitor_url: string;
+  gap_type: 'keyword' | 'content' | string;
+  keyword: string | null;
+  competitor_ranking_position: number | null;
+  our_ranking_position: number | null;
+  competitor_page_url: string | null;
+  competitor_page_title: string | null;
+  content_gap_notes: string | null;
+  cluster_id: string | null;
+  cluster_keyword: string | null;
+  opportunity_score: number | null;
+  search_volume: number | null;
+  keyword_difficulty: number | null;
+  status: string;
+  discovered_at: string;
+}
+
+export async function getSeoCompetitorGaps(opts?: { type?: string; status?: string }): Promise<SeoCompetitorGap[]> {
+  const sp = new URLSearchParams();
+  if (opts?.type) sp.set('type', opts.type);
+  if (opts?.status) sp.set('status', opts.status);
+  const qs = sp.toString();
+  const data = await seoFetch<{ data: SeoCompetitorGap[] }>(`/api/proxy/seo/competitor-gaps${qs ? `?${qs}` : ''}`);
+  return data.data ?? [];
+}
+
 export async function markBacklinkContacted(domain: string): Promise<void> {
   await seoFetch('/api/proxy/seo/backlinks', {
     method: 'POST',

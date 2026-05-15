@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../hooks/useRBAC';
 import { AccessDenied, DashboardCard } from '../../../components/dashboard';
@@ -9,8 +9,14 @@ import { useThemeColors } from '../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
 import { violet } from '../../../design/tokens/colors';
-import { getSeoOverviewKpis, getPagePerformance, getGscPipelineHealth, getSeoProgress } from '../../../lib/seoApi';
-import type { SeoOverviewKpis, PageQueryPerformance, GscPipelineHealth, SeoProgressResponse } from '../../../lib/seoApi';
+import {
+  getSeoOverviewKpis, getPagePerformance, getGscPipelineHealth, getSeoProgress,
+  getSeoTimeseries, getSeoCompetitorGaps,
+} from '../../../lib/seoApi';
+import type {
+  SeoOverviewKpis, PageQueryPerformance, GscPipelineHealth, SeoProgressResponse,
+  SeoTimeseriesResponse, SeoCompetitorGap,
+} from '../../../lib/seoApi';
 
 // =============================================================================
 // Overview Page — Action-first layout
@@ -65,6 +71,220 @@ function ProgressBlock({
   );
 }
 
+// =============================================================================
+// Timeline Chart — daily organic clicks, 30/60/90/custom range
+// Sourced from analytics.metrics_search_console_daily (GSC). No Ahrefs.
+// =============================================================================
+
+type TimelineRange = '30' | '60' | '90' | 'custom';
+
+function TimelineChart({
+  tc, data,
+}: {
+  tc: ReturnType<typeof useThemeColors>;
+  data: SeoTimeseriesResponse | null;
+}) {
+  if (!data || data.series.length === 0) {
+    return (
+      <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
+        No Search Console data for this range.
+      </div>
+    );
+  }
+  const w = 760, h = 200, pad = { l: 36, r: 12, t: 12, b: 24 };
+  const series = data.series;
+  const maxC = Math.max(...series.map(d => d.clicks));
+  const max = (maxC === 0 ? 1 : maxC) * 1.15;
+  const min = 0;
+  const xStep = (w - pad.l - pad.r) / Math.max(1, series.length - 1);
+  const y = (v: number) => pad.t + (h - pad.t - pad.b) * (1 - (v - min) / (max - min));
+  const linePts = series.map((d, i) => `${pad.l + i * xStep},${y(d.clicks)}`).join(' ');
+  const areaPts = `${pad.l},${h - pad.b} ${linePts} ${pad.l + (series.length - 1) * xStep},${h - pad.b}`;
+  const ticks = [0, 1, 2, 3].map(i => min + ((max - min) / 3) * i);
+  const labelEvery = Math.max(1, Math.floor(series.length / 6));
+  const delta = data.summary.half_over_half_delta_pct;
+  const totalClicks = data.summary.total_clicks;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: space['6'], marginBottom: space['3'], alignItems: 'baseline', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Organic clicks · last {data.range_days} days
+          </div>
+          <div style={{ display: 'flex', gap: space['3'], alignItems: 'baseline', marginTop: space['1'] }}>
+            <span style={{ fontFamily: fontFamily.display, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }}>
+              {totalClicks.toLocaleString()}
+            </span>
+            {delta != null && (
+              <span style={{ fontSize: '13px', color: delta >= 0 ? '#065f46' : '#991b1b', fontWeight: fontWeight.medium }}>
+                {delta >= 0 ? '+' : ''}{delta.toFixed(1)}% half-over-half
+              </span>
+            )}
+          </div>
+          <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: space['1'] }}>
+            {data.summary.total_impressions.toLocaleString()} impressions over the period · {data.start_date} → {data.end_date}
+          </div>
+        </div>
+      </div>
+      <svg width={w} height={h} style={{ display: 'block', maxWidth: '100%' }}>
+        <defs>
+          <linearGradient id="seo-timeline-grad" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={violet[500]} stopOpacity="0.22" />
+            <stop offset="100%" stopColor={violet[500]} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={pad.l} x2={w - pad.r} y1={y(t)} y2={y(t)} stroke={tc.border.subtle} strokeDasharray="2 3" />
+            <text x={pad.l - 6} y={y(t) + 3} textAnchor="end" fontSize="10" fill={tc.text.muted}>{Math.round(t)}</text>
+          </g>
+        ))}
+        {series.map((d, i) => i % labelEvery === 0 && (
+          <text key={i} x={pad.l + i * xStep} y={h - 6} textAnchor="middle" fontSize="10" fill={tc.text.muted}>
+            {d.date.slice(5)}
+          </text>
+        ))}
+        <polygon points={areaPts} fill="url(#seo-timeline-grad)" />
+        <polyline points={linePts} fill="none" stroke={violet[500]} strokeWidth={2} />
+      </svg>
+      {totalClicks < 20 && (
+        <div style={{ marginTop: space['3'], padding: `${space['2']} ${space['3']}`, backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: '12px', color: '#92400e', lineHeight: lineHeight.relaxed }}>
+          ⚠ Organic clicks are very low for this window — average position is {(series.reduce((s, d) => s + (d.avg_position ?? 0), 0) / Math.max(1, series.filter(d => d.avg_position != null).length)).toFixed(1)}. The priority queue below has the highest-impact fixes.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RangeBtn({ tc, active, onClick, children }: { tc: ReturnType<typeof useThemeColors>; active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: `${space['1']} ${space['3']}`,
+        background: active ? violet[500] : tc.background.surface,
+        color: active ? '#ffffff' : tc.text.primary,
+        border: `1px solid ${active ? violet[500] : tc.border.default}`,
+        borderRadius: radius.md,
+        fontFamily: fontFamily.body,
+        fontSize: '12px',
+        fontWeight: active ? fontWeight.semibold : fontWeight.medium,
+        cursor: 'pointer',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// =============================================================================
+// Competitor Gaps Panel — sourced from analytics.seo_competitor_gap (cluster
+// engine). Replaces the previous Ahrefs-backed panels.
+// =============================================================================
+
+function CompetitorGapsPanel({
+  tc, gaps,
+}: {
+  tc: ReturnType<typeof useThemeColors>;
+  gaps: SeoCompetitorGap[];
+}) {
+  const top = useMemo(
+    () => [...gaps].sort((a, b) => (b.opportunity_score ?? 0) - (a.opportunity_score ?? 0)).slice(0, 8),
+    [gaps],
+  );
+  const byCompetitor = useMemo(() => {
+    const m = new Map<string, { domain: string; count: number; bestScore: number }>();
+    for (const g of gaps) {
+      const dom = (g.competitor_url || '').replace(/^https?:\/\//, '').split('/')[0];
+      if (!dom) continue;
+      const cur = m.get(dom) ?? { domain: dom, count: 0, bestScore: 0 };
+      cur.count += 1;
+      cur.bestScore = Math.max(cur.bestScore, g.opportunity_score ?? 0);
+      m.set(dom, cur);
+    }
+    return Array.from(m.values()).sort((a, b) => b.count - a.count).slice(0, 6);
+  }, [gaps]);
+
+  if (gaps.length === 0) {
+    return (
+      <div style={{ padding: space['5'], color: tc.text.muted, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
+        No competitor gaps detected by the cluster engine in the last sweep.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: space['4'] }}>
+      {/* Top opportunities — ranked queries competitors capture, you don't */}
+      <div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: space['2'] }}>
+          Top competitor gaps · ranked by opportunity score
+        </div>
+        <div>
+          {top.map((g, i) => {
+            const dom = (g.competitor_url || '').replace(/^https?:\/\//, '').split('/')[0];
+            const oursLabel = g.our_ranking_position
+              ? `pos ${g.our_ranking_position}`
+              : 'unranked';
+            return (
+              <div
+                key={g.id}
+                style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                  padding: `${space['2']} 0`, borderBottom: i < top.length - 1 ? `1px solid ${tc.border.subtle}` : 'none',
+                }}
+                data-testid={`row-competitor-gap-${i}`}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary }}>
+                    {g.keyword || g.cluster_keyword || g.content_gap_notes || '—'}
+                  </div>
+                  <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px' }}>
+                    <span style={{ color: '#991b1b' }}>{dom}</span>
+                    {g.competitor_ranking_position != null && <> ranks pos <span style={{ fontVariantNumeric: 'tabular-nums' }}>{g.competitor_ranking_position}</span></>}
+                    {' · '}you&rsquo;re <span style={{ fontVariantNumeric: 'tabular-nums' }}>{oursLabel}</span>
+                    {g.search_volume != null && <> · <span style={{ fontVariantNumeric: 'tabular-nums' }}>{g.search_volume.toLocaleString()}</span>/mo</>}
+                  </div>
+                </div>
+                {g.opportunity_score != null && (
+                  <div style={{ marginLeft: space['3'], textAlign: 'right' }}>
+                    <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Score</div>
+                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: tc.text.primary, fontVariantNumeric: 'tabular-nums' }}>
+                      {g.opportunity_score.toFixed(2)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Per-competitor counts */}
+      <div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: space['2'] }}>
+          Most-overlapping competitors
+        </div>
+        <div>
+          {byCompetitor.map((c) => (
+            <div key={c.domain} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: `${space['1.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
+              <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{c.domain}</span>
+              <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, fontVariantNumeric: 'tabular-nums' }}>
+                {c.count} gap{c.count === 1 ? '' : 's'}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: space['3'], padding: `${space['2']} ${space['3']}`, backgroundColor: tc.background.subtle, border: `1px solid ${tc.border.subtle}`, borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: lineHeight.relaxed }}>
+          Source: <strong style={{ color: tc.text.secondary }}>cluster engine</strong> (analytics.seo_competitor_gap), refreshed daily.
+          Ahrefs is decommissioned — share-of-voice and backlink-gap views are no longer available.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SeoOverviewContent() {
   const tc = useThemeColors();
   const [kpis, setKpis] = useState<SeoOverviewKpis | null>(null);
@@ -75,18 +295,30 @@ function SeoOverviewContent() {
   const [error, setError] = useState<string | null>(null);
   const [systemExpanded, setSystemExpanded] = useState(false);
 
+  // Timeline state
+  const [range, setRange] = useState<TimelineRange>('30');
+  const [customDays, setCustomDays] = useState(45);
+  const days = range === 'custom' ? customDays : Number(range);
+  const [timeseries, setTimeseries] = useState<SeoTimeseriesResponse | null>(null);
+  const [timeseriesLoading, setTimeseriesLoading] = useState(false);
+
+  // Competitor gaps
+  const [competitorGaps, setCompetitorGaps] = useState<SeoCompetitorGap[]>([]);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const [k, tp, gh, pr] = await Promise.all([
+        const [k, tp, gh, pr, cg] = await Promise.all([
           getSeoOverviewKpis(),
           getPagePerformance('impressions', 50),
           getGscPipelineHealth().catch(() => null),
           getSeoProgress().catch(() => null),
+          getSeoCompetitorGaps().catch(() => []),
         ]);
         if (!cancelled) {
-          setKpis(k); setTopPages(tp); setGscHealth(gh); setProgress(pr); setLoading(false);
+          setKpis(k); setTopPages(tp); setGscHealth(gh); setProgress(pr);
+          setCompetitorGaps(cg); setLoading(false);
         }
       } catch (err: unknown) {
         if (!cancelled) { setError(err instanceof Error ? err.message : 'Unknown error'); setLoading(false); }
@@ -95,6 +327,17 @@ function SeoOverviewContent() {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // Reload timeseries whenever the range changes
+  useEffect(() => {
+    let cancelled = false;
+    setTimeseriesLoading(true);
+    getSeoTimeseries(days)
+      .then((r) => { if (!cancelled) setTimeseries(r); })
+      .catch(() => { if (!cancelled) setTimeseries(null); })
+      .finally(() => { if (!cancelled) setTimeseriesLoading(false); });
+    return () => { cancelled = true; };
+  }, [days]);
 
   // Derived data
   const pendingCount = kpis?.awaiting_approval ?? 0;
@@ -179,6 +422,47 @@ function SeoOverviewContent() {
           </span>
         </div>
       )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* TIMELINE — daily organic clicks, 30/60/90/custom (GSC, post-Ahrefs)*/}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <div style={{ marginBottom: space['6'], backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['5'] }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: space['3'], flexWrap: 'wrap', gap: space['3'] }}>
+          <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>
+            Organic traffic timeline
+          </h2>
+          <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', alignItems: 'center' }}>
+            <RangeBtn tc={tc} active={range === '30'} onClick={() => setRange('30')}>30d</RangeBtn>
+            <RangeBtn tc={tc} active={range === '60'} onClick={() => setRange('60')}>60d</RangeBtn>
+            <RangeBtn tc={tc} active={range === '90'} onClick={() => setRange('90')}>90d</RangeBtn>
+            <RangeBtn tc={tc} active={range === 'custom'} onClick={() => setRange('custom')}>Custom</RangeBtn>
+            {range === 'custom' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginLeft: space['2'] }}>
+                <input
+                  type="range"
+                  min={7}
+                  max={90}
+                  value={customDays}
+                  onChange={(e) => setCustomDays(Number(e.target.value))}
+                  style={{ width: 140 }}
+                  aria-label="Custom days"
+                  data-testid="input-timeline-custom-days"
+                />
+                <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, fontVariantNumeric: 'tabular-nums', minWidth: 56 }}>
+                  {customDays} days
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+        {timeseriesLoading && !timeseries ? (
+          <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
+            Loading timeseries…
+          </div>
+        ) : (
+          <TimelineChart tc={tc} data={timeseries} />
+        )}
+      </div>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* TODAY'S BRIEF — actions yesterday + needs attention now             */}
@@ -437,6 +721,21 @@ function SeoOverviewContent() {
           </div>
         </div>
       )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* COMPETITOR INTELLIGENCE — sourced from cluster engine, not Ahrefs */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <div style={{ marginBottom: space['8'] }}>
+        <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['1'] }}>
+          Competitor intelligence
+        </h2>
+        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['4'] }}>
+          Queries competitors capture that you don&rsquo;t — refreshed daily by the cluster engine.
+        </p>
+        <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['5'] }}>
+          <CompetitorGapsPanel tc={tc} gaps={competitorGaps} />
+        </div>
+      </div>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* SECTION C — System status (collapsed by default)                  */}
