@@ -1,0 +1,273 @@
+You are performing a targeted diagnostic audit of the reporting and SEO dashboard
+components in the nsd-platform-shell repo (Next.js / Vercel).
+This is a read-only inspection — report findings only, make no changes.
+
+## Context
+
+A full audit of the nsd-ods-api (the ODS API layer) was completed on 2026-05-14.
+Several backend issues have now been fixed:
+  - analytics.seo_revenue_attribution table created (was missing)
+  - analytics.seo_content_score_log table created (was missing)
+  - analytics.seo_conversion_events table created (was missing)
+  - analytics.seo_cluster_opportunities view fixed (was producing 0 actionable rows)
+  - seo_page_index.topic backfilled (was NULL for all 1,492 rows)
+
+What remains unknown is how nsd-platform-shell consumes the ODS API and whether the
+dashboard components handle backend failures gracefully, show stale/empty states
+correctly, and surface actionable data to reviewers. Your job is to inspect each
+area below, confirm what is rendering (or failing) in the UI, and report exactly
+what is broken and what the fix would be.
+
+The ODS API base URL will be something like https://[nsd-ods-api-domain]/api/v1.
+All data flows through that API — the shell does not query Supabase directly.
+
+---
+
+## INVESTIGATION 1 — SEO Intelligence Dashboard Queue Pages
+
+**Symptom confirmed from ODS API side:**
+The following ODS API endpoints were returning 500 errors until 2026-05-14:
+  GET /api/v1/seo/intelligence/queue/content
+  GET /api/v1/seo/intelligence/queue/quick-wins
+  GET /api/v1/seo/intelligence/queue/authority
+  GET /api/v1/seo/intelligence/queue/balanced
+  GET /api/v1/seo/intelligence/queue/overview
+
+Root cause was an integer overflow in analytics.seo_opportunity_score_v2 (now
+potentially resolved — backend team should confirm). These endpoints may now be
+returning data for the first time.
+
+**Investigate:**
+1. Find the dashboard page(s) that render the SEO opportunity queue. What is the
+   file path? (Likely under app/(dashboard)/seo/, pages/seo/, or similar.)
+2. For each queue endpoint listed above — how does the component handle a 500 error?
+   Does it show an error boundary, an empty state, a spinner that never resolves,
+   or a crash?
+3. What does the component render when the endpoint returns an empty array []?
+   Is there a meaningful empty state or does it show a blank panel?
+4. How does the component handle the data shape from the queue endpoint? Specifically:
+   - Does it expect total_opportunity_score as a number or string?
+   - Does it expect urgency_band to be 'high' | 'medium' | 'low' | null?
+   - Does it handle null values in ahrefs_search_volume, gsc_impressions, etc.?
+5. Is there any client-side caching (SWR, React Query, fetch with revalidate) that
+   would serve a stale 500 error response even after the backend is fixed?
+   If so, what is the cache TTL and revalidation strategy?
+
+**Report:** File paths for the queue page components, error handling behaviour for
+500 and empty responses, any data shape assumptions that might cause runtime errors
+when the endpoint starts returning real data, and cache invalidation needed.
+
+---
+
+## INVESTIGATION 2 — SEO Action Items / Reviewer Workflow
+
+**Symptom confirmed from DB:**
+  SELECT status, COUNT(*) FROM analytics.seo_action GROUP BY status;
+  → rejected: 3 rows  (the only rows in the entire table)
+
+  SELECT COUNT(*) FROM analytics.seo_recommendations WHERE status = 'pending_review';
+  → 202 rows  (none visible in seo_action)
+
+There are 202 pending recommendations in analytics.seo_recommendations that are not
+appearing in the action items review queue because the two tables are not bridged.
+The dashboard reads from seo_action (3 rejected rows) not from seo_recommendations
+(202 pending rows).
+
+**Investigate:**
+1. Find the SEO action items / reviewer queue page. What API endpoint does it call?
+   - Does it call GET /api/v1/seo/recommendations?status=pending_review directly?
+   - Or does it call a different endpoint that reads from seo_action?
+   - Or a combined endpoint?
+   Show the exact fetch URL(s).
+2. Find the approve and reject action handlers. What API endpoint do they POST to?
+   - POST /api/v1/seo/recommendations/:id/approve (seo_recommendations path)
+   - POST /api/v1/seo/execution/candidates/:id/approve (execution_candidate path)
+   - POST to a seo_action endpoint?
+   This determines whether approvals are being written to the right table.
+3. Is there a component that displays pending_review recommendations from
+   analytics.seo_recommendations? If yes, is it currently receiving and rendering
+   those rows?
+4. When a reviewer approves a recommendation, what happens next in the UI? Does it
+   transition to an "approved" state, remove from the queue, or redirect?
+5. Are there any permission checks in the UI that gate the approve/reject buttons?
+   What roles or claims are required (seo:approve)?
+
+**Report:** Exact API endpoint(s) the reviewer queue reads from, what the approve/reject
+actions write to, whether 202 pending recommendations are visible to reviewers today,
+and whether the UI would correctly route approvals into the execution pipeline.
+
+---
+
+## INVESTIGATION 3 — Phase 8 Dashboard Pages
+
+**Symptom confirmed from DB (as of 2026-05-14 pre-fix):**
+  analytics.seo_revenue_attribution   → table did not exist (now created)
+  analytics.seo_content_score_log     → table did not exist (now created)
+  analytics.seo_serp_features         → 0 rows (DataForSEO not populating)
+  analytics.seo_backlink_opportunities → 362 rows, 0 with status='active'
+
+The tables now exist but are empty. The SERP features table remains empty pending
+DataForSEO credential fix in nsd-integrations.
+
+**Investigate:**
+
+### 3a — Attribution Page
+1. Find the Attribution dashboard page. What ODS API endpoint does it call?
+   Likely: GET /api/v1/seo/attribution or GET /api/v1/seo/revenue-attribution
+2. What does the page render when the API returns an empty array?
+   (Table is now created but has 0 rows — the page will hit this case immediately.)
+3. Does the page show a meaningful empty state or is it blank/broken?
+4. Are there any hardcoded date range assumptions (e.g. "last 30 days") that would
+   return empty results for a table with no historical data?
+
+### 3b — Content Scores Page
+1. Find the Content Scores dashboard page. What ODS API endpoint does it call?
+2. What does it render when seo_content_score_log has 0 rows?
+3. Does it show the job_name breakdown (productDescriptionJob, faqSchemaJob, etc.)
+   or just a flat score list?
+
+### 3c — SERP Features Page
+1. Find the SERP Features page. What ODS API endpoint does it call?
+2. What does it render when seo_serp_features has 0 rows?
+3. Is there a "data unavailable — DataForSEO not configured" state, or just empty?
+
+### 3d — Backlinks Page
+1. Find the Backlinks page. What ODS API endpoint does it call?
+2. With 362 rows but 0 active, does the page show the 362 rows (in 'new'/'ignored'
+   status) or does it filter to active only and show nothing?
+3. Is there a way for a reviewer to promote a 'new' opportunity to 'active' from
+   the UI? What API endpoint does that write to?
+
+**Report:** File paths and API endpoints for all four Phase 8 pages, empty-state
+behaviour for each, and any UX gaps where a user would see a blank page with no
+explanation.
+
+---
+
+## INVESTIGATION 4 — Automated Reports (Daily / Weekly)
+
+**Symptom confirmed from DB:**
+  analytics.daily_report_opportunity_payload  → was affected by integer overflow view
+  analytics.weekly_seo_opportunity_rollup     → was affected by integer overflow view
+  No evidence of report emails being sent in production logs.
+
+**Investigate:**
+1. Find the daily marketing report job or component. Is it:
+   - A Next.js API route (pages/api/ or app/api/)?
+   - A Vercel cron function?
+   - A server action?
+   Show the file path and cron schedule.
+2. What does the report include? Which ODS API endpoints or DB views does it query?
+   Specifically:
+   - Does it query analytics.daily_report_opportunity_payload directly?
+   - Or does it call an ODS API endpoint that abstracts it?
+3. What email provider does it use (Resend, SendGrid, Nodemailer, etc.)?
+   Is the API key set in the Vercel environment?
+4. Who are the report recipients? Is the recipient list hardcoded or configurable?
+5. When was the last report successfully sent? Check Vercel function logs for the
+   report job around the last known successful date.
+6. Check the weekly_seo_opportunity_rollup path:
+   - Same questions as above for the weekly report.
+   - Is there a separate cron job or does it share logic with the daily?
+
+**Report:** File paths for daily and weekly report jobs, email provider and credential
+status, recipient list, last successful send date from logs, and whether the reports
+would now work with the integer overflow fix applied to the DB.
+
+---
+
+## INVESTIGATION 5 — Source Freshness / Data Staleness Indicators
+
+**Symptom confirmed from DB:**
+  analytics.source_freshness_status → returns data correctly (this view works)
+
+  Current freshness state:
+    raw_search_console:   aging (3 days)
+    metrics_google_ads:   stale (60 days)
+    keyword_clusters:     healthy (updated today)
+    seo_recommendations:  aging (5 days)
+
+**Investigate:**
+1. Does the dashboard surface data freshness warnings to users? Is there a staleness
+   banner, badge, or indicator on any page?
+2. Find any component that consumes analytics.source_freshness_status or
+   GET /api/v1/seo/source-freshness (or equivalent ODS endpoint).
+3. If a data source is "stale" (>5 days), does the UI surface an actionable warning
+   to the user? Or is it hidden in a settings/admin page?
+4. Specifically: does the dashboard show any warning that Google Ads data is 60 days
+   stale, which means the opportunity queue is missing commercial intent signals?
+5. Is there a "last updated" timestamp shown anywhere on the opportunity queue or
+   cluster pages to help users understand data recency?
+
+**Report:** File paths for any freshness indicator components, what staleness thresholds
+trigger UI warnings, and whether the current 60-day Ads staleness would be visible
+to a reviewer using the dashboard today.
+
+---
+
+## INVESTIGATION 6 — /for-businesses/ Page Coverage Gap
+
+**Symptom confirmed from DB:**
+  SELECT payload->>'page', SUM((payload->>'impressions')::int) AS impressions,
+         SUM((payload->>'clicks')::int) AS clicks
+  FROM analytics.raw_search_console
+  WHERE payload->>'page' ILIKE '%for-businesses%'
+  GROUP BY payload->>'page';
+  → 16,118 impressions, 0 clicks, avg_position 70.7
+
+This is NSD's highest-impression strategic page. The SEO system has zero active
+recommendations targeting it. There is no dashboard surface that highlights this gap.
+
+**Investigate:**
+1. Is there any page in the dashboard that shows per-URL SEO performance and flags
+   URLs with high impressions but zero clicks?
+   (This would be a CTR opportunity view — impressions > X, clicks = 0.)
+2. Is /for-businesses/ listed anywhere in a "strategic pages" watchlist or monitor
+   configuration in the UI?
+3. Does the dashboard have a "coverage gaps" or "unaddressed pages" section that
+   would surface this?
+4. Find the strategic page monitor config (if any). The ODS API has:
+   GET /api/v1/seo/page-optimization-candidates
+   Does the shell consume this endpoint? What does it display?
+5. Is there a way for a reviewer to manually create a recommendation for a specific
+   URL from the dashboard? What API endpoint does that call?
+
+**Report:** Whether the dashboard has any surface for high-impression/zero-click gaps,
+whether /for-businesses/ would appear on any existing dashboard page, and whether
+a reviewer could manually target it today.
+
+---
+
+## INVESTIGATION 7 — Execution Status & Velocity Tracking
+
+**Symptom confirmed from DB:**
+  SELECT COUNT(*) FROM analytics.seo_execution_audit
+  WHERE created_at >= CURRENT_DATE - INTERVAL '30 days';
+  → 0 rows  (no executions in last 30 days)
+
+  Historical record: 11 successful publishes, 3 rollbacks (all before 2026-05-01).
+
+**Investigate:**
+1. Find the execution status / velocity dashboard page. Does it show:
+   - Executions per day/week/month?
+   - Current execution pipeline status (proposed → approved → draft_applied → published)?
+   - Rollback history?
+2. With 0 executions in the last 30 days, what does this page show? Is there a
+   "no recent activity" state, or does it show stale historical data?
+3. Is there a velocity KPI or target displayed (e.g. "target: 50 changes/month")?
+4. Find the rollback UI. Which seo_execution_candidate rows have rollback_available = true?
+     SELECT id, target_url, execution_status FROM analytics.seo_execution_candidate
+     WHERE rollback_available = true;
+   Are these accessible from the UI for a reviewer to trigger a rollback?
+5. Is there any alerting in the UI for execution velocity drop-off — i.e. would a
+   reviewer be notified automatically if no executions occurred in 14+ days?
+
+**Report:** File paths for the execution tracking page, what it renders with 0 recent
+executions, whether the rollback UI is accessible, and whether there is any automated
+alert for velocity stalls.
+
+---
+
+## REPORT FORMAT
+
+For each investigation, provide:
