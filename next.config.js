@@ -2,6 +2,15 @@
 const nextConfig = {
   reactStrictMode: true,
   allowedDevOrigins: ['*'],
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/sales-engine/home',
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {
