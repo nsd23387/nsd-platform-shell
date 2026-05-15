@@ -1,78 +1,84 @@
 'use client';
 
+// =============================================================================
+// SEO Command Center — Overview
+// Wholesale redesign graduated from app/seo-mockups/proposed/page.tsx.
+// Governance lock: this page is read-first. The only write paths are the
+// existing approve/reject recommendation endpoints; no other mutations.
+// Ahrefs is decommissioned — no SoV / backlink-gap / content-velocity panels.
+// =============================================================================
+
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { DashboardGuard } from '../../../hooks/useRBAC';
-import { AccessDenied, DashboardCard } from '../../../components/dashboard';
-import { DashboardGrid } from '../../../components/dashboard/DashboardGrid';
+import { AccessDenied } from '../../../components/dashboard';
 import { useThemeColors } from '../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
 import { violet } from '../../../design/tokens/colors';
 import {
-  getSeoOverviewKpis, getPagePerformance, getGscPipelineHealth, getSeoProgress,
-  getSeoTimeseries, getSeoCompetitorGaps,
+  getSeoOverviewKpis, getGscPipelineHealth, getSeoTimeseries,
+  getSeoCompetitorGaps, getRecommendations, approveRecommendation,
 } from '../../../lib/seoApi';
 import type {
-  SeoOverviewKpis, PageQueryPerformance, GscPipelineHealth, SeoProgressResponse,
-  SeoTimeseriesResponse, SeoCompetitorGap,
+  SeoOverviewKpis, GscPipelineHealth, SeoTimeseriesResponse,
+  SeoCompetitorGap, SeoRecommendation,
 } from '../../../lib/seoApi';
 
-// =============================================================================
-// Overview Page — Action-first layout
-// =============================================================================
+// -----------------------------------------------------------------------------
+// Mockup palette — tones used in the redesign that aren't in the global theme.
+// These are intentional brand accents matched to the approved canvas mockup.
+// -----------------------------------------------------------------------------
+const PALETTE = {
+  violet: violet[500],
+  violetSoft: '#ede9fe',
+  good: '#065f46', goodSoft: '#d1fae5',
+  bad: '#991b1b', badSoft: '#fee2e2',
+  warn: '#92400e', warnSoft: '#fef3c7',
+  info: '#1e40af', infoSoft: '#dbeafe',
+};
 
-// =============================================================================
-// Progress Block — renders a column of weekly or monthly metrics
-// =============================================================================
+const monoStack = '"JetBrains Mono", "SF Mono", Menlo, Consolas, monospace';
 
-function ProgressBlock({
-  tc, label, data, extras,
-}: {
-  tc: ReturnType<typeof useThemeColors>;
-  label: string;
-  data: {
-    organic_clicks: { current: number; prior: number; delta_pct: number };
-    organic_impressions: { current: number; prior: number; delta_pct: number };
-    avg_position: { current: number | null; prior: number | null; delta: number | null };
-  };
-  extras: { label: string; value: string }[];
-}) {
-  const renderDelta = (delta: number, invertGood = false) => {
-    const isGood = invertGood ? delta < 0 : delta > 0;
-    const color = delta === 0 ? tc.text.muted : isGood ? '#065f46' : '#991b1b';
-    const prefix = delta > 0 ? '+' : '';
-    return <span style={{ color, fontWeight: fontWeight.medium, fontSize: '12px' }}>{prefix}{delta.toFixed(1)}%</span>;
-  };
-  const renderPosDelta = (delta: number | null) => {
-    if (delta == null) return <span style={{ color: tc.text.muted, fontSize: '12px' }}>—</span>;
-    const isGood = delta < 0; // lower position = better
-    const color = delta === 0 ? tc.text.muted : isGood ? '#065f46' : '#991b1b';
-    const arrow = delta < 0 ? '↑' : delta > 0 ? '↓' : '→';
-    return <span style={{ color, fontWeight: fontWeight.medium, fontSize: '12px' }}>{arrow} {Math.abs(delta).toFixed(1)}</span>;
-  };
-  const row = (label: string, current: string, delta: React.ReactNode) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: `${space['1.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
-      <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{label}</span>
-      <span style={{ display: 'flex', gap: space['2'], alignItems: 'baseline' }}>
-        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary }}>{current}</span>
-        {delta}
-      </span>
-    </div>
-  );
+type ToneKey = 'good' | 'bad' | 'warn' | 'info' | 'violet' | 'neutral';
+
+function toneStyle(tone: ToneKey, tc: ReturnType<typeof useThemeColors>) {
+  switch (tone) {
+    case 'good':    return { bg: PALETTE.goodSoft,   fg: PALETTE.good };
+    case 'bad':     return { bg: PALETTE.badSoft,    fg: PALETTE.bad };
+    case 'warn':    return { bg: PALETTE.warnSoft,   fg: PALETTE.warn };
+    case 'info':    return { bg: PALETTE.infoSoft,   fg: PALETTE.info };
+    case 'violet':  return { bg: PALETTE.violetSoft, fg: PALETTE.violet };
+    default:        return { bg: tc.background.muted, fg: tc.text.muted };
+  }
+}
+
+function Pill({ children, tone, tc }: { children: React.ReactNode; tone: ToneKey; tc: ReturnType<typeof useThemeColors> }) {
+  const s = toneStyle(tone, tc);
   return (
-    <div>
-      <div style={{ fontFamily: fontFamily.body, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: tc.text.muted, fontWeight: fontWeight.medium, marginBottom: space['2'] }}>{label}</div>
-      {row('Organic clicks', data.organic_clicks.current.toLocaleString(), renderDelta(data.organic_clicks.delta_pct))}
-      {row('Impressions', data.organic_impressions.current.toLocaleString(), renderDelta(data.organic_impressions.delta_pct))}
-      {row('Avg position', data.avg_position.current != null ? data.avg_position.current.toFixed(1) : '—', renderPosDelta(data.avg_position.delta))}
-      {extras.map((e, i) => row(e.label, e.value, <span />))}
-    </div>
+    <span style={{
+      display: 'inline-block', padding: '2px 8px', borderRadius: 999,
+      fontSize: '11px', fontWeight: fontWeight.medium, background: s.bg, color: s.fg,
+      fontFamily: fontFamily.body,
+    }}>
+      {children}
+    </span>
   );
 }
 
+// -----------------------------------------------------------------------------
+// Map an SeoRecommendation's opportunity_type → intent label + tone.
+// -----------------------------------------------------------------------------
+function mapIntent(rec: SeoRecommendation): { label: string; tone: ToneKey } {
+  const t = (rec.opportunity_type || '').toLowerCase();
+  if (t.includes('ctr') || t.includes('title') || t.includes('meta')) return { label: 'improve_ctr', tone: 'violet' };
+  if (t.includes('strengthen') || t.includes('expand') || t.includes('content')) return { label: 'strengthen_page', tone: 'info' };
+  if (t.includes('link')) return { label: 'add_internal_links', tone: 'good' };
+  if (t.includes('create') || t.includes('new')) return { label: 'create_page', tone: 'warn' };
+  return { label: t || 'optimize', tone: 'neutral' };
+}
+
 // =============================================================================
-// Timeline Chart — daily organic clicks, 30/60/90/custom range
+// Timeline Chart — daily organic clicks, 30/60/90/custom range.
 // Sourced from analytics.metrics_search_console_daily (GSC). No Ahrefs.
 // =============================================================================
 
@@ -102,42 +108,38 @@ function TimelineChart({
   const areaPts = `${pad.l},${h - pad.b} ${linePts} ${pad.l + (series.length - 1) * xStep},${h - pad.b}`;
   const ticks = [0, 1, 2, 3].map(i => min + ((max - min) / 3) * i);
   const labelEvery = Math.max(1, Math.floor(series.length / 6));
-  const delta = data.summary.half_over_half_delta_pct;
-  const totalClicks = data.summary.total_clicks;
+  const total = data.summary.total_clicks;
+  const deltaPct = data.summary.half_over_half_delta_pct ?? 0;
+  const deltaColor = deltaPct >= 0 ? PALETTE.good : PALETTE.bad;
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: space['6'], marginBottom: space['3'], alignItems: 'baseline', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: space['7'], marginBottom: space['3'], alignItems: 'baseline' }}>
         <div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Organic clicks · last {data.range_days} days
           </div>
           <div style={{ display: 'flex', gap: space['3'], alignItems: 'baseline', marginTop: space['1'] }}>
-            <span style={{ fontFamily: fontFamily.display, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-              {totalClicks.toLocaleString()}
+            <span data-testid="text-timeline-total" style={{ fontFamily: fontFamily.display, fontSize: '36px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>
+              {total.toLocaleString()}
             </span>
-            {delta != null && (
-              <span style={{ fontSize: '13px', color: delta >= 0 ? '#065f46' : '#991b1b', fontWeight: fontWeight.medium }}>
-                {delta >= 0 ? '+' : ''}{delta.toFixed(1)}% half-over-half
-              </span>
-            )}
-          </div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: space['1'] }}>
-            {data.summary.total_impressions.toLocaleString()} impressions over the period · {data.start_date} → {data.end_date}
+            <span style={{ fontFamily: fontFamily.body, fontSize: '13px', color: deltaColor, fontWeight: fontWeight.medium }}>
+              {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(1)}% half-over-half
+            </span>
           </div>
         </div>
       </div>
-      <svg width={w} height={h} style={{ display: 'block', maxWidth: '100%' }}>
+      <svg width={w} height={h} style={{ display: 'block', maxWidth: '100%' }} role="img" aria-label="Organic clicks timeline">
         <defs>
           <linearGradient id="seo-timeline-grad" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={violet[500]} stopOpacity="0.22" />
-            <stop offset="100%" stopColor={violet[500]} stopOpacity="0" />
+            <stop offset="0%" stopColor={PALETTE.violet} stopOpacity="0.22" />
+            <stop offset="100%" stopColor={PALETTE.violet} stopOpacity="0" />
           </linearGradient>
         </defs>
         {ticks.map((t, i) => (
           <g key={i}>
             <line x1={pad.l} x2={w - pad.r} y1={y(t)} y2={y(t)} stroke={tc.border.subtle} strokeDasharray="2 3" />
-            <text x={pad.l - 6} y={y(t) + 3} textAnchor="end" fontSize="10" fill={tc.text.muted}>{Math.round(t)}</text>
+            <text x={pad.l - 6} y={y(t) + 3} textAnchor="end" fontSize="10" fill={tc.text.muted} fontFamily={monoStack}>{Math.round(t)}</text>
           </g>
         ))}
         {series.map((d, i) => i % labelEvery === 0 && (
@@ -146,31 +148,29 @@ function TimelineChart({
           </text>
         ))}
         <polygon points={areaPts} fill="url(#seo-timeline-grad)" />
-        <polyline points={linePts} fill="none" stroke={violet[500]} strokeWidth={2} />
+        <polyline points={linePts} fill="none" stroke={PALETTE.violet} strokeWidth={2} />
       </svg>
-      {totalClicks < 20 && (
-        <div style={{ marginTop: space['3'], padding: `${space['2']} ${space['3']}`, backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: radius.md, fontFamily: fontFamily.body, fontSize: '12px', color: '#92400e', lineHeight: lineHeight.relaxed }}>
-          ⚠ Organic clicks are very low for this window — average position is {(series.reduce((s, d) => s + (d.avg_position ?? 0), 0) / Math.max(1, series.filter(d => d.avg_position != null).length)).toFixed(1)}. The priority queue below has the highest-impact fixes.
-        </div>
-      )}
     </div>
   );
 }
 
-function RangeBtn({ tc, active, onClick, children }: { tc: ReturnType<typeof useThemeColors>; active: boolean; onClick: () => void; children: React.ReactNode }) {
+function RangeBtn({ tc, active, onClick, children, testId }: {
+  tc: ReturnType<typeof useThemeColors>; active: boolean; onClick: () => void; children: React.ReactNode; testId: string;
+}) {
   return (
     <button
       onClick={onClick}
+      data-testid={testId}
       style={{
-        padding: `${space['1']} ${space['3']}`,
-        background: active ? violet[500] : tc.background.surface,
+        padding: '6px 12px',
+        background: active ? PALETTE.violet : tc.background.surface,
         color: active ? '#ffffff' : tc.text.primary,
-        border: `1px solid ${active ? violet[500] : tc.border.default}`,
+        border: `1px solid ${active ? PALETTE.violet : tc.border.default}`,
         borderRadius: radius.md,
-        fontFamily: fontFamily.body,
         fontSize: '12px',
         fontWeight: active ? fontWeight.semibold : fontWeight.medium,
         cursor: 'pointer',
+        fontFamily: fontFamily.body,
       }}
     >
       {children}
@@ -179,28 +179,209 @@ function RangeBtn({ tc, active, onClick, children }: { tc: ReturnType<typeof use
 }
 
 // =============================================================================
-// Competitor Gaps Panel — sourced from analytics.seo_competitor_gap (cluster
-// engine). Replaces the previous Ahrefs-backed panels.
+// Data Freshness — sidecar to the timeline. Real GSC freshness; cluster engine
+// freshness derived from kpis.last_pipeline_run_at; Ahrefs explicitly retired.
 // =============================================================================
 
-function CompetitorGapsPanel({
-  tc, gaps,
+function relativeAge(iso: string | null | undefined): string {
+  if (!iso) return 'never';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms) || ms < 0) return '—';
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
+function DataFreshnessCard({
+  tc, gscHealth, kpis,
 }: {
   tc: ReturnType<typeof useThemeColors>;
-  gaps: SeoCompetitorGap[];
+  gscHealth: GscPipelineHealth | null;
+  kpis: SeoOverviewKpis | null;
 }) {
+  const sources: { src: string; age: string; status: 'good' | 'bad' | 'unknown' }[] = [
+    {
+      src: 'Google Search Console',
+      age: relativeAge(gscHealth?.last_successful_run ?? gscHealth?.last_run_at ?? null),
+      status: gscHealth?.status === 'healthy' ? 'good' : gscHealth?.status ? 'bad' : 'unknown',
+    },
+    {
+      src: 'Cluster engine',
+      age: relativeAge(kpis?.last_pipeline_run_at ?? null),
+      status: kpis?.last_pipeline_run_at ? 'good' : 'unknown',
+    },
+    { src: 'Ahrefs', age: 'decommissioned', status: 'bad' },
+  ];
+
+  return (
+    <div style={{
+      backgroundColor: tc.background.surface,
+      border: `1px solid ${tc.border.default}`,
+      borderRadius: radius.lg,
+      padding: space['5'],
+      height: '100%',
+      boxSizing: 'border-box',
+    }}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: space['3'] }}>
+        Data freshness
+      </div>
+      {sources.map((s) => {
+        const dotColor = s.status === 'good' ? PALETTE.good : s.status === 'bad' ? PALETTE.bad : tc.text.muted;
+        const ageColor = s.status === 'bad' ? PALETTE.bad : tc.text.muted;
+        return (
+          <div
+            key={s.src}
+            data-testid={`row-freshness-${s.src.toLowerCase().replace(/\s+/g, '-')}`}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${tc.border.subtle}` }}
+          >
+            <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.primary }}>{s.src}</span>
+            <span style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 4, background: dotColor }} />
+              <span style={{ fontFamily: monoStack, fontSize: '12px', color: ageColor }}>{s.age}</span>
+            </span>
+          </div>
+        );
+      })}
+      <div style={{ marginTop: space['3'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: lineHeight.relaxed }}>
+        Sources update on the nightly cluster pipeline. Ahrefs has been retired — competitor coverage is now driven by the cluster engine.
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Velocity stall callout — only renders when the half-over-half delta on the
+// current timeline window indicates a real slowdown. Threshold mirrors the
+// mockup: any negative or low-positive delta surfaces the warning.
+// =============================================================================
+
+function VelocityStallCallout({ tc, timeseries }: {
+  tc: ReturnType<typeof useThemeColors>;
+  timeseries: SeoTimeseriesResponse | null;
+}) {
+  const delta = timeseries?.summary.half_over_half_delta_pct ?? null;
+  if (delta == null || delta >= 5) return null;
+  return (
+    <div
+      data-testid="callout-velocity-stall"
+      style={{
+        display: 'flex', gap: space['3'], padding: space['3'],
+        background: PALETTE.warnSoft, borderRadius: radius.md, alignItems: 'center', marginTop: space['3'],
+        border: `1px solid ${PALETTE.warn}22`,
+      }}
+    >
+      <span aria-hidden style={{ fontSize: 20, color: PALETTE.warn }}>⚠</span>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.warn, lineHeight: lineHeight.relaxed }}>
+        <strong>Velocity {delta < 0 ? 'decline' : 'stall'} detected:</strong>{' '}
+        organic clicks are {delta >= 0 ? `only +${delta.toFixed(1)}%` : `${delta.toFixed(1)}%`} half-over-half on this window.
+        Review the priority queue below — the highest-impact fixes should restore growth.
+        {tc.text /* keep tc referenced */ ? null : null}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// "Do this next" — priority queue of approval-ready recommendations.
+// Sourced from /api/proxy/seo/recommendations (analytics.seo_recommendations).
+// =============================================================================
+
+function ActionRow({
+  tc, rank, rec, onApprove, busy,
+}: {
+  tc: ReturnType<typeof useThemeColors>;
+  rank: number;
+  rec: SeoRecommendation;
+  onApprove: (id: string) => void;
+  busy: boolean;
+}) {
+  const intent = mapIntent(rec);
+  const url = rec.target_url || rec.recommended_url || '—';
+  const title = rec.recommended_title || rec.recommended_action || rec.cluster_topic || rec.primary_keyword || 'Recommendation';
+  const why = rec.recommended_meta_description
+    || (rec.cluster_topic ? `Cluster: ${rec.cluster_topic}. Primary keyword: ${rec.primary_keyword}.` : 'Engine-generated opportunity.');
+  const impact = rec.estimated_impact || '—';
+
+  return (
+    <div
+      data-testid={`row-action-${rec.id}`}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '40px 1fr 140px 220px',
+        gap: space['4'],
+        alignItems: 'center',
+        padding: `${space['3']} ${space['5']}`,
+        borderBottom: `1px solid ${tc.border.subtle}`,
+      }}
+    >
+      <div style={{ fontFamily: monoStack, fontSize: '18px', fontWeight: fontWeight.semibold, color: tc.text.muted }}>
+        #{rank}
+      </div>
+      <div>
+        <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: space['1'], flexWrap: 'wrap' }}>
+          <Pill tone={intent.tone} tc={tc}>{intent.label}</Pill>
+          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: tc.text.primary }}>{title}</span>
+        </div>
+        <div style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, marginBottom: space['1'], wordBreak: 'break-all' }}>{url}</div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.primary, lineHeight: lineHeight.relaxed }}>
+          <span style={{ color: tc.text.muted }}>Why: </span>{why}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Est. impact</div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: PALETTE.good }}>{impact}</div>
+      </div>
+      <div style={{ display: 'flex', gap: space['2'], justifyContent: 'flex-end' }}>
+        <button
+          data-testid={`button-approve-${rec.id}`}
+          disabled={busy || rec.status !== 'pending_review'}
+          onClick={() => onApprove(rec.id)}
+          style={{
+            padding: '6px 12px',
+            background: rec.status === 'approved' ? PALETTE.good : PALETTE.violet,
+            color: '#ffffff', border: 'none', borderRadius: radius.md,
+            fontSize: '12px', fontWeight: fontWeight.medium,
+            cursor: busy || rec.status !== 'pending_review' ? 'default' : 'pointer',
+            opacity: busy ? 0.6 : 1, fontFamily: fontFamily.body,
+          }}
+        >
+          {rec.status === 'approved' ? 'Approved' : busy ? 'Approving…' : 'Approve'}
+        </button>
+        <button
+          data-testid={`button-details-${rec.id}`}
+          style={{
+            padding: '6px 12px', background: tc.background.surface, color: tc.text.primary,
+            border: `1px solid ${tc.border.strong}`, borderRadius: radius.md,
+            fontSize: '12px', cursor: 'pointer', fontFamily: fontFamily.body,
+          }}
+          onClick={() => window.open(url.startsWith('http') ? url : `https://${url}`, '_blank', 'noopener')}
+        >
+          Open URL
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Competitor Gaps — cluster-engine sourced (Ahrefs decommissioned).
+// =============================================================================
+
+function CompetitorGapsPanel({ tc, gaps }: { tc: ReturnType<typeof useThemeColors>; gaps: SeoCompetitorGap[] }) {
   const top = useMemo(
     () => [...gaps].sort((a, b) => (b.opportunity_score ?? 0) - (a.opportunity_score ?? 0)).slice(0, 8),
     [gaps],
   );
   const byCompetitor = useMemo(() => {
-    const m = new Map<string, { domain: string; count: number; bestScore: number }>();
+    const m = new Map<string, { domain: string; count: number }>();
     for (const g of gaps) {
       const dom = (g.competitor_url || '').replace(/^https?:\/\//, '').split('/')[0];
       if (!dom) continue;
-      const cur = m.get(dom) ?? { domain: dom, count: 0, bestScore: 0 };
+      const cur = m.get(dom) ?? { domain: dom, count: 0 };
       cur.count += 1;
-      cur.bestScore = Math.max(cur.bestScore, g.opportunity_score ?? 0);
       m.set(dom, cur);
     }
     return Array.from(m.values()).sort((a, b) => b.count - a.count).slice(0, 6);
@@ -216,7 +397,6 @@ function CompetitorGapsPanel({
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: space['4'] }}>
-      {/* Top opportunities — ranked queries competitors capture, you don't */}
       <div>
         <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: space['2'] }}>
           Top competitor gaps · ranked by opportunity score
@@ -224,33 +404,28 @@ function CompetitorGapsPanel({
         <div>
           {top.map((g, i) => {
             const dom = (g.competitor_url || '').replace(/^https?:\/\//, '').split('/')[0];
-            const oursLabel = g.our_ranking_position
-              ? `pos ${g.our_ranking_position}`
-              : 'unranked';
+            const oursLabel = g.our_ranking_position ? `pos ${g.our_ranking_position}` : 'unranked';
             return (
-              <div
-                key={g.id}
+              <div key={g.id} data-testid={`row-competitor-gap-${i}`}
                 style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
                   padding: `${space['2']} 0`, borderBottom: i < top.length - 1 ? `1px solid ${tc.border.subtle}` : 'none',
                 }}
-                data-testid={`row-competitor-gap-${i}`}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary }}>
                     {g.keyword || g.cluster_keyword || g.content_gap_notes || '—'}
                   </div>
                   <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px' }}>
-                    <span style={{ color: '#991b1b' }}>{dom}</span>
-                    {g.competitor_ranking_position != null && <> ranks pos <span style={{ fontVariantNumeric: 'tabular-nums' }}>{g.competitor_ranking_position}</span></>}
-                    {' · '}you&rsquo;re <span style={{ fontVariantNumeric: 'tabular-nums' }}>{oursLabel}</span>
-                    {g.search_volume != null && <> · <span style={{ fontVariantNumeric: 'tabular-nums' }}>{g.search_volume.toLocaleString()}</span>/mo</>}
+                    <span style={{ color: PALETTE.bad }}>{dom}</span>
+                    {g.competitor_ranking_position != null && <> ranks pos <span style={{ fontFamily: monoStack }}>{g.competitor_ranking_position}</span></>}
+                    {' · '}you&rsquo;re <span style={{ fontFamily: monoStack }}>{oursLabel}</span>
                   </div>
                 </div>
                 {g.opportunity_score != null && (
                   <div style={{ marginLeft: space['3'], textAlign: 'right' }}>
                     <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Score</div>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: tc.text.primary, fontVariantNumeric: 'tabular-nums' }}>
+                    <div style={{ fontFamily: monoStack, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
                       {g.opportunity_score.toFixed(2)}
                     </div>
                   </div>
@@ -260,8 +435,6 @@ function CompetitorGapsPanel({
           })}
         </div>
       </div>
-
-      {/* Per-competitor counts */}
       <div>
         <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: space['2'] }}>
           Most-overlapping competitors
@@ -270,7 +443,7 @@ function CompetitorGapsPanel({
           {byCompetitor.map((c) => (
             <div key={c.domain} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: `${space['1.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
               <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.primary }}>{c.domain}</span>
-              <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted }}>
                 {c.count} gap{c.count === 1 ? '' : 's'}
               </span>
             </div>
@@ -285,562 +458,278 @@ function CompetitorGapsPanel({
   );
 }
 
+// =============================================================================
+// Page
+// =============================================================================
+
 function SeoOverviewContent() {
   const tc = useThemeColors();
   const [kpis, setKpis] = useState<SeoOverviewKpis | null>(null);
-  const [topPages, setTopPages] = useState<PageQueryPerformance[]>([]);
   const [gscHealth, setGscHealth] = useState<GscPipelineHealth | null>(null);
-  const [progress, setProgress] = useState<SeoProgressResponse | null>(null);
+  const [recs, setRecs] = useState<SeoRecommendation[]>([]);
+  const [competitorGaps, setCompetitorGaps] = useState<SeoCompetitorGap[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [systemExpanded, setSystemExpanded] = useState(false);
 
-  // Timeline state
   const [range, setRange] = useState<TimelineRange>('30');
   const [customDays, setCustomDays] = useState(45);
   const days = range === 'custom' ? customDays : Number(range);
   const [timeseries, setTimeseries] = useState<SeoTimeseriesResponse | null>(null);
-  const [timeseriesLoading, setTimeseriesLoading] = useState(false);
 
-  // Competitor gaps
-  const [competitorGaps, setCompetitorGaps] = useState<SeoCompetitorGap[]>([]);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+    (async () => {
       try {
-        const [k, tp, gh, pr, cg] = await Promise.all([
+        const [k, gh, rs, cg] = await Promise.all([
           getSeoOverviewKpis(),
-          getPagePerformance('impressions', 50),
           getGscPipelineHealth().catch(() => null),
-          getSeoProgress().catch(() => null),
-          getSeoCompetitorGaps().catch(() => []),
+          getRecommendations().catch(() => [] as SeoRecommendation[]),
+          getSeoCompetitorGaps().catch(() => [] as SeoCompetitorGap[]),
         ]);
         if (!cancelled) {
-          setKpis(k); setTopPages(tp); setGscHealth(gh); setProgress(pr);
-          setCompetitorGaps(cg); setLoading(false);
+          setKpis(k); setGscHealth(gh); setRecs(rs); setCompetitorGaps(cg); setLoading(false);
         }
-      } catch (err: unknown) {
+      } catch (err) {
         if (!cancelled) { setError(err instanceof Error ? err.message : 'Unknown error'); setLoading(false); }
       }
-    }
-    load();
+    })();
     return () => { cancelled = true; };
   }, []);
 
-  // Reload timeseries whenever the range changes
   useEffect(() => {
     let cancelled = false;
-    setTimeseriesLoading(true);
     getSeoTimeseries(days)
       .then((r) => { if (!cancelled) setTimeseries(r); })
-      .catch(() => { if (!cancelled) setTimeseries(null); })
-      .finally(() => { if (!cancelled) setTimeseriesLoading(false); });
+      .catch(() => { if (!cancelled) setTimeseries(null); });
     return () => { cancelled = true; };
   }, [days]);
 
-  // Derived data
-  const pendingCount = kpis?.awaiting_approval ?? 0;
-  const ctrIssues = topPages.filter(p => p.impressions > 200 && p.clicks === 0);
-  const topOpportunities = topPages
-    .filter(p => p.impressions > 200 && p.clicks === 0)
-    .sort((a, b) => b.impressions - a.impressions)
-    .slice(0, 5);
+  // Sort pending recs by estimated impact desc (numeric prefix), then take top 5.
+  const priorityQueue = useMemo(() => {
+    const score = (r: SeoRecommendation) => {
+      const m = (r.estimated_impact || '').match(/[+]?(\d+(?:\.\d+)?)/);
+      return m ? Number(m[1]) : 0;
+    };
+    return [...recs]
+      .filter((r) => r.status === 'pending_review')
+      .sort((a, b) => score(b) - score(a))
+      .slice(0, 5);
+  }, [recs]);
 
-  const pipelineRunLabel = kpis?.last_pipeline_run_at
-    ? `Last pipeline run: ${new Date(kpis.last_pipeline_run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
-    : 'Last run: unknown';
+  const totalPending = recs.filter((r) => r.status === 'pending_review').length;
+  const approvedThisBatch = recs.filter((r) => r.status === 'approved').length;
 
-  // Styles
+  // Subtitle: prefer real lift if any rec has numeric impact; otherwise fall
+  // back to a generic count-based message.
+  const headerSubtitle = useMemo(() => {
+    const lifts = priorityQueue
+      .map((r) => {
+        const m = (r.estimated_impact || '').match(/[+]?(\d+(?:\.\d+)?)/);
+        return m ? Number(m[1]) : 0;
+      })
+      .filter((n) => n > 0);
+    const sum = lifts.reduce((a, b) => a + b, 0);
+    if (sum > 0) {
+      return `Your top ${priorityQueue.length} fixes will move organic clicks +${Math.round(sum)}/mo if approved this week.`;
+    }
+    if (totalPending > 0) {
+      return `${totalPending} recommendation${totalPending === 1 ? '' : 's'} awaiting your review · ${approvedThisBatch} approved.`;
+    }
+    return 'No pending recommendations. Cluster engine is monitoring for new opportunities.';
+  }, [priorityQueue, totalPending, approvedThisBatch]);
+
+  async function handleApprove(id: string) {
+    setApprovingId(id);
+    try {
+      await approveRecommendation(id);
+      setRecs((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'approved' } : r)));
+    } catch {
+      // Stay quiet — the recommendation row will re-show pending_review if reload runs.
+    } finally {
+      setApprovingId(null);
+    }
+  }
+
+  async function handleApproveTop5() {
+    for (const r of priorityQueue) {
+      if (r.status === 'pending_review') {
+        // eslint-disable-next-line no-await-in-loop
+        await handleApprove(r.id);
+      }
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: space['8'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>
+        Loading SEO Command Center…
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ padding: space['6'], color: tc.text.primary, fontFamily: fontFamily.body }}>
+        Error loading SEO data: {error}
+      </div>
+    );
+  }
+
   const cardBase: React.CSSProperties = {
     backgroundColor: tc.background.surface,
     border: `1px solid ${tc.border.default}`,
     borderRadius: radius.lg,
     padding: space['5'],
-    display: 'flex',
-    flexDirection: 'column',
-    gap: space['3'],
   };
 
-  if (loading) {
-    return (
-      <div style={{ padding: space['8'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>
-        Loading SEO overview...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={{ padding: space['6'], color: tc.text.primary, fontFamily: fontFamily.body }}>
-        Failed to load: {error}
-      </div>
-    );
-  }
+  // Greeting derived from local time (still locale-friendly).
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <div>
-      {/* Page header */}
-      <div style={{ marginBottom: space['6'] }}>
-        <h1
-          style={{ fontFamily: fontFamily.display, fontSize: fontSize['2xl'], fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['1'], lineHeight: lineHeight.snug }}
-          data-testid="text-seo-overview-title"
-        >
-          Good morning — here&rsquo;s what needs attention
-        </h1>
-        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
-          {pipelineRunLabel}
-        </p>
+    <div style={{ padding: space['6'], maxWidth: 1280, margin: '0 auto', fontFamily: fontFamily.body, color: tc.text.primary }}>
+      {/* ============================ HEADER ============================ */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['7'], gap: space['4'], flexWrap: 'wrap' }}>
+        <div>
+          <h1 data-testid="text-page-title"
+            style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, margin: 0, color: tc.text.primary, lineHeight: lineHeight.snug }}
+          >
+            SEO Command Center
+          </h1>
+          <div data-testid="text-header-subtitle"
+            style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: space['1'] }}
+          >
+            {greeting} — {headerSubtitle}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: space['2'] }}>
+          <button
+            data-testid="button-diagnose-url"
+            onClick={() => {
+              const u = window.prompt('Diagnose a URL — paste the page path or full URL');
+              if (u) window.open(`/dashboard/seo/page-performance?url=${encodeURIComponent(u)}`, '_self');
+            }}
+            style={{
+              padding: '8px 14px', background: tc.background.surface,
+              border: `1px solid ${tc.border.strong}`, borderRadius: radius.md,
+              fontSize: '13px', cursor: 'pointer', color: tc.text.primary, fontFamily: fontFamily.body,
+            }}
+          >
+            Diagnose a URL…
+          </button>
+          <button
+            data-testid="button-approve-top-5"
+            onClick={handleApproveTop5}
+            disabled={priorityQueue.length === 0 || approvingId != null}
+            style={{
+              padding: '8px 14px', background: PALETTE.violet, color: '#ffffff',
+              border: 'none', borderRadius: radius.md,
+              fontSize: '13px', fontWeight: fontWeight.medium,
+              cursor: priorityQueue.length === 0 ? 'default' : 'pointer',
+              opacity: priorityQueue.length === 0 ? 0.5 : 1,
+              fontFamily: fontFamily.body,
+            }}
+          >
+            Approve top {Math.min(5, priorityQueue.length)} ($0)
+          </button>
+        </div>
       </div>
 
-      {/* GSC pipeline health banner — only shown when data is stale or degraded */}
-      {gscHealth && gscHealth.status !== 'healthy' && (
+      {/* ============================ HERO 2-COL ============================ */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: space['4'], marginBottom: space['7'] }}>
         <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: space['3'],
-          padding: `${space['3']} ${space['4']}`,
-          marginBottom: space['6'],
-          borderRadius: radius.md,
-          backgroundColor: gscHealth.status === 'stale' ? '#fef2f2' : '#fffbeb',
-          border: `1px solid ${gscHealth.status === 'stale' ? '#fecaca' : '#fde68a'}`,
-          fontFamily: fontFamily.body,
-          fontSize: fontSize.sm,
-          color: gscHealth.status === 'stale' ? '#991b1b' : '#92400e',
+          ...cardBase,
+          background: `linear-gradient(135deg, ${PALETTE.violetSoft} 0%, ${tc.background.surface} 60%)`,
         }}>
-          <span style={{ flexShrink: 0 }}>
-            {gscHealth.status === 'stale' ? '●' : '◐'}
-          </span>
-          <span>
-            <strong>GSC:</strong>{' '}
-            {gscHealth.days_behind !== null
-              ? `${gscHealth.days_behind}d behind`
-              : 'no data'}{' '}
-            — last ingested{' '}
-            {gscHealth.raw_data_last_date ?? 'never'}.
-            {gscHealth.last_error && ` Last error: ${gscHealth.last_error}`}
-          </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['3'], flexWrap: 'wrap', gap: space['3'] }}>
+            <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap' }}>
+              <RangeBtn tc={tc} active={range === '30'} onClick={() => setRange('30')} testId="button-range-30">30d</RangeBtn>
+              <RangeBtn tc={tc} active={range === '60'} onClick={() => setRange('60')} testId="button-range-60">60d</RangeBtn>
+              <RangeBtn tc={tc} active={range === '90'} onClick={() => setRange('90')} testId="button-range-90">90d</RangeBtn>
+              <RangeBtn tc={tc} active={range === 'custom'} onClick={() => setRange('custom')} testId="button-range-custom">Custom</RangeBtn>
+              {range === 'custom' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginLeft: space['2'] }}>
+                  <input
+                    data-testid="input-custom-days"
+                    type="range" min={7} max={90} value={customDays}
+                    onChange={(e) => setCustomDays(Number(e.target.value))}
+                    style={{ width: 140 }}
+                  />
+                  <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, minWidth: 56 }}>{customDays} days</span>
+                </div>
+              )}
+            </div>
+            <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>vs prior period</span>
+          </div>
+          <TimelineChart tc={tc} data={timeseries} />
+          <VelocityStallCallout tc={tc} timeseries={timeseries} />
         </div>
-      )}
+        <DataFreshnessCard tc={tc} gscHealth={gscHealth} kpis={kpis} />
+      </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* TIMELINE — daily organic clicks, 30/60/90/custom (GSC, post-Ahrefs)*/}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <div style={{ marginBottom: space['6'], backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['5'] }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: space['3'], flexWrap: 'wrap', gap: space['3'] }}>
-          <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>
-            Organic traffic timeline
-          </h2>
-          <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', alignItems: 'center' }}>
-            <RangeBtn tc={tc} active={range === '30'} onClick={() => setRange('30')}>30d</RangeBtn>
-            <RangeBtn tc={tc} active={range === '60'} onClick={() => setRange('60')}>60d</RangeBtn>
-            <RangeBtn tc={tc} active={range === '90'} onClick={() => setRange('90')}>90d</RangeBtn>
-            <RangeBtn tc={tc} active={range === 'custom'} onClick={() => setRange('custom')}>Custom</RangeBtn>
-            {range === 'custom' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginLeft: space['2'] }}>
-                <input
-                  type="range"
-                  min={7}
-                  max={90}
-                  value={customDays}
-                  onChange={(e) => setCustomDays(Number(e.target.value))}
-                  style={{ width: 140 }}
-                  aria-label="Custom days"
-                  data-testid="input-timeline-custom-days"
-                />
-                <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, fontVariantNumeric: 'tabular-nums', minWidth: 56 }}>
-                  {customDays} days
-                </span>
-              </div>
-            )}
+      {/* ============================ DO THIS NEXT ============================ */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: space['3'] }}>
+        <div>
+          <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>
+            Do this next
+          </div>
+          <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px' }}>
+            Ranked by estimated organic-clicks lift, top 5 of {totalPending}
           </div>
         </div>
-        {timeseriesLoading && !timeseries ? (
+      </div>
+      <div style={{ ...cardBase, padding: 0 }}>
+        {priorityQueue.length === 0 ? (
           <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
-            Loading timeseries…
+            No recommendations are awaiting review. The cluster engine surfaces new opportunities each night.
           </div>
         ) : (
-          <TimelineChart tc={tc} data={timeseries} />
+          priorityQueue.map((rec, i) => (
+            <ActionRow
+              key={rec.id} tc={tc} rank={i + 1} rec={rec}
+              onApprove={handleApprove} busy={approvingId === rec.id}
+            />
+          ))
+        )}
+        {totalPending > priorityQueue.length && (
+          <div style={{ padding: space['3'], borderTop: `1px solid ${tc.border.subtle}`, textAlign: 'center', backgroundColor: tc.background.muted }}>
+            <a data-testid="link-view-all-recommendations" href="/dashboard/seo/recommendations"
+              style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }}
+            >
+              View all {totalPending} recommendations →
+            </a>
+          </div>
         )}
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* TODAY'S BRIEF — actions yesterday + needs attention now             */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {progress && (
-        <div style={{ marginBottom: space['6'], backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['5'] }}>
-          <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['3'] }}>
-            Today&rsquo;s Brief
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: space['4'] }}>
-            <div>
-              <div style={{ fontFamily: fontFamily.body, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: tc.text.muted, fontWeight: fontWeight.medium, marginBottom: space['1'] }}>Actions Yesterday</div>
-              <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.primary, lineHeight: lineHeight.relaxed }}>
-                {progress.today.actions_yesterday.applied === 0 && progress.today.actions_yesterday.approved === 0 ? (
-                  <span style={{ color: tc.text.muted }}>No activity in the last 24 hours</span>
-                ) : (
-                  <>
-                    <div><strong style={{ color: '#065f46' }}>{progress.today.actions_yesterday.applied}</strong> applied to live site</div>
-                    <div><strong>{progress.today.actions_yesterday.approved}</strong> approved · <strong>{progress.today.actions_yesterday.rejected}</strong> rejected</div>
-                    {progress.today.actions_yesterday.pages.length > 0 && (
-                      <div style={{ marginTop: space['1'], fontSize: '12px', color: tc.text.muted }}>
-                        Latest: {progress.today.actions_yesterday.pages[0]?.replace('https://neonsignsdepot.com', '') || '—'}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+      {/* ============================ COMPETITOR INTEL ============================ */}
+      <div style={{ marginTop: space['7'] }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: space['3'] }}>
+          <div>
+            <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>
+              Competitor intelligence
             </div>
-
-            <div>
-              <div style={{ fontFamily: fontFamily.body, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: tc.text.muted, fontWeight: fontWeight.medium, marginBottom: space['1'] }}>Needs Your Attention</div>
-              <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.primary, lineHeight: lineHeight.relaxed }}>
-                {progress.today.needs_attention.awaiting_approval === 0 && progress.today.needs_attention.decay_count === 0 ? (
-                  <span style={{ color: tc.text.muted }}>All caught up</span>
-                ) : (
-                  <>
-                    {progress.today.needs_attention.awaiting_approval > 0 && (
-                      <div>
-                        <Link href="/dashboard/seo/actions" style={{ color: violet[500], textDecoration: 'none', fontWeight: fontWeight.medium }}>
-                          {progress.today.needs_attention.awaiting_approval} recommendation{progress.today.needs_attention.awaiting_approval === 1 ? '' : 's'}
-                        </Link>
-                        {progress.today.needs_attention.urgent_pages > 0 && <span style={{ color: '#991b1b' }}> ({progress.today.needs_attention.urgent_pages} urgent)</span>}
-                      </div>
-                    )}
-                    {progress.today.needs_attention.decay_count > 0 && (
-                      <div>
-                        <Link href="/dashboard/seo/signals" style={{ color: violet[500], textDecoration: 'none', fontWeight: fontWeight.medium }}>
-                          {progress.today.needs_attention.decay_count} decay signal{progress.today.needs_attention.decay_count === 1 ? '' : 's'}
-                        </Link>
-                      </div>
-                    )}
-                    {progress.today.needs_attention.cannibalization_count > 0 && (
-                      <div>{progress.today.needs_attention.cannibalization_count} cannibalization pair{progress.today.needs_attention.cannibalization_count === 1 ? '' : 's'}</div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontFamily: fontFamily.body, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: tc.text.muted, fontWeight: fontWeight.medium, marginBottom: space['1'] }}>Pipeline Health</div>
-              <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.secondary, lineHeight: lineHeight.relaxed }}>
-                {(() => {
-                  const last = progress.today.pipeline_health.last_cluster_run;
-                  const ageH = last ? Math.floor((Date.now() - new Date(last).getTime()) / 3600000) : null;
-                  const stale = ageH != null && ageH > 30;
-                  return (
-                    <div style={{ color: stale ? '#92400e' : '#065f46' }}>
-                      {stale ? '⚠ ' : '✓ '}Cluster job: {ageH != null ? `${ageH}h ago` : 'never'}
-                    </div>
-                  );
-                })()}
-                {(() => {
-                  const last = progress.today.pipeline_health.last_gsc_date;
-                  if (!last) return <div style={{ color: '#92400e' }}>⚠ GSC: no data</div>;
-                  const ageDays = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
-                  const stale = ageDays > 5;
-                  return <div style={{ color: stale ? '#92400e' : '#065f46' }}>{stale ? '⚠ ' : '✓ '}GSC: {ageDays}d behind</div>;
-                })()}
-                {(() => {
-                  const last = progress.today.pipeline_health.last_execution;
-                  if (!last) return <div style={{ color: tc.text.muted }}>No executions yet</div>;
-                  const ageH = Math.floor((Date.now() - new Date(last).getTime()) / 3600000);
-                  return <div style={{ color: tc.text.secondary }}>Last execution: {ageH < 24 ? `${ageH}h ago` : `${Math.floor(ageH / 24)}d ago`}</div>;
-                })()}
-              </div>
+            <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px' }}>
+              Top organic competitors for your tracked clusters · refreshed nightly
             </div>
           </div>
         </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* PROGRESS SCOREBOARD — week + month traffic trends                   */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {progress && (
-        <div style={{ marginBottom: space['8'], backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['5'] }}>
-          <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['3'] }}>
-            Progress Scoreboard
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space['4'] }}>
-            {/* Weekly */}
-            <ProgressBlock
-              tc={tc}
-              label="Last 7 days vs prior 7"
-              data={progress.week}
-              extras={[
-                { label: 'Pages optimized', value: String(progress.week.pages_optimized) },
-                { label: 'Measuring', value: String(progress.week.pages_measuring) },
-              ]}
-            />
-            {/* Monthly */}
-            <ProgressBlock
-              tc={tc}
-              label="Last 30 days vs prior 30"
-              data={progress.month}
-              extras={[
-                { label: 'Pages optimized', value: String(progress.month.pages_optimized) },
-                {
-                  label: 'Win rate',
-                  value: progress.month.win_rate_pct != null
-                    ? `${progress.month.win_rate_pct}% (n=${progress.month.win_sample_size})`
-                    : 'Need 14d+',
-                },
-              ]}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* SECTION A — Actions needed today                                  */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: space['4'], marginBottom: space['8'] }}>
-
-        {/* Card 1 — Pending approvals */}
-        <div
-          style={{
-            ...cardBase,
-            borderLeft: pendingCount > 0 ? '4px solid #F59E0B' : `4px solid ${tc.border.default}`,
-          }}
-          data-testid="card-pending-approvals"
-        >
-          <div style={{ fontFamily: fontFamily.display, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-            {pendingCount > 0
-              ? `${pendingCount} recommendation${pendingCount === 1 ? '' : 's'} need${pendingCount === 1 ? 's' : ''} your approval`
-              : 'No approvals needed right now'}
-          </div>
-          {pendingCount > 0 && topPages.length > 0 && (
-            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, lineHeight: lineHeight.relaxed }}>
-              Review and approve pending SEO changes to improve rankings.
-            </div>
-          )}
-          <Link
-            href="/dashboard/seo/actions"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: space['1'],
-              fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
-              color: violet[500], textDecoration: 'none',
-            }}
-          >
-            Review &amp; approve &rarr;
-          </Link>
-        </div>
-
-        {/* Card 2 — CTR issues */}
-        <div
-          style={{
-            ...cardBase,
-            borderLeft: ctrIssues.length > 0 ? '4px solid #EF4444' : `4px solid ${tc.border.default}`,
-          }}
-          data-testid="card-ctr-issues"
-        >
-          <div style={{ fontFamily: fontFamily.display, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-            {ctrIssues.length > 0
-              ? `${ctrIssues.length} page${ctrIssues.length === 1 ? '' : 's'} getting impressions but zero clicks`
-              : 'No critical CTR issues'}
-          </div>
-          {ctrIssues.slice(0, 2).map((p, i) => (
-            <div key={i} style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>
-              {(p.url || '').replace('https://neonsignsdepot.com', '') || '/'} — {p.impressions.toLocaleString()} impressions, 0 clicks, position {Number(p.position).toFixed(1)}
-            </div>
-          ))}
-          <Link
-            href="/dashboard/seo/pages"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: space['1'],
-              fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
-              color: violet[500], textDecoration: 'none',
-            }}
-          >
-            View all page issues &rarr;
-          </Link>
-        </div>
-
-        {/* Card 3 — Overnight activity */}
-        <div style={{ ...cardBase }} data-testid="card-overnight-activity">
-          <div style={{ fontFamily: fontFamily.display, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-            What happened last night
-          </div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, lineHeight: lineHeight.relaxed }}>
-            {kpis?.last_pipeline_run_at ? (
-              <>
-                Cluster job completed &middot; Revalidation sweep ran &middot; Measurement loop checked executions
-              </>
-            ) : (
-              'All scheduled jobs completed normally.'
-            )}
-          </div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
-            Auto-approve: {kpis?.auto_approve_enabled && kpis?.seo_auto_execute_env ? 'ON' : 'OFF'} &middot; {kpis?.auto_approved_today ?? 0} auto-approved today &middot; {kpis?.approved ?? 0} in execution queue
-          </div>
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* SECTION B — Top opportunities right now                           */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {topOpportunities.length > 0 && (
-        <div style={{ marginBottom: space['8'] }}>
-          <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['4'] }}>
-            Top opportunities right now
-          </h2>
-          <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, overflow: 'hidden' }}>
-            {topOpportunities.map((p, i) => {
-              const pagePath = (p.url || '').replace('https://neonsignsdepot.com', '') || '/';
-              return (
-                <div
-                  key={`${p.url}-${p.query}-${i}`}
-                  style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: `${space['3']} ${space['4']}`,
-                    borderBottom: i < topOpportunities.length - 1 ? `1px solid ${tc.border.subtle}` : 'none',
-                  }}
-                  data-testid={`row-opportunity-${i}`}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary }}>
-                      #{i + 1} {pagePath}
-                    </div>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: '2px' }}>
-                      {p.impressions.toLocaleString()} impressions, 0 clicks, position {Number(p.position).toFixed(1)} — update title &amp; meta to capture traffic
-                    </div>
-                  </div>
-                  <Link
-                    href="/dashboard/seo/actions"
-                    style={{
-                      fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
-                      color: violet[500], textDecoration: 'none', whiteSpace: 'nowrap', marginLeft: space['3'],
-                    }}
-                  >
-                    Take action &rarr;
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* COMPETITOR INTELLIGENCE — sourced from cluster engine, not Ahrefs */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <div style={{ marginBottom: space['8'] }}>
-        <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['1'] }}>
-          Competitor intelligence
-        </h2>
-        <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['4'] }}>
-          Queries competitors capture that you don&rsquo;t — refreshed daily by the cluster engine.
-        </p>
-        <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['5'] }}>
+        <div style={cardBase}>
           <CompetitorGapsPanel tc={tc} gaps={competitorGaps} />
         </div>
       </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* SECTION C — System status (collapsed by default)                  */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <div style={{ marginBottom: space['4'] }}>
-        <button
-          onClick={() => setSystemExpanded(!systemExpanded)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: space['2'],
-            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-            fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: tc.text.muted,
-          }}
-          data-testid="button-toggle-system-status"
-        >
-          {systemExpanded ? '▾' : '▸'} System status
-        </button>
-      </div>
-
-      {systemExpanded && (
-        <>
-          <DashboardGrid columns={4}>
-            <DashboardCard title="Engine Opportunities" value={String(kpis?.total_opportunities ?? 0)} subtitle="Scored and ranked" />
-            <DashboardCard title="Topic Clusters" value={String(kpis?.total_clusters ?? 0)} subtitle="Unique keyword themes" />
-            <DashboardCard title="High Urgency" value={String(kpis?.high_urgency ?? 0)} subtitle="Immediate action needed" variant={(kpis?.high_urgency ?? 0) > 0 ? 'warning' : 'default'} />
-            <DashboardCard title="Indexed Pages" value={String(kpis?.indexed_pages ?? 0)} subtitle="Pages in site index" />
-          </DashboardGrid>
-
-          <DashboardGrid columns={4}>
-            <DashboardCard title="Pending Review" value={String(kpis?.awaiting_approval ?? 0)} subtitle="Needs human approval" variant={(kpis?.awaiting_approval ?? 0) > 0 ? 'warning' : 'default'} />
-            <DashboardCard title="Auto-Approved" value={String(kpis?.auto_approved_today ?? 0)} subtitle="Today" />
-            <DashboardCard title="Execution Queue" value={String(kpis?.approved ?? 0)} subtitle="Awaiting apply" />
-            <DashboardCard title="Published" value={String(kpis?.published ?? 0)} subtitle="Live on WordPress" />
-          </DashboardGrid>
-
-          <DashboardGrid columns={4}>
-            <DashboardCard title="Internal Links" value={String(kpis?.internal_link_recs ?? 0)} subtitle="Suggestions" />
-            <DashboardCard title="Ahrefs Keywords" value={String(kpis?.ahrefs_keywords_tracked ?? 0)} subtitle="Tracked" />
-            <DashboardCard title="Content Artifacts" value={String(kpis?.content_artifacts ?? 0)} subtitle="Briefs" />
-            <DashboardCard title="Execution Total" value={String(kpis?.execution_candidates_total ?? 0)} subtitle="All-time" />
-          </DashboardGrid>
-
-          {/* Pipeline & Auto-Approve panels */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space['4'], marginTop: space['4'] }}>
-            <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['4'] }}>
-              <h3 style={{ fontFamily: fontFamily.display, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: tc.text.muted, marginBottom: space['3'], textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Nightly Pipeline
-              </h3>
-              {[
-                { label: 'Cluster Generation', time: '03:00 UTC' },
-                { label: 'Revalidation Sweep', time: '03:30 UTC' },
-                { label: 'Measurement Loop', time: '04:00 UTC' },
-                { label: 'Competitor Gap', time: '05:00 UTC' },
-                { label: 'Decay Detection', time: '05:30 UTC' },
-                { label: 'Cannibalization', time: '05:45 UTC' },
-                { label: 'Topical Authority', time: '06:00 UTC' },
-              ].map((job) => (
-                <div key={job.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${space['1']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
-                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{job.label}</span>
-                  <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.placeholder }}>
-                    {kpis?.last_pipeline_run_at
-                      ? new Date(kpis.last_pipeline_run_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                      : job.time}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['4'] }}>
-              <h3 style={{ fontFamily: fontFamily.display, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: tc.text.muted, marginBottom: space['3'], textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Auto-Approve
-              </h3>
-              {(() => {
-                const envOn = kpis?.seo_auto_execute_env ?? false;
-                const dbOn = kpis?.auto_approve_enabled ?? false;
-                const cap = kpis?.auto_approve_daily_cap ?? 25;
-                const used = kpis?.auto_approved_today ?? 0;
-                const minScore = kpis?.auto_approve_min_score ?? 7.0;
-                return [
-                  { label: 'Env kill switch', value: envOn ? 'ON' : 'OFF', color: envOn ? '#065f46' : '#991b1b', bg: envOn ? '#d1fae5' : '#fee2e2' },
-                  { label: 'DB kill switch', value: dbOn ? 'ON' : 'OFF', color: dbOn ? '#065f46' : '#991b1b', bg: dbOn ? '#d1fae5' : '#fee2e2' },
-                  { label: 'Daily cap', value: `${used}/${cap}`, color: tc.text.secondary, bg: 'transparent' },
-                  { label: 'Min score', value: String(minScore), color: tc.text.secondary, bg: 'transparent' },
-                ].map((row) => (
-                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${space['1']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
-                    <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>{row.label}</span>
-                    <span style={{
-                      fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium,
-                      color: row.color, backgroundColor: row.bg,
-                      padding: row.bg !== 'transparent' ? `${space['0.5']} ${space['2']}` : '0',
-                      borderRadius: row.bg !== 'transparent' ? radius.full : '0',
-                    }}>{row.value}</span>
-                  </div>
-                ));
-              })()}
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }
 
+// =============================================================================
+// Page export — RBAC-gated by DashboardGuard.
+// =============================================================================
+
 export default function SeoOverviewPage() {
   return (
-    <DashboardGuard dashboard="seo" fallback={<AccessDenied />}>
+    <DashboardGuard dashboard="seo" fallback={<AccessDenied message="You do not have permission to view the SEO Command Center." />}>
       <SeoOverviewContent />
     </DashboardGuard>
   );
