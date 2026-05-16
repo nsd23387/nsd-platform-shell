@@ -1,0 +1,249 @@
+# Agent Prompt: Competitive Intelligence Wiring — Part 3
+# Target repo: nsd-platform-shell (Next.js dashboard)
+
+## Context
+
+Parts 1 and 2 are complete:
+- **nsd-ods-api** exposes 7 competitive intelligence REST endpoints (live in Supabase/Replit)
+- **nsd-integrations** drives weekly Apify crawls and posts results to those endpoints
+
+Your job is to build the `/dashboard/competitive` page in nsd-platform-shell.
+
+---
+
+## Data sources (all ODS API)
+
+Base URL stored in `NSD_ODS_API_BASE_URL` env var. All requests are server-side
+(Next.js Route Handlers or `getServerSideProps`) using `NSD_ODS_API_SERVICE_TOKEN`
+as the Bearer token. Never expose the token to the browser.
+
+| Endpoint | Used for |
+|----------|----------|
+| `GET /api/v1/competitive/summary` | Header stat cards |
+| `GET /api/v1/competitive/weekly-insights/latest` | Weekly insight panel |
+| `GET /api/v1/competitive/pages/changes?limit=50` | Change feed table |
+
+### GET /api/v1/competitive/summary — response shape
+```json
+{
+  "success": true,
+  "data": {
+    "competitors_tracked": 10,
+    "pages_tracked": 4821,
+    "last_crawl_date": "2026-05-11T04:12:00Z",
+    "this_week_new": 47,
+    "this_week_changed": 23
+  }
+}
+```
+
+### GET /api/v1/competitive/weekly-insights/latest — response shape
+```json
+{
+  "success": true,
+  "data": {
+    "id": "<uuid>",
+    "week_start_date": "2026-05-11",
+    "week_end_date": "2026-05-17",
+    "priority": "high",
+    "summary": "This week, 5 competitors made detectable changes...",
+    "key_changes_json": [
+      {
+        "competitor": "Custom Neon",
+        "page_type": "pricing",
+        "change_type": "new",
+        "title": "Custom Neon Pricing — Build Your Sign",
+        "url": "https://customneon.com/pricing"
+      }
+    ],
+    "recommended_actions_json": [
+      {
+        "priority": "HIGH",
+        "action": "Review NSD pricing page against Custom Neon",
+        "reason": "1 competitor added new pricing pages this week"
+      }
+    ],
+    "pages_new": 47,
+    "pages_changed": 23,
+    "competitors_with_changes": 5,
+    "generated_at": "2026-05-12T05:00:00Z"
+  }
+}
+```
+
+`data` is `null` when no insights have been generated yet — handle gracefully.
+
+### GET /api/v1/competitive/pages/changes — response shape
+```json
+{
+  "success": true,
+  "data": {
+    "changes": [
+      {
+        "id": "<uuid>",
+        "competitor_name": "Custom Neon",
+        "competitor_domain": "customneon.com",
+        "page_url": "https://customneon.com/pricing",
+        "page_type": "pricing",
+        "buyer_segment": "both",
+        "change_type": "new",
+        "page_title": "Custom Neon Pricing",
+        "content_hash": "a1b2c3d4e5f6g7h8",
+        "status_code": 200,
+        "crawl_depth": 1,
+        "crawled_at": "2026-05-11T03:47:22Z"
+      }
+    ],
+    "total": 312,
+    "limit": 50,
+    "offset": 0
+  }
+}
+```
+
+Query params supported: `limit`, `offset`, `competitor` (domain), `page_type`, `change_type` (`new` | `changed`).
+
+---
+
+## Page to build: `/dashboard/competitive`
+
+### Layout
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Competitive Intelligence              [Last crawl: …]  │
+├──────────┬──────────┬──────────┬──────────┬────────────-┤
+│ 10       │ 4,821    │ 47       │ 23       │ 5           │
+│ Tracked  │ Pages    │ New      │ Changed  │ Active      │
+│ Compet.  │ Indexed  │ (7 days) │ (7 days) │ Competitors │
+├─────────────────────────────────────────────────────────┤
+│  Weekly Insight — Week of May 11                        │
+│  [HIGH] badge                                           │
+│  "This week, 5 competitors made detectable changes…"    │
+│                                                         │
+│  Key Changes (up to 10 rows)                            │
+│  Competitor | Type | Change | Title                     │
+│                                                         │
+│  Recommended Actions                                    │
+│  [HIGH] Review NSD pricing page against Custom Neon     │
+│         Reason: 1 competitor added new pricing…         │
+├─────────────────────────────────────────────────────────┤
+│  Recent Changes                                         │
+│  Filters: [All types ▼] [All competitors ▼] [page_type▼]│
+│                                                         │
+│  Competitor | URL | Type | Change | Date | Segment      │
+│  ──────────────────────────────────────────────────────-│
+│  Custom Neon | customneon.com/pricing | pricing | new…  │
+│  …                                                      │
+│  [Load more]                                            │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Component breakdown
+
+### `app/dashboard/competitive/page.tsx`
+Server component. Fetches all 3 endpoints in parallel (`Promise.all`).
+Passes data as props to client components.
+
+```typescript
+// Pseudocode — adapt to the repo's data fetching pattern
+const [summary, insight, changes] = await Promise.all([
+  fetchOds('/api/v1/competitive/summary'),
+  fetchOds('/api/v1/competitive/weekly-insights/latest'),
+  fetchOds('/api/v1/competitive/pages/changes?limit=50'),
+]);
+```
+
+### `components/competitive/SummaryCards.tsx`
+Five stat cards (competitors_tracked, pages_tracked, this_week_new, this_week_changed,
+competitors_with_changes). Use the existing stat card pattern from other dashboard pages.
+
+### `components/competitive/WeeklyInsightPanel.tsx`
+Priority badge (`HIGH` = red, `MEDIUM` = amber, `LOW` = green).
+Summary paragraph. Key changes table (10 rows max). Recommended actions list with priority
+badge per row. Renders a "No insight yet" empty state when `data` is null.
+
+### `components/competitive/ChangeFeed.tsx`
+Client component (uses `useState` for filters + pagination). Calls the ODS endpoint from
+a Next.js proxy Route Handler (never directly from browser). Columns:
+- Competitor name + domain badge
+- Page URL (truncated, links to the live URL)
+- Page type badge (colour-coded: pricing=red, customizer=purple, product=blue, blog=grey, other=slate)
+- Change type badge (`new` = green, `changed` = amber)
+- Buyer segment pill
+- Crawled at (relative time, e.g. "3 days ago")
+
+Filters: change_type (All / New / Changed), competitor domain (dropdown from the tracked
+competitor list), page_type (All / product / pricing / customizer / blog / industry_page / other).
+
+Pagination: show 50 at a time, "Load more" button increments offset.
+
+---
+
+## Next.js proxy Route Handler
+Create `app/api/competitive/changes/route.ts` (or equivalent) so the browser calls go through
+Next.js, not directly to the ODS. This keeps `NSD_ODS_API_SERVICE_TOKEN` server-side only.
+
+```typescript
+// app/api/competitive/changes/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = req.nextUrl;
+  const qs = searchParams.toString();
+
+  const res = await fetch(
+    `${process.env.NSD_ODS_API_BASE_URL}/api/v1/competitive/pages/changes?${qs}`,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.NSD_ODS_API_SERVICE_TOKEN}`,
+      },
+      cache: 'no-store',
+    }
+  );
+
+  const data = await res.json();
+  return NextResponse.json(data, { status: res.status });
+}
+```
+
+---
+
+## Environment variables to add in Vercel (nsd-platform-shell)
+
+| Variable | Value |
+|----------|-------|
+| `NSD_ODS_API_BASE_URL` | `https://<nsd-ods-api-replit-domain>` |
+| `NSD_ODS_API_SERVICE_TOKEN` | Same as `SUPABASE_ACCESS_TOKEN` in nsd-ods-api |
+
+---
+
+## Navigation
+
+Add "Competitive" to the existing dashboard sidebar nav, grouped under Marketing or SEO
+(wherever the existing `competitive-gap` or SEO pages live). Use a suitable icon
+(e.g. `TrendingUp` or `BarChart2` from lucide-react).
+
+---
+
+## Empty states
+
+- No crawl data yet: show a card — "No competitor data yet. The weekly crawl runs every
+  Sunday at 02:00 UTC. You can trigger a manual run from nsd-integrations."
+- Insight `data` is null: show "No weekly insight generated yet."
+- Changes table empty: show "No page changes detected this week."
+
+---
+
+## Acceptance criteria
+
+- [ ] `/dashboard/competitive` loads without errors when all 3 ODS endpoints return data
+- [ ] `/dashboard/competitive` renders correct empty states when endpoints return null/empty
+- [ ] Stat cards display correct values from `/api/v1/competitive/summary`
+- [ ] Weekly insight panel shows priority badge, summary, key changes, and recommended actions
+- [ ] Change feed table filters by `change_type`, `competitor`, `page_type`
+- [ ] "Load more" increments offset and appends rows
+- [ ] `NSD_ODS_API_SERVICE_TOKEN` is never sent to the browser
+- [ ] Page is added to the sidebar nav
