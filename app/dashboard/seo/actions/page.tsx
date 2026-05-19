@@ -1,5 +1,13 @@
 'use client';
 
+// =============================================================================
+// GOVERNANCE LOCK — read-first surface
+// Reads:  getSeoActions (analytics.seo_action)
+// Writes: approveSeoAction, rejectSeoAction
+//         (both go through existing /api/proxy/seo/* approval endpoints)
+// Do not add new write paths or new data sources without an audit + approval.
+// =============================================================================
+
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';

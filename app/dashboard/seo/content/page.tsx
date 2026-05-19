@@ -1,5 +1,13 @@
 'use client';
 
+// =============================================================================
+// GOVERNANCE LOCK — read-first surface
+// Reads:  getPageBriefs, getCompetitorGaps (cluster engine, not Ahrefs)
+// Writes: updateBriefStatus, generateBriefFromGap
+//         (both go through existing /api/proxy/seo/* approval endpoints)
+// Do not add new write paths or new data sources without an audit + approval.
+// =============================================================================
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
@@ -266,7 +274,7 @@ function ContentPipelineContent() {
               No competitor gaps detected yet
             </p>
             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
-              Gap detection runs daily at 05:00 UTC using Ahrefs keyword data.
+              Gap detection runs daily at 05:00 UTC via the cluster engine.
             </p>
           </div>
         )}

@@ -12,3 +12,21 @@ id = "ee5UAyXhGFPv7--8_WG6s"
 uri = "file://.local/feasibility-audit-report.md"
 type = "text"
 title = "NSD Sales-Conversion & Marketing Efficiency — Feasibility Audit Report"
+
+[[outputs]]
+id = "J1Mf428IUa0i84-fRl3rV"
+uri = "file://SEO_COMMAND_CENTER_AUDIT.md"
+type = "text"
+title = "SEO Command Center — Audit & Redesign Proposal"
+
+[[outputs]]
+id = "0awCDECtjKapNO3_zktdi"
+uri = "file://DATAFORSEO_MIGRATION_AUDIT.md"
+type = "text"
+title = "DataForSEO Migration Audit"
+
+[[outputs]]
+id = "mIn1bBHgR_GiYzGPYx3_T"
+uri = "file://MARKETING_DASHBOARD_AUDIT.md"
+type = "text"
+title = "Marketing Dashboard — End-to-End Operational Audit"

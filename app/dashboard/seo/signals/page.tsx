@@ -1,5 +1,14 @@
 'use client';
 
+// =============================================================================
+// GOVERNANCE LOCK — read-first surface
+// Reads:  getSignals (seo_decay_signal, seo_cannibalization_signal,
+//                     seo_topical_authority_gap)
+// Writes: updateSignalStatus, generateBriefFromGap
+//         (both go through existing /api/proxy/seo/* approval endpoints)
+// Do not add new write paths or new data sources without an audit + approval.
+// =============================================================================
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';

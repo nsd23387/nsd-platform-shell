@@ -81,19 +81,42 @@ function getAuthHeaders(): HeadersInit {
   return headers;
 }
 
+// Default per-request timeout for all SEO lib fetches.
+// Mirrors the Overview's Promise.allSettled + 8s timeout pattern so no SEO sub-page
+// can stall indefinitely on a single hung upstream (Postgres pool, proxy route, etc.).
+// Callers may pass their own AbortSignal to override.
+const SEO_FETCH_TIMEOUT_MS = 8000;
+
 async function seoFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      ...getAuthHeaders(),
-      ...(options?.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`SEO API error ${res.status}: ${text || res.statusText}`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SEO_FETCH_TIMEOUT_MS);
+  // If the caller passed their own signal, abort our controller when theirs fires.
+  if (options?.signal) {
+    if (options.signal.aborted) controller.abort();
+    else options.signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
-  return res.json();
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        ...getAuthHeaders(),
+        ...(options?.headers || {}),
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`SEO API error ${res.status}: ${text || res.statusText}`);
+    }
+    return res.json();
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`SEO API timeout after ${SEO_FETCH_TIMEOUT_MS}ms: ${url}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function getClusters(): Promise<SeoCluster[]> {

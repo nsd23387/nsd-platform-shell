@@ -1,0 +1,117 @@
+Context: nsd-platform-shell is an analytics dashboard that includes a /dashboard/competitive page.
+The page currently shows a "not configured" banner because the backend API connection is not wired.
+The producer (nsd-integrations on Vercel) is now fully set up and serving data. Wire the dashboard.
+
+=== PRODUCER API ===
+
+Base URL: https://nsd-integrations.vercel.app
+Auth header on every request: Authorization: Bearer <NSD_ODS_API_SERVICE_TOKEN>
+
+The token value is the same as API_SECRET_KEY in the nsd-integrations Vercel environment.
+Add it to this Replit project as a secret named NSD_ODS_API_SERVICE_TOKEN.
+
+Three endpoints to connect:
+
+1. GET /api/v1/competitive/summary
+   Response shape:
+   {
+     "competitors_tracked": 10,
+     "pages_tracked": 1500,
+     "last_crawl_date": "2026-05-19T02:35:00Z",   // null if no crawl yet
+     "this_week_new": 45,
+     "this_week_changed": 12
+   }
+
+2. GET /api/v1/competitive/weekly-insights/latest
+   Response shape:
+   {
+     "insight": {                                   // null if no insight yet
+       "id": "1",
+       "week_start_date": "2026-05-19",
+       "priority": "high",                          // "high" | "medium" | "low"
+       "summary": "Echo Neon added 12 new product pages...",
+       "key_changes": [                             // array of change objects
+         { "competitor_name": "Echo Neon", "change_type": "new", "page_type": "product", "count": 12 }
+       ],
+       "recommended_actions": [                     // array of action strings or objects
+         "Monitor Echo Neon's new LED neon category"
+       ],
+       "pages_new": 45,
+       "pages_changed": 12,
+       "competitors_with_changes": 7,
+       "generated_at": "2026-05-19T02:40:00Z"
+     }
+   }
+
+3. GET /api/v1/competitive/pages/changes?limit=50&offset=0
+   Response shape:
+   {
+     "changes": [
+       {
+         "id": "1",
+         "competitor_name": "Echo Neon",
+         "competitor_domain": "echoneon.com",
+         "page_url": "https://echoneon.com/products/led-neon/",
+         "page_type": "product",                   // "product" | "category" | "blog" | "homepage" | "pricing" | "other"
+         "buyer_segment": "b2c_individual",        // "b2c_individual" | "b2c_event" | "b2b_small" | "b2b_enterprise" | "unknown"
+         "change_type": "new",                     // "new" | "changed"
+         "page_title": "LED Neon Signs | Echo Neon",
+         "status_code": 200,
+         "crawl_depth": 2,
+         "crawled_at": "2026-05-19T02:35:00Z"
+       }
+     ],
+     "total": 150,
+     "limit": 50,
+     "offset": 0
+   }
+
+=== DASHBOARD PAGE: /dashboard/competitive ===
+
+The page has three sections that need data:
+
+1. Summary Cards (top row) — wire to GET /summary:
+   - Competitors tracked (competitors_tracked)
+   - Pages monitored (pages_tracked)
+   - Last crawl date (last_crawl_date, formatted as relative time e.g. "3 days ago")
+   - New pages this week (this_week_new)
+   - Changed pages this week (this_week_changed)
+
+2. Weekly Insight Panel — wire to GET /weekly-insights/latest:
+   - Show priority badge (high=red, medium=amber, low=green)
+   - Show summary text
+   - Show key_changes as a list
+   - Show recommended_actions as a list
+   - If insight is null, show "No insight generated yet — first crawl pending"
+
+3. Recent Changes Feed — wire to GET /pages/changes:
+   - Paginated table/list of page changes
+   - Columns: Competitor, Page URL, Type, Buyer Segment, Change (new/changed), Crawled At
+   - Support ?limit=50&offset=N for pagination
+   - Change type "new" = green badge, "changed" = amber badge
+
+=== EMPTY STATE ===
+
+All three endpoints return valid empty responses before the first crawl runs
+(summary returns zeros, insight returns null, changes returns empty array).
+Remove the "not configured" banner and replace it with these empty states instead.
+The banner should only show if the API request itself fails (network error or non-200).
+
+=== ERROR HANDLING ===
+
+If any endpoint returns non-200 or throws a network error:
+- Show a subtle inline error state per section (not a full-page error)
+- Do not block the rest of the dashboard from rendering
+
+=== PROXY / CORS ===
+
+If the dashboard calls the API from the browser, it will need a server-side proxy
+to avoid CORS issues and to keep NSD_ODS_API_SERVICE_TOKEN server-side only.
+Add a thin proxy route (e.g. /api/competitive/[...path]) that forwards requests
+to https://nsd-integrations.vercel.app/api/v1/competitive/[...path] with the
+Authorization header attached server-side.
+
+=== DO NOT ===
+- Do not modify nsd-integrations
+- Do not hardcode the API secret anywhere client-side
+- Do not change the URL structure of the three endpoints

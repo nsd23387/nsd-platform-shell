@@ -1,5 +1,13 @@
 'use client';
 
+// =============================================================================
+// GOVERNANCE LOCK — read-first surface
+// Reads:  getSchemaMarkup (analytics.seo_schema_markup)
+// Writes: updateSchemaMarkupStatus, applySchemaMarkup
+//         (both go through existing /api/proxy/seo/* approval endpoints)
+// Do not add new write paths or new data sources without an audit + approval.
+// =============================================================================
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';

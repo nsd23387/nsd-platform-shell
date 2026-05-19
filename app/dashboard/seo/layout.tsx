@@ -35,16 +35,17 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/seo/pages', label: 'Page Performance', icon: 'search' },
       { href: '/dashboard/seo/serp-features', label: 'SERP Features', icon: 'trending' },
-      { href: '/dashboard/seo/competitive', label: 'Competitive Intel', icon: 'chart' },
+      { href: '/dashboard/seo/competitive', label: 'Competitor Deep Dive', icon: 'chart' },
     ],
   },
   {
     title: 'Optimization',
     items: [
-      { href: '/dashboard/seo/actions', label: 'SEO Actions', icon: 'review' },
+      { href: '/dashboard/seo/actions', label: 'All Recommendations', icon: 'review' },
       { href: '/dashboard/seo/execution-log', label: 'Execution Log', icon: 'timeline' },
       { href: '/dashboard/seo/content', label: 'Content Pipeline', icon: 'edit' },
-      { href: '/dashboard/seo/backlinks', label: 'Backlinks', icon: 'search' },
+      { href: '/dashboard/seo/internal-links', label: 'Internal Links', icon: 'search' },
+      { href: '/dashboard/seo/schema', label: 'Schema Markup', icon: 'edit' },
     ],
   },
   {

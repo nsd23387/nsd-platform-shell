@@ -1,0 +1,191 @@
+Competitive Intelligence Investigation Report
+Date: 2026-05-19
+Repo: nsd23387/nsd-integrations
+Deployment: Vercel (https://nsd-integrations.vercel.app)
+
+1. Inventory — All Apify Actors Referenced
+#	Actor	Hardcoded ID	Purpose	Schedule
+1	Website Crawler	aYG0l9s7dbB7j3gbS	Crawls 10 competitor domains, raw text extraction	None on Vercel (see §3)
+2	SEO Metadata Extractor	UBFTB6oko2JXyQ3vI	Fetches title/meta-description/canonical for changed pages	Triggered inline after crawl succeeds
+No Apify SDK is installed. package.json lists zero apify* or crawlee* dependencies. All Apify calls are raw fetch to https://api.apify.com/v2 — integrations/apify/apifyClient.ts:54,109,182.
+
+There is no second "SEO Scraper" wired to analytics.seo_competitor_gap / seo_backlink_* / seo_decay_signal. Those tables are populated by DataForSEO via the Ahrefs ingestion pipeline (api/v1/ingestion/ahrefs) — Apify has no involvement there. Only one Apify pipeline exists: the competitive web crawler.
+
+2. Wire Diagram
+Pipeline designed intent (never actually executed end-to-end on Vercel)
+POST /api/v1/competitive/intel          (intel.ts:startCrawlRun)
+  │
+  ├─ startApifyActor(aYG0l9s7dbB7j3gbS)  ← APIFY_TOKEN        apifyClient.ts:49
+  │    startUrls: 10 competitor URLs       competitorIntelJob.ts:58-69
+  │    Returns 202 { apify_run_id, dataset_id }
+  │
+  ▼
+[Apify crawl runs 20-30 min in cloud — Vercel not involved]
+  │
+  ├── Path A: Apify webhook fires
+  │     POST /api/v1/competitive/intel/webhook?secret=APIFY_WEBHOOK_SECRET
+  │       webhook.ts:65-96
+  │       └─ completePipelineFromCrawl() [fire-and-forget after 200]
+  │
+  └── Path B: Manual poll
+        POST /api/v1/competitive/intel/poll { apify_run_id, dataset_id }
+          poll.ts:44-65
+          └─ completePipelineFromCrawl()
+completePipelineFromCrawl(crawlApifyRunId, datasetId)   competitorIntelJob.ts:263
+  │
+  ├─ Step 4: fetchDatasetItems(datasetId)                apifyClient.ts:179
+  │           GET api.apify.com/v2/datasets/{id}/items
+  │
+  ├─ Step 5: postCrawlImport(payload)                    competitorIntelOdsClient.ts:85
+  │           POST https://nsd-integrations.vercel.app/api/v1/competitive/crawl/import
+  │           → crawl/import.ts (pg → competitive.crawl_runs, .pages, .page_snapshots)
+  │
+  ├─ Step 6: getSeoCandidates()                          competitorIntelOdsClient.ts:93
+  │           GET .../seo-candidates  → seo-candidates.ts (pg SELECT from competitive.pages)
+  │
+  ├─ Step 7: startApifyActor(UBFTB6oko2JXyQ3vI, urls)   apifyClient.ts:49
+  │           pollRunUntilFinished(runId, maxWait=30min) apifyClient.ts:102  ← ⛔ SEE BUG #4
+  │           fetchDatasetItems(seoDatasetId)
+  │           postSeoImport(payload)                     competitorIntelOdsClient.ts:100
+  │           POST .../seo/import  → seo/import.ts (pg UPDATE competitive.pages)
+  │
+  └─ Step 8: triggerWeeklyInsights()                    competitorIntelOdsClient.ts:109
+              POST .../weekly-insights/generate
+              → weekly-insights/generate.ts (pg INSERT competitive.weekly_insights)
+
+3. Root Causes (all five must be fixed; any one alone blocks data flow)
+Bug #1 — No Vercel cron triggers the pipeline (CRITICAL)
+Evidence: vercel.json crons array has 20+ entries. Zero of them touch /api/v1/competitive/intel. Confirmed by grep output — crons.filter(c=>c.path.includes('competitive')) returns [].
+
+The only scheduler for this job is server.ts:145:
+
+startWeeklyCompetitorIntelScheduler();   // Sunday 02:00 UTC setTimeout
+
+This runs on Replit only. On Vercel, Vercel's own runtime serves requests — server.ts is never executed. The setTimeout never fires. The job has never been auto-triggered in production.
+
+Bug #2 — intel/poll and intel/webhook not in vercel.json functions (CRITICAL)
+Evidence: vercel.json lists 39 functions. The competitive functions block contains exactly:
+
+api/v1/competitive/crawl/import.ts      maxDuration=300
+api/v1/competitive/seo/import.ts        maxDuration=60
+api/v1/competitive/seo-candidates.ts    maxDuration=30
+api/v1/competitive/weekly-insights/generate.ts  maxDuration=60
+api/v1/competitive/weekly-insights/latest.ts    maxDuration=30
+api/v1/competitive/summary.ts           maxDuration=30
+api/v1/competitive/pages/changes.ts     maxDuration=30
+
+api/v1/competitive/intel/poll.ts — not listed → defaults to 10s timeout
+api/v1/competitive/intel/webhook.ts — not listed → defaults to 10s timeout
+
+completePipelineFromCrawl takes several minutes (fetching datasets, importing pages, polling the SEO actor). With a 10s timeout, both endpoints are killed before they can do anything useful. Neither has ever succeeded.
+
+Bug #3 — APIFY_WEBHOOK_SECRET not provisioned → webhook always returns 401
+Evidence: api/v1/competitive/intel/webhook.ts:45-52:
+
+const expectedSecret = process.env.APIFY_WEBHOOK_SECRET ?? '';
+if (!expectedSecret || receivedSecret !== expectedSecret) {
+  res.status(401).json({ error: 'Unauthorized' });
+  return;
+}
+
+APIFY_WEBHOOK_SECRET is not in the Replit secrets list and not documented as a required env var in replit.md. expectedSecret is always '', so the first condition (!expectedSecret) is always true → every Apify webhook delivery returns 401. Apify marks the delivery failed and stops retrying.
+
+Even if the secret were set, Bug #2 means the function times out before the pipeline completes anyway.
+
+Bug #4 — completePipelineFromCrawl polls the SEO actor synchronously for up to 30 minutes (ARCHITECTURAL)
+Evidence: competitorIntelJob.ts:347:
+
+const seoPoll = await pollRunUntilFinished(seoApifyRunId, POLL_OPTIONS);
+// POLL_OPTIONS = { maxWaitMs: 30 * 60 * 1000, pollIntervalMs: 30 * 1000 }
+
+This is a 30-minute blocking loop inside a single serverless function invocation. Even if intel/poll were given maxDuration=300 (5 min — the Vercel Pro max for non-Enterprise), the function is killed before the SEO actor finishes. The crawl import (Step 5) may succeed, but the SEO metadata phase and weekly insights never run.
+
+Additionally: webhook.ts:91 fires completePipelineFromCrawl after sending the 200 response:
+
+res.status(200).json({ received: true, apify_run_id: apifyRunId });
+completePipelineFromCrawl(...).catch(...);   // fire-and-forget
+
+On Vercel, the function runtime is frozen/terminated immediately after the response is sent. The .catch callback and everything in completePipelineFromCrawl are killed at that point.
+
+Bug #5 — SUPABASE_URL used for dedup reads/writes in competitorIntelJob.ts (NON-FATAL but broken)
+Evidence: competitorIntelJob.ts:92:
+
+function supabaseBase(): string {
+  return process.env.SUPABASE_URL ?? '';
+}
+
+getLastRunWeek() and markRunWeek() both use this. On Vercel, SUPABASE_URL is not set — both functions fail silently (the catch returns null / logs a warn). Effect:
+
+getLastRunWeek() always returns null → dedup always passes → job would re-run on every manual trigger (acceptable).
+markRunWeek() silently fails → last-run week is never persisted (acceptable side-effect).
+This is non-fatal but means the idempotency guard never works on Vercel. intel.ts was updated to use pg for this read in the latest commit, but competitorIntelJob.ts itself (which is called at runtime) was not updated.
+
+Bug #6 — analytics.ingestion_runs is never written to
+Evidence: No code in integrations/apify/, src/jobs/competitorIntelJob.ts, or any api/v1/competitive/ handler executes an INSERT into analytics.ingestion_runs. The consumer's Pipeline Health panel only sees sources that register there. Result: zero competitive intel rows in that table, so the consumer's health panel shows no apify source.
+
+4. On nsd-ods-api/
+nsd-ods-api/ is a separate Express app scaffolded in this repo (nsd-ods-api/src/routes/competitive/ contains crawlImport.ts, seoImport.ts, seoCandidates.ts, pagesChanges.ts, summary.ts, weeklyInsightsGenerate.ts, weeklyInsightsLatest.ts). It has no package.json and is not deployed anywhere. Its routes are duplicated in the Vercel function handlers under api/v1/competitive/. The consumer dashboard reads from the Vercel functions, not from nsd-ods-api. The nsd-ods-api/ folder is dead code in terms of the live pipeline.
+
+The three endpoints the consumer dashboard proxies — GET /api/v1/competitive/summary, GET /api/v1/competitive/weekly-insights/latest, GET /api/v1/competitive/pages/changes — are implemented in api/v1/competitive/summary.ts, weekly-insights/latest.ts, and pages/changes.ts. Once data exists in the tables, they will return correct responses. This is not the blocking issue.
+
+5. Concrete Fix Plan
+Acceptance test: SELECT COUNT(*) FROM competitive.page_snapshots WHERE crawled_at > now() - interval '24 hours' returns > 0.
+
+Fix A — Register intel/poll and intel/webhook in vercel.json with correct timeouts (REQUIRED)
+"api/v1/competitive/intel/poll.ts": { "maxDuration": 300 },
+"api/v1/competitive/intel/webhook.ts": { "maxDuration": 30 }
+
+webhook.ts only needs 30s — it returns 200 immediately. The async tail must be removed (see Fix C).
+poll.ts needs 300s — it runs the full dataset import pipeline (minus the long SEO actor poll — see Fix C).
+
+Fix B — Add Vercel cron OR rely solely on Apify webhook (REQUIRED — pick one)
+Option 1 — Vercel cron (recommended): Add to vercel.json crons:
+
+{ "path": "/api/v1/competitive/intel", "schedule": "0 2 * * 0" }
+
+This fires POST /api/v1/competitive/intel at Sunday 02:00 UTC, which starts the actor and returns 202. The webhook (Fix D) then completes the pipeline.
+
+Option 2 — Manual trigger only: Remove the weekly scheduler expectation; document that someone must POST /api/v1/competitive/intel then POST /api/v1/competitive/intel/poll once the Apify run finishes.
+
+Fix C — Remove inline SEO actor polling from completePipelineFromCrawl (REQUIRED)
+pollRunUntilFinished with maxWaitMs=30min inside a Vercel function will always time out. The SEO metadata phase must be decoupled:
+
+Option 1: Drop the SEO actor phase entirely for now. SEO metadata (page_title, meta_description) is supplementary — the core tables (crawl_runs, pages, page_snapshots) populate without it. The seo-candidates → SEO actor → seo/import chain can be triggered separately as a follow-up manual step.
+Option 2: Move the SEO poll into a third Vercel function (a /seo-poll step), called by a Vercel cron or manually once per week after the crawl dataset is imported.
+For an immediate fix: remove lines 326–371 from completePipelineFromCrawl in competitorIntelJob.ts (the SEO actor block). The rest of the pipeline (dataset fetch → crawl import → insights) fits inside 300s.
+
+Fix D — Provision APIFY_WEBHOOK_SECRET and register webhook with Apify (REQUIRED)
+Generate a random secret and add it as APIFY_WEBHOOK_SECRET in Vercel environment variables.
+In the Apify console, on actor aYG0l9s7dbB7j3gbS, add a webhook:
+Event: ACTOR.RUN.SUCCEEDED
+URL: https://nsd-integrations.vercel.app/api/v1/competitive/intel/webhook?secret=<APIFY_WEBHOOK_SECRET>
+Payload: default Apify payload (includes eventType, resource.id, resource.defaultDatasetId, resource.startedAt, resource.finishedAt)
+Without this, every webhook delivery returns 401 and no pipeline completion is possible after actor runs.
+
+Fix E — Fix competitorIntelJob.ts dedup to use pg instead of SUPABASE_URL (MINOR)
+getLastRunWeek() and markRunWeek() in competitorIntelJob.ts:128-154 call Supabase PostgREST via SUPABASE_URL. Update them to use createSeoPool() with direct SQL — same pattern applied to intel.ts in the last session. Without this, the ISO-week dedup guard never activates on Vercel and the job re-runs on every cron tick.
+
+Fix F — Rewrite webhook to not use fire-and-forget (REQUIRED with Fix A)
+webhook.ts:91 fires the pipeline after the response. Vercel terminates the function immediately post-response. The correct approach for the webhook endpoint is:
+
+Return 200 immediately (keep as-is) but instead of calling completePipelineFromCrawl in the same invocation, make a self-call to /api/v1/competitive/intel/poll with the run ID and dataset ID. The poll endpoint (with maxDuration=300) then runs the actual pipeline. This keeps the webhook handler under 30s and offloads the heavy work to the poll function.
+
+// In webhook.ts, after res.status(200).json(...)
+fetch(`${process.env.ODS_API_URL}/api/v1/competitive/intel/poll`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.API_SECRET_KEY}` },
+  body: JSON.stringify({ apify_run_id: apifyRunId, dataset_id: datasetId, started_at: startedAt }),
+}).catch(...);
+
+6. Consumer-Side Token
+Once data is flowing, the consumer dashboard needs NSD_ODS_API_SERVICE_TOKEN set in its Replit environment. This token is used as the Authorization: Bearer header when the dashboard's proxy calls the three allowlisted endpoints on nsd-integrations.vercel.app. The value should be the same as API_SECRET_KEY on Vercel — no new token needs to be minted. The existing API_SECRET_KEY can be reused.
+
+Summary Table
+#	Bug	Severity	Tables blocked?
+1	No Vercel cron for pipeline trigger	🔴 Critical	All
+2	intel/poll and intel/webhook missing from vercel.json	🔴 Critical	All
+3	APIFY_WEBHOOK_SECRET not provisioned → 401	🔴 Critical	All
+4	30-min SEO actor poll inside single function invocation	🔴 Critical	weekly_insights; partial for pages
+5	SUPABASE_URL used for dedup in job file	🟡 Minor	Idempotency only
+6	No writes to analytics.ingestion_runs	🟠 Moderate	Pipeline Health panel
+The pipeline has never successfully executed on Vercel. No actor has been scheduled or triggered via the Vercel deployment. All tables being empty is fully explained by Bugs #1–4 in combination.
