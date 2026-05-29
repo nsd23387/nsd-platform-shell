@@ -752,6 +752,20 @@ export async function rejectSeoAction(id: string, notes?: string): Promise<void>
   });
 }
 
+// Command-center review queue surfaces proposed changes that still live in the
+// seo_execution_candidate table, so the write must carry the source so the
+// actions route updates the candidate (not the seo_action) row.
+export async function decideSeoCandidate(
+  id: string,
+  action: 'approve' | 'reject',
+  notes?: string,
+): Promise<void> {
+  await seoFetch('/api/proxy/seo/actions', {
+    method: 'POST',
+    body: JSON.stringify({ id, action, notes, source: 'seo_execution_candidate' }),
+  });
+}
+
 export interface SeoProgressDelta {
   current: number;
   prior: number;

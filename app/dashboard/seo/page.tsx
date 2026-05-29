@@ -1,32 +1,30 @@
 'use client';
 
 // =============================================================================
-// SEO Command Center — Overview
-// Wholesale redesign graduated from app/seo-mockups/proposed/page.tsx.
-// Governance lock: this page is read-first. The only write paths are the
-// existing approve/reject recommendation endpoints; no other mutations.
-// Ahrefs is decommissioned — no SoV / backlink-gap / content-velocity panels.
+// SEO Command Center — Overview (reconciled)
+//
+// Keeps main's redesigned shell (GSC organic-clicks timeline + competitor
+// leaderboard) and fixes the part that made the dashboard feel dead: the
+// action queue and findings now read the POPULATED analytics tables via
+// /api/proxy/seo/summary (proposed changes, ranking decay, cannibalization,
+// backlink targets) instead of the near-empty seo_action pipeline.
+//
+// Governance: read-first. The only write is approve/reject of a proposed
+// change, which goes through decideSeoCandidate() in lib/seoApi.ts (the
+// whitelisted write path) — no inline POST in this page.
 // =============================================================================
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DashboardGuard } from '../../../hooks/useRBAC';
 import { AccessDenied } from '../../../components/dashboard';
 import { useThemeColors } from '../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
 import { violet } from '../../../design/tokens/colors';
-import {
-  getSeoOverviewKpis, getGscPipelineHealth, getSeoTimeseries,
-  getSeoCompetitorGaps, getRecommendations, approveRecommendation,
-} from '../../../lib/seoApi';
-import type {
-  SeoOverviewKpis, GscPipelineHealth, SeoTimeseriesResponse,
-  SeoCompetitorGap, SeoRecommendation,
-} from '../../../lib/seoApi';
+import { decideSeoCandidate } from '../../../lib/seoApi';
 
 // -----------------------------------------------------------------------------
-// Mockup palette — tones used in the redesign that aren't in the global theme.
-// These are intentional brand accents matched to the approved canvas mockup.
+// Palette + helpers (carried over from main's redesign)
 // -----------------------------------------------------------------------------
 const PALETTE = {
   violet: violet[500],
@@ -36,97 +34,107 @@ const PALETTE = {
   warn: '#92400e', warnSoft: '#fef3c7',
   info: '#1e40af', infoSoft: '#dbeafe',
 };
-
 const monoStack = '"JetBrains Mono", "SF Mono", Menlo, Consolas, monospace';
-
+type TC = ReturnType<typeof useThemeColors>;
 type ToneKey = 'good' | 'bad' | 'warn' | 'info' | 'violet' | 'neutral';
 
-function toneStyle(tone: ToneKey, tc: ReturnType<typeof useThemeColors>) {
+function toneStyle(tone: ToneKey, tc: TC) {
   switch (tone) {
-    case 'good':    return { bg: PALETTE.goodSoft,   fg: PALETTE.good };
-    case 'bad':     return { bg: PALETTE.badSoft,    fg: PALETTE.bad };
-    case 'warn':    return { bg: PALETTE.warnSoft,   fg: PALETTE.warn };
-    case 'info':    return { bg: PALETTE.infoSoft,   fg: PALETTE.info };
-    case 'violet':  return { bg: PALETTE.violetSoft, fg: PALETTE.violet };
-    default:        return { bg: tc.background.muted, fg: tc.text.muted };
+    case 'good': return { bg: PALETTE.goodSoft, fg: PALETTE.good };
+    case 'bad': return { bg: PALETTE.badSoft, fg: PALETTE.bad };
+    case 'warn': return { bg: PALETTE.warnSoft, fg: PALETTE.warn };
+    case 'info': return { bg: PALETTE.infoSoft, fg: PALETTE.info };
+    case 'violet': return { bg: PALETTE.violetSoft, fg: PALETTE.violet };
+    default: return { bg: tc.background.muted, fg: tc.text.muted };
   }
 }
-
-function Pill({ children, tone, tc }: { children: React.ReactNode; tone: ToneKey; tc: ReturnType<typeof useThemeColors> }) {
+function Pill({ children, tone, tc }: { children: React.ReactNode; tone: ToneKey; tc: TC }) {
   const s = toneStyle(tone, tc);
   return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: 999,
-      fontSize: '11px', fontWeight: fontWeight.medium, background: s.bg, color: s.fg,
-      fontFamily: fontFamily.body,
-    }}>
+    <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: '11px', fontWeight: fontWeight.medium, background: s.bg, color: s.fg, fontFamily: fontFamily.body }}>
       {children}
     </span>
   );
 }
 
 // -----------------------------------------------------------------------------
-// Map an SeoRecommendation's opportunity_type → intent label + tone.
+// Types (local — keeps this page self-contained and independent of seoApi
+// type exports so it compiles regardless of merge order)
 // -----------------------------------------------------------------------------
-function mapIntent(rec: SeoRecommendation): { label: string; tone: ToneKey } {
-  const t = (rec.opportunity_type || '').toLowerCase();
-  if (t.includes('ctr') || t.includes('title') || t.includes('meta')) return { label: 'improve_ctr', tone: 'violet' };
-  if (t.includes('strengthen') || t.includes('expand') || t.includes('content')) return { label: 'strengthen_page', tone: 'info' };
-  if (t.includes('link')) return { label: 'add_internal_links', tone: 'good' };
-  if (t.includes('create') || t.includes('new')) return { label: 'create_page', tone: 'warn' };
-  return { label: t || 'optimize', tone: 'neutral' };
+interface ProposedChange {
+  id: string; page: string; mutation_type: string; target_field: string | null;
+  original_value: string | null; proposed_value: string | null;
+  evidence_summary: string | null; opportunity_score: number | null; state: string | null;
+}
+interface DecayRow { id: string; page: string; keyword: string; position_30d_ago: number; position_now: number; position_delta: number; traffic_delta_pct: number; decay_score: number; }
+interface CannibalRow { id: string; keyword: string; page_a: string; page_b: string; overlap_score: number; suggested_canonical: string; canonical_confidence: string; }
+interface BacklinkRow { id: string; referring_domain: string; domain_rank: number; backlinks_count: number; spam_score: number; gap_competitor: string; }
+interface SummaryData {
+  counts: Record<string, number>;
+  proposedChanges: ProposedChange[];
+  decay: DecayRow[];
+  cannibalization: CannibalRow[];
+  backlinks: BacklinkRow[];
+  generated_at: string;
+}
+interface TimeseriesPoint { date: string; clicks: number; impressions?: number; }
+interface TimeseriesResp { series: TimeseriesPoint[]; summary: { total_clicks: number; half_over_half_delta_pct: number | null }; range_days: number; }
+interface CompetitorGap {
+  id: string; competitor_url?: string; competitor_ranking_position?: number | null;
+  our_ranking_position?: number | null; opportunity_score?: number | null;
+  keyword?: string; cluster_keyword?: string;
+}
+
+const MUTATION_LABEL: Record<string, string> = {
+  meta_description_update: 'Meta description', meta_description: 'Meta description',
+  title_tag_refinement: 'Title tag', title_tag: 'Title tag',
+  internal_link_insertion: 'Internal link',
+};
+
+async function getJson<T>(url: string): Promise<T | null> {
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return (json && typeof json === 'object' && 'data' in json ? json.data : json) as T;
+  } catch {
+    return null;
+  }
 }
 
 // =============================================================================
-// Timeline Chart — daily organic clicks, 30/60/90/custom range.
-// Sourced from analytics.metrics_search_console_daily (GSC). No Ahrefs.
+// Timeline chart (carried from main — GSC organic clicks)
 // =============================================================================
+type TimelineRange = '30' | '60' | '90';
 
-type TimelineRange = '30' | '60' | '90' | 'custom';
-
-function TimelineChart({
-  tc, data,
-}: {
-  tc: ReturnType<typeof useThemeColors>;
-  data: SeoTimeseriesResponse | null;
-}) {
-  if (!data || data.series.length === 0) {
-    return (
-      <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
-        No Search Console data for this range.
-      </div>
-    );
+function TimelineChart({ tc, data }: { tc: TC; data: TimeseriesResp | null }) {
+  if (!data || !data.series || data.series.length === 0) {
+    return <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>No Search Console data for this range.</div>;
   }
   const w = 760, h = 200, pad = { l: 36, r: 12, t: 12, b: 24 };
   const series = data.series;
-  const maxC = Math.max(...series.map(d => d.clicks));
+  const maxC = Math.max(...series.map((d) => d.clicks));
   const max = (maxC === 0 ? 1 : maxC) * 1.15;
-  const min = 0;
   const xStep = (w - pad.l - pad.r) / Math.max(1, series.length - 1);
-  const y = (v: number) => pad.t + (h - pad.t - pad.b) * (1 - (v - min) / (max - min));
+  const y = (v: number) => pad.t + (h - pad.t - pad.b) * (1 - v / max);
   const linePts = series.map((d, i) => `${pad.l + i * xStep},${y(d.clicks)}`).join(' ');
   const areaPts = `${pad.l},${h - pad.b} ${linePts} ${pad.l + (series.length - 1) * xStep},${h - pad.b}`;
-  const ticks = [0, 1, 2, 3].map(i => min + ((max - min) / 3) * i);
+  const ticks = [0, 1, 2, 3].map((i) => (max / 3) * i);
   const labelEvery = Math.max(1, Math.floor(series.length / 6));
-  const total = data.summary.total_clicks;
-  const deltaPct = data.summary.half_over_half_delta_pct ?? 0;
+  const total = data.summary?.total_clicks ?? 0;
+  const deltaPct = data.summary?.half_over_half_delta_pct ?? 0;
   const deltaColor = deltaPct >= 0 ? PALETTE.good : PALETTE.bad;
-
   return (
     <div>
-      <div style={{ display: 'flex', gap: space['7'], marginBottom: space['3'], alignItems: 'baseline' }}>
-        <div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Organic clicks · last {data.range_days} days
-          </div>
-          <div style={{ display: 'flex', gap: space['3'], alignItems: 'baseline', marginTop: space['1'] }}>
-            <span data-testid="text-timeline-total" style={{ fontFamily: fontFamily.display, fontSize: '36px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-              {total.toLocaleString()}
-            </span>
-            <span style={{ fontFamily: fontFamily.body, fontSize: '13px', color: deltaColor, fontWeight: fontWeight.medium }}>
-              {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(1)}% half-over-half
-            </span>
-          </div>
+      <div style={{ marginBottom: space['3'] }}>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Organic clicks · last {data.range_days} days
+        </div>
+        <div style={{ display: 'flex', gap: space['3'], alignItems: 'baseline', marginTop: space['1'] }}>
+          <span style={{ fontFamily: fontFamily.display, fontSize: '36px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>{total.toLocaleString()}</span>
+          <span style={{ fontFamily: fontFamily.body, fontSize: '13px', color: deltaColor, fontWeight: fontWeight.medium }}>
+            {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(1)}% half-over-half
+          </span>
         </div>
       </div>
       <svg width={w} height={h} style={{ display: 'block', maxWidth: '100%' }} role="img" aria-label="Organic clicks timeline">
@@ -143,9 +151,7 @@ function TimelineChart({
           </g>
         ))}
         {series.map((d, i) => i % labelEvery === 0 && (
-          <text key={i} x={pad.l + i * xStep} y={h - 6} textAnchor="middle" fontSize="10" fill={tc.text.muted}>
-            {d.date.slice(5)}
-          </text>
+          <text key={i} x={pad.l + i * xStep} y={h - 6} textAnchor="middle" fontSize="10" fill={tc.text.muted}>{d.date.slice(5)}</text>
         ))}
         <polygon points={areaPts} fill="url(#seo-timeline-grad)" />
         <polyline points={linePts} fill="none" stroke={PALETTE.violet} strokeWidth={2} />
@@ -154,370 +160,154 @@ function TimelineChart({
   );
 }
 
-function RangeBtn({ tc, active, onClick, children, testId }: {
-  tc: ReturnType<typeof useThemeColors>; active: boolean; onClick: () => void; children: React.ReactNode; testId: string;
-}) {
+function RangeBtn({ tc, active, onClick, children }: { tc: TC; active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      data-testid={testId}
-      style={{
-        padding: '6px 12px',
-        background: active ? PALETTE.violet : tc.background.surface,
-        color: active ? '#ffffff' : tc.text.primary,
-        border: `1px solid ${active ? PALETTE.violet : tc.border.default}`,
-        borderRadius: radius.md,
-        fontSize: '12px',
-        fontWeight: active ? fontWeight.semibold : fontWeight.medium,
-        cursor: 'pointer',
-        fontFamily: fontFamily.body,
-      }}
-    >
+    <button onClick={onClick} style={{ padding: '6px 12px', background: active ? PALETTE.violet : tc.background.surface, color: active ? '#fff' : tc.text.primary, border: `1px solid ${active ? PALETTE.violet : tc.border.default}`, borderRadius: radius.md, fontSize: '12px', fontWeight: active ? fontWeight.semibold : fontWeight.medium, cursor: 'pointer', fontFamily: fontFamily.body }}>
       {children}
     </button>
   );
 }
 
 // =============================================================================
-// Data Freshness — sidecar to the timeline. Real GSC freshness; cluster engine
-// freshness derived from kpis.last_pipeline_run_at; Ahrefs explicitly retired.
+// Competitor leaderboard (carried from main — cluster-engine sourced)
 // =============================================================================
-
-function relativeAge(iso: string | null | undefined): string {
-  if (!iso) return 'never';
-  const ms = Date.now() - new Date(iso).getTime();
-  if (Number.isNaN(ms) || ms < 0) return '—';
-  const m = Math.floor(ms / 60000);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 48) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
-
-function DataFreshnessCard({
-  tc, gscHealth, kpis,
-}: {
-  tc: ReturnType<typeof useThemeColors>;
-  gscHealth: GscPipelineHealth | null;
-  kpis: SeoOverviewKpis | null;
-}) {
-  // Match the approved mockup: GSC, GA4, Google Ads, Cluster engine.
-  // GA4/Ads ages aren't currently piped through this page; show "—" with
-  // an explicit "see Marketing dashboard" link rather than fabricating data.
-  const sources: { src: string; age: string; status: 'good' | 'bad' | 'stale' | 'unknown' }[] = [
-    {
-      src: 'Google Search Console',
-      age: relativeAge(gscHealth?.last_successful_run ?? gscHealth?.last_run_at ?? null),
-      status: gscHealth?.status === 'healthy' ? 'good' : gscHealth?.status ? 'bad' : 'unknown',
-    },
-    { src: 'GA4', age: '—', status: 'unknown' },
-    { src: 'Google Ads', age: '—', status: 'unknown' },
-    {
-      src: 'Cluster engine',
-      age: relativeAge(kpis?.last_pipeline_run_at ?? null),
-      status: kpis?.last_pipeline_run_at ? 'good' : 'unknown',
-    },
-  ];
-
-  return (
-    <div style={{
-      backgroundColor: tc.background.surface,
-      border: `1px solid ${tc.border.default}`,
-      borderRadius: radius.lg,
-      padding: space['5'],
-      height: '100%',
-      boxSizing: 'border-box',
-    }}>
-      <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: space['3'] }}>
-        Data freshness
-      </div>
-      {sources.map((s) => {
-        const dotColor = s.status === 'good' ? PALETTE.good : s.status === 'bad' ? PALETTE.bad : s.status === 'stale' ? PALETTE.warn : tc.text.muted;
-        const ageColor = s.status === 'bad' ? PALETTE.bad : tc.text.muted;
-        return (
-          <div
-            key={s.src}
-            data-testid={`row-freshness-${s.src.toLowerCase().replace(/\s+/g, '-')}`}
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${tc.border.subtle}` }}
-          >
-            <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.primary }}>{s.src}</span>
-            <span style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
-              <span style={{ width: 8, height: 8, borderRadius: 4, background: dotColor }} />
-              <span style={{ fontFamily: monoStack, fontSize: '12px', color: ageColor }}>{s.age}</span>
-            </span>
-          </div>
-        );
-      })}
-      <a
-        data-testid="link-resync-ads"
-        href="/dashboard/marketing"
-        style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, fontWeight: fontWeight.medium, marginTop: space['3'], display: 'inline-block', textDecoration: 'none' }}
-      >
-        Resync Ads →
-      </a>
-      <div style={{ marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: lineHeight.relaxed }}>
-        Sources update on the nightly cluster pipeline. GA4 and Google Ads freshness is tracked on the Marketing dashboard.
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// Velocity stall callout — only renders when the half-over-half delta on the
-// current timeline window indicates a real slowdown. Threshold mirrors the
-// mockup: any negative or low-positive delta surfaces the warning.
-// =============================================================================
-
-function VelocityStallCallout({ timeseries }: {
-  timeseries: SeoTimeseriesResponse | null;
-}) {
-  const delta = timeseries?.summary.half_over_half_delta_pct ?? null;
-  if (delta == null || delta >= 5) return null;
-  return (
-    <div
-      data-testid="callout-velocity-stall"
-      style={{
-        display: 'flex', gap: space['3'], padding: space['3'],
-        background: PALETTE.warnSoft, borderRadius: radius.md, alignItems: 'center', marginTop: space['3'],
-        border: `1px solid ${PALETTE.warn}22`,
-      }}
-    >
-      <span aria-hidden style={{ fontSize: 20, color: PALETTE.warn }}>⚠</span>
-      <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.warn, lineHeight: lineHeight.relaxed }}>
-        <strong>Velocity {delta < 0 ? 'decline' : 'stall'} detected:</strong>{' '}
-        organic clicks are {delta >= 0 ? `only +${delta.toFixed(1)}%` : `${delta.toFixed(1)}%`} half-over-half on this window.
-        Review the priority queue below — the highest-impact fixes should restore growth.
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// "Do this next" — priority queue of approval-ready recommendations.
-// Sourced from /api/proxy/seo/recommendations (analytics.seo_recommendations).
-// =============================================================================
-
-function ActionRow({
-  tc, rank, rec, onApprove, busy,
-}: {
-  tc: ReturnType<typeof useThemeColors>;
-  rank: number;
-  rec: SeoRecommendation;
-  onApprove: (id: string) => void;
-  busy: boolean;
-}) {
-  const intent = mapIntent(rec);
-  const url = rec.target_url || rec.recommended_url || '—';
-  const title = rec.recommended_title || rec.recommended_action || rec.cluster_topic || rec.primary_keyword || 'Recommendation';
-  const why = rec.recommended_meta_description
-    || (rec.cluster_topic ? `Cluster: ${rec.cluster_topic}. Primary keyword: ${rec.primary_keyword}.` : 'Engine-generated opportunity.');
-  const impact = rec.estimated_impact || '—';
-
-  return (
-    <div
-      data-testid={`row-action-${rec.id}`}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '40px 1fr 140px 220px',
-        gap: space['4'],
-        alignItems: 'center',
-        padding: `${space['3']} ${space['5']}`,
-        borderBottom: `1px solid ${tc.border.subtle}`,
-      }}
-    >
-      <div style={{ fontFamily: monoStack, fontSize: '18px', fontWeight: fontWeight.semibold, color: tc.text.muted }}>
-        #{rank}
-      </div>
-      <div>
-        <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: space['1'], flexWrap: 'wrap' }}>
-          <Pill tone={intent.tone} tc={tc}>{intent.label}</Pill>
-          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: tc.text.primary }}>{title}</span>
-        </div>
-        <div style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, marginBottom: space['1'], wordBreak: 'break-all' }}>{url}</div>
-        <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.primary, lineHeight: lineHeight.relaxed }}>
-          <span style={{ color: tc.text.muted }}>Why: </span>{why}
-        </div>
-      </div>
-      <div>
-        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Est. impact</div>
-        <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: PALETTE.good }}>{impact}</div>
-      </div>
-      <div style={{ display: 'flex', gap: space['2'], justifyContent: 'flex-end' }}>
-        <button
-          data-testid={`button-approve-${rec.id}`}
-          disabled={busy || rec.status !== 'pending_review'}
-          onClick={() => onApprove(rec.id)}
-          style={{
-            padding: '6px 12px',
-            background: rec.status === 'approved' ? PALETTE.good : PALETTE.violet,
-            color: '#ffffff', border: 'none', borderRadius: radius.md,
-            fontSize: '12px', fontWeight: fontWeight.medium,
-            cursor: busy || rec.status !== 'pending_review' ? 'default' : 'pointer',
-            opacity: busy ? 0.6 : 1, fontFamily: fontFamily.body,
-          }}
-        >
-          {rec.status === 'approved' ? 'Approved' : busy ? 'Approving…' : 'Approve'}
-        </button>
-        <a
-          data-testid={`button-details-${rec.id}`}
-          href={`/dashboard/seo/opportunities/${rec.id}`}
-          style={{
-            padding: '6px 12px', background: tc.background.surface, color: tc.text.primary,
-            border: `1px solid ${tc.border.strong}`, borderRadius: radius.md,
-            fontSize: '12px', cursor: 'pointer', fontFamily: fontFamily.body,
-            textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
-          }}
-        >
-          Details
-        </a>
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// Competitor Gaps — cluster-engine sourced (Ahrefs decommissioned).
-// =============================================================================
-
-// Mirrors the approved mockup layout: a leaderboard TABLE on the left
-// (Competitor / Share of voice / Overlap / Gap kw / 30d trend) and a
-// "Top competitor gaps" sidecar on the right. Real cluster-engine data
-// fills the columns we can compute; Ahrefs-only columns degrade to "—"
-// with a clear footer explanation.
-function CompetitorGapsPanel({ tc, gaps }: { tc: ReturnType<typeof useThemeColors>; gaps: SeoCompetitorGap[] }) {
+function CompetitorGapsPanel({ tc, gaps }: { tc: TC; gaps: CompetitorGap[] }) {
   const leaderboard = useMemo(() => {
-    const m = new Map<string, { domain: string; count: number; topPos: number | null }>();
+    const m = new Map<string, { domain: string; count: number }>();
     for (const g of gaps) {
       const dom = (g.competitor_url || '').replace(/^https?:\/\//, '').split('/')[0];
       if (!dom) continue;
-      const cur = m.get(dom) ?? { domain: dom, count: 0, topPos: null };
+      const cur = m.get(dom) ?? { domain: dom, count: 0 };
       cur.count += 1;
-      const pos = g.competitor_ranking_position;
-      if (pos != null && (cur.topPos == null || pos < cur.topPos)) cur.topPos = pos;
       m.set(dom, cur);
     }
     const rows = Array.from(m.values()).sort((a, b) => b.count - a.count);
     const totalGaps = rows.reduce((s, r) => s + r.count, 0) || 1;
-    return rows.slice(0, 6).map((r) => ({ ...r, sovProxy: (r.count / totalGaps) * 100 }));
+    return rows.slice(0, 6).map((r) => ({ ...r, sov: (r.count / totalGaps) * 100 }));
   }, [gaps]);
-
-  const topGaps = useMemo(
-    () => [...gaps].sort((a, b) => (b.opportunity_score ?? 0) - (a.opportunity_score ?? 0)).slice(0, 6),
-    [gaps],
-  );
-
+  const topGaps = useMemo(() => [...gaps].sort((a, b) => (b.opportunity_score ?? 0) - (a.opportunity_score ?? 0)).slice(0, 6), [gaps]);
   if (gaps.length === 0) {
-    return (
-      <div style={{ padding: space['5'], color: tc.text.muted, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
-        No competitor gaps detected by the cluster engine in the last sweep.
-      </div>
-    );
+    return <div style={{ padding: space['5'], color: tc.text.muted, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>No competitor gaps detected in the last sweep.</div>;
   }
-
-  const maxSov = Math.max(1, ...leaderboard.map((r) => r.sovProxy));
-
+  const maxSov = Math.max(1, ...leaderboard.map((r) => r.sov));
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: space['4'] }}>
-      {/* Competitor leaderboard TABLE */}
       <div style={{ overflow: 'hidden', border: `1px solid ${tc.border.subtle}`, borderRadius: radius.md }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '13px' }}>
           <thead>
-            <tr style={{ borderBottom: `1px solid ${tc.border.subtle}`, textAlign: 'left', backgroundColor: tc.background.muted }}>
-              {['Competitor', 'Share of voice', 'Overlap', 'Gap kw', '30d trend'].map((h, i) => (
-                <th key={h} style={{
-                  padding: '10px 12px',
-                  fontWeight: fontWeight.semibold, color: tc.text.muted, fontSize: '11px',
-                  textTransform: 'uppercase', letterSpacing: '0.05em',
-                  textAlign: i === 0 ? 'left' : 'right',
-                }}>{h}</th>
+            <tr style={{ borderBottom: `1px solid ${tc.border.subtle}`, backgroundColor: tc.background.muted }}>
+              {['Competitor', 'Share of voice', 'Gap kw'].map((hh, i) => (
+                <th key={hh} style={{ padding: '10px 12px', fontWeight: fontWeight.semibold, color: tc.text.muted, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: i === 0 ? 'left' : 'right' }}>{hh}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {leaderboard.map((c) => (
-              <tr key={c.domain}
-                  data-testid={`row-competitor-leaderboard-${c.domain}`}
-                  style={{ borderBottom: `1px solid ${tc.border.subtle}` }}>
-                <td style={{ padding: '10px 12px', fontWeight: fontWeight.medium, color: tc.text.primary }}>
-                  {c.domain}
-                </td>
+            {leaderboard.map((c2) => (
+              <tr key={c2.domain} style={{ borderBottom: `1px solid ${tc.border.subtle}` }}>
+                <td style={{ padding: '10px 12px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{c2.domain}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                   <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-                    <span style={{ fontFamily: monoStack }}>{c.sovProxy.toFixed(1)}%</span>
+                    <span style={{ fontFamily: monoStack }}>{c2.sov.toFixed(1)}%</span>
                     <span style={{ display: 'inline-block', width: 80, height: 4, background: tc.border.subtle, borderRadius: 2 }}>
-                      <span style={{ display: 'block', width: `${(c.sovProxy / maxSov) * 100}%`, height: '100%', background: PALETTE.violet, borderRadius: 2 }} />
+                      <span style={{ display: 'block', width: `${(c2.sov / maxSov) * 100}%`, height: '100%', background: PALETTE.violet, borderRadius: 2 }} />
                     </span>
                   </div>
                 </td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', color: tc.text.muted, fontFamily: monoStack }}>—</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{c.count}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', color: tc.text.muted, fontFamily: monoStack }}>—</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{c2.count}</td>
               </tr>
             ))}
-            {/* "You" row — fixed neonsignsdepot identity row, mirrors mockup */}
-            <tr data-testid="row-competitor-leaderboard-you"
-                style={{ borderBottom: `1px solid ${tc.border.subtle}`, background: PALETTE.violetSoft }}>
-              <td style={{ padding: '10px 12px', fontWeight: fontWeight.semibold, color: PALETTE.violet }}>
-                You — neonsignsdepot.com
-              </td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', color: tc.text.muted, fontFamily: monoStack }}>—</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', color: tc.text.muted, fontFamily: monoStack }}>—</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.muted }}>0</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', color: tc.text.muted, fontFamily: monoStack }}>—</td>
-            </tr>
           </tbody>
         </table>
-        <div style={{
-          padding: '10px 12px', borderTop: `1px solid ${tc.border.subtle}`,
-          fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, backgroundColor: tc.background.muted,
-          display: 'flex', justifyContent: 'space-between', gap: space['3'], flexWrap: 'wrap',
-        }}>
-          <span>Share of voice = % of tracked gap keywords each competitor ranks for. Overlap and 30d trend require Ahrefs (decommissioned).</span>
-          <a href="/dashboard/seo/competitive" style={{ color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }}>
-            View full SERP analysis →
-          </a>
+        <div style={{ padding: '10px 12px', borderTop: `1px solid ${tc.border.subtle}`, fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, backgroundColor: tc.background.muted, display: 'flex', justifyContent: 'space-between', gap: space['3'], flexWrap: 'wrap' }}>
+          <span>Share of voice = % of tracked gap keywords each competitor ranks for.</span>
+          <a href="/dashboard/seo/competitive" style={{ color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }}>Full SERP analysis →</a>
         </div>
       </div>
-
-      {/* Top competitor gaps sidecar */}
       <div>
-        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
-          Top competitor gaps
-        </div>
-        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['3'] }}>
-          Queries competitors rank top-10 for, you don&rsquo;t
-        </div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>Top competitor gaps</div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['3'] }}>Queries competitors rank for, you don&rsquo;t</div>
         {topGaps.map((g, i) => {
           const dom = (g.competitor_url || '').replace(/^https?:\/\//, '').split('/')[0];
           return (
-            <div key={g.id} data-testid={`row-competitor-gap-${i}`}
-              style={{ padding: `${space['2.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
+            <div key={g.id ?? i} style={{ padding: `${space['2.5']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2px', gap: space['2'] }}>
-                <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary, wordBreak: 'break-word' }}>
-                  {g.keyword || g.cluster_keyword || '—'}
-                </span>
-                {g.opportunity_score != null && (
-                  <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, whiteSpace: 'nowrap' }}>
-                    {g.opportunity_score.toFixed(2)}
-                  </span>
-                )}
+                <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary, wordBreak: 'break-word' }}>{g.keyword || g.cluster_keyword || '—'}</span>
+                {g.opportunity_score != null && <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, whiteSpace: 'nowrap' }}>{g.opportunity_score.toFixed(2)}</span>}
               </div>
               <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
-                <span style={{ color: PALETTE.bad }}>{dom}</span>
-                {g.competitor_ranking_position != null && (
-                  <> ranks pos <span style={{ fontFamily: monoStack }}>{g.competitor_ranking_position}</span></>
-                )}
-                {' · '}you&rsquo;re <span style={{ fontFamily: monoStack }}>{g.our_ranking_position ? `pos ${g.our_ranking_position}` : 'unranked'}</span>
+                <span style={{ color: PALETTE.bad }}>{dom || '—'}</span>{' · '}you&rsquo;re{' '}
+                <span style={{ fontFamily: monoStack }}>{g.our_ranking_position ? `pos ${g.our_ranking_position}` : 'unranked'}</span>
               </div>
             </div>
           );
         })}
-        <a href="/dashboard/seo/opportunities"
-           style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, fontWeight: fontWeight.medium, marginTop: space['3'], display: 'inline-block', textDecoration: 'none' }}>
-          Generate page recommendations →
-        </a>
+        <a href="/dashboard/seo/competitive" style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, fontWeight: fontWeight.medium, marginTop: space['3'], display: 'inline-block', textDecoration: 'none' }}>View all gaps →</a>
       </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Review queue — the actual proposed changes (before -> after)
+// =============================================================================
+function ChangeRow({ tc, change, busy, onDecide }: { tc: TC; change: ProposedChange; busy: boolean; onDecide: (c: ProposedChange, a: 'approve' | 'reject') => void; }) {
+  const label = MUTATION_LABEL[change.mutation_type] || change.mutation_type;
+  return (
+    <div style={{ padding: space['4'], borderBottom: `1px solid ${tc.border.subtle}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Pill tone="violet" tc={tc}>{label}</Pill>
+          <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>{change.page || '/'}</span>
+          {change.opportunity_score != null && <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>score {change.opportunity_score}</span>}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => onDecide(change, 'reject')} disabled={busy} style={{ fontSize: 12, padding: '6px 14px', borderRadius: radius.md, border: `1px solid ${tc.border.strong}`, background: tc.background.surface, color: tc.text.secondary, cursor: busy ? 'wait' : 'pointer', fontFamily: fontFamily.body }}>Reject</button>
+          <button onClick={() => onDecide(change, 'approve')} disabled={busy} style={{ fontSize: 12, fontWeight: fontWeight.semibold, padding: '6px 16px', borderRadius: radius.md, border: 'none', background: PALETTE.violet, color: '#fff', cursor: busy ? 'wait' : 'pointer', fontFamily: fontFamily.body }}>{busy ? '…' : 'Approve'}</button>
+        </div>
+      </div>
+      {change.mutation_type.includes('internal_link') ? (
+        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.secondary }}>Insert internal-link anchor: <strong style={{ color: tc.text.primary }}>{change.proposed_value}</strong></div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <BeforeAfter tc={tc} label="Current" value={change.original_value} muted />
+          <BeforeAfter tc={tc} label="Proposed" value={change.proposed_value} />
+        </div>
+      )}
+      {change.evidence_summary && (
+        <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: 10 }}>{change.evidence_summary}</div>
+      )}
+    </div>
+  );
+}
+function BeforeAfter({ tc, label, value, muted }: { tc: TC; label: string; value: string | null; muted?: boolean }) {
+  return (
+    <div style={{ background: muted ? tc.background.muted : PALETTE.violetSoft, borderRadius: radius.md, padding: '8px 10px' }}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: tc.text.muted, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontFamily: fontFamily.body, fontSize: 13, color: tc.text.primary, lineHeight: lineHeight.relaxed }}>{value || <em style={{ color: tc.text.muted }}>none set</em>}</div>
+    </div>
+  );
+}
+
+// Findings panels --------------------------------------------------------------
+function Panel({ tc, title, href, hrefLabel, children }: { tc: TC; title: string; href: string; hrefLabel: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['5'] }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <h3 style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>{title}</h3>
+        <a href={href} style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, textDecoration: 'none' }}>{hrefLabel} →</a>
+      </div>
+      {children}
+    </div>
+  );
+}
+function MiniRow({ tc, main, sub, right }: { tc: TC; main: string; sub: string; right: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${tc.border.subtle}` }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{main}</div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
+      </div>
+      <div style={{ flexShrink: 0 }}>{right}</div>
     </div>
   );
 }
@@ -525,279 +315,145 @@ function CompetitorGapsPanel({ tc, gaps }: { tc: ReturnType<typeof useThemeColor
 // =============================================================================
 // Page
 // =============================================================================
-
 function SeoOverviewContent() {
   const tc = useThemeColors();
-  const [kpis, setKpis] = useState<SeoOverviewKpis | null>(null);
-  const [gscHealth, setGscHealth] = useState<GscPipelineHealth | null>(null);
-  const [recs, setRecs] = useState<SeoRecommendation[]>([]);
-  const [competitorGaps, setCompetitorGaps] = useState<SeoCompetitorGap[]>([]);
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [timeseries, setTimeseries] = useState<TimeseriesResp | null>(null);
+  const [gaps, setGaps] = useState<CompetitorGap[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [range, setRange] = useState<TimelineRange>('30');
-  const [customDays, setCustomDays] = useState(45);
-  const days = range === 'custom' ? customDays : Number(range);
-  const [timeseries, setTimeseries] = useState<SeoTimeseriesResponse | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const [approvingId, setApprovingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    // Use allSettled + per-request timeout so a single hanging upstream
-    // (e.g. cluster-engine cold start) cannot trap the page on Loading.
-    const withTimeout = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
-      Promise.race([
-        p,
-        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
-      ]);
-    (async () => {
-      const [kRes, ghRes, rsRes, cgRes] = await Promise.allSettled([
-        withTimeout(getSeoOverviewKpis(), 8000, null as SeoOverviewKpis | null),
-        withTimeout(getGscPipelineHealth(), 8000, null as GscPipelineHealth | null),
-        withTimeout(getRecommendations(), 8000, [] as SeoRecommendation[]),
-        withTimeout(getSeoCompetitorGaps(), 8000, [] as SeoCompetitorGap[]),
-      ]);
-      if (cancelled) return;
-      setKpis(kRes.status === 'fulfilled' ? kRes.value : null);
-      setGscHealth(ghRes.status === 'fulfilled' ? ghRes.value : null);
-      setRecs(rsRes.status === 'fulfilled' ? rsRes.value : []);
-      setCompetitorGaps(cgRes.status === 'fulfilled' ? cgRes.value : []);
-      setLoading(false);
-    })();
-    return () => { cancelled = true; };
+  const loadCore = useCallback(async () => {
+    const [s, g] = await Promise.all([
+      getJson<SummaryData>('/api/proxy/seo/summary'),
+      getJson<CompetitorGap[]>('/api/proxy/seo/competitor-gaps'),
+    ]);
+    setSummary(s);
+    setGaps(Array.isArray(g) ? g : []);
+    setLoading(false);
   }, []);
 
+  useEffect(() => { loadCore(); }, [loadCore]);
   useEffect(() => {
     let cancelled = false;
-    getSeoTimeseries(days)
-      .then((r) => { if (!cancelled) setTimeseries(r); })
-      .catch(() => { if (!cancelled) setTimeseries(null); });
+    getJson<TimeseriesResp>(`/api/proxy/seo/timeseries?days=${range}`).then((r) => { if (!cancelled) setTimeseries(r); });
     return () => { cancelled = true; };
-  }, [days]);
+  }, [range]);
 
-  // Sort pending recs by estimated impact desc (numeric prefix), then take top 5.
-  const priorityQueue = useMemo(() => {
-    const score = (r: SeoRecommendation) => {
-      const m = (r.estimated_impact || '').match(/[+]?(\d+(?:\.\d+)?)/);
-      return m ? Number(m[1]) : 0;
-    };
-    return [...recs]
-      .filter((r) => r.status === 'pending_review')
-      .sort((a, b) => score(b) - score(a))
-      .slice(0, 5);
-  }, [recs]);
-
-  const totalPending = recs.filter((r) => r.status === 'pending_review').length;
-  const approvedThisBatch = recs.filter((r) => r.status === 'approved').length;
-
-  // Subtitle: prefer real lift if any rec has numeric impact; otherwise fall
-  // back to a generic count-based message.
-  const headerSubtitle = useMemo(() => {
-    const lifts = priorityQueue
-      .map((r) => {
-        const m = (r.estimated_impact || '').match(/[+]?(\d+(?:\.\d+)?)/);
-        return m ? Number(m[1]) : 0;
-      })
-      .filter((n) => n > 0);
-    const sum = lifts.reduce((a, b) => a + b, 0);
-    if (sum > 0) {
-      return `Your top ${priorityQueue.length} fixes will move organic clicks +${Math.round(sum)}/mo if approved this week.`;
-    }
-    if (totalPending > 0) {
-      return `${totalPending} recommendation${totalPending === 1 ? '' : 's'} awaiting your review · ${approvedThisBatch} approved.`;
-    }
-    return 'No pending recommendations. Cluster engine is monitoring for new opportunities.';
-  }, [priorityQueue, totalPending, approvedThisBatch]);
-
-  async function handleApprove(id: string) {
-    setApprovingId(id);
+  const decide = useCallback(async (change: ProposedChange, action: 'approve' | 'reject') => {
+    setBusyId(change.id);
     try {
-      await approveRecommendation(id);
-      setRecs((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'approved' } : r)));
+      await decideSeoCandidate(change.id, action);
+      setSummary((prev) => prev ? {
+        ...prev,
+        proposedChanges: prev.proposedChanges.filter((x) => x.id !== change.id),
+        counts: { ...prev.counts, proposed_changes: Math.max(0, (prev.counts.proposed_changes || 1) - 1) },
+      } : prev);
+      setToast(`${action === 'approve' ? 'Approved' : 'Rejected'}: ${change.page}`);
     } catch {
-      // Stay quiet — the recommendation row will re-show pending_review if reload runs.
+      setToast('Action failed — please retry.');
     } finally {
-      setApprovingId(null);
+      setBusyId(null);
+      setTimeout(() => setToast(null), 2600);
     }
-  }
+  }, []);
 
-  async function handleApproveTop5() {
-    for (const r of priorityQueue) {
-      if (r.status === 'pending_review') {
-        // eslint-disable-next-line no-await-in-loop
-        await handleApprove(r.id);
-      }
-    }
-  }
+  const counts = summary?.counts ?? {};
+  const proposed = summary?.proposedChanges ?? [];
+  const subtitle = loading
+    ? 'Loading findings…'
+    : `${counts.proposed_changes ?? 0} proposed changes awaiting review · ${counts.decay ?? 0} decay · ${counts.cannibalization ?? 0} cannibalization · ${counts.backlinks ?? 0} backlink targets`;
+
+  const cardBase: React.CSSProperties = { backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['5'] };
 
   if (loading) {
-    return (
-      <div style={{ padding: space['8'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>
-        Loading SEO Command Center…
-      </div>
-    );
+    return <div style={{ padding: space['8'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>Loading SEO Command Center…</div>;
   }
-  if (error) {
-    return (
-      <div style={{ padding: space['6'], color: tc.text.primary, fontFamily: fontFamily.body }}>
-        Error loading SEO data: {error}
-      </div>
-    );
-  }
-
-  const cardBase: React.CSSProperties = {
-    backgroundColor: tc.background.surface,
-    border: `1px solid ${tc.border.default}`,
-    borderRadius: radius.lg,
-    padding: space['5'],
-  };
 
   return (
     <div style={{ padding: space['6'], maxWidth: 1280, margin: '0 auto', fontFamily: fontFamily.body, color: tc.text.primary }}>
-      {/* ============================ HEADER ============================ */}
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['7'], gap: space['4'], flexWrap: 'wrap' }}>
         <div>
-          <h1 data-testid="text-page-title"
-            style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, margin: 0, color: tc.text.primary, lineHeight: lineHeight.snug }}
-          >
-            SEO Command Center
-          </h1>
-          <div data-testid="text-header-subtitle"
-            style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: space['1'] }}
-          >
-            {headerSubtitle}
-          </div>
+          <h1 style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, margin: 0, color: tc.text.primary, lineHeight: lineHeight.snug }}>SEO Command Center</h1>
+          <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: space['1'] }}>{subtitle}</div>
         </div>
-        <div style={{ display: 'flex', gap: space['2'] }}>
-          <button
-            data-testid="button-diagnose-url"
-            onClick={() => {
-              const u = window.prompt('Diagnose a URL — paste the page path or full URL');
-              if (u) window.open(`/dashboard/seo/pages?url=${encodeURIComponent(u)}`, '_self');
-            }}
-            style={{
-              padding: '8px 14px', background: tc.background.surface,
-              border: `1px solid ${tc.border.strong}`, borderRadius: radius.md,
-              fontSize: '13px', cursor: 'pointer', color: tc.text.primary, fontFamily: fontFamily.body,
-            }}
-          >
-            Diagnose a URL…
-          </button>
-          <button
-            data-testid="button-approve-top-5"
-            onClick={handleApproveTop5}
-            disabled={priorityQueue.length === 0 || approvingId != null}
-            style={{
-              padding: '8px 14px', background: PALETTE.violet, color: '#ffffff',
-              border: 'none', borderRadius: radius.md,
-              fontSize: '13px', fontWeight: fontWeight.medium,
-              cursor: priorityQueue.length === 0 ? 'default' : 'pointer',
-              opacity: priorityQueue.length === 0 ? 0.5 : 1,
-              fontFamily: fontFamily.body,
-            }}
-          >
-            Approve top {Math.min(5, priorityQueue.length)} ($0)
-          </button>
-        </div>
+        <button onClick={() => { setLoading(true); loadCore(); }} style={{ padding: '8px 14px', background: tc.background.surface, border: `1px solid ${tc.border.strong}`, borderRadius: radius.md, fontSize: '13px', cursor: 'pointer', color: tc.text.primary, fontFamily: fontFamily.body }}>Refresh</button>
       </div>
 
-      {/* ============================ HERO 2-COL ============================ */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: space['4'], marginBottom: space['7'] }}>
-        <div style={{
-          ...cardBase,
-          background: `linear-gradient(135deg, ${PALETTE.violetSoft} 0%, ${tc.background.surface} 60%)`,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['3'], flexWrap: 'wrap', gap: space['3'] }}>
-            <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap' }}>
-              <RangeBtn tc={tc} active={range === '30'} onClick={() => setRange('30')} testId="button-range-30">30d</RangeBtn>
-              <RangeBtn tc={tc} active={range === '60'} onClick={() => setRange('60')} testId="button-range-60">60d</RangeBtn>
-              <RangeBtn tc={tc} active={range === '90'} onClick={() => setRange('90')} testId="button-range-90">90d</RangeBtn>
-              <RangeBtn tc={tc} active={range === 'custom'} onClick={() => setRange('custom')} testId="button-range-custom">Custom</RangeBtn>
-              {range === 'custom' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginLeft: space['2'] }}>
-                  <label htmlFor="seo-custom-days" style={{ position: 'absolute', left: -9999, width: 1, height: 1, overflow: 'hidden' }}>
-                    Custom timeline range in days
-                  </label>
-                  <input
-                    id="seo-custom-days"
-                    data-testid="input-custom-days"
-                    type="range" min={7} max={90} value={customDays}
-                    aria-label="Custom timeline range in days"
-                    aria-valuemin={7} aria-valuemax={90} aria-valuenow={customDays}
-                    onChange={(e) => setCustomDays(Number(e.target.value))}
-                    style={{ width: 140 }}
-                  />
-                  <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, minWidth: 56 }}>{customDays} days</span>
-                </div>
-              )}
-            </div>
-            <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>vs prior period</span>
-          </div>
-          <TimelineChart tc={tc} data={timeseries} />
-          <VelocityStallCallout timeseries={timeseries} />
-        </div>
-        <DataFreshnessCard tc={tc} gscHealth={gscHealth} kpis={kpis} />
+      {/* KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: space['3'], marginBottom: space['7'] }}>
+        {[
+          { k: 'proposed_changes', label: 'Proposed changes', href: '/dashboard/seo/actions' },
+          { k: 'decay', label: 'Ranking decay', href: '/dashboard/seo/signals' },
+          { k: 'cannibalization', label: 'Cannibalization', href: '/dashboard/seo/signals' },
+          { k: 'backlinks', label: 'Backlink targets', href: '/dashboard/seo/backlinks' },
+          { k: 'competitor_gaps', label: 'Competitor gaps', href: '/dashboard/seo/competitive' },
+        ].map((t) => (
+          <a key={t.k} href={t.href} style={{ ...cardBase, padding: space['4'], textDecoration: 'none', borderLeft: `3px solid ${PALETTE.violet}` }}>
+            <div style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>{counts[t.k] ?? 0}</div>
+            <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{t.label}</div>
+          </a>
+        ))}
       </div>
 
-      {/* ============================ DO THIS NEXT ============================ */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: space['3'] }}>
-        <div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>
-            Do this next
-          </div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px' }}>
-            Ranked by estimated organic-clicks lift, top 5 of {totalPending}
-          </div>
+      {/* Hero: timeline */}
+      <div style={{ ...cardBase, background: `linear-gradient(135deg, ${PALETTE.violetSoft} 0%, ${tc.background.surface} 60%)`, marginBottom: space['7'] }}>
+        <div style={{ display: 'flex', gap: space['2'], marginBottom: space['3'] }}>
+          {(['30', '60', '90'] as TimelineRange[]).map((r) => (
+            <RangeBtn key={r} tc={tc} active={range === r} onClick={() => setRange(r)}>{r}d</RangeBtn>
+          ))}
         </div>
-      </div>
-      <div style={{ ...cardBase, padding: 0 }}>
-        {priorityQueue.length === 0 ? (
-          <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
-            No recommendations are awaiting review. The cluster engine surfaces new opportunities each night.
-          </div>
-        ) : (
-          priorityQueue.map((rec, i) => (
-            <ActionRow
-              key={rec.id} tc={tc} rank={i + 1} rec={rec}
-              onApprove={handleApprove} busy={approvingId === rec.id}
-            />
-          ))
-        )}
-        {totalPending > priorityQueue.length && (
-          <div style={{ padding: space['3'], borderTop: `1px solid ${tc.border.subtle}`, textAlign: 'center', backgroundColor: tc.background.muted }}>
-            <a data-testid="link-view-all-recommendations" href="/dashboard/seo/opportunities"
-              style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }}
-            >
-              View all {totalPending} recommendations →
-            </a>
-          </div>
-        )}
+        <TimelineChart tc={tc} data={timeseries} />
       </div>
 
-      {/* ============================ COMPETITOR INTEL ============================ */}
-      <div style={{ marginTop: space['7'] }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: space['3'] }}>
-          <div>
-            <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>
-              Competitor intelligence
-            </div>
-            <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px' }}>
-              Top organic competitors for your tracked clusters · refreshed nightly
-            </div>
-          </div>
-        </div>
-        <div style={cardBase}>
-          <CompetitorGapsPanel tc={tc} gaps={competitorGaps} />
-        </div>
+      {/* Review queue */}
+      <div style={{ marginBottom: space['3'] }}>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>Review queue — proposed changes</div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px' }}>The actual change the engine wants to make. Approve to draft it in WordPress.</div>
       </div>
+      <div style={{ ...cardBase, padding: 0, marginBottom: space['7'] }}>
+        {proposed.length === 0 ? (
+          <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>No proposed changes are currently awaiting review.</div>
+        ) : proposed.map((change) => (
+          <ChangeRow key={change.id} tc={tc} change={change} busy={busyId === change.id} onDecide={decide} />
+        ))}
+      </div>
+
+      {/* Detected problems */}
+      <div style={{ marginBottom: space['3'], fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>Detected problems</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: space['4'], marginBottom: space['7'] }}>
+        <Panel tc={tc} title="Ranking decay" href="/dashboard/seo/signals" hrefLabel="All signals">
+          {summary?.decay.length ? summary.decay.map((d) => (
+            <MiniRow key={d.id} tc={tc} main={d.keyword} sub={d.page} right={<Pill tone="bad" tc={tc}>#{d.position_30d_ago} → #{d.position_now}</Pill>} />
+          )) : <div style={{ fontFamily: fontFamily.body, fontSize: 13, color: tc.text.muted, padding: '8px 0' }}>No active decay signals.</div>}
+        </Panel>
+        <Panel tc={tc} title="Keyword cannibalization" href="/dashboard/seo/signals" hrefLabel="All signals">
+          {summary?.cannibalization.length ? summary.cannibalization.map((x) => (
+            <MiniRow key={x.id} tc={tc} main={x.keyword || 'Overlapping pages'} sub={`${x.page_a}  ⟷  ${x.page_b}`} right={<Pill tone="warn" tc={tc}>{Math.round(x.overlap_score * 100)}%</Pill>} />
+          )) : <div style={{ fontFamily: fontFamily.body, fontSize: 13, color: tc.text.muted, padding: '8px 0' }}>No cannibalization detected.</div>}
+        </Panel>
+        <Panel tc={tc} title="Backlink targets (off-page)" href="/dashboard/seo/backlinks" hrefLabel="All backlinks">
+          {summary?.backlinks.length ? summary.backlinks.map((b) => (
+            <MiniRow key={b.id} tc={tc} main={b.referring_domain} sub={`links to ${b.gap_competitor} · ${b.backlinks_count.toLocaleString()} backlinks`} right={<Pill tone="info" tc={tc}>DR {b.domain_rank}</Pill>} />
+          )) : <div style={{ fontFamily: fontFamily.body, fontSize: 13, color: tc.text.muted, padding: '8px 0' }}>No new backlink opportunities.</div>}
+        </Panel>
+      </div>
+
+      {/* Competitor intelligence */}
+      <div style={{ marginBottom: space['3'], fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>Competitor intelligence</div>
+      <div style={cardBase}>
+        <CompetitorGapsPanel tc={tc} gaps={gaps} />
+      </div>
+
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: tc.text.primary, color: tc.text.inverse, padding: '10px 18px', borderRadius: radius.md, fontSize: 13, fontFamily: fontFamily.body, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', zIndex: 50 }}>{toast}</div>
+      )}
     </div>
   );
 }
-
-// =============================================================================
-// Page export — RBAC-gated by DashboardGuard.
-// =============================================================================
 
 export default function SeoOverviewPage() {
   return (
