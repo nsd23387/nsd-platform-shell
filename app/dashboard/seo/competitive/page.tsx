@@ -109,7 +109,7 @@ function CompetitiveContent() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${tc.border.default}` }}>
-                  {['Keyword', 'Competitor', 'Their Position', 'Our Position', 'Opp. Score', 'Difficulty', 'Volume', 'Status'].map(h => (
+                  {['Keyword', 'Competitor', 'Their Position', 'Our Position', 'Opp. Score', 'Status'].map(h => (
                     <th key={h} style={{ ...tdStyle, fontWeight: fontWeight.medium, color: tc.text.muted, textAlign: 'left' }}>{h}</th>
                   ))}
                 </tr>
@@ -124,8 +124,6 @@ function CompetitiveContent() {
                       <td style={tdStyle}>{g.competitor_ranking_position ?? '—'}</td>
                       <td style={tdStyle}>{g.our_ranking_position != null ? g.our_ranking_position : <span style={{ color: tc.text.muted }}>Not ranking</span>}</td>
                       <td style={tdStyle}>{gap.opportunity_score != null ? Number(gap.opportunity_score).toFixed(1) : '—'}</td>
-                      <td style={tdStyle}>{g.keyword_difficulty ?? '—'}</td>
-                      <td style={tdStyle}>{g.search_volume != null ? Number(g.search_volume).toLocaleString() : '—'}</td>
                       <td style={tdStyle}>
                         <span style={{ display: 'inline-block', padding: `2px 8px`, borderRadius: '9999px', fontSize: '12px', fontWeight: 500, backgroundColor: '#f5f5f5', color: '#737373' }}>
                           {gap.status}
