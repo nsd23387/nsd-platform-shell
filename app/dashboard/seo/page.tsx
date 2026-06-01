@@ -66,6 +66,8 @@ interface GateEvidence {
   target?: { url?: string; entity?: string; intent?: string };
   signals?: { hierarchy_proximity?: number; embedding_cosine?: number; shared_attributes?: number };
   why?: string;
+  anchor_context?: string;
+  implementation?: string;
 }
 interface ProposedChange {
   id: string; page: string; mutation_type: string; target_field: string | null;
@@ -319,6 +321,16 @@ function ChangeRow({ tc, change, busy, onDecide }: { tc: TC; change: ProposedCha
       <GateSignals tc={tc} ev={change.evidence} />
       {why && (
         <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: 10 }}>{why}</div>
+      )}
+      {isLink && (
+        <div style={{ marginTop: 10, padding: '8px 10px', background: tc.background.muted, borderRadius: radius.md, fontSize: 12, color: tc.text.secondary, lineHeight: lineHeight.relaxed }}>
+          <div style={{ fontFamily: monoStack, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', color: tc.text.muted, marginBottom: 3 }}>Implementation</div>
+          {change.evidence?.implementation
+            || `On approval: inserts a link in the “${srcEntity || 'source page'}” page, wrapping the existing text “${change.proposed_value}” → ${change.evidence?.target?.url || tgtEntity || 'target page'}. Saved as a WordPress draft for your review — not published.`}
+          {change.evidence?.anchor_context && (
+            <div style={{ marginTop: 6, fontStyle: 'italic', color: tc.text.muted }}>“{change.evidence.anchor_context}”</div>
+          )}
+        </div>
       )}
     </div>
   );
