@@ -19,10 +19,19 @@ const TABLE_MAP: Record<string, string> = {
 };
 
 const ORDER_MAP: Record<string, string> = {
-  decay: 'decay_score DESC NULLS LAST',
+  // Sort decay by how far rank actually slipped, not the unreliable traffic
+  // delta (computed off an undercounted GSC click baseline).
+  decay: 'position_delta DESC NULLS LAST',
   cannibalization: 'overlap_score DESC NULLS LAST',
   'topical-gaps': 'opportunity_score DESC NULLS LAST',
 };
+
+// Utility / policy pages whose ranking decay isn't actionable — excluded from
+// decay alerts so the list stays focused on commercial pages.
+const DECAY_EXCLUDE_PATTERNS = [
+  '%/shipping-returns/%', '%/returns%', '%/wholesale%', '%/privacy%',
+  '%/terms%', '%/contact%', '%/cart%', '%/checkout%', '%/my-account%',
+];
 
 export async function GET(req: NextRequest) {
   if (!databaseUrl) return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
@@ -39,6 +48,12 @@ export async function GET(req: NextRequest) {
     const params: string[] = [];
     if (status) { params.push(status); where += ` AND status = $${params.length}`; }
     if (confidence && type === 'cannibalization') { params.push(confidence); where += ` AND canonical_confidence = $${params.length}`; }
+    if (type === 'decay') {
+      for (const pat of DECAY_EXCLUDE_PATTERNS) {
+        params.push(pat);
+        where += ` AND COALESCE(page_path, '') NOT ILIKE $${params.length}`;
+      }
+    }
 
     const order = ORDER_MAP[type] || 'detected_at DESC';
     const { rows } = await p.query(`SELECT * FROM ${table} ${where} ORDER BY ${order} LIMIT 100`, params);
