@@ -53,6 +53,12 @@
       "rules": {
         "no-restricted-syntax": "off"
       }
+    },
+    {
+      "files": ["lib/financeApi.ts"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
     }
   ]
 }
