@@ -53,20 +53,23 @@ export async function GET() {
   const p = getPool();
 
   const [
-    cProposed, cDecay, cCannibal, cBacklinks, cCompetitor, cTopical, cSerp,
+    cProposed, cDecay, cCannibal, cBacklinks, cCompetitor, cTopical, cSerp, cSuppressed,
     proposedChanges,
     decay,
     cannibalization,
     backlinks,
   ] = await Promise.all([
-    count(p, `SELECT count(*) c FROM analytics.seo_execution_candidate WHERE approval_status = 'pending' OR execution_status = 'proposed'`),
+    count(p, `SELECT count(*) c FROM analytics.seo_execution_candidate WHERE (approval_status = 'pending' OR execution_status = 'proposed') AND (gate_status IS NULL OR gate_status = 'accepted')`),
     count(p, `SELECT count(*) c FROM analytics.seo_decay_signal WHERE status = 'new'`),
     count(p, `SELECT count(*) c FROM analytics.seo_cannibalization_signal WHERE status = 'new'`),
     count(p, `SELECT count(*) c FROM analytics.seo_backlink_opportunities WHERE status = 'new'`),
     count(p, `SELECT count(*) c FROM analytics.seo_competitor_gap`),
     count(p, `SELECT count(*) c FROM analytics.seo_topical_authority_gap`),
     count(p, `SELECT count(*) c FROM analytics.seo_serp_features`),
-    // The actual proposed changes — with before -> after text.
+    // Candidates the intent/relevance gate withheld.
+    count(p, `SELECT count(*) c FROM analytics.seo_gate_suppressed`),
+    // The actual proposed changes — with before -> after text + gate evidence.
+    // Gate-suppressed rows are excluded; ordered by the gate's relevance score.
     safe(p, `
       SELECT candidate_id::text AS id,
              regexp_replace(target_page_url, '^https?://[^/]+', '') AS page,
@@ -74,12 +77,16 @@ export async function GET() {
              original_value, proposed_value,
              evidence_summary,
              opportunity_score,
+             relevance_score,
+             evidence,
+             gate_status,
              COALESCE(approval_status, execution_status) AS state,
              created_at
       FROM analytics.seo_execution_candidate
       WHERE (approval_status = 'pending' OR execution_status = 'proposed')
         AND proposed_value IS NOT NULL
-      ORDER BY opportunity_score DESC NULLS LAST, created_at DESC
+        AND (gate_status IS NULL OR gate_status = 'accepted')
+      ORDER BY relevance_score DESC NULLS LAST, opportunity_score DESC NULLS LAST, created_at DESC
       LIMIT 25
     `),
     safe(p, `
@@ -122,6 +129,7 @@ export async function GET() {
     competitor_gaps: cCompetitor,
     topical_gaps: cTopical,
     serp_features: cSerp,
+    suppressed: cSuppressed,
   };
 
   return NextResponse.json({
@@ -130,6 +138,8 @@ export async function GET() {
       proposedChanges: proposedChanges.map((r) => ({
         ...r,
         opportunity_score: r.opportunity_score != null ? Number(r.opportunity_score) : null,
+        relevance_score: r.relevance_score != null ? Number(r.relevance_score) : null,
+        evidence: r.evidence ?? null,
       })),
       decay: decay.map((r) => ({
         ...r,

@@ -61,10 +61,17 @@ function Pill({ children, tone, tc }: { children: React.ReactNode; tone: ToneKey
 // Types (local — keeps this page self-contained and independent of seoApi
 // type exports so it compiles regardless of merge order)
 // -----------------------------------------------------------------------------
+interface GateEvidence {
+  source?: { url?: string; entity?: string; intent?: string };
+  target?: { url?: string; entity?: string; intent?: string };
+  signals?: { hierarchy_proximity?: number; embedding_cosine?: number; shared_attributes?: number };
+  why?: string;
+}
 interface ProposedChange {
   id: string; page: string; mutation_type: string; target_field: string | null;
   original_value: string | null; proposed_value: string | null;
   evidence_summary: string | null; opportunity_score: number | null; state: string | null;
+  relevance_score: number | null; evidence: GateEvidence | null; gate_status: string | null;
 }
 interface DecayRow { id: string; page: string; keyword: string; position_30d_ago: number; position_now: number; position_delta: number; traffic_delta_pct: number; decay_score: number; }
 interface CannibalRow { id: string; keyword: string; page_a: string; page_b: string; overlap_score: number; suggested_canonical: string; canonical_confidence: string; }
@@ -250,31 +257,68 @@ function CompetitorGapsPanel({ tc, gaps }: { tc: TC; gaps: CompetitorGap[] }) {
 // =============================================================================
 // Review queue — the actual proposed changes (before -> after)
 // =============================================================================
+function relevanceTone(score: number): ToneKey {
+  if (score >= 0.5) return 'good';
+  if (score >= 0.3) return 'violet';
+  return 'warn';
+}
+// Grounded gate signals → human chips (hierarchy adjacency, similarity, shared attrs).
+function GateSignals({ tc, ev }: { tc: TC; ev: GateEvidence | null }) {
+  const s = ev?.signals;
+  if (!s) return null;
+  const chips: React.ReactNode[] = [];
+  if (typeof s.hierarchy_proximity === 'number' && s.hierarchy_proximity > 0) {
+    chips.push(<Pill key="h" tone="good" tc={tc}>{s.hierarchy_proximity >= 1 ? 'directly adjacent' : 'related'}</Pill>);
+  }
+  if (typeof s.embedding_cosine === 'number') {
+    chips.push(<Pill key="c" tone="info" tc={tc}>similarity {s.embedding_cosine.toFixed(2)}</Pill>);
+  }
+  if (typeof s.shared_attributes === 'number' && s.shared_attributes > 0) {
+    chips.push(<Pill key="a" tone="violet" tc={tc}>{s.shared_attributes} shared attribute{s.shared_attributes === 1 ? '' : 's'}</Pill>);
+  }
+  if (!chips.length) return null;
+  return <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>{chips}</div>;
+}
 function ChangeRow({ tc, change, busy, onDecide }: { tc: TC; change: ProposedChange; busy: boolean; onDecide: (c: ProposedChange, a: 'approve' | 'reject') => void; }) {
   const label = MUTATION_LABEL[change.mutation_type] || change.mutation_type;
+  const isLink = change.mutation_type.includes('internal_link');
+  const why = change.evidence?.why || change.evidence_summary;
+  const srcEntity = change.evidence?.source?.entity;
+  const tgtEntity = change.evidence?.target?.entity;
   return (
     <div style={{ padding: space['4'], borderBottom: `1px solid ${tc.border.subtle}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Pill tone="violet" tc={tc}>{label}</Pill>
           <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>{change.page || '/'}</span>
-          {change.opportunity_score != null && <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>score {change.opportunity_score}</span>}
+          {change.relevance_score != null ? (
+            <Pill tone={relevanceTone(change.relevance_score)} tc={tc}>relevance {change.relevance_score.toFixed(2)}</Pill>
+          ) : change.opportunity_score != null ? (
+            <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>score {change.opportunity_score}</span>
+          ) : null}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => onDecide(change, 'reject')} disabled={busy} style={{ fontSize: 12, padding: '6px 14px', borderRadius: radius.md, border: `1px solid ${tc.border.strong}`, background: tc.background.surface, color: tc.text.secondary, cursor: busy ? 'wait' : 'pointer', fontFamily: fontFamily.body }}>Reject</button>
           <button onClick={() => onDecide(change, 'approve')} disabled={busy} style={{ fontSize: 12, fontWeight: fontWeight.semibold, padding: '6px 16px', borderRadius: radius.md, border: 'none', background: PALETTE.violet, color: '#fff', cursor: busy ? 'wait' : 'pointer', fontFamily: fontFamily.body }}>{busy ? '…' : 'Approve'}</button>
         </div>
       </div>
-      {change.mutation_type.includes('internal_link') ? (
-        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.secondary }}>Insert internal-link anchor: <strong style={{ color: tc.text.primary }}>{change.proposed_value}</strong></div>
+      {isLink ? (
+        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.secondary }}>
+          {srcEntity && tgtEntity ? (
+            <span><strong style={{ color: tc.text.primary }}>{srcEntity}</strong> → <strong style={{ color: tc.text.primary }}>{tgtEntity}</strong> · anchor “<strong style={{ color: tc.text.primary }}>{change.proposed_value}</strong>”</span>
+          ) : (
+            <span>Insert internal-link anchor: <strong style={{ color: tc.text.primary }}>{change.proposed_value}</strong></span>
+          )}
+        </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <BeforeAfter tc={tc} label="Current" value={change.original_value} muted />
           <BeforeAfter tc={tc} label="Proposed" value={change.proposed_value} />
         </div>
       )}
-      {change.evidence_summary && (
-        <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: 10 }}>{change.evidence_summary}</div>
+      <GateSignals tc={tc} ev={change.evidence} />
+      {why && (
+        <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: 10 }}>{why}</div>
       )}
     </div>
   );
@@ -391,6 +435,7 @@ function SeoOverviewContent() {
           { k: 'cannibalization', label: 'Cannibalization', href: '/dashboard/seo/signals' },
           { k: 'backlinks', label: 'Backlink targets', href: '/dashboard/seo/backlinks' },
           { k: 'competitor_gaps', label: 'Competitor gaps', href: '/dashboard/seo/competitive' },
+          { k: 'suppressed', label: 'Suppressed', href: '/dashboard/seo/suppressed' },
         ].map((t) => (
           <a key={t.k} href={t.href} style={{ ...cardBase, padding: space['4'], textDecoration: 'none', borderLeft: `3px solid ${PALETTE.violet}` }}>
             <div style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>{counts[t.k] ?? 0}</div>
