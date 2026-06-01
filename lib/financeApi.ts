@@ -25,3 +25,15 @@ export async function decideFinanceReviewItem(params: {
   if (!res.ok) return { ok: false, error: json.error || `HTTP ${res.status}` };
   return { ok: true };
 }
+
+/** Submit a free-text AI note to help classify an item; the console interprets + books it. */
+export async function submitFinanceNote(id: string, note: string): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch('/api/finance', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, action: 'note', note }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, error: json.error || `HTTP ${res.status}` };
+  return { ok: true };
+}

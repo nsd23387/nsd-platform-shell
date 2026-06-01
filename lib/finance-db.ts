@@ -53,6 +53,8 @@ export interface FinanceReviewItem {
   suggested_account: string | null;
   suggested_account_code: string | null;
   ai_confidence: string | null;
+  ai_confidence_score: number | null;
+  admin_note: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'applied' | 'skipped';
 }
 
@@ -94,7 +96,8 @@ export async function getLatestSnapshot(): Promise<FinanceSnapshot | null> {
 export async function getPendingReviewItems(limit = 200): Promise<FinanceReviewItem[]> {
   const { rows } = await getPool().query(
     `select id, transaction_id, txn_date, amount, paid_through, memo,
-            suggested_account, suggested_account_code, ai_confidence, status
+            suggested_account, suggested_account_code, ai_confidence,
+            ai_confidence_score, admin_note, status
        from public.finance_review_items
       where status = 'pending'
       order by txn_date desc nulls last
@@ -111,6 +114,8 @@ export async function getPendingReviewItems(limit = 200): Promise<FinanceReviewI
     suggested_account: r.suggested_account,
     suggested_account_code: r.suggested_account_code,
     ai_confidence: r.ai_confidence,
+    ai_confidence_score: num(r.ai_confidence_score),
+    admin_note: r.admin_note,
     status: r.status,
   }));
 }
@@ -136,7 +141,8 @@ export async function decideReviewItem(input: DecisionInput): Promise<FinanceRev
             decided_vendor = $4
       where id = $5 and status = 'pending'
       returning id, transaction_id, txn_date, amount, paid_through, memo,
-                suggested_account, suggested_account_code, ai_confidence, status`,
+                suggested_account, suggested_account_code, ai_confidence,
+                ai_confidence_score, admin_note, status`,
     [status, input.by ?? 'dashboard', accountCode, vendor, input.id]
   );
   if (!rows.length) throw new Error('Item not found or no longer pending.');
@@ -151,6 +157,19 @@ export async function decideReviewItem(input: DecisionInput): Promise<FinanceRev
     suggested_account: r.suggested_account,
     suggested_account_code: r.suggested_account_code,
     ai_confidence: r.ai_confidence,
+    ai_confidence_score: num(r.ai_confidence_score),
+    admin_note: r.admin_note,
     status: r.status,
   };
+}
+
+/** Record an admin AI-note on a pending item. The console interprets it and books. */
+export async function noteReviewItem(id: string, note: string, by?: string | null): Promise<void> {
+  const { rowCount } = await getPool().query(
+    `update public.finance_review_items
+        set admin_note = $1, admin_note_by = $2, admin_note_at = now()
+      where id = $3 and status = 'pending'`,
+    [note, by ?? 'dashboard', id]
+  );
+  if (!rowCount) throw new Error('Item not found or no longer pending.');
 }

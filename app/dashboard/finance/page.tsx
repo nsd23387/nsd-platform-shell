@@ -3,8 +3,11 @@
  *
  * Read-only finance analytics sourced from Zoho Books via the finance snapshot
  * published by nsd-finance-console (Supabase: public.finance_snapshots). Plus a
- * review queue (public.finance_review_items) where approving an item records the
- * categorization decision; the finance-console review loop books it to Zoho.
+ * review queue (public.finance_review_items): approve books the expense (via the
+ * console loop), or leave a free-text note for the AI to classify it.
+ *
+ * Palette: NSD brand only — violet accents, magenta as a sparing attention cue,
+ * navy text. No traffic-light (red/amber/green) colors.
  */
 
 'use client';
@@ -16,15 +19,19 @@ import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typogra
 import { space, radius } from '../../../design/tokens/spacing';
 import { violet } from '../../../design/tokens/colors';
 import type { FinanceMetrics, FinanceReviewItem, FinanceSnapshot } from '../../../lib/finance-db';
-import { decideFinanceReviewItem } from '../../../lib/financeApi';
+import { decideFinanceReviewItem, submitFinanceNote } from '../../../lib/financeApi';
 
-// Brand accents only — violet for actions/accents (matches SEO/Exec views),
-// NSD magenta used sparingly for attention/negative emphasis. No red/amber/green.
 const ACCENT = violet[600];
-const FLAG = '#CC368F';
+const FLAG = '#CC368F'; // NSD magenta — sparing attention/negative emphasis
 
 const usd = (n: number | null | undefined) =>
   n == null ? '—' : (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const confidenceLabel = (item: FinanceReviewItem): string | null => {
+  if (item.ai_confidence_score != null) return `${Math.round(item.ai_confidence_score * 100)}% confidence`;
+  if (item.ai_confidence) return `${item.ai_confidence} confidence`;
+  return null;
+};
 
 interface FinancePayload {
   snapshot: FinanceSnapshot | null;
@@ -40,6 +47,8 @@ export default function FinanceDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [codes, setCodes] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [noted, setNoted] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -63,11 +72,7 @@ export default function FinanceDashboard() {
   const decide = useCallback(async (item: FinanceReviewItem, action: 'approve' | 'reject') => {
     setBusyId(item.id);
     try {
-      const { ok, error } = await decideFinanceReviewItem({
-        id: item.id,
-        action,
-        account_code: codes[item.id] || item.suggested_account_code,
-      });
+      const { ok, error } = await decideFinanceReviewItem({ id: item.id, action, account_code: codes[item.id] || item.suggested_account_code });
       if (!ok) throw new Error(error || 'Decision failed');
       setData(prev => prev ? { ...prev, review_items: prev.review_items.filter(r => r.id !== item.id) } : prev);
     } catch (e) {
@@ -77,10 +82,24 @@ export default function FinanceDashboard() {
     }
   }, [codes]);
 
+  const sendNote = useCallback(async (item: FinanceReviewItem) => {
+    const note = (notes[item.id] || '').trim();
+    if (!note) return;
+    setBusyId(item.id);
+    try {
+      const { ok, error } = await submitFinanceNote(item.id, note);
+      if (!ok) throw new Error(error || 'Failed to submit note');
+      setNoted(n => ({ ...n, [item.id]: 'Sent to the AI — it will classify and book this shortly.' }));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to submit note');
+    } finally {
+      setBusyId(null);
+    }
+  }, [notes]);
+
   const m: FinanceMetrics | undefined = data?.snapshot?.metrics;
   const asOf = data?.snapshot?.as_of_date || data?.snapshot?.captured_at?.slice(0, 10);
 
-  // ---- header ----
   const header = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['8'], paddingBottom: space['6'], borderBottom: `1px solid ${tc.border.default}` }}>
       <div>
@@ -106,11 +125,15 @@ export default function FinanceDashboard() {
     <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary, margin: `${space['8']} 0 ${space['4']}` }}>{t}</h2>
   );
 
+  const badge = (text: string) => (
+    <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: violet[700], backgroundColor: violet[50], padding: `2px ${space['2']}`, borderRadius: radius.DEFAULT }}>{text}</span>
+  );
+
   return (
     <>
       {header}
 
-      {/* Flags — neutral card, magenta dots; no colored banners */}
+      {/* Flags — neutral card, magenta dots */}
       {m.alerts?.length > 0 && (
         <div style={{ marginBottom: space['6'] }}>
           <DashboardCard title="Needs Attention">
@@ -168,39 +191,80 @@ export default function FinanceDashboard() {
       {/* Review queue */}
       {sectionTitle(`Review Queue — Uncategorized Transactions${data?.review_items?.length ? ` (${data.review_items.length})` : ''}`)}
       <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['4'] }}>
-        Approve to book the expense to Zoho (via the finance-console loop). Adjust the account code before approving if the suggestion is wrong.
+        Approve the recommended category to book it, adjust the account code, or tell the AI how to classify it in the note box.
       </p>
       {!data?.review_items?.length ? (
         <DashboardCard title="Review Queue" empty emptyMessage="Nothing to review — all caught up." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: space['3'] }}>
-          {data.review_items.map(item => (
-            <div key={item.id} style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'], display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space['4'] }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-                  {usd(item.amount)} <span style={{ fontWeight: fontWeight.normal, fontSize: fontSize.sm, color: tc.text.muted }}>· {item.txn_date} · {item.paid_through}</span>
+          {data.review_items.map(item => {
+            const code = codes[item.id] || '';
+            const canApprove = Boolean(code || item.suggested_account_code) && busyId !== item.id;
+            const conf = confidenceLabel(item);
+            if (noted[item.id]) {
+              return (
+                <div key={item.id} style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'], display: 'flex', alignItems: 'center', gap: space['3'] }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: FLAG, flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.primary }}>{usd(item.amount)} · {item.memo}</div>
+                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['1'] }}>{noted[item.id]}</div>
+                  </div>
                 </div>
-                <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, marginTop: space['1'], overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '560px' }}>{item.memo}</div>
-                {item.suggested_account && <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['1'] }}>Suggested: {item.suggested_account}{item.ai_confidence ? ` · ${item.ai_confidence}` : ''}</div>}
+              );
+            }
+            return (
+              <div key={item.id} style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'] }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: space['4'] }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
+                      {usd(item.amount)} <span style={{ fontWeight: fontWeight.normal, fontSize: fontSize.sm, color: tc.text.muted }}>· {item.txn_date} · {item.paid_through}</span>
+                    </div>
+                    <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, marginTop: space['1'], overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '560px' }}>{item.memo}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginTop: space['2'] }}>
+                      {item.suggested_account ? (
+                        <>
+                          <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>Recommended: <strong style={{ color: tc.text.primary }}>{item.suggested_account}</strong></span>
+                          {conf && badge(conf)}
+                        </>
+                      ) : (
+                        <span style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>No recommendation yet — enter an account code or add a note below.</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], flexShrink: 0 }}>
+                    <input
+                      value={code}
+                      onChange={e => setCodes(c => ({ ...c, [item.id]: e.target.value }))}
+                      placeholder="acct code"
+                      style={{ width: '92px', padding: `${space['2']} ${space['2.5']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, backgroundColor: tc.background.surface, color: tc.text.primary }}
+                    />
+                    <button disabled={!canApprove} onClick={() => decide(item, 'approve')} title={canApprove ? 'Book to the recommended/entered account' : 'Enter an account code first'}
+                      style={{ padding: `${space['2']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: '#fff', backgroundColor: ACCENT, border: 'none', borderRadius: radius.md, cursor: canApprove ? 'pointer' : 'not-allowed', opacity: canApprove ? 1 : 0.4 }}>
+                      Approve
+                    </button>
+                    <button disabled={busyId === item.id} onClick={() => decide(item, 'reject')}
+                      style={{ padding: `${space['2']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.secondary, backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, cursor: 'pointer' }}>
+                      Reject
+                    </button>
+                  </div>
+                </div>
+                {/* AI note box */}
+                <div style={{ display: 'flex', gap: space['2'], marginTop: space['3'], paddingTop: space['3'], borderTop: `1px solid ${tc.border.subtle}` }}>
+                  <input
+                    value={notes[item.id] ?? ''}
+                    onChange={e => setNotes(n => ({ ...n, [item.id]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') sendNote(item); }}
+                    placeholder="Tell the AI how to classify this — e.g. “this is a software subscription” or “Liyu COGS”"
+                    style={{ flex: 1, padding: `${space['2']} ${space['3']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, backgroundColor: tc.background.surface, color: tc.text.primary }}
+                  />
+                  <button disabled={busyId === item.id || !(notes[item.id] || '').trim()} onClick={() => sendNote(item)}
+                    style={{ padding: `${space['2']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: ACCENT, backgroundColor: violet[50], border: `1px solid ${violet[200]}`, borderRadius: radius.md, cursor: (notes[item.id] || '').trim() ? 'pointer' : 'not-allowed', opacity: (notes[item.id] || '').trim() ? 1 : 0.5 }}>
+                    Ask AI
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], flexShrink: 0 }}>
-                <input
-                  value={codes[item.id] ?? ''}
-                  onChange={e => setCodes(c => ({ ...c, [item.id]: e.target.value }))}
-                  placeholder="acct code"
-                  style={{ width: '92px', padding: `${space['2']} ${space['2.5']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, backgroundColor: tc.background.surface, color: tc.text.primary }}
-                />
-                <button disabled={busyId === item.id || !(codes[item.id] || item.suggested_account_code)} onClick={() => decide(item, 'approve')}
-                  style={{ padding: `${space['2']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: '#fff', backgroundColor: ACCENT, border: 'none', borderRadius: radius.md, cursor: 'pointer', opacity: busyId === item.id ? 0.6 : 1 }}>
-                  Approve
-                </button>
-                <button disabled={busyId === item.id} onClick={() => decide(item, 'reject')}
-                  style={{ padding: `${space['2']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: tc.text.secondary, backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, cursor: 'pointer' }}>
-                  Reject
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>
