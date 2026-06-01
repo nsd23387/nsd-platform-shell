@@ -73,8 +73,13 @@ function AttributionContent() {
   const medCount = rows.filter(r => r.confidence === 'medium').length;
   const lowCount = rows.filter(r => r.confidence === 'low').length;
 
-  const emptyDate = data?.earliest_execution
-    ? new Date(new Date(data.earliest_execution).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  // Only surface a "check back" date when it is genuinely in the future
+  // (first execution + 30d). Never hardcode or show a past date.
+  const emptyDateMs = data?.earliest_execution
+    ? new Date(data.earliest_execution).getTime() + 30 * 24 * 60 * 60 * 1000
+    : null;
+  const emptyDate = emptyDateMs && emptyDateMs > Date.now()
+    ? new Date(emptyDateMs).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     : null;
 
   return (
@@ -118,7 +123,7 @@ function AttributionContent() {
             <div style={{ padding: space['8'], backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, textAlign: 'center' }}>
               <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.secondary, marginBottom: space['2'] }}>No attribution data yet</p>
               <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
-                Attribution data populates 30 days after first execution.
+                No SEO changes have been executed yet — auto-approval is paused. Approve changes in the Review queue; revenue attribution populates 30 days after the first execution.
                 {emptyDate && ` Check back after ${emptyDate}.`}
               </p>
             </div>

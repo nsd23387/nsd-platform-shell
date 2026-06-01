@@ -14,8 +14,14 @@ import { DashboardGrid, MetricCard, DashboardCard } from '../../../components/da
 import { useThemeColors } from '../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
+import { violet } from '../../../design/tokens/colors';
 import type { FinanceMetrics, FinanceReviewItem, FinanceSnapshot } from '../../../lib/finance-db';
 import { decideFinanceReviewItem } from '../../../lib/financeApi';
+
+// Brand accents only — violet for actions/accents (matches SEO/Exec views),
+// NSD magenta used sparingly for attention/negative emphasis. No red/amber/green.
+const ACCENT = violet[600];
+const FLAG = '#CC368F';
 
 const usd = (n: number | null | undefined) =>
   n == null ? '—' : (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -104,17 +110,19 @@ export default function FinanceDashboard() {
     <>
       {header}
 
-      {/* Alerts */}
+      {/* Flags — neutral card, magenta dots; no colored banners */}
       {m.alerts?.length > 0 && (
-        <div style={{ marginBottom: space['6'], display: 'flex', flexDirection: 'column', gap: space['2'] }}>
-          {m.alerts.map((a, i) => {
-            const g = a.level === 'alert' ? tc.semantic.danger : a.level === 'warn' ? tc.semantic.warning : tc.semantic.info;
-            return (
-              <div key={i} style={{ padding: `${space['3']} ${space['4']}`, backgroundColor: g.light, color: g.dark, border: `1px solid ${g.base}`, borderRadius: radius.lg, fontFamily: fontFamily.body, fontSize: fontSize.sm }}>
-                {a.level === 'info' ? 'ℹ️' : '⚠️'} {a.text}
-              </div>
-            );
-          })}
+        <div style={{ marginBottom: space['6'] }}>
+          <DashboardCard title="Needs Attention">
+            <div style={{ marginTop: space['2'] }}>
+              {m.alerts.map((a, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: space['3'], padding: `${space['2']} 0`, borderBottom: i < m.alerts.length - 1 ? `1px solid ${tc.border.subtle}` : 'none', fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: FLAG, flexShrink: 0 }} />
+                  <span>{a.text}</span>
+                </div>
+              ))}
+            </div>
+          </DashboardCard>
         </div>
       )}
 
@@ -122,14 +130,14 @@ export default function FinanceDashboard() {
       <DashboardGrid columns={4}>
         <MetricCard title="Operating Cash" value={usd(m.cash_master)} subtitle="Master account (100100)" />
         <MetricCard title="Net Bank Cash" value={usd(m.bank_cash_total)} subtitle="All USD bank accounts" />
-        <MetricCard title="Cards Owed" value={usd(m.card_total)} subtitle="Credit-card balances" variant="warning" />
-        <MetricCard title="Uncategorized" value={m.uncategorized_count} subtitle="Bank/card feed items" variant={m.uncategorized_count > 50 ? 'danger' : 'default'} />
+        <MetricCard title="Cards Owed" value={usd(m.card_total)} subtitle="Credit-card balances" />
+        <MetricCard title="Uncategorized" value={m.uncategorized_count} subtitle="Bank/card feed items" />
       </DashboardGrid>
 
       <DashboardGrid columns={3}>
-        <MetricCard title="PayPal Clearing" value={usd(m.clearing?.paypal)} subtitle="Unapplied receipts" variant={m.clearing?.paypal > 100 ? 'warning' : 'default'} />
+        <MetricCard title="PayPal Clearing" value={usd(m.clearing?.paypal)} subtitle="Unapplied receipts" />
         <MetricCard title="Stripe Clearing" value={usd(m.clearing?.stripe)} subtitle="In transit" />
-        <MetricCard title="A/R Outstanding" value={usd(m.ar_aging?.total)} subtitle={`${m.ar_aging?.count || 0} open invoice(s)`} variant={m.ar_aging?.d90_plus > 0 ? 'danger' : 'default'} />
+        <MetricCard title="A/R Outstanding" value={usd(m.ar_aging?.total)} subtitle={`${m.ar_aging?.count || 0} open invoice(s)`} />
       </DashboardGrid>
 
       {/* Reserves + A/R aging */}
@@ -140,7 +148,7 @@ export default function FinanceDashboard() {
             {(m.reserves || []).map(r => (
               <div key={r.code} style={{ display: 'flex', justifyContent: 'space-between', padding: `${space['2']} 0`, borderBottom: `1px solid ${tc.border.subtle}`, fontFamily: fontFamily.body, fontSize: fontSize.base }}>
                 <span style={{ color: tc.text.secondary }}>{r.name}</span>
-                <span style={{ fontWeight: fontWeight.medium, color: r.balance < 0 ? tc.semantic.danger.base : tc.text.primary }}>{usd(r.balance)}</span>
+                <span style={{ fontWeight: fontWeight.medium, color: r.balance < 0 ? FLAG : tc.text.primary }}>{usd(r.balance)}</span>
               </div>
             ))}
           </div>
@@ -183,7 +191,7 @@ export default function FinanceDashboard() {
                   style={{ width: '92px', padding: `${space['2']} ${space['2.5']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, backgroundColor: tc.background.surface, color: tc.text.primary }}
                 />
                 <button disabled={busyId === item.id || !(codes[item.id] || item.suggested_account_code)} onClick={() => decide(item, 'approve')}
-                  style={{ padding: `${space['2']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: '#fff', backgroundColor: tc.semantic.success.base, border: 'none', borderRadius: radius.md, cursor: 'pointer', opacity: busyId === item.id ? 0.6 : 1 }}>
+                  style={{ padding: `${space['2']} ${space['4']}`, fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: '#fff', backgroundColor: ACCENT, border: 'none', borderRadius: radius.md, cursor: 'pointer', opacity: busyId === item.id ? 0.6 : 1 }}>
                   Approve
                 </button>
                 <button disabled={busyId === item.id} onClick={() => decide(item, 'reject')}

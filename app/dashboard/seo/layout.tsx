@@ -23,39 +23,33 @@ interface NavGroup {
   items: NavItem[];
 }
 
+// Information architecture (Fix 0): the nav mirrors the handful of decisions the
+// operator actually makes, not the engine's internal complexity. Empty /
+// duplicative / paused routes — SERP Features, Schema, Content Pipeline,
+// All Recommendations, and the Results pages (Execution Log / Attribution /
+// Content Scores / Outcomes) — are kept out of the nav until they have something
+// trustworthy to say; the Results area stays hidden until something executes.
+// (The full single-screen tab merges for Performance & Competitors land next.)
 const NAV_GROUPS: NavGroup[] = [
   {
-    title: 'Overview',
+    title: 'Review',
     items: [
-      { href: '/dashboard/seo', label: 'SEO Overview', icon: 'chart' },
+      { href: '/dashboard/seo', label: 'Review Queue', icon: 'review' },
+      { href: '/dashboard/seo/internal-links', label: 'Internal Links', icon: 'search' },
+      { href: '/dashboard/seo/suppressed', label: 'Suppressed', icon: 'warning' },
     ],
   },
   {
-    title: 'Analysis',
+    title: 'Performance',
     items: [
       { href: '/dashboard/seo/pages', label: 'Page Performance', icon: 'search' },
-      { href: '/dashboard/seo/serp-features', label: 'SERP Features', icon: 'trending' },
-      { href: '/dashboard/seo/competitive', label: 'Competitor Deep Dive', icon: 'chart' },
-    ],
-  },
-  {
-    title: 'Optimization',
-    items: [
-      { href: '/dashboard/seo/actions', label: 'All Recommendations', icon: 'review' },
-      { href: '/dashboard/seo/suppressed', label: 'Suppressed', icon: 'warning' },
-      { href: '/dashboard/seo/execution-log', label: 'Execution Log', icon: 'timeline' },
-      { href: '/dashboard/seo/content', label: 'Content Pipeline', icon: 'edit' },
-      { href: '/dashboard/seo/internal-links', label: 'Internal Links', icon: 'search' },
-      { href: '/dashboard/seo/schema', label: 'Schema Markup', icon: 'edit' },
-    ],
-  },
-  {
-    title: 'Results',
-    items: [
-      { href: '/dashboard/seo/attribution', label: 'Revenue Attribution', icon: 'trending' },
-      { href: '/dashboard/seo/content-scores', label: 'Content Scores', icon: 'edit' },
-      { href: '/dashboard/seo/outcomes', label: 'Outcomes', icon: 'trending' },
       { href: '/dashboard/seo/signals', label: 'Signals', icon: 'warning' },
+    ],
+  },
+  {
+    title: 'Competitors',
+    items: [
+      { href: '/dashboard/seo/competitive', label: 'Competitor Deep Dive', icon: 'chart' },
     ],
   },
 ];

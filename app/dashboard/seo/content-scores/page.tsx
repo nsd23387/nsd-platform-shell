@@ -119,7 +119,7 @@ function ContentScoresContent() {
           {filtered.length === 0 ? (
             <div style={{ padding: space['8'], backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, textAlign: 'center' }}>
               <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.secondary, marginBottom: space['2'] }}>No content score data yet</p>
-              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>Product descriptions run daily at 02:30 UTC. FAQ schema runs Saturdays at 02:00 UTC.</p>
+              <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>No generated content has been scored yet. Generated drafts and their before/after scores will appear here once content generation produces and measures them.</p>
             </div>
           ) : (
             <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, overflow: 'hidden' }}>

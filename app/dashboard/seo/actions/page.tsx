@@ -351,7 +351,7 @@ function ActionsContent() {
             {tab === 'needs_review' ? 'No actions need review' : `No ${tab} actions`}
           </div>
           <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
-            The SEO Agent Loop runs daily at 13:00 UTC. Actions appear here after detection and AI review.
+            Proposed changes now live in the gate-backed Review queue (with relevance scores and evidence). Open Review to approve or reject them.
           </div>
         </div>
       )}
