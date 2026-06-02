@@ -23,7 +23,6 @@ const navItems = [
   { href: '/dashboard/design', label: 'Design', icon: 'lightbulb' },
   { href: '/dashboard/media', label: 'Media', icon: 'eye' },
   { href: '/dashboard/sales', label: 'Sales', icon: 'trending' },
-  { href: '/dashboard/finance', label: 'Finance', icon: 'building' },
   { href: '/dashboard/marketing', label: 'Marketing', icon: 'target' },
   { href: '/dashboard/competitive', label: 'Competitive', icon: 'chart' },
   { href: '/dashboard/seo', label: 'SEO Intelligence', icon: 'search' },

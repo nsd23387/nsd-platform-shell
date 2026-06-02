@@ -52,11 +52,8 @@ function PagePerformanceContent() {
     });
   }, [data, sortKey, sortDir, urlFilter]);
 
-  // Only flag "fix the title & meta" for pages ranking in a CTR-improvable band
-  // (position <= 20). At deeper ranks, zero clicks is a ranking problem, not a
-  // meta problem — surfacing a "Fix title & meta" CTA there is misleading.
   const criticalIssues = useMemo(() =>
-    data.filter(r => r.impressions > 200 && r.clicks === 0 && r.position != null && r.position <= 20)
+    data.filter(r => r.impressions > 200 && r.clicks === 0)
         .sort((a, b) => b.impressions - a.impressions)
         .slice(0, 10),
     [data]
@@ -118,7 +115,7 @@ function PagePerformanceContent() {
               These pages are getting search traffic but no one is clicking — fix the title and meta description
             </div>
             <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
-              {criticalIssues.length} page{criticalIssues.length === 1 ? '' : 's'} ranking in the top 20 with &gt;200 impressions and zero clicks — a CTR (title/meta) problem, not a ranking one
+              {criticalIssues.length} page{criticalIssues.length === 1 ? '' : 's'} with &gt;200 impressions and zero clicks
             </div>
           </div>
           {criticalIssues.map((r, i) => {

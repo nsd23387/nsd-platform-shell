@@ -1,157 +1,153 @@
 'use client';
 
 // =============================================================================
-// SEO — Suppressed (intent/relevance gate audit)
-//
-// "Recommendations the gate withheld and why — nothing is hidden."
-// Read-only: GET /api/proxy/seo/suppressed. The gate logic lives in the DB;
-// this page just surfaces what it rejected and the grounded reason.
+// SEO — Suppressed Audit
+// Governance lock: READ-ONLY transparency trail. Surfaces mutations the gate
+// withheld (analytics.seo_gate_suppressed) and why, so reviewers can audit what
+// the engine chose not to propose. No write paths exist on this surface.
 // =============================================================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
-import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
+import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
-import { violet } from '../../../../design/tokens/colors';
+import { getSeoSuppressed } from '../../../../lib/seoApi';
+import type { SuppressedAudit } from '../../../../lib/seoApi';
 
-const PALETTE = {
-  violet: violet[500], violetSoft: '#ede9fe',
-  good: '#065f46', goodSoft: '#d1fae5',
-  bad: '#991b1b', badSoft: '#fee2e2',
-  warn: '#92400e', warnSoft: '#fef3c7',
-  info: '#1e40af', infoSoft: '#dbeafe',
-};
 const monoStack = '"JetBrains Mono", "SF Mono", Menlo, Consolas, monospace';
-type TC = ReturnType<typeof useThemeColors>;
+const BAD = '#991b1b', BAD_SOFT = '#fee2e2';
 
-// Humanize the gate reason codes.
-const REASON_LABEL: Record<string, string> = {
-  no_relevance_signal: 'No relevance signal',
-  intent_mismatch: 'Intent mismatch',
-  source_not_linkable: 'Source not linkable',
-  cross_intent: 'Cross-intent',
-};
-const reasonLabel = (r: string) => REASON_LABEL[r] || r.replace(/_/g, ' ');
+type Tc = ReturnType<typeof useThemeColors>;
 
-const MUTATION_LABEL: Record<string, string> = {
-  meta_description_update: 'Meta description', meta_description: 'Meta description',
-  title_tag_refinement: 'Title tag', title_tag: 'Title tag',
-  internal_link_insertion: 'Internal link',
-};
+const fmtInt = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('en-US'));
 
-interface ByReason { reason: string; count: number; }
-interface RecentRow {
-  id: string; mutation_type: string; source: string | null; target: string | null;
-  gate_reasons: string[]; relevance_score: number | null; why: string | null; created_at: string;
-}
-interface SuppressedData { total: number; byReason: ByReason[]; recent: RecentRow[]; generated_at: string; }
-
-async function getJson<T>(url: string): Promise<T | null> {
-  try {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return (json && typeof json === 'object' && 'data' in json ? json.data : json) as T;
-  } catch {
-    return null;
-  }
-}
-
-function Pill({ children, tc }: { children: React.ReactNode; tc: TC }) {
-  return (
-    <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: '11px', fontWeight: fontWeight.medium, background: PALETTE.warnSoft, color: PALETTE.warn, fontFamily: fontFamily.body }}>
-      {children}
-    </span>
-  );
-}
-
-function fmtDate(s: string): string {
-  try { return new Date(s).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); } catch { return ''; }
+function pathOf(url: string | null): string {
+  if (!url) return '—';
+  try { const u = new URL(url); return u.pathname + (u.search || ''); }
+  catch { return url.replace(/^https?:\/\/[^/]+/, '') || url; }
 }
 
 function SuppressedContent() {
   const tc = useThemeColors();
-  const [data, setData] = useState<SuppressedData | null>(null);
+  const [audit, setAudit] = useState<SuppressedAudit | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeReason, setActiveReason] = useState<string | null>(null);
 
   useEffect(() => {
-    getJson<SuppressedData>('/api/proxy/seo/suppressed').then((d) => { setData(d); setLoading(false); });
+    let alive = true;
+    setLoading(true); setError(null);
+    getSeoSuppressed(300)
+      .then((d) => { if (alive) setAudit(d); })
+      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load suppressed audit'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, []);
 
-  const cardBase: React.CSSProperties = { backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, padding: space['5'] };
-  const total = data?.total ?? 0;
-  const byReason = data?.byReason ?? [];
-  const recent = data?.recent ?? [];
-  const maxReason = byReason.reduce((m, r) => Math.max(m, r.count), 0) || 1;
-
-  if (loading) {
-    return <div style={{ padding: space['8'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body }}>Loading suppressed candidates…</div>;
-  }
+  const rows = useMemo(() => {
+    const all = audit?.rows ?? [];
+    if (!activeReason) return all;
+    return all.filter((r) => r.gate_reasons.includes(activeReason));
+  }, [audit, activeReason]);
 
   return (
-    <div style={{ padding: space['6'], maxWidth: 1100, margin: '0 auto', fontFamily: fontFamily.body, color: tc.text.primary }}>
-      <div style={{ marginBottom: space['6'] }}>
-        <h1 style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, margin: 0, color: tc.text.primary, lineHeight: lineHeight.snug }}>
-          Suppressed ({total})
+    <div style={{ padding: space['6'], maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ marginBottom: space['5'] }}>
+        <h1 style={{ fontFamily: fontFamily.body, fontSize: '22px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>
+          Suppressed Audit
         </h1>
-        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: space['1'] }}>
-          Recommendations the gate withheld and why — nothing is hidden.
+        <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }}>
+          Transparency trail of mutations the gate withheld — what was not proposed, and why. Read-only.
+        </p>
+      </div>
+
+      {loading && (
+        <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>
+          Loading suppressed audit…
         </div>
-      </div>
+      )}
+      {error && (
+        <div style={{ padding: space['4'], borderRadius: radius.md, background: BAD_SOFT, color: BAD, fontFamily: fontFamily.body, fontSize: '13px' }}>
+          {error}
+        </div>
+      )}
 
-      {/* By-reason breakdown */}
-      <div style={{ ...cardBase, marginBottom: space['6'] }}>
-        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted, marginBottom: space['3'] }}>By reason</div>
-        {byReason.length === 0 ? (
-          <div style={{ fontSize: 13, color: tc.text.muted }}>No suppressed candidates yet — the gate has accepted everything it has seen.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: space['2'] }}>
-            {byReason.map((r) => (
-              <div key={r.reason} style={{ display: 'flex', alignItems: 'center', gap: space['3'] }}>
-                <div style={{ width: 180, flexShrink: 0, fontSize: 13, color: tc.text.primary }}>{reasonLabel(r.reason)}</div>
-                <div style={{ flex: 1, background: tc.background.muted, borderRadius: radius.sm, height: 18, overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.max(4, (r.count / maxReason) * 100)}%`, height: '100%', background: PALETTE.warn, opacity: 0.85 }} />
-                </div>
-                <div style={{ width: 44, textAlign: 'right', fontFamily: monoStack, fontSize: 12, color: tc.text.secondary }}>{r.count}</div>
-              </div>
-            ))}
+      {audit && !loading && !error && (
+        <>
+          <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginBottom: space['4'] }}>
+            {fmtInt(audit.total)} total suppressed · showing {fmtInt(audit.returned)} most recent
           </div>
-        )}
-      </div>
 
-      {/* Recent suppressed */}
-      <div style={{ marginBottom: space['3'], fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>Recent (latest {recent.length})</div>
-      <div style={{ ...cardBase, padding: 0 }}>
-        {recent.length === 0 ? (
-          <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontSize: fontSize.sm }}>Nothing suppressed.</div>
-        ) : recent.map((row) => (
-          <div key={row.id} style={{ padding: space['4'], borderBottom: `1px solid ${tc.border.subtle}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, color: tc.text.muted, fontFamily: fontFamily.body }}>{MUTATION_LABEL[row.mutation_type] || row.mutation_type}</span>
-                {row.source && row.target && (
-                  <span style={{ fontSize: 13, fontWeight: fontWeight.semibold, color: tc.text.primary }}>{row.source} → {row.target}</span>
-                )}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {row.relevance_score != null && <span style={{ fontFamily: monoStack, fontSize: 11, color: tc.text.muted }}>relevance {row.relevance_score.toFixed(2)}</span>}
-                <span style={{ fontSize: 11, color: tc.text.muted }}>{fmtDate(row.created_at)}</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-              {row.gate_reasons.map((r) => <Pill key={r} tc={tc}>{reasonLabel(r)}</Pill>)}
-            </div>
-            {row.why && <div style={{ fontSize: 12, color: tc.text.muted }}>{row.why}</div>}
+          {/* Reason rollup */}
+          <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', marginBottom: space['5'] }}>
+            {audit.reasons.map((r) => {
+              const active = activeReason === r.reason;
+              return (
+                <button
+                  key={r.reason}
+                  data-testid={`chip-reason-${r.reason}`}
+                  onClick={() => setActiveReason(active ? null : r.reason)}
+                  style={{
+                    cursor: 'pointer', padding: '6px 12px', borderRadius: 999,
+                    border: `1px solid ${active ? tc.border.strong : tc.border.default}`,
+                    background: active ? tc.background.active : tc.background.surface,
+                    color: tc.text.primary, fontFamily: fontFamily.body, fontSize: '12px',
+                  }}
+                >
+                  {r.reason} <span style={{ fontFamily: monoStack, color: tc.text.muted }}>· {fmtInt(r.count)}</span>
+                </button>
+              );
+            })}
           </div>
-        ))}
-      </div>
+
+          {activeReason && (
+            <div style={{ marginBottom: space['3'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
+              Filtered by “{activeReason}” · {rows.length} rows shown
+            </div>
+          )}
+
+          {/* Rows */}
+          <div style={{ border: `1px solid ${tc.border.default}`, borderRadius: radius.md, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '12px' }}>
+              <thead>
+                <tr style={{ background: tc.background.muted, color: tc.text.muted }}>
+                  <th style={{ textAlign: 'left', padding: '8px 10px' }}>Target URL</th>
+                  <th style={{ textAlign: 'left', padding: '8px 10px' }}>Mutation</th>
+                  <th style={{ textAlign: 'left', padding: '8px 10px' }}>Gate reasons</th>
+                  <th style={{ textAlign: 'right', padding: '8px 10px' }}>Relevance</th>
+                  <th style={{ textAlign: 'left', padding: '8px 10px' }}>Generator</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id} style={{ borderTop: `1px solid ${tc.border.subtle}` }} data-testid={`row-suppressed-${r.id}`}>
+                    <td style={{ padding: '8px 10px', fontFamily: monoStack, color: tc.text.primary, wordBreak: 'break-all' }}>{pathOf(r.target_url)}</td>
+                    <td style={{ padding: '8px 10px', color: tc.text.secondary }}>{r.mutation_type || '—'}</td>
+                    <td style={{ padding: '8px 10px', color: tc.text.secondary }}>{r.gate_reasons.join(', ') || '—'}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>
+                      {r.relevance_score == null ? '—' : r.relevance_score.toFixed(3)}
+                    </td>
+                    <td style={{ padding: '8px 10px', color: tc.text.muted }}>{r.generator || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {rows.length === 0 && (
+            <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>
+              No suppressed mutations match this filter.
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
-export default function SuppressedPage() {
+export default function SeoSuppressedPage() {
   return (
     <DashboardGuard dashboard="seo" fallback={<AccessDenied message="You do not have permission to view the SEO Command Center." />}>
       <SuppressedContent />

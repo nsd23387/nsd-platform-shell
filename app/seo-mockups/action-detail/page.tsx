@@ -55,9 +55,9 @@ export default function ActionDetailMockup() {
         <Card style={{ marginBottom: 16 }}>
           <Label>Why we&apos;re recommending this</Label>
           <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.7 }}>
-            <li>Page ranks <strong>position 12.1</strong> for the query <strong>“business led signs”</strong> with <strong>4,203 impressions / month</strong> — but CTR is <strong style={{ color: T.bad }}>0.0%</strong> (industry baseline at pos 12 is 1.6%).</li>
+            <li>Page ranks <strong>position 12.1</strong> for the query <strong>“business neon signs”</strong> with <strong>4,203 impressions / month</strong> — but CTR is <strong style={{ color: T.bad }}>0.0%</strong> (industry baseline at pos 12 is 1.6%).</li>
             <li>Current title tag is <code style={{ background: '#f5f5f4', padding: '1px 6px', borderRadius: 3, fontFamily: monoStack, fontSize: 12 }}>“For Businesses | Neon Signs Depot”</code> — the primary keyword does not appear, and there is no commercial qualifier.</li>
-            <li>Top 3 competitors (signs.com, signazon.com, fastsigns.com) all lead their title with the keyword + a price/CTA modifier.</li>
+            <li>Top 3 competitors (echoneon.com, neonmfg.com, voodooneon.com) all lead their title with the keyword + a price/CTA modifier.</li>
           </ul>
         </Card>
 
@@ -83,7 +83,7 @@ export default function ActionDetailMockup() {
             <Label>After (proposed)</Label>
             <div style={{ padding: 12, background: T.goodSoft, border: `1px solid ${T.good}30`, borderRadius: 6, marginBottom: 12 }}>
               <div style={{ fontSize: 12, color: T.good, marginBottom: 4, fontWeight: 600 }}>Proposed title</div>
-              <div style={{ fontSize: 14, fontFamily: monoStack }}>Business LED Signs — Custom Quotes in 24h | Neon Signs Depot</div>
+              <div style={{ fontSize: 14, fontFamily: monoStack }}>Business Neon Signs — Custom Quotes in 24h | Neon Signs Depot</div>
             </div>
             <table style={{ width: '100%', fontSize: 13 }}>
               <tbody>
@@ -139,8 +139,8 @@ export default function ActionDetailMockup() {
             <Label>Supporting evidence</Label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
               <a href="#" style={{ color: T.violet }}>→ View 90-day GSC query history (32 queries, 4 above 200 imp)</a>
-              <a href="#" style={{ color: T.violet }}>→ Competitor SERP snapshot (signs.com, signazon.com, fastsigns.com)</a>
-              <a href="#" style={{ color: T.violet }}>→ Cluster page: “business signs” (8 sibling pages, 14k imp)</a>
+              <a href="#" style={{ color: T.violet }}>→ Competitor SERP snapshot (echoneon.com, neonmfg.com, voodooneon.com)</a>
+              <a href="#" style={{ color: T.violet }}>→ Cluster page: “business neon signs” (8 sibling pages, 14k imp)</a>
               <a href="#" style={{ color: T.violet }}>→ Internal linking graph for /for-businesses/ (3 inbound, 12 outbound)</a>
             </div>
           </Card>
