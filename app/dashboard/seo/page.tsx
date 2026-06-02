@@ -526,7 +526,7 @@ function PageDossierDrawer({
                   </div>
                   <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '4px' }}>
                     This page is authority-bound ({dossier.page.gsc_best_position == null ? 'not yet ranking' : `pos ~${fmtPos(dossier.page.gsc_best_position)}`} for
-                    {' '}"{dossier.page.gsc_top_query || 'its target query'}"). On-page is necessary but not sufficient — pursue relevant backlinks and digital PR to break into the top 10.
+                    {' '}&ldquo;{dossier.page.gsc_top_query || 'its target query'}&rdquo;). On-page is necessary but not sufficient — pursue relevant backlinks and digital PR to break into the top 10.
                   </div>
                 </div>
               ) : (
