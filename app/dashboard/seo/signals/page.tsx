@@ -116,15 +116,7 @@ function SignalsContent() {
                   <td style={tdStyle}>{row.position_30d_ago != null ? Number(row.position_30d_ago).toFixed(1) : '—'}</td>
                   <td style={tdStyle}>{row.position_now != null ? Number(row.position_now).toFixed(1) : '—'}</td>
                   <td style={tdStyle}><span style={{ color: (row.position_delta ?? 0) > 0 ? '#991b1b' : '#065f46', fontWeight: fontWeight.medium }}>{row.position_delta != null ? `+${Number(row.position_delta).toFixed(1)}` : '—'}</span></td>
-                  <td style={tdStyle}>{(() => {
-                    const td = row.traffic_delta_pct; const pd = Number(row.position_delta ?? 0);
-                    // Blank the metric when rank slipped but traffic reads flat/positive — a
-                    // near-zero-click-baseline artifact of the undercounted GSC ingest.
-                    if (td == null || (pd > 0 && Number(td) >= 0)) {
-                      return <span style={{ color: tc.text.muted }} title="Suppressed — unreliable on a near-zero click baseline">—</span>;
-                    }
-                    return <span style={{ color: Number(td) < 0 ? '#991b1b' : '#065f46' }}>{`${Number(td).toFixed(1)}%`}</span>;
-                  })()}</td>
+                  <td style={tdStyle}><span style={{ color: (row.traffic_delta_pct ?? 0) < 0 ? '#991b1b' : '#065f46' }}>{row.traffic_delta_pct != null ? `${Number(row.traffic_delta_pct).toFixed(1)}%` : '—'}</span></td>
                   <td style={tdStyle}>{row.decay_score != null ? Number(row.decay_score).toFixed(2) : '—'}</td>
                   <td style={tdStyle}>{row.status === 'new' && <button onClick={() => handleDismiss('decay', row.id)} style={{ padding: `${space['0.5']} ${space['2']}`, fontFamily: fontFamily.body, fontSize: '11px', color: '#525252', backgroundColor: '#f5f5f5', border: 'none', borderRadius: radius.md, cursor: 'pointer' }}>Dismiss</button>}</td>
                 </tr>

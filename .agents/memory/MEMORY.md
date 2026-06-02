@@ -1,0 +1,3 @@
+- [SEO analytics schema joins](seo-analytics-schema.md) — analytics.* SEO tables disagree on URL host (www vs apex); normalize before any cross-table join, plus inventory bucketing + candidate gating rules.
+- [Project env & DB probing](env-and-db-probing.md) — how to run ad-hoc Supabase queries here: code_execution sandbox has NO process.env; use bash+node with pg resolved from project root.
+- [SEO content must be neon-specific](seo-neon-specificity.md) — never generic "LED"/"signs" copy or competitors; canonical neon competitor set + the one led-vs-neon exception.

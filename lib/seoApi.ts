@@ -752,20 +752,6 @@ export async function rejectSeoAction(id: string, notes?: string): Promise<void>
   });
 }
 
-// Command-center review queue surfaces proposed changes that still live in the
-// seo_execution_candidate table, so the write must carry the source so the
-// actions route updates the candidate (not the seo_action) row.
-export async function decideSeoCandidate(
-  id: string,
-  action: 'approve' | 'reject',
-  notes?: string,
-): Promise<void> {
-  await seoFetch('/api/proxy/seo/actions', {
-    method: 'POST',
-    body: JSON.stringify({ id, action, notes, source: 'seo_execution_candidate' }),
-  });
-}
-
 export interface SeoProgressDelta {
   current: number;
   prior: number;
@@ -887,4 +873,146 @@ export async function markBacklinkContacted(domain: string): Promise<void> {
     method: 'POST',
     body: JSON.stringify({ id: domain, status: 'contacted' }),
   });
+}
+
+// =============================================================================
+// Page Portfolio + Page Dossier (governed Review surface)
+// Backed by analytics.seo_page_inventory (+ GSC demand, DataForSEO keyword
+// value, gate-accepted execution candidates). Read-only except Lane-1 engine
+// approve/reject, which reuses approveEngineCandidate / rejectEngineCandidate.
+// =============================================================================
+
+export type PortfolioBucket = 'lost' | 'win' | 'strategic' | 'fix';
+
+export interface PortfolioPage {
+  url: string;
+  content_type: string | null;
+  status_class: string;
+  bucket: PortfolioBucket;
+  needs_verify: boolean;
+  gsc_impressions: number | null;
+  gsc_top_query: string | null;
+  gsc_best_position: number | null;
+  has_rankmath_redirect: boolean;
+  rankmath_redirect_target: string | null;
+  http_status: number | null;
+  kw_volume: number | null;
+  kw_difficulty: number | null;
+  kw_cpc: number | null;
+  has_dataforseo: boolean;
+  is_competitor_only: boolean;
+}
+
+export async function getSeoPortfolio(): Promise<PortfolioPage[]> {
+  const data = await seoFetch<{ data: PortfolioPage[] }>('/api/proxy/seo/portfolio');
+  return data.data ?? [];
+}
+
+export interface PageDossierPage {
+  url: string;
+  content_type: string | null;
+  status_class: string;
+  gsc_impressions: number | null;
+  gsc_top_query: string | null;
+  gsc_best_position: number | null;
+  has_rankmath_redirect: boolean;
+  rankmath_redirect_target: string | null;
+  http_status: number | null;
+  canonical_url: string | null;
+  indexable: boolean | null;
+  noindex: boolean | null;
+  in_404_monitor: boolean | null;
+  needs_verify: boolean;
+}
+
+export interface PageDossierDemandRow {
+  query: string;
+  impressions: number;
+  clicks: number;
+  avg_position: number | null;
+  kw_volume: number | null;
+  kw_difficulty: number | null;
+  kw_cpc: number | null;
+  is_discard: boolean;
+  discard_reason: string | null;
+}
+
+export interface PageDossierCandidate {
+  candidate_id: string;
+  opportunity_id: string | null;
+  mutation_type: string | null;
+  primary_remedy: string | null;
+  proposed_value: string | null;
+  current_value_snapshot: string | null;
+  evidence_summary: string | null;
+  gate_reasons: string[];
+  opportunity_score: number | null;
+  opportunity_urgency: string | null;
+  confidence_tier: string | null;
+  source_confidence: string | null;
+  approval_status: string | null;
+  execution_status: string | null;
+  target_page_url: string | null;
+}
+
+export interface PageDossier {
+  page: PageDossierPage;
+  demand: PageDossierDemandRow[];
+  candidates: PageDossierCandidate[];
+}
+
+export async function getSeoPageDossier(url: string): Promise<PageDossier> {
+  const data = await seoFetch<{ data: PageDossier }>(
+    `/api/proxy/seo/page?url=${encodeURIComponent(url)}`,
+  );
+  return data.data;
+}
+
+// Portfolio-wide engine action queue: every gate-accepted, approval-pending
+// candidate across all pages. Reuses PageDossierCandidate so the queue and the
+// per-page dossier render the same candidate shape. Approve/reject still routes
+// through approveEngineCandidate / rejectEngineCandidate.
+export interface SeoCandidateQueue {
+  candidates: PageDossierCandidate[];
+  returned: number;
+}
+
+export async function getSeoCandidateQueue(limit?: number): Promise<SeoCandidateQueue> {
+  const qs = limit ? `?limit=${limit}` : '';
+  const data = await seoFetch<{ data: SeoCandidateQueue }>(
+    `/api/proxy/seo/candidate-queue${qs}`,
+  );
+  return data.data;
+}
+
+// =============================================================================
+// Gate-suppressed mutation audit (read-only transparency trail)
+// =============================================================================
+
+export interface SuppressedReasonRollup {
+  reason: string;
+  count: number;
+}
+
+export interface SuppressedRow {
+  id: string;
+  generator: string | null;
+  mutation_type: string | null;
+  target_url: string | null;
+  gate_reasons: string[];
+  relevance_score: number | null;
+  created_at: string | null;
+}
+
+export interface SuppressedAudit {
+  total: number;
+  returned: number;
+  reasons: SuppressedReasonRollup[];
+  rows: SuppressedRow[];
+}
+
+export async function getSeoSuppressed(limit?: number): Promise<SuppressedAudit> {
+  const qs = limit ? `?limit=${limit}` : '';
+  const data = await seoFetch<{ data: SuppressedAudit }>(`/api/proxy/seo/suppressed${qs}`);
+  return data.data;
 }

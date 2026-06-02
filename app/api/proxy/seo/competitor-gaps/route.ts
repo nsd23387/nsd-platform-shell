@@ -37,10 +37,6 @@ const BRANDED_KEYWORD_PATTERNS = [
   'business cards', 'business card',
   'custom stickers',
   '% phone number%', '% jobs%', '% music%', '% login%', '% coupon%',
-  // Competitor BRAND / navigational terms — NSD will never rank for a rival's
-  // own name, and these inflated the gap list with junk 0.9-score rows.
-  '%neonmfg%', '%neon mfg%', '%echoneon%', '%echo neon%',
-  '%voodooneon%', '%voodoo neon%', '%neonpros%', '%neon pros%',
 ];
 
 export async function GET(req: NextRequest) {

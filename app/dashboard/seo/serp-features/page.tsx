@@ -73,7 +73,7 @@ function BacklinksContent() {
       {!loading && !error && rows.length === 0 && (
         <div style={{ padding: space['8'], backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, textAlign: 'center' }}>
           <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.secondary, marginBottom: space['2'] }}>No SERP features detected yet</p>
-          <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>The detection job runs Wednesdays at 04:00 UTC; the most recent run found none.</p>
+          <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>SERP feature detection runs Wednesdays at 04:00 UTC.</p>
         </div>
       )}
 

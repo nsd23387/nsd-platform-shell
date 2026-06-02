@@ -268,7 +268,7 @@ export default function ProposedSeoOverview() {
               tone="violet"
               title="Rewrite title tag — /for-businesses/"
               url="neonsignsdepot.com/for-businesses/"
-              why="Page ranks pos 12.1 for ‘business led signs’ (4,203 imp/mo) but CTR is 0.0%. Title currently lacks the primary keyword."
+              why="Page ranks pos 12.1 for ‘business neon signs’ (4,203 imp/mo) but CTR is 0.0%. Title currently lacks the primary keyword."
               impact="+184 clicks/mo"
               effort="Low · 5 min"
             />
@@ -306,8 +306,8 @@ export default function ProposedSeoOverview() {
               rank={5}
               intent="improve_ctr"
               tone="violet"
-              title="Add FAQ schema — /products/led-signs/blade-signs/"
-              url="neonsignsdepot.com/products/led-signs/blade-signs/"
+              title="Add FAQ schema — /products/neon-signs/blade-signs/"
+              url="neonsignsdepot.com/products/neon-signs/blade-signs/"
               why="Page already has FAQ section but no schema markup. Adding it eligible for rich results — typical CTR lift 8–14%."
               impact="+18 clicks/mo"
               effort="Low · 15 min"
@@ -342,12 +342,12 @@ export default function ProposedSeoOverview() {
                 </thead>
                 <tbody>
                   {[
-                    { name: 'signs.com', sov: 24.6, overlap: 412, gap: 188, trend: 6.4, color: T.bad },
-                    { name: 'signazon.com', sov: 18.2, overlap: 356, gap: 142, trend: 2.1, color: T.warn },
-                    { name: 'fastsigns.com', sov: 12.9, overlap: 298, gap: 96, trend: -1.4, color: T.good },
+                    { name: 'echoneon.com', sov: 24.6, overlap: 412, gap: 188, trend: 6.4, color: T.bad },
+                    { name: 'neonmfg.com', sov: 18.2, overlap: 356, gap: 142, trend: 2.1, color: T.warn },
+                    { name: 'voodooneon.com', sov: 12.9, overlap: 298, gap: 96, trend: -1.4, color: T.good },
                     { name: 'You — neonsignsdepot.com', sov: 9.4, overlap: null, gap: 0, trend: 4.2, color: T.violet, you: true },
-                    { name: 'buildasign.com', sov: 7.1, overlap: 208, gap: 71, trend: 3.0, color: T.warn },
-                    { name: 'signs365.com', sov: 5.8, overlap: 174, gap: 58, trend: 0.2, color: T.muted },
+                    { name: 'neonpros.com', sov: 7.1, overlap: 208, gap: 71, trend: 3.0, color: T.warn },
+                    { name: 'everythingneon.com', sov: 5.8, overlap: 174, gap: 58, trend: 0.2, color: T.muted },
                   ].map(c => (
                     <tr key={c.name} style={{ borderBottom: `1px solid ${T.border}`, background: c.you ? T.violetSoft : 'transparent' }}>
                       <td style={{ padding: '10px 16px', fontWeight: c.you ? 600 : 500, color: c.you ? T.violet : T.text }}>
@@ -381,11 +381,11 @@ export default function ProposedSeoOverview() {
               <div style={{ fontSize: 11, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Top competitor gaps</div>
               <div style={{ fontSize: 11, color: T.subtle, marginBottom: 12 }}>Queries competitors rank top-10 for, you don&apos;t</div>
               {[
-                { kw: 'led business signs cost', comp: 'signs.com', vol: 880, theirPos: 3 },
-                { kw: 'channel letter signs near me', comp: 'fastsigns.com', vol: 720, theirPos: 4 },
-                { kw: 'custom neon signs for business', comp: 'signazon.com', vol: 590, theirPos: 6 },
-                { kw: 'storefront sign installation', comp: 'fastsigns.com', vol: 480, theirPos: 5 },
-                { kw: 'monument sign pricing', comp: 'signs.com', vol: 320, theirPos: 7 },
+                { kw: 'business neon signs cost', comp: 'echoneon.com', vol: 880, theirPos: 3 },
+                { kw: 'custom neon signs near me', comp: 'voodooneon.com', vol: 720, theirPos: 4 },
+                { kw: 'custom neon signs for business', comp: 'neonmfg.com', vol: 590, theirPos: 6 },
+                { kw: 'neon open signs for business', comp: 'voodooneon.com', vol: 480, theirPos: 5 },
+                { kw: 'custom neon sign pricing', comp: 'echoneon.com', vol: 320, theirPos: 7 },
               ].map(g => (
                 <div key={g.kw} style={{ padding: '10px 0', borderBottom: `1px solid ${T.border}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
@@ -411,10 +411,10 @@ export default function ProposedSeoOverview() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
               {[
-                { name: 'signs.com', newPages: 12, refreshed: 28, threat: 'high' as const },
-                { name: 'signazon.com', newPages: 6, refreshed: 14, threat: 'med' as const },
-                { name: 'fastsigns.com', newPages: 3, refreshed: 9, threat: 'low' as const },
-                { name: 'buildasign.com', newPages: 8, refreshed: 11, threat: 'med' as const },
+                { name: 'echoneon.com', newPages: 12, refreshed: 28, threat: 'high' as const },
+                { name: 'neonmfg.com', newPages: 6, refreshed: 14, threat: 'med' as const },
+                { name: 'voodooneon.com', newPages: 3, refreshed: 9, threat: 'low' as const },
+                { name: 'neonpros.com', newPages: 8, refreshed: 11, threat: 'med' as const },
               ].map(c => {
                 const tone = c.threat === 'high' ? T.bad : c.threat === 'med' ? T.warn : T.good;
                 const bg = c.threat === 'high' ? T.badSoft : c.threat === 'med' ? T.warnSoft : T.goodSoft;
@@ -455,8 +455,8 @@ export default function ProposedSeoOverview() {
           <Card>
             <SectionTitle sub="Rankings flat 4+ weeks · revenue at risk">Stalled clusters</SectionTitle>
             {[
-              ['custom led signs', '$2.1k/mo', T.bad],
-              ['storefront signs', '$1.4k/mo', T.warn],
+              ['custom neon signs', '$2.1k/mo', T.bad],
+              ['storefront neon signs', '$1.4k/mo', T.warn],
               ['neon open signs', '$0.9k/mo', T.warn],
             ].map(([name, rev, color]) => (
               <div key={name as string} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${T.border}` }}>

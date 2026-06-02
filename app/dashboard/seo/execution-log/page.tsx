@@ -117,7 +117,7 @@ function ExecutionLogContent() {
             No executions yet
           </p>
           <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted }}>
-            Auto-approval is paused — approved changes will appear here once executed. Approve changes in the Review queue to begin.
+            The first run will occur at 03:30 UTC after cluster generation completes.
           </p>
         </div>
       )}

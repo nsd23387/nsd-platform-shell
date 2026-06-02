@@ -55,3 +55,7 @@ SYNC_SECRET = "dev-sync-secret"
 GOOGLE_ADS_BQ_PROJECT_ID = "nsd-marketing-analytics"
 GOOGLE_ADS_BQ_DATASET = "google_ads_data"
 GOOGLE_ADS_BQ_CUSTOMER_ID = "6999519966"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000

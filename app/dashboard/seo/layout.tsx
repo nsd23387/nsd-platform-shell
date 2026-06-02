@@ -12,68 +12,50 @@ import { Icon } from '../../../design/components/Icon';
 import { isApiDisabled } from '../../../config/appConfig';
 import { getSeoOverviewKpis } from '../../../lib/seoApi';
 
-interface SubTab {
+interface NavItem {
   href: string;
   label: string;
-}
-
-interface NavArea {
-  key: string;
-  href: string; // primary route the sidebar item links to
-  label: string;
   icon: string;
-  tabs: SubTab[]; // in-screen sub-tabs that merge sibling views into one area
-  gated?: boolean; // hidden until there is something to show (Results)
 }
 
-// Information architecture (Fix 0): four top-level areas mirror the handful of
-// decisions the operator makes. Within each area, sibling views are merged into
-// one screen via sub-tabs (rendered above the content) rather than separate nav
-// routes. Empty/duplicative/paused routes (SERP Features, Schema, All
-// Recommendations) are gone; Results stays hidden until ≥1 candidate executes.
-const NAV_AREAS: NavArea[] = [
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
   {
-    key: 'review',
-    href: '/dashboard/seo',
-    label: 'Review',
-    icon: 'review',
-    tabs: [
-      { href: '/dashboard/seo', label: 'Review Queue' },
-      { href: '/dashboard/seo/internal-links', label: 'Internal Links' },
-      { href: '/dashboard/seo/suppressed', label: 'Suppressed' },
+    title: 'Overview',
+    items: [
+      { href: '/dashboard/seo', label: 'Review', icon: 'review' },
     ],
   },
   {
-    key: 'performance',
-    href: '/dashboard/seo/pages',
-    label: 'Performance',
-    icon: 'search',
-    tabs: [
-      { href: '/dashboard/seo/pages', label: 'Pages' },
-      { href: '/dashboard/seo/signals', label: 'Signals' },
+    title: 'Analysis',
+    items: [
+      { href: '/dashboard/seo/pages', label: 'Page Performance', icon: 'search' },
+      { href: '/dashboard/seo/serp-features', label: 'SERP Features', icon: 'trending' },
+      { href: '/dashboard/seo/competitive', label: 'Competitor Deep Dive', icon: 'chart' },
     ],
   },
   {
-    key: 'competitors',
-    href: '/dashboard/seo/competitive',
-    label: 'Competitors',
-    icon: 'chart',
-    tabs: [
-      { href: '/dashboard/seo/competitive', label: 'Deep Dive' },
-      { href: '/dashboard/seo/content', label: 'Content Pipeline' },
+    title: 'Optimization',
+    items: [
+      { href: '/dashboard/seo/actions', label: 'All Recommendations', icon: 'review' },
+      { href: '/dashboard/seo/execution-log', label: 'Execution Log', icon: 'timeline' },
+      { href: '/dashboard/seo/content', label: 'Content Pipeline', icon: 'edit' },
+      { href: '/dashboard/seo/internal-links', label: 'Internal Links', icon: 'search' },
+      { href: '/dashboard/seo/schema', label: 'Schema Markup', icon: 'edit' },
+      { href: '/dashboard/seo/suppressed', label: 'Suppressed Audit', icon: 'warning' },
     ],
   },
   {
-    key: 'results',
-    href: '/dashboard/seo/outcomes',
-    label: 'Results',
-    icon: 'trending',
-    gated: true,
-    tabs: [
-      { href: '/dashboard/seo/execution-log', label: 'Execution Log' },
-      { href: '/dashboard/seo/attribution', label: 'Revenue Attribution' },
-      { href: '/dashboard/seo/content-scores', label: 'Content Scores' },
-      { href: '/dashboard/seo/outcomes', label: 'Outcomes' },
+    title: 'Results',
+    items: [
+      { href: '/dashboard/seo/attribution', label: 'Revenue Attribution', icon: 'trending' },
+      { href: '/dashboard/seo/content-scores', label: 'Content Scores', icon: 'edit' },
+      { href: '/dashboard/seo/outcomes', label: 'Outcomes', icon: 'trending' },
+      { href: '/dashboard/seo/signals', label: 'Signals', icon: 'warning' },
     ],
   },
 ];
@@ -94,15 +76,6 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
   const [mobileSubNavOpen, setMobileSubNavOpen] = useState(false);
   const [pipelineHealthColor, setPipelineHealthColor] = useState('#10b981');
   const [pipelineHealthLabel, setPipelineHealthLabel] = useState('Pipeline: checking...');
-  // Results area stays hidden until at least one candidate has executed.
-  const [showResults, setShowResults] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/proxy/seo/executions', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if ((j?.data?.executed ?? 0) > 0) setShowResults(true); })
-      .catch(() => { /* keep Results hidden on error */ });
-  }, []);
 
   useEffect(() => {
     getSeoOverviewKpis()
@@ -162,77 +135,80 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
     });
   }, []);
 
-  const visibleAreas = NAV_AREAS.filter((a) => !a.gated || showResults);
-  const activeArea =
-    NAV_AREAS.find((a) => a.tabs.some((t) => t.href === currentPath)) ?? visibleAreas[0];
-  const currentLabel = activeArea?.label ?? 'SEO Intelligence';
+  const currentLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.href === currentPath)?.label || 'SEO Intelligence';
 
   const navWidth = collapsed ? '48px' : '220px';
 
-  // Sidebar: one row per top-level area.
   const navLinks = (
     <>
-      {visibleAreas.map((area) => {
-        const isActive = activeArea?.key === area.key;
-        return (
-          <Link
-            key={area.key}
-            href={area.href}
-            title={collapsed && !isMobile ? area.label : undefined}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
-              gap: collapsed && !isMobile ? '0' : space['2.5'],
-              padding: collapsed && !isMobile ? `${space['2']} 0` : `${space['2']} ${space['4']}`,
-              fontFamily: fontFamily.body,
-              fontSize: fontSize.sm,
-              fontWeight: isActive ? fontWeight.semibold : fontWeight.normal,
-              color: isActive ? tc.text.primary : tc.text.muted,
-              backgroundColor: isActive ? tc.background.muted : 'transparent',
-              textDecoration: 'none',
-              borderLeft: collapsed && !isMobile ? 'none' : (isActive ? `3px solid ${violet[500]}` : '3px solid transparent'),
-              transition: `all ${duration.normal} ${easing.DEFAULT}`,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-            }}
-            data-testid={`nav-seo-${area.key}`}
-          >
-            <Icon name={area.icon as any} size={16} />
-            {(collapsed && !isMobile) ? null : <span>{area.label}</span>}
-          </Link>
-        );
-      })}
+      {NAV_GROUPS.map((group) => (
+        <div key={group.title} style={{ marginBottom: space['2'] }}>
+          {!collapsed && !isMobile && (
+            <div
+              style={{
+                padding: `${space['2']} ${space['4']}`,
+                fontFamily: fontFamily.body,
+                fontSize: fontSize.sm,
+                fontWeight: fontWeight.medium,
+                color: tc.text.placeholder,
+                textTransform: 'uppercase' as const,
+                letterSpacing: '0.05em',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {group.title}
+            </div>
+          )}
+          {isMobile && (
+            <div
+              style={{
+                padding: `${space['1']} ${space['4']}`,
+                fontFamily: fontFamily.body,
+                fontSize: '11px',
+                fontWeight: fontWeight.medium,
+                color: tc.text.placeholder,
+                textTransform: 'uppercase' as const,
+                letterSpacing: '0.05em',
+              }}
+            >
+              {group.title}
+            </div>
+          )}
+          {group.items.map((item) => {
+            const isActive = currentPath === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={collapsed && !isMobile ? item.label : undefined}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
+                  gap: collapsed && !isMobile ? '0' : space['2.5'],
+                  padding: collapsed && !isMobile ? `${space['2']} 0` : `${space['2']} ${space['4']}`,
+                  fontFamily: fontFamily.body,
+                  fontSize: fontSize.sm,
+                  fontWeight: isActive ? fontWeight.semibold : fontWeight.normal,
+                  color: isActive ? tc.text.primary : tc.text.muted,
+                  backgroundColor: isActive ? tc.background.muted : 'transparent',
+                  textDecoration: 'none',
+                  borderLeft: collapsed && !isMobile ? 'none' : (isActive ? `3px solid ${violet[500]}` : '3px solid transparent'),
+                  transition: `all ${duration.normal} ${easing.DEFAULT}`,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                }}
+                data-testid={`nav-seo-${item.href.split('/').pop()}`}
+              >
+                <Icon name={item.icon as any} size={16} />
+                {(collapsed && !isMobile) ? null : <span>{item.label}</span>}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </>
   );
-
-  // Sub-tab bar for the active area — merges its sibling views into one screen.
-  const subTabs = activeArea && activeArea.tabs.length > 1 ? (
-    <div style={{ display: 'flex', gap: space['4'], borderBottom: `1px solid ${tc.border.default}`, marginBottom: space['5'], flexWrap: 'wrap' }}>
-      {activeArea.tabs.map((t) => {
-        const active = currentPath === t.href;
-        return (
-          <Link
-            key={t.href}
-            href={t.href}
-            data-testid={`subtab-${t.href.split('/').pop()}`}
-            style={{
-              padding: `${space['2']} ${space['1']}`,
-              fontFamily: fontFamily.body,
-              fontSize: fontSize.sm,
-              fontWeight: active ? fontWeight.semibold : fontWeight.normal,
-              color: active ? tc.text.primary : tc.text.muted,
-              borderBottom: active ? `2px solid ${violet[500]}` : '2px solid transparent',
-              marginBottom: '-1px',
-              textDecoration: 'none',
-            }}
-          >
-            {t.label}
-          </Link>
-        );
-      })}
-    </div>
-  ) : null;
 
   if (isMobile) {
     return (
@@ -297,7 +273,6 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
         )}
 
         <div style={{ flex: 1, overflow: 'auto', padding: space['4'] }}>
-          {subTabs}
           {children}
         </div>
       </div>
@@ -426,7 +401,6 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
           </div>
         )}
         <div style={{ flex: 1, overflow: 'auto', padding: space['6'] }}>
-          {subTabs}
           {children}
         </div>
       </div>
