@@ -150,11 +150,17 @@ function PerformanceContent() {
         const rows = grouped[b.key];
         if (rows.length === 0) return null;
         const shown = Math.min(visible[b.key], rows.length);
+        const verifyCount = rows.reduce((n, p) => (p.needs_verify ? n + 1 : n), 0);
         return (
           <div key={b.key} style={{ marginBottom: space['6'] }}>
             <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: space['3'] }}>
               <Pill tone={bucketTone(b.key)} tc={tc}>{b.label}</Pill>
               <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{rows.length} · {b.blurb}</span>
+              {verifyCount > 0 && (
+                <span data-testid={`text-verify-count-${b.key}`}>
+                  <Pill tone="warn" tc={tc}>{verifyCount} need verify</Pill>
+                </span>
+              )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: space['3'] }}>
               {rows.slice(0, shown).map((p) => (

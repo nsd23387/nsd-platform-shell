@@ -82,14 +82,27 @@ type MomentumWindow = {
 };
 
 function computeMomentum(series: SeoTimeseriesPoint[], n: number, label: string): MomentumWindow {
-  const clicks = series.map((p) => p.clicks ?? 0);
-  const cur = clicks.slice(-n);
-  const prior = clicks.slice(-2 * n, -n);
-  const curSum = cur.reduce((a, b) => a + b, 0);
-  const priorSum = prior.reduce((a, b) => a + b, 0);
-  const full = cur.length === n && prior.length === n;
+  // Window by calendar DATE (anchored to the most recent point), not by array
+  // index. The GSC daily series can be missing zero-traffic days, so slicing the
+  // last N rows would span more than N calendar days and disagree with the hero /
+  // Results 30-day number. Date-windowing keeps every surface on one number.
+  if (series.length === 0) {
+    return { label, curSum: 0, priorSum: 0, deltaPct: null, full: false, haveDays: 0, needDays: 2 * n };
+  }
+  const DAY = 86_400_000;
+  const anchor = Date.parse(`${series[series.length - 1].date}T00:00:00Z`);
+  const earliest = Date.parse(`${series[0].date}T00:00:00Z`);
+  const sumWindow = (fromDaysAgo: number, toDaysAgo: number) =>
+    series.reduce((sum, p) => {
+      const t = Date.parse(`${p.date}T00:00:00Z`);
+      return t > anchor - fromDaysAgo * DAY && t <= anchor - toDaysAgo * DAY ? sum + (p.clicks ?? 0) : sum;
+    }, 0);
+  const curSum = sumWindow(n, 0);
+  const priorSum = sumWindow(2 * n, n);
+  const haveDays = Math.round((anchor - earliest) / DAY) + 1;
+  const full = haveDays >= 2 * n;
   const deltaPct = full && priorSum > 0 ? ((curSum - priorSum) / priorSum) * 100 : null;
-  return { label, curSum, priorSum, deltaPct, full, haveDays: clicks.length, needDays: 2 * n };
+  return { label, curSum, priorSum, deltaPct, full, haveDays, needDays: 2 * n };
 }
 
 function MomentumRow({ w, tc }: { w: MomentumWindow; tc: Tc }) {
@@ -820,6 +833,16 @@ function CommandCenterContent() {
     return c;
   }, [portfolio]);
 
+  // How many of the pages in each bucket are unverified (needs_verify). These
+  // are pending_verification pages folded into Strategic — surfaced as a
+  // subgroup so the bucket count is not silently inflated by pages we cannot
+  // yet confirm are canonical_live.
+  const verifyCounts = useMemo(() => {
+    const c: Record<PortfolioBucket, number> = { win: 0, strategic: 0, fix: 0, lost: 0 };
+    (portfolio ?? []).forEach((p) => { if (p.needs_verify) c[p.bucket] += 1; });
+    return c;
+  }, [portfolio]);
+
   // Detections: pending engine candidates whose target page is verified
   // canonical_live (governance — never surface targets we can't confirm are
   // live). Ranked by opportunity score (already DESC from the API).
@@ -1151,6 +1174,11 @@ function CommandCenterContent() {
                 <Pill tone={bucketTone(b.key)} tc={tc}>{b.key}</Pill>
               </div>
               <div style={{ fontFamily: monoStack, fontSize: '26px', color: tc.text.primary, marginTop: '4px' }}>{loading ? '—' : counts[b.key]}</div>
+              {!loading && verifyCounts[b.key] > 0 && (
+                <div style={{ marginTop: '4px' }} data-testid={`text-verify-count-${b.key}`}>
+                  <Pill tone="warn" tc={tc}>{verifyCounts[b.key]} need verify</Pill>
+                </div>
+              )}
               <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '2px' }}>{b.blurb}</div>
             </Link>
           ))}

@@ -19,13 +19,17 @@ function getPool(): Pool {
   return pool;
 }
 
-// Phase 8 competitor set — matches competitorGapJob.ts in nsd-integrations
+// Canonical neon competitor set — the only domains present in
+// analytics.seo_competitor_gap that are genuine *neon* shops. Generic-sign
+// printers and marketplaces (businesssignsandmore.com, vistaprint.com,
+// amazon.com, etsy.com) are intentionally excluded per the neon-only governance
+// rule (see replit.md): they attract the wrong customers for a neon brand.
 const ALLOWED_COMPETITORS = [
-  'echoneon.com',
+  'everythingneon.com',
+  'luckyneon.com',
+  'crazyneon.com',
+  'kingsofneon.com',
   'neonmfg.com',
-  'voodooneon.com',
-  'neonpros.com',
-  'signs.com',
 ];
 
 // Branded keyword patterns to exclude — these are competitor brand searches that
@@ -79,21 +83,32 @@ export async function GET(req: NextRequest) {
     // Skip ultra-short/single-character queries (low intent, no ranking potential)
     where += ` AND LENGTH(COALESCE(g.keyword, '')) >= 4`;
 
-    // Note: seo_competitor_gap (post-Ahrefs source) does not carry search_volume
-    // or keyword_difficulty — those came from Ahrefs. We expose nulls so callers
-    // can degrade gracefully without breaking their type contracts.
+    // seo_competitor_gap (post-Ahrefs source) does not carry search_volume /
+    // keyword_difficulty / cpc. We join analytics.external_query_intelligence on
+    // the normalized query to populate them where measured, leaving null only
+    // when the keyword genuinely has no intelligence row. The dedup subquery
+    // (DISTINCT ON normalized_query, newest metrics first) guards against any
+    // row fan-out so the gap count stays exact.
     const { rows } = await p.query(`
       SELECT
         g.*,
         COALESCE(g.opportunity_score, null) AS opportunity_score,
-        NULL::int AS keyword_difficulty,
-        NULL::int AS search_volume,
-        kc.primary_keyword AS cluster_keyword
+        e.keyword_difficulty::int AS keyword_difficulty,
+        e.search_volume::int     AS search_volume,
+        e.cpc::numeric           AS cpc,
+        kc.primary_keyword       AS cluster_keyword
       FROM analytics.seo_competitor_gap g
       LEFT JOIN analytics.keyword_clusters kc ON kc.id = g.cluster_id
+      LEFT JOIN (
+        SELECT DISTINCT ON (LOWER(TRIM(normalized_query)))
+          LOWER(TRIM(normalized_query)) AS nq,
+          search_volume, keyword_difficulty, cpc
+        FROM analytics.external_query_intelligence
+        WHERE normalized_query IS NOT NULL
+        ORDER BY LOWER(TRIM(normalized_query)), metrics_observed_at DESC NULLS LAST
+      ) e ON e.nq = LOWER(TRIM(g.keyword))
       ${where}
       ORDER BY g.opportunity_score DESC NULLS LAST
-      LIMIT 100
     `, params);
 
     return NextResponse.json({ data: rows });
