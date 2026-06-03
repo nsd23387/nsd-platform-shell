@@ -36,6 +36,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { organicWindow } from '../../../../../lib/seoMetrics';
 
 const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 let pool: Pool | null = null;
@@ -54,30 +55,14 @@ function getPool(): Pool {
   return pool;
 }
 
-// Aggregate GSC metrics over a window. Returns null if no data.
-async function gscWindow(p: Pool, daysAgoStart: number, daysAgoEnd: number) {
-  const { rows } = await p.query<{
-    clicks: string | null;
-    impressions: string | null;
-    position: string | null;
-  }>(
-    `SELECT
-       SUM((payload->>'clicks')::int) AS clicks,
-       SUM((payload->>'impressions')::int) AS impressions,
-       AVG((payload->>'position')::numeric) AS position
-     FROM analytics.raw_search_console
-     WHERE (payload->>'date')::date >= CURRENT_DATE - $1::interval
-       AND (payload->>'date')::date <  CURRENT_DATE - $2::interval
-       AND payload->>'page' ILIKE '%neonsignsdepot.com%'`,
-    [`${daysAgoStart} days`, `${daysAgoEnd} days`],
-  );
-  const r = rows[0];
-  if (!r) return { clicks: 0, impressions: 0, position: null as number | null };
-  return {
-    clicks: r.clicks ? parseInt(r.clicks, 10) : 0,
-    impressions: r.impressions ? parseInt(r.impressions, 10) : 0,
-    position: r.position != null ? parseFloat(r.position) : null,
-  };
+// Organic traffic windows now come from the canonical lib/seoMetrics helper
+// (analytics.metrics_search_console_daily, anchored to the latest metric_date,
+// impression-weighted position) so this Results surface reports the SAME 7d/30d
+// clicks number as the Command Center hero and Momentum card. The previous
+// raw_search_console + CURRENT_DATE path was a different grain and anchor and
+// produced a smaller, inconsistent number.
+function gscShape(w: { clicks: number; impressions: number; avgPosition: number | null }) {
+  return { clicks: w.clicks, impressions: w.impressions, position: w.avgPosition };
 }
 
 function deltaPct(current: number, prior: number): number {
@@ -133,14 +118,18 @@ export async function GET() {
        WHERE status = 'new' AND canonical_confidence = 'high'`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
-    // Count from both old pipeline and new seo_action table
+    // Awaiting approval == the Command Center actionable queue (the exact same
+    // definition the /candidate-queue surface uses): gate_status='accepted' AND
+    // approval_status='pending'. Previously this summed every proposed+pending
+    // candidate (including gate-suppressed ones) plus a seo_action union, which
+    // inflated the number far above the queue reviewers actually see. "urgent" =
+    // the re-gate-flagged subset that was re-surfaced for human re-review.
     const awaitingApproval = await p.query<{ count: string; urgent: string }>(
       `SELECT
-         (COALESCE(old.cnt, 0) + COALESCE(new.cnt, 0))::text AS count,
-         COALESCE(new.cnt, 0)::text AS urgent
-       FROM
-         (SELECT COUNT(*) AS cnt FROM analytics.seo_execution_candidate WHERE execution_status = 'proposed' AND approval_status = 'pending') old,
-         (SELECT COUNT(*) AS cnt FROM analytics.seo_action WHERE status IN ('proposed', 'reviewed')) new`,
+         COUNT(*)::text AS count,
+         COUNT(*) FILTER (WHERE regate_review_flag IS TRUE)::text AS urgent
+       FROM analytics.seo_execution_candidate
+       WHERE gate_status = 'accepted' AND approval_status = 'pending'`,
     ).catch(() => ({ rows: [{ count: '0', urgent: '0' }] }));
 
     // Pipeline health: when did each major job last run?
@@ -161,13 +150,13 @@ export async function GET() {
     ).catch(() => ({ rows: [{ max_date: null }] }));
 
     // ── WEEK & MONTH: organic traffic trends ─────────────────────────────────
-    // Compare last 7 days (1-7) vs prior 7 days (8-14)
-    const week = await gscWindow(p, 7, 0);
-    const weekPrior = await gscWindow(p, 14, 7);
+    // Canonical windows anchored to the latest metric_date (see lib/seoMetrics).
+    // Last 7 days vs prior 7 days; last 30 days vs prior 30 days.
+    const week = gscShape(await organicWindow(p, 7, 0));
+    const weekPrior = gscShape(await organicWindow(p, 7, 7));
 
-    // Last 30 days vs prior 30 days
-    const month = await gscWindow(p, 30, 0);
-    const monthPrior = await gscWindow(p, 60, 30);
+    const month = gscShape(await organicWindow(p, 30, 0));
+    const monthPrior = gscShape(await organicWindow(p, 30, 30));
 
     // Pages optimized: union old + new pipelines
     const pagesOptimizedWeek = await p.query<{ count: string }>(

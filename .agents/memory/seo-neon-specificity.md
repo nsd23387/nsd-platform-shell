@@ -14,10 +14,10 @@ brand and make conversion worse, not better — the user flagged this explicitly
 right competitors are *neon* shops, not general sign printers.
 
 **How to apply:**
-- Canonical neon competitor set lives in `app/api/proxy/seo/competitor-gaps/route.ts`
-  (`ALLOWED_COMPETITORS`): echoneon.com, neonmfg.com, voodooneon.com, neonpros.com.
-  everythingneon.com is also a valid neon competitor. The route also lists signs.com,
-  but the user rejected signs.com as a displayed competitor — do not surface it in UI.
+- Canonical neon competitor allowlist lives in `app/api/proxy/seo/competitor-gaps/route.ts`
+  (`ALLOWED_COMPETITORS`) and is now the 5 real neon domains the user confirmed:
+  everythingneon.com, luckyneon.com, crazyneon.com, kingsofneon.com, neonmfg.com.
+  Never surface generic-sign shops (signs.com, buildasign.com) as competitors.
 - The SEO redesign mockups (`app/seo-mockups/proposed`, `app/seo-mockups/action-detail`)
   hold hardcoded SAMPLE data. Keep that sample data neon-specific too.
 - One intentional exception: a `/blog/led-vs-neon/` comparison post is fine — "LED vs

@@ -92,14 +92,17 @@ function ActionDetailContent() {
   const score = candidate?.opportunity_score != null ? Math.round(candidate.opportunity_score * 100) : null;
 
   // Real GSC baseline for the page being edited (the source page).
-  // Position is the TOP-QUERY average position (the governed canonical signal),
-  // derived from the page's highest-demand query — NOT gsc_best_position
-  // (the all-time min, which overstates rank). demand is ordered impressions DESC.
+  // Position AND impressions are both the TOP-QUERY figures (the governed
+  // canonical signal), derived from the page's highest-demand query — NOT
+  // gsc_best_position (the all-time min, which overstates rank) and NOT
+  // gsc_impressions (the page-level total across every query, which mislabels
+  // a page aggregate as a top-query baseline). demand is ordered impressions
+  // DESC, so demand[0] is that highest-demand query.
   const baseline = useMemo(() => {
     const p = dossier?.page;
     const top = dossier?.demand?.[0] ?? null;
     return {
-      impressions: p?.gsc_impressions ?? null,
+      impressions: top?.impressions ?? p?.gsc_impressions ?? null,
       position: top?.avg_position ?? null,
       topQuery: top?.query ?? p?.gsc_top_query ?? null,
     };
@@ -239,7 +242,7 @@ function ActionDetailContent() {
                 <tbody>
                   <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top query</td><td style={{ textAlign: 'right', color: tc.text.primary }}>{baseline.topQuery || '—'}</td></tr>
                   <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top-query position</td><td style={{ textAlign: 'right', fontFamily: monoStack }}>{fmtPos(baseline.position)}</td></tr>
-                  <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Impressions</td><td style={{ textAlign: 'right', fontFamily: monoStack }}>{fmtInt(baseline.impressions)}</td></tr>
+                  <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top-query impressions</td><td style={{ textAlign: 'right', fontFamily: monoStack }}>{fmtInt(baseline.impressions)}</td></tr>
                 </tbody>
               </table>
               <div style={{ marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>Live GSC baseline for this page.</div>

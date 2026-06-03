@@ -855,6 +855,7 @@ export interface SeoCompetitorGap {
   opportunity_score: number | null;
   search_volume: number | null;
   keyword_difficulty: number | null;
+  cpc: number | null;
   status: string;
   discovered_at: string;
 }
