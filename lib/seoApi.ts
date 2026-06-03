@@ -893,6 +893,11 @@ export interface PortfolioPage {
   gsc_impressions: number | null;
   gsc_top_query: string | null;
   gsc_best_position: number | null;
+  // Governed position: avg position of the page's highest-demand query
+  // (NOT all-time best). top_query / top_q_impr describe that query.
+  top_query: string | null;
+  top_q_impr: number | null;
+  top_q_pos: number | null;
   has_rankmath_redirect: boolean;
   rankmath_redirect_target: string | null;
   http_status: number | null;
@@ -985,6 +990,41 @@ export async function getSeoCandidateQueue(limit?: number): Promise<SeoCandidate
   return data.data;
 }
 
+// Single engine candidate including the full `evidence` jsonb (the list/queue
+// endpoints omit the heavy jsonb). Powers the Action Card detail screen.
+// evidence shape (internal_link_insertion remedy):
+//   { why, source: {url, entity, intent}, target: {url, entity, intent},
+//     signals: { embedding_cosine, shared_attributes, hierarchy_proximity },
+//     gsc: {...} }
+export interface SeoCandidateEvidenceNode {
+  url?: string | null;
+  entity?: string | null;
+  intent?: string | null;
+}
+export interface SeoCandidateEvidence {
+  why?: string | null;
+  source?: SeoCandidateEvidenceNode | null;
+  target?: SeoCandidateEvidenceNode | null;
+  signals?: {
+    embedding_cosine?: number | null;
+    shared_attributes?: string[] | null;
+    hierarchy_proximity?: number | string | null;
+  } | null;
+  gsc?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+export interface SeoCandidateDetail extends PageDossierCandidate {
+  gate_status: string | null;
+  evidence: SeoCandidateEvidence | null;
+}
+
+export async function getSeoCandidate(id: string): Promise<SeoCandidateDetail> {
+  const data = await seoFetch<{ data: SeoCandidateDetail }>(
+    `/api/proxy/seo/candidate?id=${encodeURIComponent(id)}`,
+  );
+  return data.data;
+}
+
 // =============================================================================
 // Gate-suppressed mutation audit (read-only transparency trail)
 // =============================================================================
@@ -1015,4 +1055,94 @@ export async function getSeoSuppressed(limit?: number): Promise<SuppressedAudit>
   const qs = limit ? `?limit=${limit}` : '';
   const data = await seoFetch<{ data: SuppressedAudit }>(`/api/proxy/seo/suppressed${qs}`);
   return data.data;
+}
+
+// =============================================================================
+// Competitor Content Velocity (governed competitive feed)
+// Read-only. Sourced from the nsd-integrations competitive producer via the
+// server-side /api/competitive proxy (the bearer token never reaches the
+// browser). These helpers return null/[] — never throw and never fabricate —
+// when the feed is unconfigured or has not yet crawled, so the Command Center
+// renders an honest empty state. "new"/"changed" are the producer's real
+// change_type enum; we do NOT invent threat scores.
+// =============================================================================
+
+export interface CompetitiveVelocitySummary {
+  competitors_tracked: number;
+  pages_tracked: number;
+  last_crawl_date: string | null;
+  this_week_new: number;
+  this_week_changed: number;
+}
+
+export interface CompetitivePageChange {
+  competitor_name: string;
+  competitor_domain: string;
+  page_url: string;
+  page_title: string;
+  change_type: string;
+  page_type?: string;
+}
+
+async function competitiveFetch<T>(endpoint: string, search?: string): Promise<T | null> {
+  try {
+    const res = await fetch(`/api/competitive/${endpoint}${search ? `?${search}` : ''}`, {
+      headers: getAuthHeaders(),
+    });
+    const body = await res.json().catch(() => null);
+    if (!body || body.success !== true) return null;
+    return (body.data ?? null) as T | null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getCompetitiveVelocitySummary(): Promise<CompetitiveVelocitySummary | null> {
+  return competitiveFetch<CompetitiveVelocitySummary>('summary');
+}
+
+export async function getCompetitiveChanges(limit = 100): Promise<CompetitivePageChange[]> {
+  const data = await competitiveFetch<{ changes: CompetitivePageChange[]; total: number }>('changes', `limit=${limit}`);
+  return data?.changes ?? [];
+}
+
+// =============================================================================
+// Recently approved / shipped SEO actions (read-only)
+// Sourced from analytics.seo_action via /api/proxy/seo/actions. We surface the
+// real lifecycle status, timestamps, and the engine-measured GSC click delta
+// where one exists — we never fabricate predicted lift and never offer a
+// rollback write from this read-only surface. Empty until the engine approves
+// or ships its first action.
+// =============================================================================
+
+export interface SeoShippedAction {
+  id: string;
+  target_url: string | null;
+  mutation_type: string | null;
+  status: string | null;
+  created_at: string | null;
+  executed_at: string | null;
+  outcome_clicks_delta: number | null;
+}
+
+// Shipped lifecycle statuses. The /actions route falls back to
+// awaiting-approval execution CANDIDATES (status='awaiting_approval') when
+// analytics.seo_action is empty — those are NOT shipped, so we hard-filter to
+// this allowlist here. Without it, pending candidates would masquerade as
+// shipped work, breaking data truthfulness. This keeps the honest empty state.
+const SHIPPED_STATUSES = ['approved', 'executing', 'published', 'measuring', 'rolled_back'];
+
+export async function getSeoShipped(limit = 8): Promise<SeoShippedAction[]> {
+  const rows = await getSeoActions(SHIPPED_STATUSES.join(','), limit);
+  return (rows as Record<string, unknown>[])
+    .filter((r) => typeof r.status === 'string' && SHIPPED_STATUSES.includes(r.status))
+    .map((r) => ({
+      id: String(r.id ?? ''),
+      target_url: (r.target_url as string) ?? null,
+      mutation_type: (r.mutation_type as string) ?? null,
+      status: (r.status as string) ?? null,
+      created_at: (r.created_at as string) ?? null,
+      executed_at: (r.executed_at as string) ?? null,
+      outcome_clicks_delta: r.outcome_clicks_delta != null ? Number(r.outcome_clicks_delta) : null,
+    }));
 }

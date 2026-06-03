@@ -1,0 +1,59 @@
+# Claude Code task — wire the live database to /dashboard/seo (the Review / dossier experience)
+
+Connect the dashboard to the data that's now live in prod and render the governed page-dossier model (the prototype + `DESIGN_dashboard_redesign_review_dossier.md`). Repo: **nsd-platform-shell** (read-only governance lint applies — no inline writes; approve/reject via `lib/seoApi`).
+
+## What's already in the DB (Supabase prod `fssgkgyconuzukcwptvc`, analytics schema) — verified
+- **`seo_page_inventory`** — POPULATED: 1,638 `canonical_live` (1,464 products + 103 collections/sub-cats + 51 wholesale + core), 17 `lost` (/location/* 404s), 8 `excluded` (accessories + utility), 44 `pending_verification`. Columns incl. `url, content_type, status_class, in_sitemap, in_wp, in_gsc, gsc_impressions, gsc_top_query, gsc_best_position, http_status, exclude_reason`. This is the governance filter.
+- **`external_query_intelligence`** — live DataForSEO keyword value per normalized_query: `search_volume, cpc, keyword_difficulty, metrics_source` (+ GSC/Ads columns).
+- **`metrics_search_console_query_page_daily`** — GSC query×page demand.
+- **`seo_execution_candidate`** (gate_status='accepted') — the real, gate-verified recommendations (the Lane-1 actions). **`seo_gate_suppressed`** — withheld, with reasons.
+
+## Governance rule (non-negotiable)
+Every page surfaced as an optimization target MUST be `status_class='canonical_live'`. `lost` → its own restore/redirect queue; `excluded` → hidden; `pending_verification` → shown only with a "verify" flag, never as a confident target. No 404s as opportunities.
+
+## 1. Proxy read routes (app/api/proxy/seo/…, Node pg, read-only)
+
+### `GET /api/proxy/seo/portfolio` — Level 1 (page portfolio)
+Returns canonical_live + lost pages with demand + keyword value + bucket. Use this **validated** query (it ran clean on prod):
+```sql
+WITH pq AS (SELECT regexp_replace(page_url,'^https?://[^/]+','') path, query, sum(impressions) qi, round(avg(avg_position),1) qp
+            FROM analytics.metrics_search_console_query_page_daily GROUP BY 1,2),
+top AS (SELECT DISTINCT ON (path) path, query topq, qi, round(qp,0) qpos FROM pq ORDER BY path, qi DESC)
+SELECT i.url, i.content_type, i.status_class, i.gsc_impressions, i.gsc_best_position,
+       t.topq AS top_query, t.qi::int AS top_q_impr, t.qpos::int AS top_q_pos,
+       e.search_volume AS sv, e.cpc::numeric(10,2) AS cpc, e.keyword_difficulty::int AS kd, e.metrics_source
+FROM analytics.seo_page_inventory i
+LEFT JOIN top t ON t.path = regexp_replace(i.url,'^https?://[^/]+','')
+LEFT JOIN analytics.external_query_intelligence e ON e.normalized_query =
+  TRIM(BOTH FROM regexp_replace(lower(regexp_replace(regexp_replace(t.topq,'[^a-zA-Z0-9 ]','','g'),'\y(for|the|and|a)\y','','gi')),'\s+',' ','g'))
+WHERE i.status_class IN ('canonical_live','lost')
+ORDER BY i.gsc_impressions DESC NULLS LAST;
+```
+Bucket each row server- or client-side: `lost` (status_class='lost') · `win` (canonical_live AND top_q_pos BETWEEN 1 AND 30) · `strategic` (canonical_live AND top_q_pos > 30 or null) · `fix` (trailing-slash/duplicate of another canonical_live URL).
+
+### `GET /api/proxy/seo/page?url=` — Level 2 (one page's dossier)
+For the page: its top ~8 queries with demand + keyword value (join external_query_intelligence as above, parameterized by url — use a parameterized query, not string interpolation), its `seo_page_inventory` row, and its **gate-accepted candidates** from `seo_execution_candidate WHERE target_page_url=$1 AND gate_status='accepted'` (the real Lane-1 actions with evidence).
+
+### `GET /api/proxy/seo/suppressed` — keep existing (gate-suppressed audit).
+
+## 2. Review UI (app/dashboard/seo) — render the dossier model
+Match the prototype / design spec. Two levels:
+- **Level 1 portfolio:** pages grouped Lost / Win-now / Strategic / Fix. Card = URL + status pill + top query · impressions · position + keyword value line (`vol · KD · $cpc` from DataForSEO, or "no DataForSEO volume") + the one-line read. KPI strip on top (counts per bucket + lost impressions). Clicking a card → Level 2.
+- **Level 2 page dossier:** demand table (queries with real/discard read — flag competitor-brand/foreign/repair as discard), keyword target (primary), and **Recommended actions routed by lane**:
+  - **Lane 1 (engine drafts → approve):** the page's `seo_execution_candidate` gate-accepted rows (real), each with Approve/Reject via `lib/seoApi`.
+  - **Lane 2 (you execute in Rank Math):** lost-page redirect / canonical / noindex (derive from status_class + bucket).
+  - **Lane 3 (hand to SEO/PR):** off-page brief for authority-bound strategic pages (target keyword + position + why).
+- **Lost** pages render in their own queue (restore/redirect, intent-validated — never auto slug-match). **Excluded** hidden. **pending_verification** shown with a "verify live" flag.
+
+## 3. Governance / read-model
+- One backing source per screen; no screen reads staging or legacy tables. Replace the old summary/competitor-gaps reads where they bypassed the universe.
+- Writes only via `lib/seoApi` → `seo_execution_candidate` (draft-only). No inline POST in pages.
+- Honest empty/pending states; verified-vs-pending explicit.
+
+## 4. Forward-compatible
+When the **dossier-data layer** (`claude_code_prompt_dossier_data_layer.md`) lands and populates `seo_page_dossier` with ranked_actions (lane+executor) and keyword_targets, switch `/api/proxy/seo/page` to read that table directly (the UI contract is the same). Until then, assemble Level 2 from the live tables as above.
+
+## Acceptance
+- `/dashboard/seo` Review renders the page portfolio grouped by action, **only canonical_live pages as opportunities**; the 51 wholesale + 103 collections now appear; the `/location/*` set appears only in the Lost queue; accessories/utility never appear.
+- Each card shows live demand + DataForSEO keyword value; clicking opens the page dossier with its gate-accepted actions (Approve/Reject via lib/seoApi) routed into the three lanes.
+- `npm run build` clean (read-only lint passes); one backing source per screen; PR open.

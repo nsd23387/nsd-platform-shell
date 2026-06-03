@@ -35,6 +35,14 @@ export interface PortfolioPageRow {
   gsc_impressions: number | null;
   gsc_top_query: string | null;
   gsc_best_position: number | null;
+  // Top-query average position (NOT all-time best). This is the governed
+  // "position" surfaced in the UI and used for bucketing: best-ever position
+  // is misleading (a brand term can pin a page at pos 1 while its highest-
+  // demand query ranks ~46). top_query / top_q_impr describe the query the
+  // position belongs to. Source: analytics.metrics_search_console_query_page_daily.
+  top_query: string | null;
+  top_q_impr: number | null;
+  top_q_pos: number | null;
   has_rankmath_redirect: boolean;
   rankmath_redirect_target: string | null;
   http_status: number | null;
@@ -61,6 +69,25 @@ export async function GET() {
         GROUP BY 1
         HAVING COUNT(DISTINCT url) > 1
       ),
+      pq AS (
+        -- Per (page, query) demand from the GSC query×page rollup.
+        SELECT regexp_replace(page_url, '^https?://[^/]+', '') AS path,
+               query,
+               SUM(impressions) AS qi,
+               ROUND(AVG(avg_position), 1) AS qp
+        FROM analytics.metrics_search_console_query_page_daily
+        GROUP BY 1, 2
+      ),
+      top AS (
+        -- The single highest-demand query for each page, with its average
+        -- position. This (NOT gsc_best_position) is the governed position.
+        SELECT DISTINCT ON (path) path,
+               query AS topq,
+               qi,
+               ROUND(qp, 0) AS qpos
+        FROM pq
+        ORDER BY path, qi DESC
+      ),
       inv AS (
         SELECT
           i.url,
@@ -72,7 +99,8 @@ export async function GET() {
           i.has_rankmath_redirect,
           i.rankmath_redirect_target,
           i.http_status,
-          rtrim(regexp_replace(lower(i.url), '^https?://(www\\.)?', ''), '/') AS norm_path
+          rtrim(regexp_replace(lower(i.url), '^https?://(www\\.)?', ''), '/') AS norm_path,
+          regexp_replace(i.url, '^https?://[^/]+', '') AS path
         FROM analytics.seo_page_inventory i
         WHERE i.status_class IN ('canonical_live', 'lost', 'pending_verification')
       )
@@ -83,6 +111,9 @@ export async function GET() {
         inv.gsc_impressions,
         inv.gsc_top_query,
         inv.gsc_best_position::numeric AS gsc_best_position,
+        t.topq AS top_query,
+        t.qi::bigint AS top_q_impr,
+        t.qpos::int AS top_q_pos,
         inv.has_rankmath_redirect,
         inv.rankmath_redirect_target,
         inv.http_status,
@@ -93,8 +124,9 @@ export async function GET() {
           -- shown in Strategic with a needs_verify flag, never as Wins/Fix.
           WHEN inv.status_class = 'pending_verification' THEN 'strategic'
           WHEN d.norm_path IS NOT NULL THEN 'fix'
-          WHEN inv.gsc_best_position IS NOT NULL
-               AND inv.gsc_best_position BETWEEN 1 AND 30 THEN 'win'
+          -- Win = top-query avg position in 1..30 (NOT best-ever position).
+          WHEN t.qpos IS NOT NULL
+               AND t.qpos BETWEEN 1 AND 30 THEN 'win'
           ELSE 'strategic'
         END AS bucket,
         COALESCE(eqi.search_volume, eqi.ahrefs_search_volume) AS kw_volume,
@@ -103,6 +135,7 @@ export async function GET() {
         COALESCE(eqi.is_competitor_only, false) AS is_competitor_only
       FROM inv
       LEFT JOIN ts_dups d ON d.norm_path = inv.norm_path
+      LEFT JOIN top t ON t.path = inv.path
       LEFT JOIN analytics.external_query_intelligence eqi
         ON eqi.normalized_query = lower(trim(inv.gsc_top_query))
       ORDER BY inv.gsc_impressions DESC NULLS LAST
@@ -121,6 +154,9 @@ export async function GET() {
         gsc_impressions: r.gsc_impressions != null ? Number(r.gsc_impressions) : null,
         gsc_top_query: r.gsc_top_query,
         gsc_best_position: r.gsc_best_position != null ? Number(r.gsc_best_position) : null,
+        top_query: r.top_query ?? null,
+        top_q_impr: r.top_q_impr != null ? Number(r.top_q_impr) : null,
+        top_q_pos: r.top_q_pos != null ? Number(r.top_q_pos) : null,
         has_rankmath_redirect: r.has_rankmath_redirect,
         rankmath_redirect_target: r.rankmath_redirect_target,
         http_status: r.http_status != null ? Number(r.http_status) : null,
