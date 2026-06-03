@@ -31,6 +31,8 @@ import {
 import type { SeoCandidateDetail, PageDossier } from '../../../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, Pill, fmtInt, fmtPos, pathOf, mutationDisplay,
+  GateTransitionNote, KeywordTargetsSection, RoutedQueriesSection,
+  LaneRoutedActions, MeasurementPlan,
 } from '../../_shared';
 
 function Card({ children, style, tc }: { children: React.ReactNode; style?: React.CSSProperties; tc: Tc }) {
@@ -260,39 +262,27 @@ function ActionDetailContent() {
             </Card>
           </div>
 
-          {/* MEASUREMENT PLAN — honest, GSC-anchored */}
-          <Card tc={tc} style={{ marginBottom: space['4'] }}>
-            <Label tc={tc}>Expected outcomes &amp; measurement plan</Label>
-            <table style={{ width: '100%', fontFamily: fontFamily.body, fontSize: '13px', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${tc.border.default}`, textAlign: 'left' }}>
-                  <th style={{ padding: '8px 0', fontSize: '11px', fontWeight: fontWeight.semibold, color: tc.text.muted, textTransform: 'uppercase' }}>KPI</th>
-                  <th style={{ padding: '8px 0', fontSize: '11px', fontWeight: fontWeight.semibold, color: tc.text.muted, textTransform: 'uppercase', textAlign: 'right' }}>Baseline (live GSC)</th>
-                  <th style={{ padding: '8px 0', fontSize: '11px', fontWeight: fontWeight.semibold, color: tc.text.muted, textTransform: 'uppercase', textAlign: 'right' }}>Direction</th>
-                  <th style={{ padding: '8px 0', fontSize: '11px', fontWeight: fontWeight.semibold, color: tc.text.muted, textTransform: 'uppercase', textAlign: 'right' }}>Success threshold</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ['Top-query position', fmtPos(baseline.position), 'improve (lower)', 'No regression > 0.5'],
-                  ['Impressions', fmtInt(baseline.impressions), 'increase', 'Net positive vs baseline'],
-                  ['Clicks (top queries)', fmtInt(dossier?.demand?.reduce((s, d) => s + (d.clicks || 0), 0) ?? null), 'increase', 'Net positive vs baseline'],
-                ].map((r) => (
-                  <tr key={r[0]} style={{ borderBottom: `1px solid ${tc.border.subtle}` }}>
-                    <td style={{ padding: '10px 0', color: tc.text.primary }}>{r[0]}</td>
-                    <td style={{ padding: '10px 0', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{r[1]}</td>
-                    <td style={{ padding: '10px 0', textAlign: 'right', color: tc.text.muted }}>{r[2]}</td>
-                    <td style={{ padding: '10px 0', textAlign: 'right', color: tc.text.muted }}>{r[3]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{ display: 'flex', gap: space['4'], marginTop: space['3'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, flexWrap: 'wrap' }}>
-              <span>📅 Measurement window: <strong style={{ color: tc.text.primary }}>day 14 → day 42 after deploy</strong></span>
-              <span>🔁 {isInternalLink ? 'Internal-link changes are fully reversible in <1 min.' : 'This change is draft-only until executed downstream and is reversible.'}</span>
-              <span>ℹ️ Clicks baseline sums the page&apos;s top GSC queries (demand table), not every long-tail query.</span>
-            </div>
-          </Card>
+          {/* DOSSIER-BOUND CONTEXT — identical engine reasoning to Screen 1 */}
+          {dossier && (
+            <Card tc={tc} style={{ marginBottom: space['4'] }}>
+              <Label tc={tc}>Engine page dossier</Label>
+              <GateTransitionNote transitions={dossier.transitions} tc={tc} />
+              <KeywordTargetsSection meta={dossier.dossier} tc={tc} />
+              <RoutedQueriesSection meta={dossier.dossier} tc={tc} />
+              <LaneRoutedActions dossier={dossier} tc={tc} onDone={() => router.refresh()} readOnly />
+            </Card>
+          )}
+
+          {/* MEASUREMENT PLAN — honest, GSC-anchored (shared with Screen 1) */}
+          {dossier && (
+            <Card tc={tc} style={{ marginBottom: space['4'] }}>
+              <MeasurementPlan dossier={dossier} tc={tc} />
+              <div style={{ display: 'flex', gap: space['4'], marginTop: space['3'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, flexWrap: 'wrap' }}>
+                <span>🔁 {isInternalLink ? 'Internal-link changes are fully reversible in <1 min.' : 'This change is draft-only until executed downstream and is reversible.'}</span>
+                <span>ℹ️ Clicks baseline sums the page&apos;s top GSC queries (demand table), not every long-tail query.</span>
+              </div>
+            </Card>
+          )}
 
           {/* EVIDENCE + RISK */}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: space['4'] }}>

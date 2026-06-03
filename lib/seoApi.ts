@@ -958,12 +958,97 @@ export interface PageDossierCandidate {
   approval_status: string | null;
   execution_status: string | null;
   target_page_url: string | null;
+  // Engine re-gate signal: the candidate was re-surfaced for human re-review
+  // after a prior decision (e.g. demand shifted). Honest passthrough — null
+  // when the column is absent. lane/executor describe which of the three lanes
+  // the engine routed the candidate to.
+  regate_review_flag?: boolean | null;
+  lane?: number | null;
+  executor?: string | null;
+}
+
+// Dossier meta = the engine's per-page reasoning record (analytics.seo_page_dossier).
+// These are observed/derived signals, never fabricated projections. keyword_targets
+// is the engine's chosen primary + secondary keywords with real GSC position and
+// DataForSEO value; routed_queries is its own/route/discard routing decision per
+// query; ranked_actions is the engine's lane-routed action plan (lane 1 engine,
+// lane 2 Rank Math, lane 3 off-page). impact is a real measured impression count,
+// not a predicted lift.
+export interface PageDossierKeywordTarget {
+  keyword: string | null;
+  position: number | null;
+  volume: number | null;
+  kd: number | null;
+  cpc: number | null;
+  confidence: number | null;
+  target_score: number | null;
+  on_intent: boolean | null;
+  impressions: number | null;
+}
+
+export interface PageDossierKeywordTargets {
+  primary: PageDossierKeywordTarget | null;
+  secondary: PageDossierKeywordTarget[];
+}
+
+export interface PageDossierRoutedQuery {
+  query: string;
+  decision: string | null;
+  reason: string | null;
+  target_page: string | null;
+}
+
+export interface PageDossierRankedAction {
+  lane: number | null;
+  executor: string | null;
+  action: string | null;
+  change: string | null;
+  speed: string | null;
+  status: string | null;
+  score: number | null;
+  impact: number | null;
+}
+
+export interface PageDossierState {
+  h1?: string | null;
+  meta?: string | null;
+  title?: string | null;
+  links_in?: number | null;
+  links_out?: number | null;
+  schema_type?: string | null;
+  schema_present?: boolean | null;
+  cannibalization?: unknown;
+  [key: string]: unknown;
+}
+
+export interface PageDossierMeta {
+  intent: string | null;
+  priority: string | null;
+  status_class: string | null;
+  content_type: string | null;
+  generated_at: string | null;
+  state: PageDossierState | null;
+  keyword_targets: PageDossierKeywordTargets | null;
+  routed_queries: PageDossierRoutedQuery[];
+  ranked_actions: PageDossierRankedAction[];
+}
+
+export interface PageGateTransition {
+  candidate_id: string;
+  from_status: string | null;
+  to_status: string | null;
+  reason: string[];
+  gated_at: string | null;
 }
 
 export interface PageDossier {
   page: PageDossierPage;
   demand: PageDossierDemandRow[];
   candidates: PageDossierCandidate[];
+  // Optional because a page may exist in inventory but not (yet) have an engine
+  // dossier record. Null/empty is an honest "engine has not analyzed this page".
+  dossier?: PageDossierMeta | null;
+  transitions?: PageGateTransition[];
 }
 
 export async function getSeoPageDossier(url: string): Promise<PageDossier> {
@@ -1145,4 +1230,29 @@ export async function getSeoShipped(limit = 8): Promise<SeoShippedAction[]> {
       executed_at: (r.executed_at as string) ?? null,
       outcome_clicks_delta: r.outcome_clicks_delta != null ? Number(r.outcome_clicks_delta) : null,
     }));
+}
+
+// =============================================================================
+// Off-page authority briefs (Lane 3) — analytics.seo_offpage_brief
+// Read-only. These are the engine's authority-bound pages: ones where on-page
+// is necessary but not sufficient and backlinks / digital PR are required to
+// break into the top 10. Real GSC position + impressions + DataForSEO value;
+// no fabricated link projections. Empty when the engine has produced no briefs.
+// =============================================================================
+
+export interface SeoOffpageBrief {
+  page_url: string;
+  target_keyword: string | null;
+  search_volume: number | null;
+  current_position: number | null;
+  impressions: number | null;
+  keyword_difficulty: number | null;
+  reason: string | null;
+  generated_at: string | null;
+}
+
+export async function getSeoOffpageBriefs(url?: string): Promise<SeoOffpageBrief[]> {
+  const qs = url ? `?url=${encodeURIComponent(url)}` : '';
+  const data = await seoFetch<{ data: SeoOffpageBrief[] }>(`/api/proxy/seo/offpage${qs}`);
+  return data.data ?? [];
 }

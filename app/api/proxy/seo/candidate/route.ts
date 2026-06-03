@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
               proposed_value, current_value_snapshot, evidence_summary, gate_reasons,
               gate_status, opportunity_score::numeric AS opportunity_score, opportunity_urgency,
               confidence_tier, source_confidence, approval_status, execution_status,
-              target_page_url, evidence
+              target_page_url, regate_review_flag, lane, executor, evidence
        FROM analytics.seo_execution_candidate
        WHERE candidate_id = $1
          AND gate_status = 'accepted'
@@ -70,6 +70,9 @@ export async function GET(req: NextRequest) {
       approval_status: r.approval_status,
       execution_status: r.execution_status,
       target_page_url: r.target_page_url,
+      regate_review_flag: r.regate_review_flag ?? null,
+      lane: r.lane != null ? Number(r.lane) : null,
+      executor: r.executor ?? null,
       evidence: r.evidence ?? null,
     };
 
