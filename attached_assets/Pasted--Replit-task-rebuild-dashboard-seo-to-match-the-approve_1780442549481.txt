@@ -1,0 +1,93 @@
+# Replit task — rebuild /dashboard/seo to match the approved mockups (Command Center + Action Card)
+
+The current live `/dashboard/seo` does NOT match the two mockups we approved. The data wiring is mostly correct, but the **UI is wrong** — it shipped as a plain portfolio grid with bucket tiles instead of the **SEO Command Center** + **before/after Action Card** in the mockups. Rebuild the two screens to match the mockups exactly. **Attach the two mockup images to this Replit session** — they are the visual source of truth; the text/numbers in them are illustrative placeholders, bind real data, don't hardcode the sample values.
+
+Repo: **nsd-platform-shell** (Next.js, read-only governance lint — no inline DB writes; approve/reject only via `lib/seoApi`).
+
+---
+
+## Non-negotiable data & governance rules (do not regress these — the wiring already does most of this correctly)
+1. **Only `status_class='canonical_live'` pages are ever shown as optimization targets.** `lost` → restore/redirect queue only; `excluded` → never shown; `pending_verification` → only with a "verify" flag. Read everything through `analytics.seo_page_inventory` (the Page Universe). No screen may read a legacy table that bypasses the inventory.
+2. **Position = top-query average position, NOT best-ever position.** The portfolio API currently returns `gsc_best_position` (all-time min = 1 for the homepage) and buckets off it — this is a bug. The homepage ranks ~46 for "neon signs," so it must read as **strategic**, not "win." Use this validated query (it runs clean on prod) for the per-page top query + its avg position (`top_q_pos`):
+   ```sql
+   WITH pq AS (SELECT regexp_replace(page_url,'^https?://[^/]+','') path, query,
+                      sum(impressions) qi, round(avg(avg_position),1) qp
+               FROM analytics.metrics_search_console_query_page_daily GROUP BY 1,2),
+   top AS (SELECT DISTINCT ON (path) path, query topq, qi, round(qp,0) qpos
+           FROM pq ORDER BY path, qi DESC)
+   SELECT i.url, i.content_type, i.status_class, i.gsc_impressions,
+          t.topq AS top_query, t.qi::int AS top_q_impr, t.qpos::int AS top_q_pos,
+          e.search_volume AS kw_volume, e.cpc::numeric(10,2) AS kw_cpc,
+          e.keyword_difficulty::int AS kw_difficulty, e.metrics_source
+   FROM analytics.seo_page_inventory i
+   LEFT JOIN top t ON t.path = regexp_replace(i.url,'^https?://[^/]+','')
+   LEFT JOIN analytics.external_query_intelligence e ON e.normalized_query =
+     TRIM(BOTH FROM regexp_replace(lower(regexp_replace(regexp_replace(t.topq,'[^a-zA-Z0-9 ]','','g'),'\y(for|the|and|a)\y','','gi')),'\s+',' ','g'))
+   WHERE i.status_class IN ('canonical_live','lost')
+   ORDER BY i.gsc_impressions DESC NULLS LAST;
+   ```
+   Buckets: `lost`=status lost · `win`=canonical_live AND `top_q_pos` 1–30 · `strategic`=canonical_live AND (`top_q_pos`>30 OR null) · `fix`=trailing-slash/dupe of another canonical_live URL.
+3. **Draft-only actuation.** Approve/Defer/Modify write to `seo_execution_candidate` via `lib/seoApi` — never publish to WordPress directly, never auto-approve. No inline POST in pages.
+4. **Honest empty/pending states.** Show verified-vs-pending explicitly; if a metric is missing say so (e.g. "no DataForSEO volume"), don't fabricate.
+
+---
+
+## SCREEN 1 — "SEO Command Center" (route `/dashboard/seo`, replaces the current portfolio grid)
+Match mockup #1. Top to bottom:
+
+**A. Header bar.** Title "SEO Command Center". Right side: secondary button **"Diagnose a URL"** (opens a single-URL dossier lookup) and primary button **"Approve Next N (X)"** where X = count of high-confidence gate-accepted candidates ready for batch approval.
+
+**B. KPI hero + trend chart (left, ~2/3 width).** A large headline metric (total clicks or impressions for the selected range) with its delta vs prior period, over an area/line **trend chart**. Range toggle: **7d / 14d / 30d / Custom** with the active date range labeled. Source: `metrics_search_console_query_page_daily` aggregated by date.
+
+**C. "DATA FRESHNESS" card (right, ~1/3 width).** One row per source — **Google Search Console, GA4, Google Ads, Cluster engine, Rank Math** — each with a color-coded freshness pill (last-ingest age, green/amber/red). Bind to the real last-loaded timestamps for each source; if a source has no recent load, show it amber/red, don't fake green.
+
+**D. Data-quality alert banner (yellow, under the chart).** Surface the known **GSC anonymized-query caveat**: the query×page table undercounts clicks because Google suppresses low-volume queries, so totals here are a floor, not the true total. Include a "see detail" link. (This is a real, known data issue — keep it visible, don't hide it.)
+
+**E. "DETECTIONS" — the ranked recommendation list (the core of the screen).** Numbered rows #1..#N, each row:
+- a color-coded **category tag** (e.g. TITLE TAG / INTERNAL LINK / SCHEMA / REDIRECT),
+- bold **title + target page** (e.g. "Rewrite title tag — /for-businesses/"),
+- a one-line rationale,
+- columns: **EST. IMPACT** (realistic, intent-qualified demand, e.g. "+XXX sessions/mo"), **EFFORT** (Low/Med/High), **SCORE**,
+- inline actions **Approve** / **Defer**.
+Bind to **gate-accepted candidates** (`seo_execution_candidate WHERE gate_status='accepted'`), ranked by score, **targets filtered to canonical_live only**. Below the list: "View all N recommendations →". Clicking a row opens **Screen 2** (the Action Card).
+
+**F. "Competitors for this group" table (bottom).** Domain · share-of-voice · overlap, for the page group in view. Read from the existing competitor data source, filtered through the universe (no ungoverned global dump).
+
+> The legacy bucket tiles (Wins/Strategic/Fix/Lost) can remain as a compact summary strip, but the **Detections list is the primary content** — match the mockup, don't lead with the plain grid.
+
+---
+
+## SCREEN 2 — "Action Card" detail (route `/dashboard/seo/action/[id]` or a modal, opened from a Detection)
+Match mockup #2. Title = the recommendation (e.g. "Rewrite title tag — /for-businesses/") with breadcrumb. Right side: **Export**, **Modify**, primary **"Approve & Queue"**.
+
+**A. "WHY WE'RE RECOMMENDING THIS"** — 2–4 evidence bullets from the candidate's evidence payload (e.g. page ranks pos N for query X with Y impressions; current CTR vs benchmark; competitors include the keyword in their title).
+
+**B. BEFORE / AFTER comparison cards.**
+- **BEFORE** (red) "Current": the live title/meta/H1 (whichever this action changes) + current metrics: avg position, impressions, CTR, est. monthly visits.
+- **AFTER** (green) "Proposed": the engine-drafted replacement + projected metrics.
+Pull current values from GSC + the page's on-page state; pull the proposed change from the candidate.
+
+**C. "EXPECTED OUTCOME & MEASUREMENT PLAN" table.** Rows: Clicks/week, CTR, Avg position, Conversions. Columns: **Baseline · Target · Time horizon · How measured**. Footnote the measurement window (e.g. "compare day 14 → day 42 after deploy"). Conversions must use Ads conversion **count**, not value (NSD's quote-form conversions are $0-valued).
+
+**D. "SUPPORTING EVIDENCE" (left) + "PER-PAGE / ADS COMPETING" (right)** — the linked queries, competitor pages, and Ads terms behind the recommendation.
+
+**Approve & Queue** / **Modify** → write the draft/decision to `seo_execution_candidate` via `lib/seoApi` (draft-only). Show a "queued for WordPress draft — pending human publish" state; never publish directly.
+
+---
+
+## Navigation / IA — consolidate to 4 areas, retire the legacy pages
+The old 15-item nav and its ungoverned pages are still live alongside the new screens (Page Performance, SERP Features, Competitor Deep Dive, All Recommendations, Execution Log, Content Pipeline, Internal Links, Schema Markup, Suppressed Audit, Revenue Attribution, Content Scores, Outcomes, Signals). Collapse to:
+- **Command Center** (`/dashboard/seo`) — Screens 1 & 2 above. The dossier/Detections subsume All Recommendations, Internal Links, Schema, Content Pipeline, Execution Log.
+- **Performance** (`/dashboard/seo/performance`) — page/query performance, filtered to canonical_live.
+- **Competitors** (`/dashboard/seo/competitors`) — SERP features + competitor deep dive merged.
+- **Results** (`/dashboard/seo/results`) — revenue attribution + outcomes + content scores merged.
+Delete the legacy nav entries AND redirect the retired routes (301 in next.config) to their new home so the old URLs aren't reachable: `/actions`,`/internal-links`,`/schema`,`/content`,`/execution-log` → `/dashboard/seo`; `/pages` → `/performance`; `/serp-features`,`/competitive` → `/competitors`; `/attribution`,`/outcomes`,`/content-scores` → `/results`; `/suppressed` → a tab under Command Center or Results. Remove the old ungoverned "Top 50 internal links" and "All Recommendations" reads entirely.
+
+---
+
+## Acceptance
+- `/dashboard/seo` renders the **Command Center** matching mockup #1 (header + Approve-Next, KPI hero + trend + range toggle, Data Freshness card bound to real ingest times, GSC anonymized-query banner, ranked **Detections** list with Approve/Defer, competitors table). Detections bind to gate-accepted candidates with canonical_live targets only.
+- Clicking a detection opens the **Action Card** matching mockup #2 (Why / BEFORE-AFTER / Measurement Plan / Supporting Evidence) with Approve & Queue writing draft-only via `lib/seoApi`.
+- Position everywhere = `top_q_pos`; homepage `/` reads ~46 for "neon signs" and buckets **strategic**, not win; KPI/bucket counts recomputed.
+- Nav shows exactly the 4 areas; every legacy path redirects to its new home; no ungoverned legacy page reachable.
+- `npm run build` clean (read-only lint passes); PR open with before/after screenshots of both screens vs the mockups.

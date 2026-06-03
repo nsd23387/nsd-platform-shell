@@ -3,12 +3,37 @@ const nextConfig = {
   reactStrictMode: true,
   allowedDevOrigins: ['*'],
   async redirects() {
+    // Retired SEO routes 301 → the consolidated four-area IA (Command Center,
+    // Performance, Competitors, Results). Keeps old bookmarks/links resolving.
+    const seoRetired = [
+      ['pages', 'performance'],
+      ['content', 'performance'],
+      ['content-scores', 'performance'],
+      ['internal-links', 'performance'],
+      ['schema', 'performance'],
+      ['clusters', 'performance'],
+      ['opportunities', 'performance'],
+      ['serp-features', 'competitors'],
+      ['competitive', 'competitors'],
+      ['backlinks', 'competitors'],
+      ['actions', ''],
+      ['execution-log', 'results'],
+      ['suppressed', 'results'],
+      ['attribution', 'results'],
+      ['outcomes', 'results'],
+      ['signals', 'results'],
+    ].map(([from, to]) => ({
+      source: `/dashboard/seo/${from}`,
+      destination: to ? `/dashboard/seo/${to}` : '/dashboard/seo',
+      permanent: true,
+    }));
     return [
       {
         source: '/',
         destination: '/sales-engine/home',
         permanent: false,
       },
+      ...seoRetired,
     ];
   },
   async rewrites() {

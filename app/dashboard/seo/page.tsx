@@ -1,7 +1,7 @@
 'use client';
 
 // =============================================================================
-// SEO Command Center — Review (page portfolio + page dossier)
+// SEO Command Center — Screen 1 (overview / "do this next")
 // Governance lock: this page is read-first. The ONLY write paths are the
 // existing engine candidate approve/reject endpoints (Lane 1), routed through
 // approveEngineCandidate / rejectEngineCandidate -> /api/proxy/seo/recommendations.
@@ -10,1204 +10,871 @@
 // analytics.external_query_intelligence. Only canonical_live pages are surfaced
 // as optimization targets; lost pages live in the Lost queue; pending pages
 // carry a verify flag; excluded pages are never shown.
+//
+// Data truthfulness: every number on this screen is a live read. We do NOT
+// fabricate predicted lift, share-of-voice, or velocity figures. Detection
+// "impact" is the target page's real GSC demand (impressions @ position), not a
+// modelled click projection.
 // =============================================================================
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../hooks/useRBAC';
 import { AccessDenied } from '../../../components/dashboard';
 import { useThemeColors } from '../../../hooks/useThemeColors';
 import { fontFamily, fontWeight } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
-import { violet } from '../../../design/tokens/colors';
 import {
-  getSeoPortfolio, getSeoPageDossier, getSeoCandidateQueue,
+  getSeoTimeseries, getGscPipelineHealth, getSeoCandidateQueue,
+  getSeoPortfolio, getSeoCompetitorGaps,
   approveEngineCandidate, rejectEngineCandidate,
+  getCompetitiveVelocitySummary, getCompetitiveChanges, getSeoShipped,
 } from '../../../lib/seoApi';
 import type {
-  PortfolioPage, PortfolioBucket, PageDossier, PageDossierCandidate,
+  PortfolioPage, PortfolioBucket, PageDossierCandidate,
+  SeoTimeseriesResponse, GscPipelineHealth, SeoCompetitorGap,
+  SeoTimeseriesPoint, CompetitiveVelocitySummary, CompetitivePageChange,
+  SeoShippedAction,
 } from '../../../lib/seoApi';
+import {
+  PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
+  fmtInt, fmtPos, pathOf, PageDossierDrawer,
+} from './_shared';
 
 // -----------------------------------------------------------------------------
-// Brand accents not present in the global theme tokens.
+// Section header
 // -----------------------------------------------------------------------------
-const PALETTE = {
-  violet: violet[500],
-  violetSoft: '#ede9fe',
-  good: '#065f46', goodSoft: '#d1fae5',
-  bad: '#991b1b', badSoft: '#fee2e2',
-  warn: '#92400e', warnSoft: '#fef3c7',
-  info: '#1e40af', infoSoft: '#dbeafe',
-};
-const monoStack = '"JetBrains Mono", "SF Mono", Menlo, Consolas, monospace';
-
-type Tc = ReturnType<typeof useThemeColors>;
-type ToneKey = 'good' | 'bad' | 'warn' | 'info' | 'violet' | 'neutral';
-
-function toneStyle(tone: ToneKey, tc: Tc) {
-  switch (tone) {
-    case 'good':   return { bg: PALETTE.goodSoft,   fg: PALETTE.good };
-    case 'bad':    return { bg: PALETTE.badSoft,    fg: PALETTE.bad };
-    case 'warn':   return { bg: PALETTE.warnSoft,   fg: PALETTE.warn };
-    case 'info':   return { bg: PALETTE.infoSoft,   fg: PALETTE.info };
-    case 'violet': return { bg: PALETTE.violetSoft, fg: PALETTE.violet };
-    default:       return { bg: tc.background.muted, fg: tc.text.muted };
-  }
-}
-
-function Pill({ children, tone, tc }: { children: React.ReactNode; tone: ToneKey; tc: Tc }) {
-  const s = toneStyle(tone, tc);
+function SectionTitle({ children, sub, right, tc }: { children: React.ReactNode; sub?: string; right?: React.ReactNode; tc: Tc }) {
   return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: 999,
-      fontSize: '11px', fontWeight: fontWeight.medium, background: s.bg, color: s.fg,
-      fontFamily: fontFamily.body, whiteSpace: 'nowrap',
-    }}>
-      {children}
-    </span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: space['3'], gap: space['3'], flexWrap: 'wrap' }}>
+      <div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>{children}</div>
+        {sub && <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px' }}>{sub}</div>}
+      </div>
+      {right}
+    </div>
   );
 }
 
-// -----------------------------------------------------------------------------
-// Bucket presentation metadata.
-// -----------------------------------------------------------------------------
-const BUCKETS: { key: PortfolioBucket; label: string; tone: ToneKey; blurb: string }[] = [
-  { key: 'win',       label: 'Wins',           tone: 'good',   blurb: 'Live pages ranking 1–30 — defend and lift CTR' },
-  { key: 'strategic', label: 'Strategic',      tone: 'info',   blurb: 'Live pages ranking >30 or unranked — earn position' },
-  { key: 'fix',       label: 'Fix',            tone: 'warn',   blurb: 'Duplicate / canonicalization issues to resolve' },
-  { key: 'lost',      label: 'Lost queue',     tone: 'bad',    blurb: 'Pages no longer live — restore or 301 redirect' },
-];
-
-// How many cards to paint per bucket before requiring a "Show more" click.
-const PAGE_SIZE = 36;
-
-function bucketTone(b: PortfolioBucket): ToneKey {
-  return BUCKETS.find(x => x.key === b)?.tone ?? 'neutral';
-}
-
-function statusTone(statusClass: string): ToneKey {
-  if (statusClass === 'canonical_live') return 'good';
-  if (statusClass === 'lost') return 'bad';
-  return 'warn';
-}
-
-// Deterministic one-line "read" for a portfolio card — what to do with this page.
-function cardRead(p: PortfolioPage): string {
-  const q = p.gsc_top_query ? `“${p.gsc_top_query}”` : 'its target query';
-  switch (p.bucket) {
-    case 'lost':
-      return `HTTP ${p.http_status ?? '404'} — restore or 301 redirect to the closest live page.`;
-    case 'fix':
-      return 'Duplicate / canonical issue — consolidate signals to the primary URL.';
-    case 'win':
-      return `Ranking ~${fmtPos(p.gsc_best_position)} for ${q} — defend and lift CTR.`;
-    default:
-      return p.gsc_best_position == null
-        ? `Not yet ranking for ${q} — earn position.`
-        : `Position ~${fmtPos(p.gsc_best_position)} for ${q} — earn position.`;
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Formatting helpers.
-// -----------------------------------------------------------------------------
-const fmtInt = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('en-US'));
-const fmtPos = (n: number | null | undefined) => (n == null ? '—' : n.toFixed(1));
-const fmtMoney = (n: number | null | undefined) => (n == null ? '—' : `$${n.toFixed(2)}`);
-
-function pathOf(url: string): string {
-  try {
-    const u = new URL(url);
-    return u.pathname + (u.search || '');
-  } catch {
-    return url.replace(/^https?:\/\/[^/]+/, '') || url;
-  }
-}
-
-// Render `text` with every case-insensitive occurrence of `term` wrapped in a
-// subtle highlight mark. Returns the plain string when there is no active term
-// (or no match) so non-searching renders stay untouched.
-function highlightMatch(text: string, term: string): React.ReactNode {
-  const needle = term.trim();
-  if (!needle) return text;
-  const lowerText = text.toLowerCase();
-  const lowerNeedle = needle.toLowerCase();
-  const parts: React.ReactNode[] = [];
-  let from = 0;
-  let idx = lowerText.indexOf(lowerNeedle, from);
-  if (idx === -1) return text;
-  let key = 0;
-  while (idx !== -1) {
-    if (idx > from) parts.push(text.slice(from, idx));
-    parts.push(
-      <mark
-        key={key++}
-        style={{ background: PALETTE.warnSoft, color: 'inherit', borderRadius: '2px', padding: '0 1px' }}
-      >
-        {text.slice(idx, idx + needle.length)}
-      </mark>,
-    );
-    from = idx + needle.length;
-    idx = lowerText.indexOf(lowerNeedle, from);
-  }
-  if (from < text.length) parts.push(text.slice(from));
-  return parts;
+function Card({ children, style, tc }: { children: React.ReactNode; style?: React.CSSProperties; tc: Tc }) {
+  return (
+    <div style={{ background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, padding: space['5'], ...style }}>
+      {children}
+    </div>
+  );
 }
 
 // =============================================================================
-// Level-2 — Page Dossier drawer
+// Momentum — real GSC click momentum (7d-over-7d, 30d-over-30d)
+// Derived entirely from one live /timeseries read. We sum equal-length windows
+// of real daily clicks; a delta is only shown when a FULL prior window exists,
+// so we never compare against a partial history or fabricate a trend.
 // =============================================================================
+type MomentumWindow = {
+  label: string;
+  curSum: number;
+  priorSum: number;
+  deltaPct: number | null;
+  full: boolean;
+  haveDays: number;
+  needDays: number;
+};
 
-function lane2Suggestion(d: PageDossier): { title: string; body: string } {
-  const p = d.page;
-  const q = p.gsc_top_query || 'the page’s priority query';
-  switch (p.status_class) {
-    case 'lost':
-      return {
-        title: 'Restore or redirect (Rank Math)',
-        body: p.rankmath_redirect_target
-          ? `A redirect to ${p.rankmath_redirect_target} is already configured — verify it resolves and is the closest live match.`
-          : `Page returns HTTP ${p.http_status ?? '404'}. Add a 301 in Rank Math to the closest live page, or restore the URL if demand justifies it.`,
-      };
-    default:
-      break;
-  }
-  if (p.has_rankmath_redirect) {
-    return {
-      title: 'Resolve duplicate / canonical (Rank Math)',
-      body: `This URL has a Rank Math redirect (${p.rankmath_redirect_target ?? 'target set'}). Confirm the canonical primary URL and consolidate signals to it.`,
-    };
-  }
-  if (p.gsc_best_position != null && p.gsc_best_position <= 30) {
-    return {
-      title: 'Improve CTR (Rank Math)',
-      body: `Ranking ~${fmtPos(p.gsc_best_position)} for "${q}". Sharpen the SEO title & meta description in Rank Math to win more clicks at the current position.`,
-    };
-  }
-  return {
-    title: 'Strengthen on-page (Rank Math)',
-    body: `Position ${p.gsc_best_position == null ? 'not yet ranking' : `~${fmtPos(p.gsc_best_position)}`} for "${q}". Expand on-page content depth and tighten the title/H1 around the target intent before chasing links.`,
-  };
+function computeMomentum(series: SeoTimeseriesPoint[], n: number, label: string): MomentumWindow {
+  const clicks = series.map((p) => p.clicks ?? 0);
+  const cur = clicks.slice(-n);
+  const prior = clicks.slice(-2 * n, -n);
+  const curSum = cur.reduce((a, b) => a + b, 0);
+  const priorSum = prior.reduce((a, b) => a + b, 0);
+  const full = cur.length === n && prior.length === n;
+  const deltaPct = full && priorSum > 0 ? ((curSum - priorSum) / priorSum) * 100 : null;
+  return { label, curSum, priorSum, deltaPct, full, haveDays: clicks.length, needDays: 2 * n };
 }
 
-function lane3Applicable(d: PageDossier): boolean {
-  const p = d.page;
-  // Off-page authority work matters most for live, indexable pages that are
-  // stuck outside the top 10 — i.e. authority-bound rather than content-bound.
-  if (p.status_class !== 'canonical_live') return false;
-  if (p.gsc_best_position == null) return true;
-  return p.gsc_best_position > 10;
+function MomentumRow({ w, tc }: { w: MomentumWindow; tc: Tc }) {
+  const up = w.deltaPct != null && w.deltaPct >= 0;
+  const tone: ToneKey = w.deltaPct == null ? 'neutral' : up ? 'good' : 'bad';
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: `${space['3']} 0`, borderTop: `1px solid ${tc.border.subtle}` }} data-testid={`momentum-row-${w.label}`}>
+      <div>
+        <div style={{ fontFamily: monoStack, fontSize: '24px', color: tc.text.primary, lineHeight: 1.1 }} data-testid={`momentum-clicks-${w.label}`}>{fmtInt(w.curSum)}</div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '2px' }}>{w.label} clicks</div>
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        {w.deltaPct == null ? (
+          <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }} data-testid={`momentum-delta-${w.label}`}>
+            {w.full ? 'no prior clicks' : `building history (${w.haveDays}/${w.needDays}d)`}
+          </span>
+        ) : (
+          <Pill tone={tone} tc={tc}>
+            {up ? '▲' : '▼'} {Math.abs(w.deltaPct).toFixed(0)}% vs prior {w.label}
+          </Pill>
+        )}
+      </div>
+    </div>
+  );
 }
 
-function CandidateCard({
-  c, tc, onDone,
-}: {
-  c: PageDossierCandidate;
-  tc: Tc;
-  onDone: () => void;
-}) {
-  const [busy, setBusy] = useState<null | 'approve' | 'reject'>(null);
-  const [done, setDone] = useState<null | 'approved' | 'rejected'>(null);
-  const [err, setErr] = useState<string | null>(null);
+function MomentumCard({ tc }: { tc: Tc }) {
+  const [series, setSeries] = useState<SeoTimeseriesPoint[] | null>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    getSeoTimeseries(60)
+      .then((r) => { if (alive) setSeries(r.series ?? []); })
+      .catch(() => { if (alive) setErr(true); });
+    return () => { alive = false; };
+  }, []);
 
-  const pending = c.approval_status === 'pending' && !done;
-
-  async function act(kind: 'approve' | 'reject') {
-    setBusy(kind); setErr(null);
-    try {
-      if (kind === 'approve') {
-        await approveEngineCandidate({
-          candidate_id: c.candidate_id,
-          opportunity_id: c.opportunity_id ?? undefined,
-          proposed_value: c.proposed_value ?? undefined,
-          target_page_url: c.target_page_url ?? undefined,
-        });
-        setDone('approved');
-      } else {
-        await rejectEngineCandidate({
-          candidate_id: c.candidate_id,
-          opportunity_id: c.opportunity_id ?? undefined,
-        });
-        setDone('rejected');
-      }
-      onDone();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Action failed');
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  const statusLabel = done ?? c.approval_status ?? 'pending';
-  const statusTone: ToneKey = statusLabel === 'approved' ? 'good' : statusLabel === 'rejected' ? 'bad' : 'warn';
+  const windows = useMemo(() => {
+    if (!series) return null;
+    return [computeMomentum(series, 7, '7d'), computeMomentum(series, 30, '30d')];
+  }, [series]);
 
   return (
-    <div
-      data-testid={`card-candidate-${c.candidate_id}`}
-      style={{
-        border: `1px solid ${tc.border.default}`, borderRadius: radius.md,
-        padding: space['4'], background: tc.background.surface, marginBottom: space['3'],
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: space['3'], alignItems: 'flex-start' }}>
+    <Card tc={tc} style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>Momentum</div>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px', marginBottom: space['1'] }}>Real GSC clicks, period over equal prior period</div>
+      {err && <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.bad, paddingTop: space['3'] }} data-testid="momentum-error">Timeseries unavailable.</div>}
+      {!err && !windows && <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, paddingTop: space['3'] }} data-testid="momentum-loading">Loading momentum…</div>}
+      {!err && windows && windows.map((w) => <MomentumRow key={w.label} w={w} tc={tc} />)}
+    </Card>
+  );
+}
+
+// =============================================================================
+// Recently approved / shipped — read-only list of real engine actions.
+// No fabricated click deltas (only engine-measured deltas are shown) and no
+// rollback write — this surface is read-only.
+// =============================================================================
+function timeAgo(iso: string | null): string {
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '—';
+  const days = Math.floor((Date.now() - t) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return '1d ago';
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? '1mo ago' : `${months}mo ago`;
+}
+
+function shippedTone(status: string | null): ToneKey {
+  switch (status) {
+    case 'published': return 'good';
+    case 'measuring': return 'info';
+    case 'executing': return 'violet';
+    case 'rolled_back': return 'bad';
+    case 'approved': return 'warn';
+    default: return 'neutral';
+  }
+}
+
+function ShippedCard({ tc }: { tc: Tc }) {
+  const [items, setItems] = useState<SeoShippedAction[] | null>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    getSeoShipped(8)
+      .then((r) => { if (alive) setItems(r); })
+      .catch(() => { if (alive) setErr(true); });
+    return () => { alive = false; };
+  }, []);
+
+  return (
+    <Card tc={tc} style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: `${space['5']} ${space['5']} ${space['3']}` }}>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>Recently approved &amp; shipped</div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px' }}>Real engine actions — measured deltas only, no projections</div>
+      </div>
+      {err && <div style={{ padding: `0 ${space['5']} ${space['5']}`, fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.bad }} data-testid="shipped-error">Action feed unavailable.</div>}
+      {!err && !items && <div style={{ padding: `0 ${space['5']} ${space['5']}`, fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }} data-testid="shipped-loading">Loading…</div>}
+      {!err && items && items.length === 0 && (
+        <div style={{ padding: `0 ${space['5']} ${space['5']}`, fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }} data-testid="shipped-empty">
+          No actions approved or shipped yet — approvals from “Do this next” will appear here.
+        </div>
+      )}
+      {!err && items && items.length > 0 && (
+        <div>
+          {items.map((it) => (
+            <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: space['3'], padding: `${space['3']} ${space['5']}`, borderTop: `1px solid ${tc.border.subtle}` }} data-testid={`shipped-row-${it.id}`}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary, fontWeight: fontWeight.medium }}>{(it.mutation_type ?? 'action').replace(/_/g, ' ')}</div>
+                <div style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={it.target_url ?? ''}>{it.target_url ? pathOf(it.target_url) : '—'}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], flexShrink: 0 }}>
+                {it.outcome_clicks_delta != null && (
+                  <span style={{ fontFamily: monoStack, fontSize: '12px', color: it.outcome_clicks_delta >= 0 ? PALETTE.good : PALETTE.bad }} data-testid={`shipped-delta-${it.id}`}>
+                    {it.outcome_clicks_delta >= 0 ? '+' : ''}{fmtInt(it.outcome_clicks_delta)} clicks
+                  </span>
+                )}
+                <Pill tone={shippedTone(it.status)} tc={tc}>{(it.status ?? 'unknown').replace(/_/g, ' ')}</Pill>
+                <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, minWidth: 56, textAlign: 'right' }}>{timeAgo(it.executed_at ?? it.created_at)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// =============================================================================
+// Competitor content velocity — governed competitive feed (read-only).
+// Headline from /summary (defined contract); per-competitor new/refreshed from
+// /changes grouped by domain. No fabricated threat scores — only the producer's
+// real change_type counts. Honest empty state until the first crawl lands.
+// =============================================================================
+function CompetitorVelocityCard({ tc }: { tc: Tc }) {
+  const [summary, setSummary] = useState<CompetitiveVelocitySummary | null>(null);
+  const [changes, setChanges] = useState<CompetitivePageChange[] | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([getCompetitiveVelocitySummary(), getCompetitiveChanges(200)])
+      .then(([s, c]) => { if (alive) { setSummary(s); setChanges(c); } })
+      .finally(() => { if (alive) setLoaded(true); });
+    return () => { alive = false; };
+  }, []);
+
+  const perCompetitor = useMemo(() => {
+    if (!changes) return [];
+    const map = new Map<string, { name: string; domain: string; added: number; refreshed: number }>();
+    for (const ch of changes) {
+      const key = ch.competitor_domain || ch.competitor_name || 'unknown';
+      const entry = map.get(key) ?? { name: ch.competitor_name || key, domain: ch.competitor_domain || '', added: 0, refreshed: 0 };
+      if (ch.change_type === 'new') entry.added += 1;
+      else entry.refreshed += 1;
+      map.set(key, entry);
+    }
+    return Array.from(map.values()).sort((a, b) => (b.added + b.refreshed) - (a.added + a.refreshed)).slice(0, 6);
+  }, [changes]);
+
+  const stat = (label: string, value: React.ReactNode) => (
+    <div style={{ flex: '1 1 120px' }}>
+      <div style={{ fontFamily: monoStack, fontSize: '22px', color: tc.text.primary }}>{value}</div>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '2px' }}>{label}</div>
+    </div>
+  );
+
+  const notConfigured = loaded && summary === null;
+
+  return (
+    <Card tc={tc} style={{ padding: 0 }}>
+      <div style={{ padding: space['5'] }}>
+        {!loaded && <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }} data-testid="velocity-loading">Loading competitive feed…</div>}
+        {notConfigured && (
+          <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted }} data-testid="velocity-unconfigured">
+            Competitive feed not configured or unreachable. New &amp; refreshed competitor pages appear here once the governed feed is connected.
+          </div>
+        )}
+        {loaded && summary && (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: space['4'] }} data-testid="velocity-summary">
+              {stat('competitors tracked', fmtInt(summary.competitors_tracked))}
+              {stat('pages tracked', fmtInt(summary.pages_tracked))}
+              {stat('new this week', fmtInt(summary.this_week_new))}
+              {stat('refreshed this week', fmtInt(summary.this_week_changed))}
+              {stat('last crawl', summary.last_crawl_date ? timeAgo(summary.last_crawl_date) : 'never')}
+            </div>
+            {perCompetitor.length === 0 ? (
+              <div style={{ marginTop: space['4'], paddingTop: space['4'], borderTop: `1px solid ${tc.border.subtle}`, fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }} data-testid="velocity-empty">
+                No competitor page changes detected yet{summary.last_crawl_date ? '' : ' — first crawl pending'}.
+              </div>
+            ) : (
+              <div style={{ marginTop: space['4'], paddingTop: space['2'], borderTop: `1px solid ${tc.border.subtle}` }}>
+                {perCompetitor.map((c) => (
+                  <div key={c.domain || c.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: space['3'], padding: `${space['2']} 0` }} data-testid={`velocity-row-${c.domain || c.name}`}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary, fontWeight: fontWeight.medium, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                      {c.domain && <div style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>{c.domain}</div>}
+                    </div>
+                    <div style={{ display: 'flex', gap: space['2'], flexShrink: 0 }}>
+                      <Pill tone="info" tc={tc}>{c.added} new</Pill>
+                      <Pill tone="neutral" tc={tc}>{c.refreshed} refreshed</Pill>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// =============================================================================
+// Trend chart — live GSC timeseries
+// =============================================================================
+type RangeKey = '7' | '14' | '30' | 'custom';
+
+function TrendChart({ tc }: { tc: Tc }) {
+  const [range, setRange] = useState<RangeKey>('30');
+  const [customDays, setCustomDays] = useState(45);
+  const [data, setData] = useState<SeoTimeseriesResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const days = range === 'custom' ? customDays : Number(range);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true); setError(null);
+    getSeoTimeseries(days)
+      .then((d) => { if (alive) setData(d); })
+      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load trend'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [days]);
+
+  const series = data?.series ?? [];
+  const total = data?.summary.total_clicks ?? 0;
+  const delta = data?.summary.half_over_half_delta_pct ?? null;
+
+  // SVG geometry
+  const w = 760, h = 200, pad = { l: 36, r: 12, t: 12, b: 24 };
+  const clicks = series.map((d) => d.clicks);
+  const max = clicks.length ? Math.max(...clicks) * 1.1 : 1;
+  const min = clicks.length ? Math.min(...clicks) * 0.85 : 0;
+  const span = max - min || 1;
+  const xStep = (w - pad.l - pad.r) / Math.max(1, series.length - 1);
+  const y = (v: number) => pad.t + (h - pad.t - pad.b) * (1 - (v - min) / span);
+  const linePts = series.map((d, i) => `${pad.l + i * xStep},${y(d.clicks)}`).join(' ');
+  const areaPts = series.length ? `${pad.l},${h - pad.b} ${linePts} ${pad.l + (series.length - 1) * xStep},${h - pad.b}` : '';
+  const ticks = [0, 1, 2, 3].map((i) => min + (span / 3) * i);
+  const labelEvery = Math.max(1, Math.floor(series.length / 6));
+
+  const rangeBtn = (key: RangeKey, label: string) => {
+    const active = range === key;
+    return (
+      <button
+        key={key}
+        onClick={() => setRange(key)}
+        data-testid={`button-range-${key}`}
+        style={{
+          padding: '6px 12px', borderRadius: radius.sm, cursor: 'pointer',
+          background: active ? PALETTE.violet : tc.background.surface,
+          color: active ? '#fff' : tc.text.primary,
+          border: `1px solid ${active ? PALETTE.violet : tc.border.default}`,
+          fontFamily: fontFamily.body, fontSize: '12px', fontWeight: active ? fontWeight.semibold : fontWeight.medium,
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
+
+  return (
+    <Card tc={tc} style={{ background: tc.background.surface }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['3'], flexWrap: 'wrap', gap: space['3'] }}>
         <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', alignItems: 'center' }}>
-          <Pill tone="violet" tc={tc}>{c.primary_remedy || c.mutation_type || 'remedy'}</Pill>
-          {c.confidence_tier && <Pill tone="info" tc={tc}>{c.confidence_tier}</Pill>}
-          {c.opportunity_score != null && (
-            <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>
-              score {c.opportunity_score.toFixed(0)}
+          {rangeBtn('7', '7d')}
+          {rangeBtn('14', '14d')}
+          {rangeBtn('30', '30d')}
+          {rangeBtn('custom', 'Custom')}
+          {range === 'custom' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginLeft: space['2'] }}>
+              <input
+                type="range" min={7} max={90} value={customDays}
+                onChange={(e) => setCustomDays(Number(e.target.value))}
+                data-testid="input-custom-days"
+                style={{ width: 140 }}
+              />
+              <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, minWidth: 56 }}>{customDays} days</span>
+            </div>
+          )}
+        </div>
+        <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>GSC organic · vs prior period</span>
+      </div>
+
+      <div style={{ marginBottom: space['2'] }}>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Organic clicks · last {data?.range_days ?? days} days
+        </div>
+        <div style={{ display: 'flex', gap: space['3'], alignItems: 'baseline', marginTop: '4px' }}>
+          <span style={{ fontFamily: fontFamily.display, fontSize: '34px', fontWeight: fontWeight.semibold, color: tc.text.primary }} data-testid="text-total-clicks">
+            {fmtInt(total)}
+          </span>
+          {delta != null && (
+            <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: delta >= 0 ? PALETTE.good : PALETTE.bad }} data-testid="text-delta">
+              {delta >= 0 ? '+' : ''}{delta.toFixed(1)}% half-over-half
             </span>
           )}
         </div>
-        <Pill tone={statusTone} tc={tc}>{statusLabel}</Pill>
       </div>
 
-      {c.proposed_value && (
-        <div style={{ marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary }}>
-          <span style={{ color: tc.text.muted }}>Proposed: </span>{c.proposed_value}
-        </div>
+      {loading && <div style={{ padding: space['6'], color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading trend…</div>}
+      {error && <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
+      {!loading && !error && series.length === 0 && (
+        <div style={{ padding: space['6'], color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>No GSC timeseries data in this window.</div>
       )}
-      {c.evidence_summary && (
-        <div style={{ marginTop: space['1'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-          {c.evidence_summary}
-        </div>
+      {!loading && !error && series.length > 0 && (
+        <svg width={w} height={h} style={{ display: 'block', maxWidth: '100%' }} role="img" aria-label="Organic clicks trend">
+          <defs>
+            <linearGradient id="seoGrad" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={PALETTE.violet} stopOpacity="0.22" />
+              <stop offset="100%" stopColor={PALETTE.violet} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {ticks.map((t, i) => (
+            <g key={i}>
+              <line x1={pad.l} x2={w - pad.r} y1={y(t)} y2={y(t)} stroke={tc.border.subtle} strokeDasharray="2 3" />
+              <text x={pad.l - 6} y={y(t) + 3} textAnchor="end" fontSize="10" fill={tc.text.muted} fontFamily={monoStack}>{Math.round(t)}</text>
+            </g>
+          ))}
+          {series.map((d, i) => i % labelEvery === 0 ? (
+            <text key={i} x={pad.l + i * xStep} y={h - 6} textAnchor="middle" fontSize="10" fill={tc.text.muted}>
+              {d.date.slice(5)}
+            </text>
+          ) : null)}
+          <polygon points={areaPts} fill="url(#seoGrad)" />
+          <polyline points={linePts} fill="none" stroke={PALETTE.violet} strokeWidth={2} />
+        </svg>
       )}
 
-      {err && (
-        <div style={{ marginTop: space['2'], fontSize: '12px', color: PALETTE.bad, fontFamily: fontFamily.body }}>
-          {err}
+      {/* GSC anonymized-query caveat — honest data-quality note, not fabricated data */}
+      <div style={{ display: 'flex', gap: space['3'], padding: space['3'], background: PALETTE.warnSoft, borderRadius: radius.sm, alignItems: 'flex-start', marginTop: space['3'] }} data-testid="banner-gsc-anonymized">
+        <span style={{ fontSize: '16px', lineHeight: 1 }}>⚠</span>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.warn, lineHeight: 1.5 }}>
+          <strong>GSC anonymizes rare queries.</strong> Search Console drops query strings for low-volume / privacy-sensitive searches, so query-level totals can understate true demand. Page-level clicks &amp; impressions above are complete.
         </div>
-      )}
-
-      {pending && (
-        <div style={{ display: 'flex', gap: space['2'], marginTop: space['3'] }}>
-          <button
-            data-testid={`button-approve-${c.candidate_id}`}
-            onClick={() => act('approve')}
-            disabled={busy !== null}
-            style={{
-              padding: '6px 14px', borderRadius: radius.sm, border: 'none', cursor: busy ? 'default' : 'pointer',
-              background: PALETTE.good, color: '#fff', fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium,
-              opacity: busy ? 0.6 : 1,
-            }}
-          >
-            {busy === 'approve' ? 'Approving…' : 'Approve'}
-          </button>
-          <button
-            data-testid={`button-reject-${c.candidate_id}`}
-            onClick={() => act('reject')}
-            disabled={busy !== null}
-            style={{
-              padding: '6px 14px', borderRadius: radius.sm, cursor: busy ? 'default' : 'pointer',
-              background: 'transparent', color: PALETTE.bad, border: `1px solid ${PALETTE.bad}`,
-              fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, opacity: busy ? 0.6 : 1,
-            }}
-          >
-            {busy === 'reject' ? 'Rejecting…' : 'Reject'}
-          </button>
-        </div>
-      )}
-    </div>
+      </div>
+    </Card>
   );
 }
 
-function PageDossierDrawer({
-  url, tc, onClose,
-}: {
-  url: string;
-  tc: Tc;
-  onClose: () => void;
-}) {
-  const [dossier, setDossier] = useState<PageDossier | null>(null);
+// =============================================================================
+// Data freshness — live GSC pipeline health (honest about un-wired sources)
+// =============================================================================
+function FreshnessCard({ tc }: { tc: Tc }) {
+  const [health, setHealth] = useState<GscPipelineHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    setLoading(true); setError(null);
-    getSeoPageDossier(url)
-      .then((d) => { if (alive) setDossier(d); })
-      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load page'); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [url, reloadKey]);
-
-  const sectionLabel = {
-    fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold,
-    textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: tc.text.muted,
-    marginBottom: space['2'],
-  };
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000,
-        display: 'flex', justifyContent: 'flex-end',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        data-testid="drawer-page-dossier"
-        style={{
-          width: 'min(720px, 96vw)', height: '100%', overflowY: 'auto',
-          background: tc.background.page, borderLeft: `1px solid ${tc.border.strong}`,
-          padding: space['6'], boxShadow: '-8px 0 24px rgba(0,0,0,0.2)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: space['3'] }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontFamily: monoStack, fontSize: '13px', color: tc.text.primary, wordBreak: 'break-all' }}>
-              {pathOf(url)}
-            </div>
-            <a
-              href={url} target="_blank" rel="noopener noreferrer"
-              data-testid="link-open-live"
-              style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, textDecoration: 'none' }}
-            >
-              Open live ↗
-            </a>
-          </div>
-          <button
-            onClick={onClose}
-            data-testid="button-close-dossier"
-            style={{
-              border: `1px solid ${tc.border.default}`, background: tc.background.surface, color: tc.text.muted,
-              borderRadius: radius.sm, padding: '4px 10px', cursor: 'pointer', fontFamily: fontFamily.body, fontSize: '12px',
-            }}
-          >
-            Close
-          </button>
-        </div>
-
-        {loading && (
-          <div style={{ padding: space['6'], color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>
-            Loading dossier…
-          </div>
-        )}
-        {error && (
-          <div style={{ marginTop: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>
-            {error}
-          </div>
-        )}
-
-        {dossier && !loading && (
-          <>
-            {/* Page facts */}
-            <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', marginTop: space['3'] }}>
-              <Pill tone="neutral" tc={tc}>{dossier.page.content_type || 'page'}</Pill>
-              <Pill tone={dossier.page.status_class === 'canonical_live' ? 'good' : dossier.page.status_class === 'lost' ? 'bad' : 'warn'} tc={tc}>
-                {dossier.page.status_class}
-              </Pill>
-              {dossier.page.needs_verify && <Pill tone="warn" tc={tc}>verify live</Pill>}
-              {dossier.page.noindex && <Pill tone="bad" tc={tc}>noindex</Pill>}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: space['3'], marginTop: space['4'] }}>
-              {[
-                { k: 'Impressions', v: fmtInt(dossier.page.gsc_impressions) },
-                { k: 'Best position', v: fmtPos(dossier.page.gsc_best_position) },
-                { k: 'HTTP', v: dossier.page.http_status != null ? String(dossier.page.http_status) : '—' },
-              ].map((m) => (
-                <div key={m.k} style={{ border: `1px solid ${tc.border.subtle}`, borderRadius: radius.md, padding: space['3'], background: tc.background.surface }}>
-                  <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{m.k}</div>
-                  <div style={{ fontFamily: monoStack, fontSize: '18px', color: tc.text.primary, marginTop: '2px' }}>{m.v}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Primary keyword target */}
-            {(() => {
-              const top = dossier.page.gsc_top_query;
-              const match = top
-                ? dossier.demand.find((q) => q.query.trim().toLowerCase() === top.trim().toLowerCase())
-                : undefined;
-              const ref = match ?? dossier.demand.find((q) => !q.is_discard);
-              return (
-                <div style={{ marginTop: space['6'] }} data-testid="section-primary-target">
-                  <div style={sectionLabel}>Primary keyword target</div>
-                  {!top && !ref ? (
-                    <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted }}>
-                      No primary query identified for this page yet.
-                    </div>
-                  ) : (
-                    <div style={{ border: `1px solid ${tc.border.default}`, borderRadius: radius.md, padding: space['4'], background: tc.background.surface }}>
-                      <div style={{ fontFamily: fontFamily.body, fontSize: '15px', fontWeight: fontWeight.semibold, color: tc.text.primary }} data-testid="text-primary-query">
-                        {top || ref?.query || '—'}
-                      </div>
-                      <div style={{ display: 'flex', gap: space['5'], flexWrap: 'wrap', marginTop: space['3'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-                        <span>position <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(ref?.avg_position ?? dossier.page.gsc_best_position)}</span></span>
-                        <span>impr. <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(ref?.impressions ?? dossier.page.gsc_impressions)}</span></span>
-                        <span>volume <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(ref?.kw_volume ?? null)}</span></span>
-                        <span>KD <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{ref?.kw_difficulty == null ? '—' : ref.kw_difficulty.toFixed(0)}</span></span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Demand — real vs discard */}
-            <div style={{ marginTop: space['6'] }}>
-              <div style={sectionLabel}>Search demand · top queries (real vs discard)</div>
-              {dossier.demand.length === 0 ? (
-                <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted }}>
-                  No query/page demand recorded for this URL.
-                </div>
-              ) : (
-                <div style={{ border: `1px solid ${tc.border.default}`, borderRadius: radius.md, overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '12px' }}>
-                    <thead>
-                      <tr style={{ background: tc.background.muted, color: tc.text.muted }}>
-                        <th style={{ textAlign: 'left', padding: '8px 10px' }}>Query</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>Impr.</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>Pos.</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>Vol.</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>KD</th>
-                        <th style={{ textAlign: 'left', padding: '8px 10px' }}>Read</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dossier.demand.map((q, i) => (
-                        <tr key={i} style={{ borderTop: `1px solid ${tc.border.subtle}`, opacity: q.is_discard ? 0.6 : 1 }} data-testid={`row-demand-${i}`}>
-                          <td style={{ padding: '8px 10px', color: tc.text.primary }}>{q.query}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(q.impressions)}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtPos(q.avg_position)}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(q.kw_volume)}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{q.kw_difficulty == null ? '—' : q.kw_difficulty.toFixed(0)}</td>
-                          <td style={{ padding: '8px 10px' }}>
-                            {q.is_discard
-                              ? <span title={q.discard_reason ?? ''}><Pill tone="bad" tc={tc}>discard</Pill></span>
-                              : <Pill tone="good" tc={tc}>real</Pill>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Lane 1 — engine actions */}
-            <div style={{ marginTop: space['6'] }}>
-              <div style={sectionLabel}>Lane 1 · Engine actions (gate-accepted)</div>
-              {dossier.candidates.length === 0 ? (
-                <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted }}>
-                  No gate-accepted engine candidates for this page.
-                </div>
-              ) : (
-                dossier.candidates.map((c) => (
-                  <CandidateCard key={c.candidate_id} c={c} tc={tc} onDone={() => setReloadKey((k) => k + 1)} />
-                ))
-              )}
-            </div>
-
-            {/* Lane 2 — Rank Math manual */}
-            <div style={{ marginTop: space['6'] }}>
-              <div style={sectionLabel}>Lane 2 · Rank Math (manual)</div>
-              {(() => {
-                const s = lane2Suggestion(dossier);
-                return (
-                  <div style={{ border: `1px solid ${tc.border.default}`, borderRadius: radius.md, padding: space['4'], background: tc.background.surface }}>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{s.title}</div>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '4px' }}>{s.body}</div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Lane 3 — off-page */}
-            <div style={{ marginTop: space['6'], marginBottom: space['6'] }}>
-              <div style={sectionLabel}>Lane 3 · Off-page authority</div>
-              {lane3Applicable(dossier) ? (
-                <div style={{ border: `1px solid ${tc.border.default}`, borderRadius: radius.md, padding: space['4'], background: tc.background.surface }}>
-                  <div style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>
-                    Earn links / digital PR
-                  </div>
-                  <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '4px' }}>
-                    This page is authority-bound ({dossier.page.gsc_best_position == null ? 'not yet ranking' : `pos ~${fmtPos(dossier.page.gsc_best_position)}`} for
-                    {' '}&ldquo;{dossier.page.gsc_top_query || 'its target query'}&rdquo;). On-page is necessary but not sufficient — pursue relevant backlinks and digital PR to break into the top 10.
-                  </div>
-                </div>
-              ) : (
-                <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted }}>
-                  Not authority-bound right now — focus on Lanes 1 & 2 first.
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// Level-1 — Page portfolio
-// =============================================================================
-
-function PageCard({ p, tc, onOpen }: { p: PortfolioPage; tc: Tc; onOpen: (url: string) => void }) {
-  return (
-    <button
-      onClick={() => onOpen(p.url)}
-      data-testid={`card-page-${p.url}`}
-      style={{
-        textAlign: 'left', width: '100%', cursor: 'pointer',
-        border: `1px solid ${tc.border.default}`, borderRadius: radius.md,
-        padding: space['4'], background: tc.background.surface, display: 'block',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: space['3'], alignItems: 'flex-start' }}>
-        <div style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.primary, wordBreak: 'break-all' }}>
-          {pathOf(p.url)}
-        </div>
-        <div style={{ display: 'flex', gap: space['2'], flexShrink: 0 }}>
-          {p.needs_verify && <Pill tone="warn" tc={tc}>verify</Pill>}
-          <Pill tone={statusTone(p.status_class)} tc={tc}>{p.status_class}</Pill>
-          <Pill tone={bucketTone(p.bucket)} tc={tc}>{p.bucket}</Pill>
-        </div>
-      </div>
-      <div style={{ marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.secondary }}>
-        {cardRead(p)}
-      </div>
-      <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['3'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-        <span><span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(p.gsc_impressions)}</span> impr.</span>
-        <span>pos <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(p.gsc_best_position)}</span></span>
-        {p.gsc_top_query && <span>“{p.gsc_top_query}”</span>}
-      </div>
-      <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
-        {p.has_dataforseo ? (
-          <>
-            <span>vol <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(p.kw_volume)}</span></span>
-            <span>KD <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{p.kw_difficulty == null ? '—' : p.kw_difficulty.toFixed(0)}</span></span>
-            <span>cpc <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtMoney(p.kw_cpc)}</span></span>
-            {p.is_competitor_only && <Pill tone="bad" tc={tc}>competitor-only</Pill>}
-          </>
-        ) : (
-          <span style={{ fontStyle: 'italic' }}>no DataForSEO keyword value</span>
-        )}
-      </div>
-    </button>
-  );
-}
-
-// =============================================================================
-// Portfolio-wide engine action queue — multi-select bulk approve / reject
-// =============================================================================
-
-function CandidateQueue({ tc, onOpenPage }: { tc: Tc; onOpenPage: (url: string) => void }) {
-  const [candidates, setCandidates] = useState<PageDossierCandidate[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState<null | 'approve' | 'reject'>(null);
-  const [actionErr, setActionErr] = useState<string | null>(null);
-  // Triage controls — filter by remedy / urgency / confidence, sort by score / urgency / page.
-  const [remedyFilter, setRemedyFilter] = useState('all');
-  const [urgencyFilter, setUrgencyFilter] = useState('all');
-  const [confidenceFilter, setConfidenceFilter] = useState('all');
-  const [pageSearch, setPageSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'score' | 'urgency' | 'page'>('score');
-
-  useEffect(() => {
-    let alive = true;
-    setLoading(true); setError(null);
-    getSeoCandidateQueue()
-      .then((d) => {
-        if (!alive) return;
-        setCandidates(d.candidates);
-        // Drop selections that are no longer in the queue (already actioned).
-        setSelected((prev) => {
-          const present = new Set(d.candidates.map((c) => c.candidate_id));
-          const next = new Set<string>();
-          prev.forEach((id) => { if (present.has(id)) next.add(id); });
-          return next;
-        });
-      })
-      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load action queue'); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [reloadKey]);
-
-  const allRows = candidates ?? [];
-
-  // Distinct filter options, derived from the loaded queue so we never offer a
-  // value that would match nothing.
-  const remedyOptions = useMemo(
-    () => Array.from(new Set(allRows.map((c) => c.primary_remedy).filter((v): v is string => !!v))).sort(),
-    [allRows],
-  );
-  const urgencyOptions = useMemo(
-    () => Array.from(new Set(allRows.map((c) => c.opportunity_urgency).filter((v): v is string => !!v))).sort(),
-    [allRows],
-  );
-  const confidenceOptions = useMemo(
-    () => Array.from(new Set(allRows.map((c) => c.confidence_tier).filter((v): v is string => !!v))).sort(),
-    [allRows],
-  );
-
-  const rows = useMemo(() => {
-    const term = pageSearch.trim().toLowerCase();
-    let r = allRows.filter((c) =>
-      (remedyFilter === 'all' || c.primary_remedy === remedyFilter) &&
-      (urgencyFilter === 'all' || c.opportunity_urgency === urgencyFilter) &&
-      (confidenceFilter === 'all' || c.confidence_tier === confidenceFilter) &&
-      (term === '' ||
-        (c.target_page_url || '').toLowerCase().includes(term) ||
-        (c.proposed_value || '').toLowerCase().includes(term) ||
-        (c.evidence_summary || '').toLowerCase().includes(term)),
-    );
-    const urgencyRank = (v: string | null): number => {
-      switch ((v || '').toLowerCase()) {
-        case 'critical': return 4;
-        case 'high': return 3;
-        case 'medium': return 2;
-        case 'low': return 1;
-        default: return 0;
-      }
-    };
-    r = [...r].sort((a, b) => {
-      if (sortBy === 'urgency') {
-        const d = urgencyRank(b.opportunity_urgency) - urgencyRank(a.opportunity_urgency);
-        if (d !== 0) return d;
-        return (b.opportunity_score ?? -Infinity) - (a.opportunity_score ?? -Infinity);
-      }
-      if (sortBy === 'page') {
-        return pathOf(a.target_page_url || '').localeCompare(pathOf(b.target_page_url || ''));
-      }
-      // score (default) — highest opportunity first.
-      return (b.opportunity_score ?? -Infinity) - (a.opportunity_score ?? -Infinity);
-    });
-    return r;
-  }, [allRows, remedyFilter, urgencyFilter, confidenceFilter, pageSearch, sortBy]);
-
-  const filterActive = remedyFilter !== 'all' || urgencyFilter !== 'all' || confidenceFilter !== 'all' || pageSearch.trim() !== '';
-  const allSelected = rows.length > 0 && rows.every((c) => selected.has(c.candidate_id));
-
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleAll() {
-    setSelected((prev) => (prev.size === rows.length ? new Set() : new Set(rows.map((c) => c.candidate_id))));
-  }
-
-  async function runBulk(kind: 'approve' | 'reject') {
-    if (selected.size === 0 || busy) return;
-    // Act on every selected candidate, even ones currently hidden by a filter.
-    const targets = allRows.filter((c) => selected.has(c.candidate_id));
-    setBusy(kind); setActionErr(null);
-
-    // Optimistic: remove the acted-upon candidates immediately and clear the
-    // selection. The reconcile refetch below restores any that actually failed
-    // (they remain approval_status='pending' server-side).
-    setCandidates((prev) => (prev ?? []).filter((c) => !selected.has(c.candidate_id)));
-    setSelected(new Set());
-
-    const results = await Promise.allSettled(
-      targets.map((c) =>
-        kind === 'approve'
-          ? approveEngineCandidate({
-              candidate_id: c.candidate_id,
-              opportunity_id: c.opportunity_id ?? undefined,
-              proposed_value: c.proposed_value ?? undefined,
-              target_page_url: c.target_page_url ?? undefined,
-            })
-          : rejectEngineCandidate({
-              candidate_id: c.candidate_id,
-              opportunity_id: c.opportunity_id ?? undefined,
-            }),
-      ),
-    );
-
-    const failed = results.filter((r) => r.status === 'rejected').length;
-    if (failed > 0) {
-      setActionErr(`${failed} of ${targets.length} action(s) failed — they remain in the queue. Try again.`);
-    }
-    setBusy(null);
-    // Cache refresh — reconcile the optimistic list with server truth.
-    setReloadKey((k) => k + 1);
-  }
-
-  const sectionLabel = {
-    fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold,
-    textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: tc.text.muted,
-  };
-
-  const selectStyle = {
-    padding: '6px 10px', borderRadius: radius.sm, border: `1px solid ${tc.border.default}`,
-    background: tc.background.surface, color: tc.text.primary,
-    fontFamily: fontFamily.body, fontSize: '12px', cursor: 'pointer',
-  };
-  const controlLabel = {
-    fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.medium,
-    color: tc.text.muted,
-  };
-
-  return (
-    <div data-testid="view-queue">
-      {/* Filter + sort controls */}
-      <div
-        style={{
-          display: 'flex', gap: space['4'], alignItems: 'flex-end', flexWrap: 'wrap',
-          padding: space['3'], marginBottom: space['3'], borderRadius: radius.md,
-          border: `1px solid ${tc.border.default}`, background: tc.background.surface,
-        }}
-      >
-        <label style={{ display: 'flex', flexDirection: 'column', gap: space['1'] }}>
-          <span style={controlLabel}>Remedy</span>
-          <select
-            data-testid="select-queue-remedy"
-            value={remedyFilter}
-            onChange={(e) => setRemedyFilter(e.target.value)}
-            disabled={busy !== null}
-            style={selectStyle}
-          >
-            <option value="all">All remedies</option>
-            {remedyOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: space['1'] }}>
-          <span style={controlLabel}>Urgency</span>
-          <select
-            data-testid="select-queue-urgency"
-            value={urgencyFilter}
-            onChange={(e) => setUrgencyFilter(e.target.value)}
-            disabled={busy !== null}
-            style={selectStyle}
-          >
-            <option value="all">All urgency</option>
-            {urgencyOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: space['1'] }}>
-          <span style={controlLabel}>Confidence</span>
-          <select
-            data-testid="select-queue-confidence"
-            value={confidenceFilter}
-            onChange={(e) => setConfidenceFilter(e.target.value)}
-            disabled={busy !== null}
-            style={selectStyle}
-          >
-            <option value="all">All confidence</option>
-            {confidenceOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: space['1'], flex: 1, minWidth: 200 }}>
-          <span style={controlLabel}>Search target page</span>
-          <input
-            type="text"
-            data-testid="input-queue-search"
-            value={pageSearch}
-            onChange={(e) => setPageSearch(e.target.value)}
-            placeholder="Filter by page URL, proposed value, or evidence…"
-            disabled={busy !== null}
-            style={{ ...selectStyle, cursor: 'text', width: '100%' }}
-          />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: space['1'] }}>
-          <span style={controlLabel}>Sort by</span>
-          <select
-            data-testid="select-queue-sort"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'score' | 'urgency' | 'page')}
-            disabled={busy !== null}
-            style={selectStyle}
-          >
-            <option value="score">Opportunity score</option>
-            <option value="urgency">Urgency</option>
-            <option value="page">Target page</option>
-          </select>
-        </label>
-        {filterActive && (
-          <button
-            data-testid="button-queue-clear-filters"
-            onClick={() => { setRemedyFilter('all'); setUrgencyFilter('all'); setConfidenceFilter('all'); setPageSearch(''); }}
-            disabled={busy !== null}
-            style={{
-              padding: '6px 12px', borderRadius: radius.sm, border: `1px solid ${tc.border.default}`,
-              background: 'transparent', color: tc.text.secondary, cursor: busy ? 'default' : 'pointer',
-              fontFamily: fontFamily.body, fontSize: '12px',
-            }}
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
-
-      {/* Bulk action bar */}
-      <div
-        style={{
-          display: 'flex', gap: space['3'], alignItems: 'center', flexWrap: 'wrap',
-          padding: space['3'], marginBottom: space['4'], borderRadius: radius.md,
-          border: `1px solid ${tc.border.default}`, background: tc.background.surface,
-        }}
-      >
-        <label style={{ display: 'flex', gap: space['2'], alignItems: 'center', cursor: rows.length ? 'pointer' : 'default', fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.secondary }}>
-          <input
-            type="checkbox"
-            data-testid="checkbox-queue-all"
-            checked={allSelected}
-            onChange={toggleAll}
-            disabled={rows.length === 0 || busy !== null}
-          />
-          Select all
-        </label>
-        <span data-testid="text-queue-selected" style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-          {selected.size} selected · {filterActive ? `${rows.length} of ${allRows.length}` : rows.length} pending
-        </span>
-        <div style={{ flex: 1 }} />
-        <button
-          data-testid="button-bulk-approve"
-          onClick={() => runBulk('approve')}
-          disabled={selected.size === 0 || busy !== null}
-          style={{
-            padding: '6px 14px', borderRadius: radius.sm, border: 'none',
-            cursor: selected.size === 0 || busy ? 'default' : 'pointer',
-            background: PALETTE.good, color: '#fff', fontFamily: fontFamily.body,
-            fontSize: '12px', fontWeight: fontWeight.medium,
-            opacity: selected.size === 0 || busy ? 0.5 : 1,
-          }}
-        >
-          {busy === 'approve' ? 'Approving…' : `Approve selected${selected.size ? ` (${selected.size})` : ''}`}
-        </button>
-        <button
-          data-testid="button-bulk-reject"
-          onClick={() => runBulk('reject')}
-          disabled={selected.size === 0 || busy !== null}
-          style={{
-            padding: '6px 14px', borderRadius: radius.sm,
-            cursor: selected.size === 0 || busy ? 'default' : 'pointer',
-            background: 'transparent', color: PALETTE.bad, border: `1px solid ${PALETTE.bad}`,
-            fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium,
-            opacity: selected.size === 0 || busy ? 0.5 : 1,
-          }}
-        >
-          {busy === 'reject' ? 'Rejecting…' : `Reject selected${selected.size ? ` (${selected.size})` : ''}`}
-        </button>
-      </div>
-
-      {actionErr && (
-        <div style={{ marginBottom: space['4'], padding: space['3'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '12px' }}>
-          {actionErr}
-        </div>
-      )}
-
-      {loading && (
-        <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>
-          Loading action queue…
-        </div>
-      )}
-      {error && (
-        <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>
-          {error}
-        </div>
-      )}
-
-      {!loading && !error && rows.length === 0 && (
-        <div data-testid="text-queue-empty" style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>
-          {filterActive && allRows.length > 0
-            ? (pageSearch.trim()
-                ? `No candidates match “${pageSearch.trim()}”. Try a different search or clear the filters.`
-                : 'No candidates match the current filters. Try clearing them.')
-            : 'No gate-accepted engine candidates are awaiting approval. The queue is clear.'}
-        </div>
-      )}
-
-      {!loading && !error && rows.map((c) => {
-        const checked = selected.has(c.candidate_id);
-        return (
-          <div
-            key={c.candidate_id}
-            data-testid={`row-queue-${c.candidate_id}`}
-            style={{
-              display: 'flex', gap: space['3'], alignItems: 'flex-start',
-              border: `1px solid ${checked ? PALETTE.violet : tc.border.default}`,
-              borderRadius: radius.md, padding: space['4'], background: tc.background.surface,
-              marginBottom: space['3'],
-            }}
-          >
-            <input
-              type="checkbox"
-              data-testid={`checkbox-queue-${c.candidate_id}`}
-              checked={checked}
-              onChange={() => toggle(c.candidate_id)}
-              disabled={busy !== null}
-              style={{ marginTop: '3px' }}
-            />
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', alignItems: 'center' }}>
-                <Pill tone="violet" tc={tc}>{c.primary_remedy || c.mutation_type || 'remedy'}</Pill>
-                {c.confidence_tier && <Pill tone="info" tc={tc}>{c.confidence_tier}</Pill>}
-                {c.opportunity_urgency && <Pill tone="warn" tc={tc}>{c.opportunity_urgency}</Pill>}
-                {c.opportunity_score != null && (
-                  <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>
-                    score {c.opportunity_score.toFixed(0)}
-                  </span>
-                )}
-              </div>
-              {c.target_page_url && (
-                <button
-                  onClick={() => onOpenPage(c.target_page_url as string)}
-                  data-testid={`link-queue-page-${c.candidate_id}`}
-                  style={{
-                    display: 'block', marginTop: space['2'], padding: 0, border: 'none', background: 'none',
-                    textAlign: 'left', cursor: 'pointer', fontFamily: monoStack, fontSize: '12px', color: PALETTE.violet,
-                    wordBreak: 'break-all',
-                  }}
-                >
-                  {highlightMatch(pathOf(c.target_page_url), pageSearch)}
-                </button>
-              )}
-              {c.proposed_value && (
-                <div style={{ marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary }}>
-                  <span style={{ color: tc.text.muted }}>Proposed: </span>{highlightMatch(c.proposed_value, pageSearch)}
-                </div>
-              )}
-              {c.evidence_summary && (
-                <div style={{ marginTop: space['1'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-                  {highlightMatch(c.evidence_summary, pageSearch)}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-      <div style={sectionLabel} />
-    </div>
-  );
-}
-
-function SeoReviewContent() {
-  const tc = useThemeColors();
-  const [view, setView] = useState<'portfolio' | 'queue'>('portfolio');
-  const [pages, setPages] = useState<PortfolioPage[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [activeBucket, setActiveBucket] = useState<PortfolioBucket | 'all'>('all');
-  const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
-  // The portfolio can hold ~1700 pages; rendering every card at once locks the main
-  // thread. Cap visible cards per bucket and reveal more on demand.
-  const [visible, setVisible] = useState<Record<PortfolioBucket, number>>({
-    win: PAGE_SIZE, strategic: PAGE_SIZE, fix: PAGE_SIZE, lost: PAGE_SIZE,
-  });
-  // Any change to the filter/search resets the reveal counts so we never try to
-  // paint a giant list after narrowing.
-  useEffect(() => {
-    setVisible({ win: PAGE_SIZE, strategic: PAGE_SIZE, fix: PAGE_SIZE, lost: PAGE_SIZE });
-  }, [search, activeBucket]);
-
-  useEffect(() => {
-    let alive = true;
-    setLoading(true); setError(null);
-    getSeoPortfolio()
-      .then((d) => { if (alive) setPages(d); })
-      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load portfolio'); })
+    getGscPipelineHealth()
+      .then((d) => { if (alive) setHealth(d); })
+      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load pipeline health'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
 
+  const statusTone: Record<string, 'good' | 'warn' | 'bad'> = {
+    healthy: 'good', warning: 'warn', stale: 'bad', credential_error: 'bad',
+  };
+
+  const rel = (iso: string | null): string => {
+    if (!iso) return 'never';
+    const ms = Date.now() - new Date(iso).getTime();
+    if (Number.isNaN(ms)) return '—';
+    const h = Math.round(ms / 3_600_000);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.round(h / 24)}d ago`;
+  };
+
+  return (
+    <Card tc={tc}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: space['3'] }}>Data freshness</div>
+
+      {loading && <div style={{ color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Checking…</div>}
+      {error && <div style={{ color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
+
+      {health && (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${tc.border.subtle}` }}>
+            <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.primary }}>Google Search Console</span>
+            <span style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
+              <Pill tone={statusTone[health.status] ?? 'warn'} tc={tc}>{health.status}</Pill>
+              <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted }}>{rel(health.raw_data_last_date || health.last_successful_run)}</span>
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Last successful run</span><span style={{ fontFamily: monoStack }}>{rel(health.last_successful_run)}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Data lag</span><span style={{ fontFamily: monoStack }}>{health.days_behind == null ? '—' : `${health.days_behind}d`}</span></div>
+            {health.last_error && (
+              <div style={{ marginTop: space['1'], color: PALETTE.bad, fontSize: '11px' }}>{health.last_error}</div>
+            )}
+          </div>
+          <div style={{ marginTop: space['3'], paddingTop: space['3'], borderTop: `1px solid ${tc.border.subtle}`, fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: 1.5 }}>
+            GA4, Google Ads &amp; the cluster engine sync on their own schedules and aren&apos;t exposed through this freshness probe yet — this surface tracks GSC only.
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// =============================================================================
+// "Do this next" — ranked detections from the engine candidate queue
+// =============================================================================
+function DetectionRow({
+  rank, c, page, tc, onApprove, onDefer,
+}: {
+  rank: number;
+  c: PageDossierCandidate;
+  page: PortfolioPage | undefined;
+  tc: Tc;
+  onApprove: (c: PageDossierCandidate) => void;
+  onDefer: (id: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const score = c.opportunity_score != null ? Math.round(c.opportunity_score * 100) : null;
+  // Honest impact: the target page's real GSC demand, not a modelled lift.
+  const impr = page?.top_q_impr ?? page?.gsc_impressions ?? null;
+  const pos = page?.top_q_pos ?? page?.gsc_best_position ?? null;
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 160px 90px 220px', gap: space['4'], alignItems: 'center', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }} data-testid={`row-detection-${c.candidate_id}`}>
+      <div style={{ fontFamily: monoStack, fontSize: '18px', fontWeight: fontWeight.semibold, color: tc.text.muted }}>#{rank}</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
+          <Pill tone="violet" tc={tc}>INTERNAL LINK</Pill>
+          <span style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>
+            {c.proposed_value ? `Add internal link → ${c.proposed_value}` : 'Add internal link'}
+          </span>
+        </div>
+        <div style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, marginBottom: '4px', wordBreak: 'break-all' }}>
+          {c.target_page_url ? pathOf(c.target_page_url) : '—'}
+        </div>
+        {c.evidence_summary && (
+          <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.secondary, lineHeight: 1.5 }}>
+            <span style={{ color: tc.text.muted }}>Why: </span>{c.evidence_summary}
+          </div>
+        )}
+      </div>
+      <div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Target demand</div>
+        <div style={{ fontFamily: monoStack, fontSize: '13px', color: tc.text.primary }}>
+          {impr == null ? '—' : `${fmtInt(impr)} impr`}
+        </div>
+        <div style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>
+          {pos == null ? 'pos —' : `pos ${fmtPos(pos)}`} {score != null && `· score ${score}`}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Effort</div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary }}>Low</div>
+      </div>
+      <div style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
+        <button
+          onClick={async () => { setBusy(true); try { await onApprove(c); } finally { setBusy(false); } }}
+          disabled={busy}
+          data-testid={`button-approve-detection-${c.candidate_id}`}
+          style={{ padding: '6px 12px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
+        >
+          {busy ? '…' : 'Approve'}
+        </button>
+        <Link
+          href={`/dashboard/seo/action/${encodeURIComponent(c.candidate_id)}`}
+          data-testid={`link-details-${c.candidate_id}`}
+          style={{ padding: '6px 12px', background: tc.background.surface, color: tc.text.primary, border: `1px solid ${tc.border.default}`, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '12px', textDecoration: 'none' }}
+        >
+          Details
+        </Link>
+        <button
+          onClick={() => onDefer(c.candidate_id)}
+          data-testid={`button-defer-${c.candidate_id}`}
+          style={{ padding: '6px 8px', background: 'transparent', color: tc.text.muted, border: 'none', fontFamily: fontFamily.body, fontSize: '12px', cursor: 'pointer' }}
+        >
+          Defer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Main content
+// =============================================================================
+function CommandCenterContent() {
+  const tc = useThemeColors();
+
+  const [candidates, setCandidates] = useState<PageDossierCandidate[] | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioPage[] | null>(null);
+  const [gaps, setGaps] = useState<SeoCompetitorGap[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deferred, setDeferred] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
+  const [diagnoseOpen, setDiagnoseOpen] = useState(false);
+  const [diagnoseUrl, setDiagnoseUrl] = useState('');
+
+  function loadAll() {
+    setLoading(true); setError(null);
+    Promise.all([
+      getSeoCandidateQueue(),
+      getSeoPortfolio(),
+      getSeoCompetitorGaps().catch(() => [] as SeoCompetitorGap[]),
+    ])
+      .then(([q, p, g]) => {
+        setCandidates(q.candidates);
+        setPortfolio(p);
+        setGaps(g);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load command center'))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { loadAll(); }, []);
+
+  // Portfolio lookup keyed by path (host-robust: portfolio + candidate URLs
+  // disagree on www vs apex host, so we normalize to pathname before joining).
+  const portfolioByPath = useMemo(() => {
+    const m = new Map<string, PortfolioPage>();
+    (portfolio ?? []).forEach((p) => m.set(pathOf(p.url), p));
+    return m;
+  }, [portfolio]);
+
+  // Bucket counts for the strip.
   const counts = useMemo(() => {
     const c: Record<PortfolioBucket, number> = { win: 0, strategic: 0, fix: 0, lost: 0 };
-    (pages ?? []).forEach((p) => { c[p.bucket] += 1; });
+    (portfolio ?? []).forEach((p) => { c[p.bucket] += 1; });
     return c;
-  }, [pages]);
+  }, [portfolio]);
 
-  // Total search impressions tied to lost pages — the demand currently going unserved.
-  const lostImpressions = useMemo(
-    () => (pages ?? []).reduce((sum, p) => (p.bucket === 'lost' ? sum + (p.gsc_impressions ?? 0) : sum), 0),
-    [pages],
-  );
+  // Detections: pending engine candidates whose target page is verified
+  // canonical_live (governance — never surface targets we can't confirm are
+  // live). Ranked by opportunity score (already DESC from the API).
+  const detections = useMemo(() => {
+    return (candidates ?? [])
+      .filter((c) => !deferred.has(c.candidate_id))
+      .filter((c) => {
+        if (!c.target_page_url) return false;
+        const p = portfolioByPath.get(pathOf(c.target_page_url));
+        return p != null && p.status_class === 'canonical_live';
+      });
+  }, [candidates, deferred, portfolioByPath]);
 
-  const filtered = useMemo(() => {
-    let rows = pages ?? [];
-    if (activeBucket !== 'all') rows = rows.filter((p) => p.bucket === activeBucket);
-    const term = search.trim().toLowerCase();
-    if (term) {
-      rows = rows.filter((p) =>
-        p.url.toLowerCase().includes(term) ||
-        (p.gsc_top_query || '').toLowerCase().includes(term),
-      );
-    }
-    return rows;
-  }, [pages, activeBucket, search]);
+  async function approveOne(c: PageDossierCandidate) {
+    await approveEngineCandidate({
+      candidate_id: c.candidate_id,
+      opportunity_id: c.opportunity_id ?? undefined,
+      proposed_value: c.proposed_value ?? undefined,
+      target_page_url: c.target_page_url ?? undefined,
+    });
+    setCandidates((prev) => (prev ?? []).filter((x) => x.candidate_id !== c.candidate_id));
+  }
 
-  const grouped = useMemo(() => {
-    const g: Record<PortfolioBucket, PortfolioPage[]> = { win: [], strategic: [], fix: [], lost: [] };
-    filtered.forEach((p) => { g[p.bucket].push(p); });
-    return g;
-  }, [filtered]);
+  function deferOne(id: string) {
+    setDeferred((prev) => new Set(prev).add(id));
+  }
+
+  async function approveTopN(n: number) {
+    if (bulkBusy) return;
+    const targets = detections.slice(0, n);
+    if (targets.length === 0) return;
+    setBulkBusy(true); setActionMsg(null);
+    const ids = new Set(targets.map((c) => c.candidate_id));
+    setCandidates((prev) => (prev ?? []).filter((c) => !ids.has(c.candidate_id)));
+    const results = await Promise.allSettled(targets.map((c) => approveEngineCandidate({
+      candidate_id: c.candidate_id,
+      opportunity_id: c.opportunity_id ?? undefined,
+      proposed_value: c.proposed_value ?? undefined,
+      target_page_url: c.target_page_url ?? undefined,
+    })));
+    const ok = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - ok;
+    setActionMsg(`Queued ${ok} recommendation${ok === 1 ? '' : 's'} as DRAFT${failed ? ` · ${failed} failed (still pending)` : ''}.`);
+    setBulkBusy(false);
+    if (failed) loadAll();
+  }
+
+  const TOP_N = 5;
+  const topCount = Math.min(TOP_N, detections.length);
 
   return (
     <div style={{ padding: space['6'], maxWidth: 1200, margin: '0 auto' }}>
-      <div style={{ marginBottom: space['5'] }}>
-        <h1 style={{ fontFamily: fontFamily.body, fontSize: '22px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>
-          SEO Review
-        </h1>
-        <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }}>
-          Governed page portfolio. Only live pages are surfaced as targets; lost pages sit in the restore queue; excluded pages are never shown. Click any page to open its dossier.
-        </p>
-      </div>
-
-      {/* View toggle — page portfolio vs portfolio-wide engine action queue */}
-      <div style={{ display: 'inline-flex', gap: '2px', padding: '3px', marginBottom: space['5'], borderRadius: radius.md, border: `1px solid ${tc.border.default}`, background: tc.background.surface }}>
-        {([
-          { key: 'portfolio' as const, label: 'Page portfolio' },
-          { key: 'queue' as const, label: 'Action queue' },
-        ]).map((v) => {
-          const active = view === v.key;
-          return (
-            <button
-              key={v.key}
-              data-testid={`button-view-${v.key}`}
-              onClick={() => setView(v.key)}
-              style={{
-                padding: '6px 14px', borderRadius: radius.sm, cursor: 'pointer', border: 'none',
-                background: active ? PALETTE.violet : 'transparent',
-                color: active ? '#fff' : tc.text.muted,
-                fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium,
-              }}
-            >
-              {v.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {view === 'queue' ? (
-        <CandidateQueue tc={tc} onOpenPage={setSelectedUrl} />
-      ) : (
-      <>
-      {/* KPI strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: space['3'], marginBottom: space['5'] }}>
-        {BUCKETS.map((b) => (
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['6'], gap: space['4'], flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>SEO Command Center</h1>
+          <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-subtitle">
+            {loading ? 'Loading governed recommendations…'
+              : `${detections.length} gate-accepted recommendation${detections.length === 1 ? '' : 's'} awaiting approval on live pages.`}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap' }}>
           <button
-            key={b.key}
-            data-testid={`kpi-${b.key}`}
-            onClick={() => setActiveBucket(activeBucket === b.key ? 'all' : b.key)}
-            style={{
-              textAlign: 'left', cursor: 'pointer',
-              border: `1px solid ${activeBucket === b.key ? toneStyle(b.tone, tc).fg : tc.border.default}`,
-              borderRadius: radius.md, padding: space['4'], background: tc.background.surface,
-            }}
+            onClick={() => setDiagnoseOpen((v) => !v)}
+            data-testid="button-diagnose"
+            style={{ padding: '8px 14px', background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary, cursor: 'pointer' }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{b.label}</span>
-              <Pill tone={b.tone} tc={tc}>{b.key}</Pill>
-            </div>
-            <div style={{ fontFamily: monoStack, fontSize: '26px', color: tc.text.primary, marginTop: '4px' }}>{counts[b.key]}</div>
-            <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '2px' }}>{b.blurb}</div>
+            Diagnose a URL…
           </button>
-        ))}
-        <div
-          data-testid="kpi-lost-impressions"
-          style={{
-            textAlign: 'left',
-            border: `1px solid ${tc.border.default}`,
-            borderRadius: radius.md, padding: space['4'], background: tc.background.surface,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>Lost impressions</span>
-            <Pill tone="bad" tc={tc}>demand</Pill>
-          </div>
-          <div style={{ fontFamily: monoStack, fontSize: '26px', color: tc.text.primary, marginTop: '4px' }}>{fmtInt(lostImpressions)}</div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '2px' }}>Search impressions tied to lost pages — demand going unserved</div>
+          <button
+            onClick={() => approveTopN(TOP_N)}
+            disabled={bulkBusy || topCount === 0}
+            data-testid="button-approve-top"
+            style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (bulkBusy || topCount === 0) ? 'default' : 'pointer', opacity: (bulkBusy || topCount === 0) ? 0.6 : 1 }}
+          >
+            {bulkBusy ? 'Queuing…' : `Approve top ${topCount}`}
+          </button>
         </div>
       </div>
 
-      {/* Controls */}
-      <div style={{ display: 'flex', gap: space['3'], alignItems: 'center', marginBottom: space['4'], flexWrap: 'wrap' }}>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter by URL or query…"
-          data-testid="input-search"
-          style={{
-            flex: '1 1 260px', padding: '8px 12px', borderRadius: radius.sm,
-            border: `1px solid ${tc.border.default}`, background: tc.background.surface,
-            color: tc.text.primary, fontFamily: fontFamily.body, fontSize: '13px',
-          }}
-        />
-        {activeBucket !== 'all' && (
+      {/* Diagnose-a-URL inline input */}
+      {diagnoseOpen && (
+        <div style={{ display: 'flex', gap: space['2'], marginBottom: space['5'], flexWrap: 'wrap' }}>
+          <input
+            value={diagnoseUrl}
+            onChange={(e) => setDiagnoseUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && diagnoseUrl.trim()) setSelectedUrl(diagnoseUrl.trim()); }}
+            placeholder="Paste a page URL or path to open its dossier…"
+            data-testid="input-diagnose-url"
+            style={{ flex: '1 1 320px', padding: '8px 12px', borderRadius: radius.sm, border: `1px solid ${tc.border.default}`, background: tc.background.surface, color: tc.text.primary, fontFamily: fontFamily.body, fontSize: '13px' }}
+          />
           <button
-            onClick={() => setActiveBucket('all')}
-            data-testid="button-clear-filter"
-            style={{
-              padding: '8px 12px', borderRadius: radius.sm, cursor: 'pointer',
-              border: `1px solid ${tc.border.default}`, background: tc.background.surface,
-              color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '12px',
-            }}
+            onClick={() => { if (diagnoseUrl.trim()) setSelectedUrl(diagnoseUrl.trim()); }}
+            disabled={!diagnoseUrl.trim()}
+            data-testid="button-diagnose-go"
+            style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: diagnoseUrl.trim() ? 'pointer' : 'default', opacity: diagnoseUrl.trim() ? 1 : 0.6 }}
           >
-            Clear bucket filter ({activeBucket})
+            Open dossier
           </button>
-        )}
-        <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-          {filtered.length} pages
-        </span>
-      </div>
+        </div>
+      )}
 
-      {loading && (
-        <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>
-          Loading portfolio…
+      {actionMsg && (
+        <div style={{ marginBottom: space['4'], padding: space['3'], borderRadius: radius.sm, background: PALETTE.goodSoft, color: PALETTE.good, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="text-action-msg">
+          {actionMsg}
         </div>
       )}
       {error && (
-        <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>
-          {error}
-        </div>
+        <div style={{ marginBottom: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>
       )}
 
-      {!loading && !error && BUCKETS.map((b) => {
-        const rows = grouped[b.key];
-        if (rows.length === 0) return null;
-        const shown = Math.min(visible[b.key], rows.length);
-        return (
-          <div key={b.key} style={{ marginBottom: space['6'] }}>
-            <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: space['3'] }}>
-              <Pill tone={b.tone} tc={tc}>{b.label}</Pill>
-              <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{rows.length} · {b.blurb}</span>
+      {/* HERO — trend + freshness */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: space['4'], marginBottom: space['4'] }}>
+        <TrendChart tc={tc} />
+        <FreshnessCard tc={tc} />
+      </div>
+
+      {/* MOMENTUM + RECENTLY SHIPPED */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: space['4'], marginBottom: space['6'] }}>
+        <MomentumCard tc={tc} />
+        <ShippedCard tc={tc} />
+      </div>
+
+      {/* DO THIS NEXT */}
+      <SectionTitle
+        tc={tc}
+        sub="Gate-accepted engine recommendations on live pages, ranked by opportunity score"
+        right={<Pill tone="neutral" tc={tc}>Lane 1 · draft-only approvals</Pill>}
+      >
+        Do this next
+      </SectionTitle>
+      <Card tc={tc} style={{ padding: 0 }}>
+        <div style={{ padding: `0 ${space['5']}` }}>
+          {loading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading recommendations…</div>}
+          {!loading && detections.length === 0 && (
+            <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-detections">
+              No gate-accepted recommendations awaiting approval on live pages.
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: space['3'] }}>
-              {rows.slice(0, shown).map((p) => (
-                <PageCard key={p.url} p={p} tc={tc} onOpen={setSelectedUrl} />
-              ))}
-            </div>
-            {shown < rows.length && (
-              <div style={{ display: 'flex', gap: space['3'], alignItems: 'center', marginTop: space['3'] }}>
-                <button
-                  data-testid={`button-show-more-${b.key}`}
-                  onClick={() => setVisible((v) => ({ ...v, [b.key]: v[b.key] + PAGE_SIZE }))}
-                  style={{
-                    padding: '8px 14px', borderRadius: radius.sm, cursor: 'pointer',
-                    border: `1px solid ${tc.border.default}`, background: tc.background.surface,
-                    color: tc.text.primary, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium,
-                  }}
-                >
-                  Show {Math.min(PAGE_SIZE, rows.length - shown)} more
-                </button>
-                <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-                  Showing {shown} of {rows.length} — narrow with the filter above
-                </span>
-              </div>
-            )}
+          )}
+          {!loading && detections.slice(0, 12).map((c, i) => (
+            <DetectionRow
+              key={c.candidate_id}
+              rank={i + 1}
+              c={c}
+              page={c.target_page_url ? portfolioByPath.get(pathOf(c.target_page_url)) : undefined}
+              tc={tc}
+              onApprove={approveOne}
+              onDefer={deferOne}
+            />
+          ))}
+        </div>
+        {!loading && detections.length > 12 && (
+          <div style={{ padding: space['4'], borderTop: `1px solid ${tc.border.subtle}`, textAlign: 'center', background: tc.background.muted }}>
+            <Link href="/dashboard/seo/performance" style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-view-all-detections">
+              View all {detections.length} recommendations →
+            </Link>
           </div>
-        );
-      })}
+        )}
+      </Card>
 
-      {!loading && !error && filtered.length === 0 && (
-        <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>
-          No pages match the current filters.
+      {/* COMPETITOR INTELLIGENCE */}
+      <div style={{ marginTop: space['6'] }}>
+        <SectionTitle tc={tc} sub="Queries competitors rank for that you don't — from the governed competitive feed">
+          Competitor intelligence
+        </SectionTitle>
+        <Card tc={tc} style={{ padding: 0 }}>
+          {loading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading competitor gaps…</div>}
+          {!loading && (!gaps || gaps.length === 0) && (
+            <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-gaps">
+              No competitor gaps recorded in the governed feed.
+            </div>
+          )}
+          {!loading && gaps && gaps.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: tc.background.muted, color: tc.text.muted, textAlign: 'left' }}>
+                  <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Keyword</th>
+                  <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Competitor</th>
+                  <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Their pos</th>
+                  <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Your pos</th>
+                  <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Volume</th>
+                  <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gaps.slice(0, 8).map((g) => (
+                  <tr key={g.id} style={{ borderTop: `1px solid ${tc.border.subtle}` }} data-testid={`row-gap-${g.id}`}>
+                    <td style={{ padding: '10px 16px', color: tc.text.primary, fontWeight: fontWeight.medium }}>{g.keyword || '—'}</td>
+                    <td style={{ padding: '10px 8px', color: PALETTE.bad, fontFamily: monoStack, fontSize: '12px' }}>{(() => { try { return new URL(g.competitor_url).hostname; } catch { return g.competitor_url; } })()}</td>
+                    <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{g.competitor_ranking_position ?? '—'}</td>
+                    <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.muted }}>{g.our_ranking_position ?? 'unranked'}</td>
+                    <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(g.search_volume)}</td>
+                    <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{g.opportunity_score == null ? '—' : g.opportunity_score.toFixed(0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {!loading && gaps && gaps.length > 8 && (
+            <div style={{ padding: '10px 16px', borderTop: `1px solid ${tc.border.subtle}`, background: tc.background.muted, textAlign: 'right' }}>
+              <Link href="/dashboard/seo/competitors" style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-view-all-gaps">
+                View all {gaps.length} gaps →
+              </Link>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* COMPETITOR CONTENT VELOCITY */}
+      <div style={{ marginTop: space['6'] }}>
+        <SectionTitle tc={tc} sub="New & refreshed competitor pages from the governed competitive crawl — real change counts, no modeled threat scores">
+          Competitor content velocity
+        </SectionTitle>
+        <CompetitorVelocityCard tc={tc} />
+      </div>
+
+      {/* PORTFOLIO STRIP */}
+      <div style={{ marginTop: space['6'] }}>
+        <SectionTitle tc={tc} sub="Governed page portfolio by bucket — open Performance to triage">
+          Portfolio at a glance
+        </SectionTitle>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: space['3'] }}>
+          {BUCKETS.map((b) => (
+            <Link
+              key={b.key}
+              href={`/dashboard/seo/performance?bucket=${b.key}`}
+              data-testid={`tile-bucket-${b.key}`}
+              style={{ textDecoration: 'none', border: `1px solid ${tc.border.default}`, borderRadius: radius.md, padding: space['4'], background: tc.background.surface, display: 'block' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{b.label}</span>
+                <Pill tone={bucketTone(b.key)} tc={tc}>{b.key}</Pill>
+              </div>
+              <div style={{ fontFamily: monoStack, fontSize: '26px', color: tc.text.primary, marginTop: '4px' }}>{loading ? '—' : counts[b.key]}</div>
+              <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '2px' }}>{b.blurb}</div>
+            </Link>
+          ))}
         </div>
-      )}
-      </>
-      )}
+      </div>
 
       {selectedUrl && (
         <PageDossierDrawer url={selectedUrl} tc={tc} onClose={() => setSelectedUrl(null)} />
@@ -1219,11 +886,10 @@ function SeoReviewContent() {
 // =============================================================================
 // Page export — RBAC-gated by DashboardGuard.
 // =============================================================================
-
-export default function SeoReviewPage() {
+export default function SeoCommandCenterPage() {
   return (
     <DashboardGuard dashboard="seo" fallback={<AccessDenied message="You do not have permission to view the SEO Command Center." />}>
-      <SeoReviewContent />
+      <CommandCenterContent />
     </DashboardGuard>
   );
 }

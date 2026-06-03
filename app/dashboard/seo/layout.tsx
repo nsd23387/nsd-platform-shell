@@ -23,39 +23,19 @@ interface NavGroup {
   items: NavItem[];
 }
 
+// Consolidated information architecture — four governed areas. Retired routes
+// (pages, actions, serp-features, competitive, execution-log, content,
+// internal-links, schema, suppressed, attribution, content-scores, outcomes,
+// signals, clusters, backlinks, opportunities) 301-redirect into these four via
+// next.config.js so old links and bookmarks keep resolving.
 const NAV_GROUPS: NavGroup[] = [
   {
-    title: 'Overview',
+    title: 'SEO',
     items: [
-      { href: '/dashboard/seo', label: 'Review', icon: 'review' },
-    ],
-  },
-  {
-    title: 'Analysis',
-    items: [
-      { href: '/dashboard/seo/pages', label: 'Page Performance', icon: 'search' },
-      { href: '/dashboard/seo/serp-features', label: 'SERP Features', icon: 'trending' },
-      { href: '/dashboard/seo/competitive', label: 'Competitor Deep Dive', icon: 'chart' },
-    ],
-  },
-  {
-    title: 'Optimization',
-    items: [
-      { href: '/dashboard/seo/actions', label: 'All Recommendations', icon: 'review' },
-      { href: '/dashboard/seo/execution-log', label: 'Execution Log', icon: 'timeline' },
-      { href: '/dashboard/seo/content', label: 'Content Pipeline', icon: 'edit' },
-      { href: '/dashboard/seo/internal-links', label: 'Internal Links', icon: 'search' },
-      { href: '/dashboard/seo/schema', label: 'Schema Markup', icon: 'edit' },
-      { href: '/dashboard/seo/suppressed', label: 'Suppressed Audit', icon: 'warning' },
-    ],
-  },
-  {
-    title: 'Results',
-    items: [
-      { href: '/dashboard/seo/attribution', label: 'Revenue Attribution', icon: 'trending' },
-      { href: '/dashboard/seo/content-scores', label: 'Content Scores', icon: 'edit' },
-      { href: '/dashboard/seo/outcomes', label: 'Outcomes', icon: 'trending' },
-      { href: '/dashboard/seo/signals', label: 'Signals', icon: 'warning' },
+      { href: '/dashboard/seo', label: 'Command Center', icon: 'review' },
+      { href: '/dashboard/seo/performance', label: 'Performance', icon: 'search' },
+      { href: '/dashboard/seo/competitors', label: 'Competitors', icon: 'chart' },
+      { href: '/dashboard/seo/results', label: 'Results', icon: 'trending' },
     ],
   },
 ];
