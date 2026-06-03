@@ -38,7 +38,7 @@ import type {
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
-  fmtInt, fmtPos, pathOf, PageDossierDrawer,
+  fmtInt, fmtPos, pathOf, PageDossierDrawer, actionMeta,
 } from './_shared';
 
 // -----------------------------------------------------------------------------
@@ -520,6 +520,7 @@ function DetectionRow({
   onDefer: (id: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const meta = actionMeta(c.mutation_type, c.proposed_value);
   const score = c.opportunity_score != null ? Math.round(c.opportunity_score * 100) : null;
   // Honest impact: the target page's real GSC demand, not a modelled lift.
   const impr = page?.top_q_impr ?? page?.gsc_impressions ?? null;
@@ -530,9 +531,10 @@ function DetectionRow({
       <div style={{ fontFamily: monoStack, fontSize: '18px', fontWeight: fontWeight.semibold, color: tc.text.muted }}>#{rank}</div>
       <div style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
-          <Pill tone="violet" tc={tc}>INTERNAL LINK</Pill>
+          <Pill tone={meta.tone} tc={tc}>{meta.label}</Pill>
+          {c.regate_review_flag && <Pill tone="warn" tc={tc}>RE-REVIEW</Pill>}
           <span style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-            {c.proposed_value ? `Add internal link → ${c.proposed_value}` : 'Add internal link'}
+            {meta.title}
           </span>
         </div>
         <div style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, marginBottom: '4px', wordBreak: 'break-all' }}>
@@ -555,7 +557,7 @@ function DetectionRow({
       </div>
       <div>
         <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Effort</div>
-        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary }}>Low</div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary }}>{meta.effort}</div>
       </div>
       <div style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
         <button
