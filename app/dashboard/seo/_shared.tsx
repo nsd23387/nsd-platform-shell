@@ -65,38 +65,6 @@ export function Pill({ children, tone, tc }: { children: React.ReactNode; tone: 
 }
 
 // -----------------------------------------------------------------------------
-// Mutation-type presentation: color-coded category tag + human title + effort +
-// lane. Drives the "DO THIS NEXT" detection rows and the Action Card so each of the
-// six action types renders distinctly (not all as "INTERNAL LINK").
-// -----------------------------------------------------------------------------
-export type ActionMeta = { label: string; tone: ToneKey; title: string; effort: string; lane: 1 | 2 | 3 };
-
-export function actionMeta(mutationType: string | null | undefined, proposedValue?: string | null): ActionMeta {
-  switch (mutationType) {
-    case 'title_tag_refinement':
-      return { label: 'TITLE', tone: 'info', title: 'Rewrite title tag', effort: 'Low', lane: 1 };
-    case 'meta_description_update':
-      return { label: 'META', tone: 'violet', title: 'Rewrite meta description', effort: 'Low', lane: 1 };
-    case 'h1_tag_refinement':
-      return { label: 'H1', tone: 'good', title: 'Refine H1 heading', effort: 'Low', lane: 1 };
-    case 'product_offer_schema':
-      return { label: 'SCHEMA', tone: 'warn', title: 'Add Product/Offer schema', effort: 'Medium', lane: 1 };
-    case 'image_alt_text_improvement':
-      return { label: 'IMAGE ALT', tone: 'neutral', title: 'Improve image alt text', effort: 'Low', lane: 1 };
-    case 'internal_link_insertion':
-      return { label: 'INTERNAL LINK', tone: 'violet', title: proposedValue ? `Add internal link → ${proposedValue}` : 'Add internal link', effort: 'Low', lane: 1 };
-    case 'lost_page_redirect':
-      return { label: 'REDIRECT', tone: 'bad', title: 'Lost-page 301 redirect (Rank Math)', effort: 'Manual', lane: 2 };
-    case 'canonical_consolidation':
-      return { label: 'CANONICAL', tone: 'warn', title: 'Canonical consolidation (Rank Math)', effort: 'Manual', lane: 2 };
-    case 'noindex_hygiene':
-      return { label: 'NOINDEX', tone: 'neutral', title: 'Noindex / sitemap hygiene (Rank Math)', effort: 'Manual', lane: 2 };
-    default:
-      return { label: (mutationType || 'ACTION').replace(/_/g, ' ').toUpperCase(), tone: 'neutral', title: mutationType || 'Action', effort: '—', lane: 1 };
-  }
-}
-
-// -----------------------------------------------------------------------------
 // Bucket presentation metadata.
 // -----------------------------------------------------------------------------
 export const BUCKETS: { key: PortfolioBucket; label: string; tone: ToneKey; blurb: string }[] = [
@@ -142,6 +110,43 @@ export function cardRead(p: PortfolioPage): string {
 export const fmtInt = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('en-US'));
 export const fmtPos = (n: number | null | undefined) => (n == null ? '—' : n.toFixed(1));
 export const fmtMoney = (n: number | null | undefined) => (n == null ? '—' : `$${n.toFixed(2)}`);
+
+// Mutation-type display — the engine emits several distinct candidate types
+// (title, meta, h1, schema, internal_link, redirect). The UI must reflect the
+// ACTUAL type of each candidate, never a hardcoded one (data truthfulness).
+// `tag` is the short pill label; `verb(proposedValue)` is the headline phrase.
+export function mutationDisplay(
+  mutationType: string | null | undefined,
+  primaryRemedy?: string | null,
+): { tag: string; verb: (proposedValue?: string | null) => string } {
+  const t = (mutationType ?? '').toLowerCase();
+  const tgt = (v?: string | null) => (v ? ` → ${v}` : '');
+  if (t.includes('internal_link')) {
+    return { tag: 'INTERNAL LINK', verb: (v) => `Add internal link${tgt(v)}` };
+  }
+  if (t.includes('redirect')) {
+    return { tag: 'REDIRECT', verb: (v) => `Add redirect${tgt(v)}` };
+  }
+  if (t.includes('schema') || t.includes('offer')) {
+    return { tag: 'SCHEMA', verb: () => 'Add structured-data schema' };
+  }
+  if (t.includes('meta')) {
+    return { tag: 'META', verb: () => 'Update meta description' };
+  }
+  if (t.includes('title')) {
+    return { tag: 'TITLE', verb: () => 'Update title tag' };
+  }
+  if (t === 'h1' || t.includes('h1')) {
+    return { tag: 'H1', verb: () => 'Update H1 heading' };
+  }
+  // Unknown / future mutation type — surface the raw type honestly rather than
+  // inventing a friendly label that could misrepresent the action. When neither
+  // field is present, fall back to an explicit UNKNOWN (governance: never imply a
+  // specific action we cannot name).
+  const raw = mutationType || primaryRemedy;
+  if (!raw) return { tag: 'UNKNOWN', verb: () => 'Unknown change type' };
+  return { tag: raw.replace(/_/g, ' ').toUpperCase(), verb: () => raw.replace(/_/g, ' ') };
+}
 
 export function pathOf(url: string): string {
   try {
