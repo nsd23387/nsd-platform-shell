@@ -65,6 +65,38 @@ export function Pill({ children, tone, tc }: { children: React.ReactNode; tone: 
 }
 
 // -----------------------------------------------------------------------------
+// Mutation-type presentation: color-coded category tag + human title + effort +
+// lane. Drives the "DO THIS NEXT" detection rows and the Action Card so each of the
+// six action types renders distinctly (not all as "INTERNAL LINK").
+// -----------------------------------------------------------------------------
+export type ActionMeta = { label: string; tone: ToneKey; title: string; effort: string; lane: 1 | 2 | 3 };
+
+export function actionMeta(mutationType: string | null | undefined, proposedValue?: string | null): ActionMeta {
+  switch (mutationType) {
+    case 'title_tag_refinement':
+      return { label: 'TITLE', tone: 'info', title: 'Rewrite title tag', effort: 'Low', lane: 1 };
+    case 'meta_description_update':
+      return { label: 'META', tone: 'violet', title: 'Rewrite meta description', effort: 'Low', lane: 1 };
+    case 'h1_tag_refinement':
+      return { label: 'H1', tone: 'good', title: 'Refine H1 heading', effort: 'Low', lane: 1 };
+    case 'product_offer_schema':
+      return { label: 'SCHEMA', tone: 'warn', title: 'Add Product/Offer schema', effort: 'Medium', lane: 1 };
+    case 'image_alt_text_improvement':
+      return { label: 'IMAGE ALT', tone: 'neutral', title: 'Improve image alt text', effort: 'Low', lane: 1 };
+    case 'internal_link_insertion':
+      return { label: 'INTERNAL LINK', tone: 'violet', title: proposedValue ? `Add internal link → ${proposedValue}` : 'Add internal link', effort: 'Low', lane: 1 };
+    case 'lost_page_redirect':
+      return { label: 'REDIRECT', tone: 'bad', title: 'Lost-page 301 redirect (Rank Math)', effort: 'Manual', lane: 2 };
+    case 'canonical_consolidation':
+      return { label: 'CANONICAL', tone: 'warn', title: 'Canonical consolidation (Rank Math)', effort: 'Manual', lane: 2 };
+    case 'noindex_hygiene':
+      return { label: 'NOINDEX', tone: 'neutral', title: 'Noindex / sitemap hygiene (Rank Math)', effort: 'Manual', lane: 2 };
+    default:
+      return { label: (mutationType || 'ACTION').replace(/_/g, ' ').toUpperCase(), tone: 'neutral', title: mutationType || 'Action', effort: '—', lane: 1 };
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Bucket presentation metadata.
 // -----------------------------------------------------------------------------
 export const BUCKETS: { key: PortfolioBucket; label: string; tone: ToneKey; blurb: string }[] = [

@@ -18,7 +18,7 @@ const nextConfig = {
       ['backlinks', 'competitors'],
       ['actions', ''],
       ['execution-log', 'results'],
-      ['suppressed', 'results'],
+      ['suppressed', ''],
       ['attribution', 'results'],
       ['outcomes', 'results'],
       ['signals', 'results'],

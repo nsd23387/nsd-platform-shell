@@ -958,12 +958,35 @@ export interface PageDossierCandidate {
   approval_status: string | null;
   execution_status: string | null;
   target_page_url: string | null;
+  regate_review_flag?: boolean | null;
+}
+
+export interface KeywordTarget {
+  keyword?: string | null;
+  volume?: number | null;
+  cpc?: number | null;
+  kd?: number | null;
+  position?: number | null;
+  target_score?: number | null;
+  confidence?: number | null;
+}
+export interface RoutedQuery {
+  query: string;
+  decision: 'own' | 'route' | 'content_gap' | 'discard' | string;
+  target_page?: string | null;
+  reason?: string | null;
+}
+export interface PageDossierMeta {
+  priority: string | null;
+  keyword_targets: { primary?: KeywordTarget | null; secondary?: KeywordTarget[] | null } | null;
+  routed_queries: RoutedQuery[];
 }
 
 export interface PageDossier {
   page: PageDossierPage;
   demand: PageDossierDemandRow[];
   candidates: PageDossierCandidate[];
+  dossier_meta?: PageDossierMeta | null;
 }
 
 export async function getSeoPageDossier(url: string): Promise<PageDossier> {

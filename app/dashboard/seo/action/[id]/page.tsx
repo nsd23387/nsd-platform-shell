@@ -28,7 +28,7 @@ import {
 } from '../../../../../lib/seoApi';
 import type { SeoCandidateDetail, PageDossier } from '../../../../../lib/seoApi';
 import {
-  PALETTE, monoStack, Tc, Pill, fmtInt, fmtPos, pathOf,
+  PALETTE, monoStack, Tc, ToneKey, Pill, fmtInt, fmtPos, pathOf, actionMeta,
 } from '../../_shared';
 
 function Card({ children, style, tc }: { children: React.ReactNode; style?: React.CSSProperties; tc: Tc }) {
@@ -86,14 +86,25 @@ function ActionDetailContent() {
   const targetNode = evidence?.target ?? null;
   const signals = evidence?.signals ?? null;
   const score = candidate?.opportunity_score != null ? Math.round(candidate.opportunity_score * 100) : null;
+  const meta = actionMeta(candidate?.mutation_type, candidate?.proposed_value);
+  const isLink = candidate?.mutation_type === 'internal_link_insertion';
+  const kwTargets = dossier?.dossier_meta?.keyword_targets ?? null;
+  const routed = dossier?.dossier_meta?.routed_queries ?? [];
+  // Ads conversion COUNT for the page (quote-form conversions are $0-valued — never weight by value).
+  const convCount = (evidence?.gsc && typeof (evidence.gsc as Record<string, unknown>).conversions === 'number')
+    ? Number((evidence.gsc as Record<string, unknown>).conversions)
+    : null;
 
-  // Real GSC baseline for the page being edited (the source page).
+  // Real GSC baseline for the page being edited. Position = the TOP query's average
+  // position (highest-impression query from the demand table), NOT gsc_best_position
+  // (all-time min, which mislabels deep-ranking pages as wins). Governance rule #2.
   const baseline = useMemo(() => {
     const p = dossier?.page;
+    const top = dossier?.demand?.[0] ?? null; // demand is ordered by impressions desc
     return {
       impressions: p?.gsc_impressions ?? null,
-      position: p?.gsc_best_position ?? null,
-      topQuery: p?.gsc_top_query ?? null,
+      position: top?.avg_position ?? p?.gsc_best_position ?? null,
+      topQuery: top?.query ?? p?.gsc_top_query ?? null,
     };
   }, [dossier]);
 
@@ -145,13 +156,14 @@ function ActionDetailContent() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['5'], gap: space['4'], flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: space['2'], flexWrap: 'wrap' }}>
-                <Pill tone="violet" tc={tc}>{candidate.primary_remedy || candidate.mutation_type || 'remedy'}</Pill>
+                <Pill tone={meta.tone} tc={tc}>{meta.label}</Pill>
+                <Pill tone="neutral" tc={tc}>Lane {meta.lane} · {meta.lane === 1 ? 'engine draft' : meta.lane === 2 ? 'Rank Math (human)' : 'off-page (human)'}</Pill>
                 {candidate.confidence_tier && <Pill tone="info" tc={tc}>confidence: {candidate.confidence_tier}</Pill>}
                 {score != null && <Pill tone="neutral" tc={tc}>score {score}</Pill>}
                 {candidate.gate_status && <Pill tone="good" tc={tc}>gate: {candidate.gate_status}</Pill>}
               </div>
               <h1 style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>
-                {candidate.proposed_value ? `Add internal link → ${candidate.proposed_value}` : 'Internal link insertion'}
+                {meta.title}
               </h1>
               <div style={{ fontFamily: monoStack, fontSize: '13px', color: tc.text.muted, marginTop: '4px', wordBreak: 'break-all' }}>
                 {candidate.target_page_url ? pathOf(candidate.target_page_url) : '—'}
@@ -216,14 +228,18 @@ function ActionDetailContent() {
               <Label tc={tc}>Before</Label>
               <div style={{ padding: space['3'], background: PALETTE.badSoft, border: `1px solid ${PALETTE.bad}30`, borderRadius: radius.sm, marginBottom: space['3'] }}>
                 <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.bad, marginBottom: '4px', fontWeight: fontWeight.semibold }}>Current state</div>
-                <div style={{ fontFamily: fontFamily.body, fontSize: '14px', color: tc.text.primary }}>
-                  No internal link from this page to {targetNode?.entity ? <strong>{targetNode.entity}</strong> : 'the related page'}.
+                <div style={{ fontFamily: fontFamily.body, fontSize: '14px', color: tc.text.primary, wordBreak: 'break-word' }}>
+                  {candidate.current_value_snapshot
+                    ? <span style={{ fontFamily: monoStack, fontSize: '13px' }}>{candidate.current_value_snapshot}</span>
+                    : isLink
+                      ? <>No internal link from this page to {targetNode?.entity ? <strong>{targetNode.entity}</strong> : 'the related page'}.</>
+                      : <span style={{ color: tc.text.muted }}>No current value captured yet (executor snapshots it before applying).</span>}
                 </div>
               </div>
               <table style={{ width: '100%', fontFamily: fontFamily.body, fontSize: '13px' }}>
                 <tbody>
                   <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top query</td><td style={{ textAlign: 'right', color: tc.text.primary }}>{baseline.topQuery || '—'}</td></tr>
-                  <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Best position</td><td style={{ textAlign: 'right', fontFamily: monoStack }}>{fmtPos(baseline.position)}</td></tr>
+                  <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top-query position</td><td style={{ textAlign: 'right', fontFamily: monoStack }}>{fmtPos(baseline.position)}</td></tr>
                   <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Impressions</td><td style={{ textAlign: 'right', fontFamily: monoStack }}>{fmtInt(baseline.impressions)}</td></tr>
                 </tbody>
               </table>
@@ -233,8 +249,12 @@ function ActionDetailContent() {
               <Label tc={tc}>After (proposed)</Label>
               <div style={{ padding: space['3'], background: PALETTE.goodSoft, border: `1px solid ${PALETTE.good}30`, borderRadius: radius.sm, marginBottom: space['3'] }}>
                 <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.good, marginBottom: '4px', fontWeight: fontWeight.semibold }}>Proposed change</div>
-                <div style={{ fontFamily: fontFamily.body, fontSize: '14px', color: tc.text.primary }}>
-                  Insert a contextual internal link to {candidate.proposed_value ? <strong>{candidate.proposed_value}</strong> : 'the related page'}{targetNode?.url ? <> (<span style={{ fontFamily: monoStack, fontSize: '12px' }}>{pathOf(targetNode.url)}</span>)</> : ''}.
+                <div style={{ fontFamily: fontFamily.body, fontSize: '14px', color: tc.text.primary, wordBreak: 'break-word' }}>
+                  {isLink
+                    ? <>Insert a contextual internal link to {candidate.proposed_value ? <strong>{candidate.proposed_value}</strong> : 'the related page'}{targetNode?.url ? <> (<span style={{ fontFamily: monoStack, fontSize: '12px' }}>{pathOf(targetNode.url)}</span>)</> : ''}.</>
+                    : candidate.proposed_value
+                      ? <span style={{ fontFamily: monoStack, fontSize: '13px' }}>{candidate.proposed_value}</span>
+                      : <span style={{ color: tc.text.muted }}>Proposed value pending generation.</span>}
                 </div>
               </div>
               <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.secondary, lineHeight: 1.6 }}>
@@ -257,9 +277,10 @@ function ActionDetailContent() {
               </thead>
               <tbody>
                 {[
-                  ['Best position', fmtPos(baseline.position), 'improve (lower)', 'No regression > 0.5'],
+                  ['Top-query position', fmtPos(baseline.position), 'improve (lower)', 'No regression > 0.5'],
                   ['Impressions', fmtInt(baseline.impressions), 'increase', 'Net positive vs baseline'],
                   ['Clicks (top queries)', fmtInt(dossier?.demand?.reduce((s, d) => s + (d.clicks || 0), 0) ?? null), 'increase', 'Net positive vs baseline'],
+                  ['Conversions (Ads count)', convCount != null ? fmtInt(convCount) : '—', 'increase', 'Quote-form conversion count — never $-weighted'],
                 ].map((r) => (
                   <tr key={r[0]} style={{ borderBottom: `1px solid ${tc.border.subtle}` }}>
                     <td style={{ padding: '10px 0', color: tc.text.primary }}>{r[0]}</td>
@@ -276,6 +297,60 @@ function ActionDetailContent() {
               <span>ℹ️ Clicks baseline sums the page&apos;s top GSC queries (demand table), not every long-tail query.</span>
             </div>
           </Card>
+
+          {/* KEYWORD TARGETS + ROUTED QUERIES (from the page dossier) */}
+          {(kwTargets?.primary || (kwTargets?.secondary && kwTargets.secondary.length > 0) || routed.length > 0) && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: space['4'], marginBottom: space['4'] }}>
+              <Card tc={tc}>
+                <Label tc={tc}>Keyword targets</Label>
+                {kwTargets?.primary ? (
+                  <div style={{ marginBottom: space['3'] }}>
+                    <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: '4px' }}>
+                      <Pill tone="good" tc={tc}>PRIMARY</Pill>
+                      <span style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>{kwTargets.primary.keyword || '—'}</span>
+                    </div>
+                    <div style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted }}>
+                      vol {kwTargets.primary.volume != null ? fmtInt(kwTargets.primary.volume) : 'no DataForSEO volume'} · kd {kwTargets.primary.kd ?? '—'} · cpc {kwTargets.primary.cpc != null ? `$${Number(kwTargets.primary.cpc).toFixed(2)}` : '—'} · pos {fmtPos(kwTargets.primary.position ?? null)}
+                    </div>
+                  </div>
+                ) : <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted }}>No primary keyword target recorded.</div>}
+                {kwTargets?.secondary && kwTargets.secondary.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {kwTargets.secondary.map((s, i) => (
+                      <div key={i} style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Pill tone="neutral" tc={tc}>SECONDARY</Pill>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary }}>{s.keyword || '—'}</span>
+                        <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>vol {s.volume != null ? fmtInt(s.volume) : '—'} · pos {fmtPos(s.position ?? null)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+              <Card tc={tc}>
+                <Label tc={tc}>Routed queries</Label>
+                {routed.length === 0 ? (
+                  <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted }}>No routed queries recorded.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: 260, overflowY: 'auto' }}>
+                    {routed.slice(0, 20).map((rq, i) => {
+                      const isMirage = rq.decision === 'discard';
+                      const tone: ToneKey = rq.decision === 'own' ? 'good' : rq.decision === 'route' ? 'info' : rq.decision === 'content_gap' ? 'warn' : 'bad';
+                      return (
+                        <div key={i} style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap', opacity: isMirage ? 0.85 : 1 }}>
+                          <Pill tone={tone} tc={tc}>{isMirage ? `MIRAGE · ${rq.reason || 'discard'}` : rq.decision.toUpperCase()}</Pill>
+                          <span style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary, textDecoration: isMirage ? 'line-through' : 'none' }}>{rq.query}</span>
+                          {rq.decision === 'route' && rq.target_page && (
+                            <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>→ {pathOf(rq.target_page)}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div style={{ marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>Mirages (competitor / foreign-language / off-intent) are discarded with a reason — never surfaced as opportunities.</div>
+              </Card>
+            </div>
+          )}
 
           {/* EVIDENCE + RISK */}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: space['4'] }}>
