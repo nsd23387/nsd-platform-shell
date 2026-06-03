@@ -29,16 +29,17 @@ import {
   getSeoPortfolio, getSeoCompetitorGaps,
   approveEngineCandidate, rejectEngineCandidate,
   getCompetitiveVelocitySummary, getCompetitiveChanges, getSeoShipped,
+  getSeoOffpageBriefs, getSeoSuppressed,
 } from '../../../lib/seoApi';
 import type {
   PortfolioPage, PortfolioBucket, PageDossierCandidate,
   SeoTimeseriesResponse, GscPipelineHealth, SeoCompetitorGap,
   SeoTimeseriesPoint, CompetitiveVelocitySummary, CompetitivePageChange,
-  SeoShippedAction,
+  SeoShippedAction, SeoOffpageBrief, SuppressedAudit,
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
-  fmtInt, fmtPos, pathOf, PageDossierDrawer, mutationDisplay,
+  fmtInt, fmtPos, pathOf, PageDossierDrawer, mutationDisplay, sectionLabelStyle,
 } from './_shared';
 
 // -----------------------------------------------------------------------------
@@ -497,8 +498,25 @@ function FreshnessCard({ tc }: { tc: Tc }) {
               <div style={{ marginTop: space['1'], color: PALETTE.bad, fontSize: '11px' }}>{health.last_error}</div>
             )}
           </div>
-          <div style={{ marginTop: space['3'], paddingTop: space['3'], borderTop: `1px solid ${tc.border.subtle}`, fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: 1.5 }}>
-            GA4, Google Ads &amp; the cluster engine sync on their own schedules and aren&apos;t exposed through this freshness probe yet — this surface tracks GSC only.
+          <div style={{ marginTop: space['3'], paddingTop: space['3'], borderTop: `1px solid ${tc.border.subtle}` }}>
+            {[
+              { name: 'Google Analytics 4' },
+              { name: 'Google Ads' },
+              { name: 'Cluster engine' },
+              { name: 'Rank Math' },
+            ].map((s) => (
+              <div
+                key={s.name}
+                data-testid={`row-freshness-${s.name.replace(/\W+/g, '-').toLowerCase()}`}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}
+              >
+                <span>{s.name}</span>
+                <Pill tone="neutral" tc={tc}>no freshness probe</Pill>
+              </div>
+            ))}
+            <div style={{ marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: 1.5 }}>
+              These sources sync on their own schedules and aren&apos;t wired to a freshness probe yet — only GSC is observed here.
+            </div>
           </div>
         </>
       )}
@@ -536,6 +554,11 @@ function DetectionRow({
               <span style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>
                 {m.verb(c.proposed_value)}
               </span>
+              {c.regate_review_flag && (
+                <span title="Re-surfaced for human re-review after a prior decision">
+                  <Pill tone="warn" tc={tc}>re-review</Pill>
+                </span>
+              )}
             </>
           ); })()}
         </div>
@@ -590,6 +613,161 @@ function DetectionRow({
 }
 
 // =============================================================================
+// Off-page authority briefs — portfolio-wide Lane 3 advisory (read-only).
+// Sourced from analytics.seo_offpage_brief. All figures are real observed GSC /
+// DataForSEO values — no fabricated link counts or projected authority.
+// =============================================================================
+function OffpageBriefsSection({ tc }: { tc: Tc }) {
+  const [briefs, setBriefs] = useState<SeoOffpageBrief[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getSeoOffpageBriefs()
+      .then((b) => { if (alive) setBriefs(b); })
+      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load off-page briefs'); });
+    return () => { alive = false; };
+  }, []);
+
+  return (
+    <div style={{ marginTop: space['6'] }}>
+      <SectionTitle
+        tc={tc}
+        sub="Authority-bound pages where on-page is adequate — earn links / digital PR to break into the top 10"
+        right={<Pill tone="neutral" tc={tc}>Lane 3 · advisory</Pill>}
+      >
+        Off-page authority briefs
+      </SectionTitle>
+      <Card tc={tc} style={{ padding: 0 }}>
+        {!briefs && !error && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading off-page briefs…</div>}
+        {error && <div style={{ padding: space['4'], color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
+        {briefs && briefs.length === 0 && (
+          <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-offpage">
+            No off-page authority briefs — on-page work (Lanes 1 &amp; 2) is the priority.
+          </div>
+        )}
+        {briefs && briefs.length > 0 && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '13px' }}>
+            <thead>
+              <tr style={{ background: tc.background.muted, color: tc.text.muted, textAlign: 'left' }}>
+                <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Page</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Target keyword</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Pos</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Impr</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Vol</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>KD</th>
+                <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {briefs.map((b, i) => (
+                <tr key={i} style={{ borderTop: `1px solid ${tc.border.subtle}` }} data-testid={`row-offpage-${i}`}>
+                  <td style={{ padding: '10px 16px', fontFamily: monoStack, fontSize: '12px', color: tc.text.primary, wordBreak: 'break-all' }}>{pathOf(b.page_url)}</td>
+                  <td style={{ padding: '10px 8px', color: tc.text.primary }}>{b.target_keyword || '—'}</td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtPos(b.current_position)}</td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(b.impressions)}</td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(b.search_volume)}</td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{b.keyword_difficulty == null ? '—' : b.keyword_difficulty.toFixed(0)}</td>
+                  <td style={{ padding: '10px 16px', color: tc.text.muted, fontSize: '12px', maxWidth: 320 }}>{b.reason || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// =============================================================================
+// Suppressed candidates — read-only audit grouped by gate reason. Sourced from
+// the engine's gate-rejected pile (analytics). Shows WHY the engine withheld a
+// candidate so the absence of action is transparent, never hidden.
+// =============================================================================
+function SuppressedSection({ tc }: { tc: Tc }) {
+  const [audit, setAudit] = useState<SuppressedAudit | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [openReason, setOpenReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getSeoSuppressed()
+      .then((a) => { if (alive) setAudit(a); })
+      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load suppressed audit'); });
+    return () => { alive = false; };
+  }, []);
+
+  // Group rows by their gate reason(s). A row with multiple reasons appears
+  // under each — the rollup counts already reflect the engine's own tally.
+  const grouped = useMemo(() => {
+    const m = new Map<string, SuppressedAudit['rows']>();
+    (audit?.rows ?? []).forEach((r) => {
+      const reasons = r.gate_reasons.length > 0 ? r.gate_reasons : ['(no reason recorded)'];
+      reasons.forEach((reason) => {
+        const list = m.get(reason) ?? [];
+        list.push(r);
+        m.set(reason, list);
+      });
+    });
+    return Array.from(m.entries()).sort((a, b) => b[1].length - a[1].length);
+  }, [audit]);
+
+  return (
+    <div style={{ marginTop: space['6'] }}>
+      <SectionTitle
+        tc={tc}
+        sub="Candidates the engine withheld at the gate — grouped by reason, for transparency"
+        right={audit ? <Pill tone="neutral" tc={tc}>{audit.total} suppressed</Pill> : undefined}
+      >
+        Suppressed by the gate
+      </SectionTitle>
+      <Card tc={tc} style={{ padding: 0 }}>
+        {!audit && !error && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading suppressed audit…</div>}
+        {error && <div style={{ padding: space['4'], color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
+        {audit && grouped.length === 0 && (
+          <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-suppressed">
+            Nothing suppressed — every candidate the engine produced passed the gate.
+          </div>
+        )}
+        {audit && grouped.map(([reason, rows]) => {
+          const open = openReason === reason;
+          return (
+            <div key={reason} style={{ borderTop: `1px solid ${tc.border.subtle}` }}>
+              <button
+                onClick={() => setOpenReason(open ? null : reason)}
+                data-testid={`button-suppressed-reason-${reason.replace(/\W+/g, '-').toLowerCase()}`}
+                style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: space['3'], padding: `${space['3']} ${space['5']}`, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <span style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Pill tone="warn" tc={tc}>{reason}</Pill>
+                  <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{rows.length} candidate{rows.length === 1 ? '' : 's'}</span>
+                </span>
+                <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted }}>{open ? '▾' : '▸'}</span>
+              </button>
+              {open && (
+                <div style={{ padding: `0 ${space['5']} ${space['3']}` }}>
+                  {rows.map((r) => (
+                    <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: space['3'], padding: '6px 0', borderTop: `1px solid ${tc.border.subtle}`, fontFamily: fontFamily.body, fontSize: '12px' }} data-testid={`row-suppressed-${r.id}`}>
+                      <span style={{ minWidth: 0 }}>
+                        <Pill tone="neutral" tc={tc}>{mutationDisplay(r.mutation_type).tag}</Pill>
+                        <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, marginLeft: space['2'], wordBreak: 'break-all' }}>{r.target_url ? pathOf(r.target_url) : '—'}</span>
+                      </span>
+                      <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, flexShrink: 0 }}>
+                        {r.relevance_score == null ? '' : `rel ${(r.relevance_score * 100).toFixed(0)}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </Card>
+    </div>
+  );
+}
+
+// =============================================================================
 // Main content
 // =============================================================================
 function CommandCenterContent() {
@@ -603,6 +781,8 @@ function CommandCenterContent() {
   const [deferred, setDeferred] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewSelected, setReviewSelected] = useState<Set<string>>(new Set());
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
   const [diagnoseUrl, setDiagnoseUrl] = useState('');
@@ -667,10 +847,28 @@ function CommandCenterContent() {
     setDeferred((prev) => new Set(prev).add(id));
   }
 
-  async function approveTopN(n: number) {
-    if (bulkBusy) return;
+  // Open the review-then-confirm panel for the top N detections. Nothing is
+  // approved until the user confirms — and they may deselect any candidate
+  // first (governance: bulk approve must remain a deliberate, reviewable act).
+  function openReview(n: number) {
     const targets = detections.slice(0, n);
     if (targets.length === 0) return;
+    setReviewSelected(new Set(targets.map((c) => c.candidate_id)));
+    setReviewOpen(true);
+  }
+
+  function toggleReview(id: string) {
+    setReviewSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function confirmReview() {
+    if (bulkBusy) return;
+    const targets = detections.filter((c) => reviewSelected.has(c.candidate_id));
+    if (targets.length === 0) { setReviewOpen(false); return; }
     setBulkBusy(true); setActionMsg(null);
     const ids = new Set(targets.map((c) => c.candidate_id));
     setCandidates((prev) => (prev ?? []).filter((c) => !ids.has(c.candidate_id)));
@@ -684,11 +882,16 @@ function CommandCenterContent() {
     const failed = results.length - ok;
     setActionMsg(`Queued ${ok} recommendation${ok === 1 ? '' : 's'} as DRAFT${failed ? ` · ${failed} failed (still pending)` : ''}.`);
     setBulkBusy(false);
+    setReviewOpen(false);
     if (failed) loadAll();
   }
 
   const TOP_N = 5;
   const topCount = Math.min(TOP_N, detections.length);
+  const reviewTargets = useMemo(
+    () => detections.slice(0, TOP_N),
+    [detections],
+  );
 
   return (
     <div style={{ padding: space['6'], maxWidth: 1200, margin: '0 auto' }}>
@@ -710,12 +913,12 @@ function CommandCenterContent() {
             Diagnose a URL…
           </button>
           <button
-            onClick={() => approveTopN(TOP_N)}
+            onClick={() => openReview(TOP_N)}
             disabled={bulkBusy || topCount === 0}
             data-testid="button-approve-top"
             style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (bulkBusy || topCount === 0) ? 'default' : 'pointer', opacity: (bulkBusy || topCount === 0) ? 0.6 : 1 }}
           >
-            {bulkBusy ? 'Queuing…' : `Approve top ${topCount}`}
+            {`Review top ${topCount}…`}
           </button>
         </div>
       </div>
@@ -739,6 +942,74 @@ function CommandCenterContent() {
           >
             Open dossier
           </button>
+        </div>
+      )}
+
+      {/* Approve-top-N review-then-confirm. Governance: bulk approve is never a
+          one-click act — the user reviews each candidate and may deselect any
+          before anything is queued as DRAFT. */}
+      {reviewOpen && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: space['6'], overflowY: 'auto' }}
+          onClick={() => { if (!bulkBusy) setReviewOpen(false); }}
+          data-testid="overlay-review"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: 640, background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, padding: space['5'], marginTop: '48px' }}
+          >
+            <div style={sectionLabelStyle(tc)}>Review before queuing as DRAFT</div>
+            <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginBottom: space['4'] }}>
+              Deselect anything you don&apos;t want to approve. Selected items are queued as DRAFT for human governance — nothing is published.
+            </div>
+            <div style={{ borderTop: `1px solid ${tc.border.subtle}`, marginBottom: space['4'] }}>
+              {reviewTargets.map((c) => {
+                const checked = reviewSelected.has(c.candidate_id);
+                const m = mutationDisplay(c.mutation_type, c.primary_remedy);
+                return (
+                  <label
+                    key={c.candidate_id}
+                    data-testid={`review-row-${c.candidate_id}`}
+                    style={{ display: 'flex', gap: space['3'], alignItems: 'flex-start', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}`, cursor: 'pointer' }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleReview(c.candidate_id)}
+                      data-testid={`review-check-${c.candidate_id}`}
+                      style={{ marginTop: '3px', flexShrink: 0 }}
+                    />
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap', marginBottom: '2px' }}>
+                        <Pill tone="violet" tc={tc}>{m.tag}</Pill>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{m.verb(c.proposed_value)}</span>
+                        {c.regate_review_flag && <Pill tone="warn" tc={tc}>re-review</Pill>}
+                      </span>
+                      <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, wordBreak: 'break-all' }}>{c.target_page_url ? pathOf(c.target_page_url) : '—'}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: space['2'], justifyContent: 'flex-end', alignItems: 'center' }}>
+              <button
+                onClick={() => setReviewOpen(false)}
+                disabled={bulkBusy}
+                data-testid="button-review-cancel"
+                style={{ padding: '8px 14px', background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary, cursor: bulkBusy ? 'default' : 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmReview}
+                disabled={bulkBusy || reviewSelected.size === 0}
+                data-testid="button-review-confirm"
+                style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (bulkBusy || reviewSelected.size === 0) ? 'default' : 'pointer', opacity: (bulkBusy || reviewSelected.size === 0) ? 0.6 : 1 }}
+              >
+                {bulkBusy ? 'Queuing…' : `Queue ${reviewSelected.size} as DRAFT`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -855,6 +1126,12 @@ function CommandCenterContent() {
         </SectionTitle>
         <CompetitorVelocityCard tc={tc} />
       </div>
+
+      {/* OFF-PAGE AUTHORITY BRIEFS (Lane 3 advisory) */}
+      <OffpageBriefsSection tc={tc} />
+
+      {/* SUPPRESSED BY THE GATE (read-only audit) */}
+      <SuppressedSection tc={tc} />
 
       {/* PORTFOLIO STRIP */}
       <div style={{ marginTop: space['6'] }}>

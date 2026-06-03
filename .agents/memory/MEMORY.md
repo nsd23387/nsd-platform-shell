@@ -1,5 +1,6 @@
 - [SEO analytics schema joins](seo-analytics-schema.md) — analytics.* SEO tables disagree on URL host (www vs apex); normalize before any cross-table join, plus inventory bucketing + candidate gating rules.
 - [Project env & DB probing](env-and-db-probing.md) — how to run ad-hoc Supabase queries here: code_execution sandbox has NO process.env; use bash+node with pg resolved from project root.
 - [SEO content must be neon-specific](seo-neon-specificity.md) — never generic "LED"/"signs" copy or competitors; canonical neon competitor set + the one led-vs-neon exception.
+- [SEO action-card governance scoping](seo-screen-governance.md) — Screen 2 (action/[id]) shares lane components with Screen 1 but must readOnly-gate all non-URL candidates; only the URL-scoped candidate is writable.
 - [SEO /actions silent candidate fallback](seo-actions-shipped-fallback.md) — /api/proxy/seo/actions returns awaiting-approval candidates when seo_action is empty; shipped consumers must filter by status allowlist.
 - [Page dossier demand is capped](seo-analytics-schema.md) — /api/proxy/seo/page demand table is LIMIT 12 (top queries); never label sums of it as a full page total — say "top queries".

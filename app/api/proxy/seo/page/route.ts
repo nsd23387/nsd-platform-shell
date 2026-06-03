@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
               proposed_value, current_value_snapshot, evidence_summary, gate_reasons,
               opportunity_score::numeric AS opportunity_score, opportunity_urgency,
               confidence_tier, source_confidence, approval_status, execution_status,
-              target_page_url
+              target_page_url, regate_review_flag, lane, executor
        FROM analytics.seo_execution_candidate
        WHERE rtrim(regexp_replace(lower(target_page_url), '^https?://(www\\.)?', ''), '/') = $1
          AND gate_status = 'accepted'
@@ -110,7 +110,34 @@ export async function GET(req: NextRequest) {
       [norm],
     );
 
-    const [invR, demandR, candR] = await Promise.all([invQ, demandQ, candQ]);
+    // Engine per-page reasoning record. Matched on norm_url (the dossier stores
+    // the already-normalized url) with a regexp fallback on page_url for safety.
+    const dossierQ = pool.query(
+      `SELECT intent, priority, status_class, content_type, generated_at,
+              state, keyword_targets, routed_queries, ranked_actions
+       FROM analytics.seo_page_dossier
+       WHERE norm_url = $1
+          OR rtrim(regexp_replace(lower(page_url), '^https?://(www\\.)?', ''), '/') = $1
+       ORDER BY generated_at DESC NULLS LAST
+       LIMIT 1`,
+      [norm],
+    );
+
+    // Gate-decision trail for THIS page's candidates. seo_gate_transition has no
+    // page column, so we join through seo_execution_candidate on candidate_id.
+    const transQ = pool.query(
+      `SELECT t.candidate_id, t.from_status, t.to_status, t.reason, t.gated_at
+       FROM analytics.seo_gate_transition t
+       JOIN analytics.seo_execution_candidate c ON c.candidate_id = t.candidate_id
+       WHERE rtrim(regexp_replace(lower(c.target_page_url), '^https?://(www\\.)?', ''), '/') = $1
+       ORDER BY t.gated_at DESC
+       LIMIT 20`,
+      [norm],
+    );
+
+    const [invR, demandR, candR, dossierR, transR] = await Promise.all([
+      invQ, demandQ, candQ, dossierQ, transQ,
+    ]);
 
     if (invR.rows.length === 0) {
       return NextResponse.json({ error: 'Page not found in inventory' }, { status: 404 });
@@ -173,9 +200,75 @@ export async function GET(req: NextRequest) {
       approval_status: r.approval_status,
       execution_status: r.execution_status,
       target_page_url: r.target_page_url,
+      regate_review_flag: r.regate_review_flag ?? null,
+      lane: r.lane != null ? Number(r.lane) : null,
+      executor: r.executor ?? null,
     }));
 
-    return NextResponse.json({ data: { page, demand, candidates } });
+    const num = (v: unknown): number | null =>
+      v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v);
+    const mapKwTarget = (k: Record<string, unknown> | null | undefined) => {
+      if (!k || typeof k !== 'object') return null;
+      const ev = (k.evidence ?? {}) as Record<string, unknown>;
+      return {
+        keyword: (k.keyword as string) ?? null,
+        position: num(k.position),
+        volume: num(k.volume),
+        kd: num(k.kd),
+        cpc: num(k.cpc),
+        confidence: num(k.confidence),
+        target_score: num(k.target_score),
+        on_intent: typeof ev.on_intent === 'boolean' ? ev.on_intent : null,
+        impressions: num(ev.impressions),
+      };
+    };
+
+    let dossier: unknown = null;
+    if (dossierR.rows.length > 0) {
+      const d = dossierR.rows[0];
+      const kt = (d.keyword_targets ?? {}) as Record<string, unknown>;
+      const secondaryRaw = Array.isArray(kt.secondary) ? kt.secondary : [];
+      const routedRaw = Array.isArray(d.routed_queries) ? d.routed_queries : [];
+      const rankedRaw = Array.isArray(d.ranked_actions) ? d.ranked_actions : [];
+      dossier = {
+        intent: d.intent ?? null,
+        priority: d.priority ?? null,
+        status_class: d.status_class ?? null,
+        content_type: d.content_type ?? null,
+        generated_at: d.generated_at ?? null,
+        state: d.state ?? null,
+        keyword_targets: {
+          primary: mapKwTarget(kt.primary as Record<string, unknown>),
+          secondary: secondaryRaw.map((s: Record<string, unknown>) => mapKwTarget(s)).filter(Boolean),
+        },
+        routed_queries: routedRaw.map((q: Record<string, unknown>) => ({
+          query: (q.query as string) ?? '',
+          decision: (q.decision as string) ?? null,
+          reason: (q.reason as string) ?? null,
+          target_page: (q.target_page as string) ?? null,
+        })),
+        ranked_actions: rankedRaw.map((a: Record<string, unknown>) => ({
+          lane: num(a.lane),
+          executor: (a.executor as string) ?? null,
+          action: (a.action as string) ?? null,
+          change: (a.change as string) ?? null,
+          speed: (a.speed as string) ?? null,
+          status: (a.status as string) ?? null,
+          score: num(a.score),
+          impact: num(a.impact),
+        })),
+      };
+    }
+
+    const transitions = transR.rows.map((t) => ({
+      candidate_id: t.candidate_id,
+      from_status: t.from_status ?? null,
+      to_status: t.to_status ?? null,
+      reason: Array.isArray(t.reason) ? t.reason : [],
+      gated_at: t.gated_at ?? null,
+    }));
+
+    return NextResponse.json({ data: { page, demand, candidates, dossier, transitions } });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[seo/page] GET error:', msg);

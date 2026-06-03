@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
               proposed_value, current_value_snapshot, evidence_summary, gate_reasons,
               opportunity_score::numeric AS opportunity_score, opportunity_urgency,
               confidence_tier, source_confidence, approval_status, execution_status,
-              target_page_url
+              target_page_url, regate_review_flag, lane, executor
        FROM analytics.seo_execution_candidate
        WHERE gate_status = 'accepted'
          AND approval_status = 'pending'
@@ -68,6 +68,9 @@ export async function GET(req: NextRequest) {
       approval_status: r.approval_status,
       execution_status: r.execution_status,
       target_page_url: r.target_page_url,
+      regate_review_flag: r.regate_review_flag ?? null,
+      lane: r.lane != null ? Number(r.lane) : null,
+      executor: r.executor ?? null,
     }));
 
     return NextResponse.json({ data: { candidates, returned: candidates.length } });
