@@ -110,18 +110,7 @@ export async function GET(req: NextRequest) {
       [norm],
     );
 
-    // Per-page dossier (keyword_targets + routed_queries) — the recommendation
-    // generator's view of this page; used by the Action Card. Best-effort: a page
-    // without a dossier row (monitor/maintain) just omits these.
-    const dossierQ = pool.query(
-      `SELECT priority, keyword_targets, routed_queries
-       FROM analytics.seo_page_dossier
-       WHERE rtrim(regexp_replace(lower(page_url), '^https?://(www\\.)?', ''), '/') = $1
-       LIMIT 1`,
-      [norm],
-    );
-
-    const [invR, demandR, candR, dossierR] = await Promise.all([invQ, demandQ, candQ, dossierQ]);
+    const [invR, demandR, candR] = await Promise.all([invQ, demandQ, candQ]);
 
     if (invR.rows.length === 0) {
       return NextResponse.json({ error: 'Page not found in inventory' }, { status: 404 });
@@ -186,16 +175,7 @@ export async function GET(req: NextRequest) {
       target_page_url: r.target_page_url,
     }));
 
-    const dossierRow = dossierR.rows[0] ?? null;
-    const dossier_meta = dossierRow
-      ? {
-          priority: dossierRow.priority ?? null,
-          keyword_targets: dossierRow.keyword_targets ?? null,
-          routed_queries: Array.isArray(dossierRow.routed_queries) ? dossierRow.routed_queries : [],
-        }
-      : null;
-
-    return NextResponse.json({ data: { page, demand, candidates, dossier_meta } });
+    return NextResponse.json({ data: { page, demand, candidates } });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[seo/page] GET error:', msg);
