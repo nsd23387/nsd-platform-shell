@@ -1022,6 +1022,12 @@ export interface PageDossierState {
   [key: string]: unknown;
 }
 
+export interface PageDossierMetaDemandRow {
+  query: string;
+  position: number | null;
+  impressions: number | null;
+}
+
 export interface PageDossierMeta {
   intent: string | null;
   priority: string | null;
@@ -1029,6 +1035,9 @@ export interface PageDossierMeta {
   content_type: string | null;
   generated_at: string | null;
   state: PageDossierState | null;
+  // Engine demand ranking (ordered impressions DESC). demand[0] is the canonical
+  // top-query baseline that the detection rows + keyword targets read from.
+  demand: PageDossierMetaDemandRow[];
   keyword_targets: PageDossierKeywordTargets | null;
   routed_queries: PageDossierRoutedQuery[];
   ranked_actions: PageDossierRankedAction[];
