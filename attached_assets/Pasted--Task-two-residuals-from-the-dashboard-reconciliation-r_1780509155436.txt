@@ -1,0 +1,22 @@
+# Task — two residuals from the dashboard reconciliation re-test (2026-06-03)
+
+Repo **nsd-platform-shell**. The prior fix pass landed: clicks consistency, Results "Awaiting approval" (now 457), and Competitors (now 351/5/8 with volume/difficulty). Two items remain — both read-only proxy/display, no logic or governance changes.
+
+## 1. Action Card BEFORE block — position still shows page-level, not top-query
+On the homepage meta card (`/dashboard/seo/action/[id]`), the BEFORE block now correctly shows **Top-query impressions = 4,849** (the "neon signs" value) — but the position right beside it still reads **"Top-query position 33.4"**, which is the **page-level average across all queries**, not the top query's position. The two fields are sourced inconsistently: impressions from the top query, position from the page aggregate.
+
+**Fix:** populate the BEFORE position from the **same source as the impressions** — `seo_page_dossier.demand[0].position` (the highest-impression query). For the homepage that is **45.6** ("neon signs"), which matches the detection row (46) and the keyword-targets section (45.6). After the fix, the homepage card shows one consistent baseline: position ≈45.6, impressions 4,849, both for "neon signs."
+
+**Acceptance:** the BEFORE "Top-query position" equals `dossier.demand[0].position` for the page (homepage ≈45.6/46), and agrees with the detection row + keyword target. No field labeled "top-query" shows the page-level aggregate (33.4).
+
+## 2. Competitors — confirm or lift the 483→351 trim
+The route now returns **351 gaps / 5 competitors / 8 content gaps**, but `analytics.seo_competitor_gap` holds **483 / 9 / 14**. So ~132 gaps, 4 competitors, and 6 content gaps are still dropped (every surfaced row also shows "unranked," suggesting an unranked-only or dedup/top-competitor filter).
+
+**Decide and make it honest — either:**
+- (a) **Intentional filter** (e.g. only `our_ranking_position IS NULL` true gaps, or dedup by keyword): keep it, but state it in the screen subtitle (e.g. "unranked gaps only" / "deduped by keyword") and make the KPI tiles reflect the filtered scope consistently so "Total gaps" isn't ambiguous; **or**
+- (b) **Not intentional:** remove the trim and surface the full governed feed — all 9 competitors and 14 content gaps (paginate if needed). KPIs then read 483 / 9 / 14.
+
+**Acceptance:** either the Competitors counts equal the DB (483 / 9 / 14), or the screen explicitly states the filter applied and the KPI tiles match that stated scope — no silent gap between displayed and actual.
+
+## Governance
+Read-only proxies; no write paths; draft-only invariant unchanged. `npm run build` clean; PR open. (Don't touch the now-correct surfaces: clicks, Results awaiting-approval, the Competitors volume/difficulty join.)

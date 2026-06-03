@@ -63,6 +63,9 @@ function CompetitorsContent() {
         <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }}>
           Keyword and content gaps where competitors rank and you don&apos;t — from the governed competitive feed. Read-only.
         </p>
+        <p style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-competitor-scope">
+          Scope: neon competitors only (generic-sign printers and marketplaces excluded), branded and ultra-short queries removed. Counts below reflect this filtered scope, not the full raw feed.
+        </p>
       </div>
 
       {/* Summary tiles */}

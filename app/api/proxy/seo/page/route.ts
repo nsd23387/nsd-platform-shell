@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
     // the already-normalized url) with a regexp fallback on page_url for safety.
     const dossierQ = pool.query(
       `SELECT intent, priority, status_class, content_type, generated_at,
-              state, keyword_targets, routed_queries, ranked_actions
+              state, demand, keyword_targets, routed_queries, ranked_actions
        FROM analytics.seo_page_dossier
        WHERE norm_url = $1
           OR rtrim(regexp_replace(lower(page_url), '^https?://(www\\.)?', ''), '/') = $1
@@ -237,6 +237,19 @@ export async function GET(req: NextRequest) {
         content_type: d.content_type ?? null,
         generated_at: d.generated_at ?? null,
         state: d.state ?? null,
+        // Engine demand ranking (analytics.seo_page_dossier.demand), ordered
+        // impressions DESC. demand[0] is the page's highest-demand query and is
+        // the canonical top-query baseline (position + impressions) the
+        // detection rows and keyword-targets section read from — surfaced here
+        // so the Action card's BEFORE block can source both fields from it
+        // consistently instead of mixing in the raw GSC-metrics lane.
+        demand: Array.isArray(d.demand)
+          ? (d.demand as Record<string, unknown>[]).map((row) => ({
+              query: (row.query as string) ?? '',
+              position: num(row.position),
+              impressions: num(row.impressions),
+            }))
+          : [],
         keyword_targets: {
           primary: mapKwTarget(kt.primary as Record<string, unknown>),
           secondary: secondaryRaw.map((s: Record<string, unknown>) => mapKwTarget(s)).filter(Boolean),

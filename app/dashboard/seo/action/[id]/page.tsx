@@ -92,19 +92,24 @@ function ActionDetailContent() {
   const score = candidate?.opportunity_score != null ? Math.round(candidate.opportunity_score * 100) : null;
 
   // Real GSC baseline for the page being edited (the source page).
-  // Position AND impressions are both the TOP-QUERY figures (the governed
-  // canonical signal), derived from the page's highest-demand query — NOT
-  // gsc_best_position (the all-time min, which overstates rank) and NOT
-  // gsc_impressions (the page-level total across every query, which mislabels
-  // a page aggregate as a top-query baseline). demand is ordered impressions
-  // DESC, so demand[0] is that highest-demand query.
+  // Position AND impressions are both the TOP-QUERY figures from the SAME
+  // source — the engine dossier's demand[0] (analytics.seo_page_dossier.demand,
+  // ordered impressions DESC) — so they agree with the detection row and the
+  // keyword-targets section (homepage: "neon signs", position 45.6, 4,849 imp).
+  // We deliberately do NOT mix the raw GSC-metrics demand lane (which yields an
+  // impression-weighted page-ish position) for the position field, nor
+  // gsc_best_position (all-time min, overstates rank) or gsc_impressions
+  // (page-level total across every query). The GSC-metrics lane and
+  // page-inventory fields remain only as last-resort fallbacks when the engine
+  // has not produced a dossier record for the page.
   const baseline = useMemo(() => {
     const p = dossier?.page;
-    const top = dossier?.demand?.[0] ?? null;
+    const engineTop = dossier?.dossier?.demand?.[0] ?? null;
+    const gscTop = dossier?.demand?.[0] ?? null;
     return {
-      impressions: top?.impressions ?? p?.gsc_impressions ?? null,
-      position: top?.avg_position ?? null,
-      topQuery: top?.query ?? p?.gsc_top_query ?? null,
+      impressions: engineTop?.impressions ?? gscTop?.impressions ?? p?.gsc_impressions ?? null,
+      position: engineTop?.position ?? gscTop?.avg_position ?? null,
+      topQuery: engineTop?.query ?? gscTop?.query ?? p?.gsc_top_query ?? null,
     };
   }, [dossier]);
 
