@@ -150,6 +150,72 @@ export function mutationDisplay(
   return { tag: raw.replace(/_/g, ' ').toUpperCase(), verb: () => raw.replace(/_/g, ' ') };
 }
 
+// -----------------------------------------------------------------------------
+// Proposal review guard (governance, UI-only).
+// Some engine candidates surface a scaffold/placeholder proposed_value (e.g.
+// "Set H1 to <primary keyword>") or a title/meta that doesn't actually mention
+// the page's primary keyword target. These must be flagged "needs review — not
+// auto-approvable" so a human authors/checks them before approval, and they must
+// be excluded from one-click bulk approve. This NEVER changes the draft-only
+// write path, the engine's gating, or candidate ranking — it only annotates.
+// -----------------------------------------------------------------------------
+export function isTextMutation(mutationType: string | null | undefined): boolean {
+  const t = (mutationType ?? '').toLowerCase();
+  // Only title/meta/h1 carry authored copy as proposed_value. internal_link /
+  // redirect / schema proposals are URLs or structured targets, not prose, so a
+  // placeholder/keyword check would be meaningless (and produce false flags).
+  return t.includes('title') || t.includes('meta') || t === 'h1' || t.includes('h1');
+}
+
+// Unambiguous placeholder / scaffold markers. Kept conservative so finished copy
+// is never mis-flagged: an imperative scaffold directive only matches when it
+// ALSO names the element it is scaffolding (e.g. "set ... h1").
+const PLACEHOLDER_PATTERNS: RegExp[] = [
+  /\{\{|\}\}/,                                   // mustache / template tokens
+  /<[a-z][^>]*>/i,                               // raw HTML tags left in copy
+  /\[[^\]]*\b(keyword|primary|secondary|topic|brand|product|category|city|location)\b[^\]]*\]/i, // [keyword] style slots
+  /\b(tbd|todo|fixme|placeholder|lorem ipsum|your keyword|target keyword|keyword here|example (?:title|meta|heading|description))\b/i,
+  /^\s*(set|add|write|insert|create|update|choose|pick|provide|enter)\b.*\b(h1|title|meta|heading|headline|description)\b/i, // scaffold directive
+];
+
+export function isPlaceholderProposal(
+  c: { mutation_type?: string | null; proposed_value?: string | null },
+): boolean {
+  if (!isTextMutation(c.mutation_type)) return false;
+  const v = (c.proposed_value ?? '').trim();
+  if (!v) return true;
+  return PLACEHOLDER_PATTERNS.some((re) => re.test(v));
+}
+
+export interface ProposalReview {
+  flagged: boolean;
+  reasons: string[];
+}
+
+// `primaryKeyword` is optional: the per-page dossier (Action Card) knows the
+// keyword target, the portfolio-wide list/queue does not. Without it we run the
+// placeholder check only; with it we additionally flag keyword drift.
+export function proposalReview(
+  c: { mutation_type?: string | null; proposed_value?: string | null },
+  primaryKeyword?: string | null,
+): ProposalReview {
+  const reasons: string[] = [];
+  if (isPlaceholderProposal(c)) {
+    reasons.push('Proposal looks like a scaffold/placeholder, not finished copy — author it before approving.');
+  } else if (isTextMutation(c.mutation_type) && primaryKeyword && primaryKeyword.trim()) {
+    const v = (c.proposed_value ?? '').toLowerCase();
+    const kw = primaryKeyword.trim().toLowerCase();
+    // Match the full phrase OR every meaningful token (word order/punctuation
+    // may legitimately differ). Tokens shorter than 3 chars are ignored.
+    const tokens = kw.split(/\s+/).filter((t) => t.length >= 3);
+    const contains = v.includes(kw) || (tokens.length > 0 && tokens.every((t) => v.includes(t)));
+    if (!contains) {
+      reasons.push(`Proposed copy doesn't mention the page's primary keyword target "${primaryKeyword.trim()}".`);
+    }
+  }
+  return { flagged: reasons.length > 0, reasons };
+}
+
 export function pathOf(url: string): string {
   try {
     const u = new URL(url);

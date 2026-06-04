@@ -24,8 +24,15 @@ function isConfigured(): boolean {
   return Boolean(process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL);
 }
 
-const MAX_LIMIT = 500;
-const DEFAULT_LIMIT = 500;
+// The governance contract for this endpoint is "surface EVERY accepted+pending
+// candidate" so reviewers triage the whole backlog. A 500 cap silently truncated
+// the queue once the backlog approached that size (the Recommendations list and
+// Command Center header both fetch this with no explicit limit), so the ceiling
+// is raised to a high guardrail value rather than a tight page size. The backing
+// query is a single indexed scan ordered by opportunity_score, so returning the
+// full pending set is cheap.
+const MAX_LIMIT = 5000;
+const DEFAULT_LIMIT = 5000;
 
 export async function GET(req: NextRequest) {
   if (!isConfigured()) {

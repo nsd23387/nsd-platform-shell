@@ -1,0 +1,56 @@
+# Task — Action Card must show real before/after CONTEXT + what happens after approval
+
+The Action Card currently can't be trusted to approve from: the BEFORE says "see the live page," and for internal links it names a target but never shows the **sentence** the link lands in — so you can't tell a relevant, natural link from a box-checking one. And the card never says what "Approve & queue" actually does. Fix both. Verified against prod `fssgkgyconuzukcwptvc`.
+
+Two repos: **nsd-ods-api / nsd-integrations** (capture the current state + anchor context at candidate generation) and **nsd-platform-shell** (render it). Governance unchanged: draft-only, read-only proxies, reuse the gate.
+
+---
+
+## Root cause (verified)
+- `seo_execution_candidate.current_value_snapshot` is **NULL on every accepted candidate** (0 of 227 H1 / 146 meta / 146 title / 47 link). That's why BEFORE shows "see the live page."
+- Internal-link candidates store only `target_field='body_anchor'`, `proposed_value='<entity name>'` (e.g. "Donuts Neon Sign") and the target URL — **no source sentence, no exact anchor phrase, no proof the anchor occurs in real copy**. So the human can't judge placement or naturalness.
+
+---
+
+## Part A — capture the real current state + anchor context (generation, backend)
+At candidate generation, populate `current_value_snapshot` (and the link fields) from the **live page** via the Rank Math read-path (the existing `show_in_rest` mu-plugin) and the page body:
+
+- **title / meta / H1**: store the **current live value** of that field.
+- **product_offer_schema**: store the current schema JSON (or "none present").
+- **internal_link_insertion** — this is the key one. Produce a **concrete, in-context** proposal, not a bare entity name:
+  - the **exact anchor phrase** to hyperlink (e.g. "donut neon signs"),
+  - the **actual existing sentence/paragraph** on the source page that contains (or best fits) that phrase — stored verbatim,
+  - the **target URL**,
+  - a **placement type**: `existing_anchor` (the phrase already appears in real copy → just hyperlink it) **vs** `new_sentence` (no natural anchor exists → the engine drafts a sentence to insert). If `new_sentence`, store the drafted sentence verbatim and a **naturalness/confidence** score.
+  - Run it through the gate's anchor/relevance check (the `anchor_not_found` logic): an `existing_anchor` proposal must cite a real sentence; a `new_sentence` proposal must read naturally for the page's topic, not generic filler — flag low-confidence ones for human scrutiny rather than surfacing them as clean.
+
+Store these so the UI can render true before/after. Do **not** invent a sentence and present it as if it were existing copy.
+
+## Part B — render before/after WITH context (Action Card, frontend)
+Replace the thin BEFORE/AFTER with a contextual diff:
+
+- **title / meta / H1**: BEFORE = the real current value (from `current_value_snapshot`); AFTER = `proposed_value`; show them as an inline diff (changed words highlighted), not "see the live page."
+- **internal link**: show the **sentence**, before and after:
+  - BEFORE = the actual source sentence with the candidate anchor phrase shown in context, **not yet linked**.
+  - AFTER = the **same sentence** with the anchor phrase now hyperlinked to the target (anchor highlighted, target URL on hover).
+  - If `placement = new_sentence`, label it clearly ("New sentence to be inserted") and show **where** it goes (e.g. "appended to the intro paragraph"), plus the naturalness/confidence so the reviewer can judge relevance vs box-checking.
+  - Surface the gate result ("anchor found in existing copy" vs "new sentence drafted") so trust is explicit.
+- Keep the existing "why / keyword targets / measurement plan." The point: a reviewer sees the exact words that change and the sentence a link lives in, and can reject anything that reads as filler.
+
+## Part C — "What happens after I approve" (make the lifecycle explicit)
+The lifecycle already exists in the data (`execution_status`: proposed → approved → **draft_applied** → **published**, with **rolled_back** available; `applied_value` + `execution_timestamp` captured). The card never explains it. Add a short **"What happens on approval"** panel + a status timeline:
+
+- State the flow plainly: **Approve & queue (draft)** → the engine writes the change as a **WordPress/Rank Math draft** (`draft_applied`) → **you review & publish it in WordPress** → `published` → measured against the live GSC baseline post-deploy → **rollback available** if it regresses.
+- **Clarify the publish gate truthfully:** confirm whether publish is human-gated in WordPress (the intended draft-only model) or auto-published after approval — and state exactly that on the card. If approval can auto-publish, that contradicts the draft-only invariant and must be gated. (`published` rows exist today — confirm how they got there.)
+- Show this candidate's current stage in the timeline, and expose the rollback control for `published` ones.
+
+---
+
+## Acceptance
+1. `current_value_snapshot` populated for new candidates across all 6 types; BEFORE never says "see the live page" — it shows the real current value.
+2. Internal-link card shows the **actual source sentence** (before, unlinked) and the **same sentence with the anchor hyperlinked** (after); `new_sentence` proposals are labelled and confidence-scored; nothing is presented as existing copy that isn't.
+3. Each card has a "What happens on approval" panel + status timeline reflecting the real `execution_status` lifecycle, and the publish step's human-gating is stated accurately (and enforced if currently auto).
+4. Reuse the gate; draft-only; read-only proxies; build clean; PRs open (ods-api/integrations for capture, platform-shell for render).
+
+## Out of scope
+Changing the ranking/scoring; the Competitors/clicks residuals (separate prompt).
