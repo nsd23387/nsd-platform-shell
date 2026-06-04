@@ -52,3 +52,17 @@ existing `/api/proxy/seo/recommendations` write path with `target:'engine'` +
 `candidate_id` (lib: `approveEngineCandidate`/`rejectEngineCandidate`).
 `gate_status='suppressed'` rows are the audit trail; standalone full suppression
 log lives in `seo_gate_suppressed` (~1375 rows).
+
+# seo_execution_candidate BEFORE value (Action Card)
+
+`current_value_snapshot` is NULL for **every** candidate today (gen run never
+populated it). So the Action Card's "before" must fall back to the LIVE page
+state the engine scraped into `analytics.seo_page_dossier.state`:
+- `state.meta` for meta_description_update, `state.title` for title_tag_refinement,
+  `state.h1` for h1_tag_refinement (pick by `mutation_type`; `target_field` is NOT
+  on the candidate proxy's response type).
+`state.*` is raw scraped HTML: carries HTML entities (`&amp;`) and UTF-8-as-CP1252
+mojibake (`â€"`→—). Decode for honest display; decode is idempotent so the
+before/after word-diff against the clean proposed_value stays fair.
+**Why:** snapshot was the intended baseline but is unpopulated; live dossier state
+is the only real current value available read-only.

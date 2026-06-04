@@ -1,0 +1,50 @@
+# Replit task — fix the SEO dashboard defects found in QA (2026-06-03)
+
+Fix the defects below in the SEO dashboard (`/dashboard/seo`). Full report: `QA_dashboard_full_test_2026-06-03.md`. Governance unchanged: read-only proxies for reads; approve/reject only via `lib/seoApi` (draft-only — never auto-publish); only `status_class='canonical_live'` pages surface as targets. Lead with the three HIGH defects — they're why the queue is currently un-workable.
+
+## 🔴 HIGH — approval workflow is broken
+
+### D1 + D4 — Build a real, filterable Recommendations list (this is the #1 ask)
+Today there is **no all-recommendations view**: "View all N recommendations →" misroutes to `/dashboard/seo/performance` (the pages portfolio), and the Command Center shows only ~12 detections with no filter/search. Users can't see all ~447 or isolate a page's recommendations.
+- Build a **Recommendations list page** (e.g. `/dashboard/seo/recommendations`) listing **all gate-accepted, pending recommendations** (`seo_execution_candidate WHERE gate_status='accepted' AND approval_status='pending'`, canonical_live targets), **paginated** to the full set.
+- **Filter + sort** by: target page URL (free-text, e.g. "for-businesses"), **mutation_type** (title / meta / h1 / schema / internal_link / redirect), status, and **opportunity_score** (default sort desc). Reuse the **Competitors table pattern** — it already does filter + full-list well.
+- Each row shows: rank/score, type tag, target page, one-line `evidence_summary`, and links to its **Action Card** (`/dashboard/seo/action/[candidate_id]`, which works). Inline Approve/Defer optional.
+- Repoint **"View all N recommendations →"** (Command Center) to this page.
+- **Acceptance:** "View all" lands on a list of all ~447; filtering to "/for-businesses/" or to "title" narrows correctly; each row opens its Action Card; counts match the DB.
+
+### D2 — Performance page cards must open the page's dossier
+The subtitle says "Click any page to open its dossier," but clicking a card does nothing (verified on `/for-businesses/` via its element ref — no navigation/drawer).
+- Wire each Performance card to open that page's dossier/recommendations (route to a page dossier view, or to the Recommendations list pre-filtered to that URL).
+- **Acceptance:** clicking any Performance card opens that page's dossier/recommendations.
+
+### D3 — "Review top N" batch-approve button is dead
+Clicking "Review top 5…" does nothing (no modal, no state change). It's the primary throughput control.
+- Implement the review-then-confirm modal: list the top N pending high-confidence candidates with **per-item deselect**, then **Approve & Queue** writes `approval_status` via `lib/seoApi` (draft-only; nothing publishes). Cancel closes with no change.
+- **Acceptance:** button opens the modal; deselect works; confirm queues only the selected as drafts and they leave the pending count; cancel is a no-op.
+
+## 🟠 MEDIUM
+
+### D5 — Standardize the clicks metric across widgets
+Command Center hero and Momentum disagree (7-day: hero **7** vs Momentum **4**). Use **one shared definition/source** for organic clicks (recommend the date-only complete GSC grain, window anchored to the table's max date) across the **hero, Momentum, and Results**.
+- **Acceptance:** the 7-day and 30-day clicks numbers are identical on Command Center hero, Momentum, and Results.
+
+### D6 — Standardize "Awaiting approval" count
+Command Center header shows **447**; Results shows **454**. Use one definition everywhere — actionable = `gate_status='accepted' AND approval_status='pending' AND canonical_live`.
+- **Acceptance:** header and Results show the same number.
+
+### D7 — Don't surface placeholder / page-mismatched proposals as approvable
+Proposed copy is wrong/placeholder: homepage's title proposal is "**Business** Neon Signs…", for-businesses' meta is "Shop **Wedding** Neon Signs…", and H1 proposals are the literal string "**Set H1 to the page primary keyword**."
+- **UI guard (do now):** detect placeholder/templated proposals (e.g. `proposed_value` starting with "Set H1…", or a title/meta whose keyword doesn't match the page's `keyword_targets.primary`) and **flag them "needs review — not auto-approvable"** rather than presenting them as clean Approve candidates.
+- **Note:** the real fix is in the candidate generator (make title/meta/H1 page-aware from the dossier's correct keyword target, no placeholders) — that's the Convex/backend generation layer, not the dashboard UI. Flag it as a paired backend task; the UI guard prevents bad approvals in the meantime.
+
+## 🟡 LOW
+- **D8** — Data Freshness GSC badge flips between "healthy" and "warning" across reloads; make the threshold deterministic.
+- **D9** — Competitors shows 351 gaps / 5 competitors / 8 content vs DB 483 / 9 / 14 — surface the full governed feed (remove the residual cap) or state the filter explicitly so counts aren't ambiguous.
+
+## What already works (don't regress)
+4-area nav + legacy redirects (`/actions`→`/dashboard/seo`, `/internal-links`→`/performance`); Command Center KPI hero + range toggle + data-freshness + GSC banner; detection "Details" → Action Card (Approve/Reject present); Performance URL filter + bucket KPIs (match DB); Competitors filterable table; Results sections; no console errors.
+
+## Acceptance (overall)
+- All three HIGH defects resolved (recommendations list + filter live and linked; Performance cards open dossiers; batch-approve modal works).
+- D5/D6 numbers consistent across screens; D7 UI guard live (+ backend generation task logged); D8/D9 addressed.
+- Draft-only invariant intact (no auto-publish); `npm run build` clean; PR open with before/after screenshots of the new Recommendations list, a working Performance card click, and the batch-approve modal.

@@ -1096,10 +1096,29 @@ export interface SeoCandidateEvidenceNode {
   entity?: string | null;
   intent?: string | null;
 }
+// Internal-link anchor context — the concrete, in-context proposal captured at
+// generation time (Part A, ods-api/integrations). Lets the reviewer see the
+// exact sentence a link lives in and judge naturalness vs box-checking.
+//   placement_type: 'existing_anchor' = the phrase already appears in real copy
+//     (just hyperlink it); 'new_sentence' = no natural anchor exists so the
+//     engine drafted a sentence to insert (confidence-scored, flag for scrutiny).
+//   gate_result: the anchor/relevance gate outcome (e.g. 'anchor_found',
+//     'new_sentence_drafted', 'anchor_not_found').
+// All fields optional/null: when the engine has not yet captured anchor context
+// the UI degrades to an honest "not yet captured" state, never invented copy.
+export interface SeoAnchorContext {
+  anchor_phrase?: string | null;
+  source_sentence?: string | null;
+  placement_type?: 'existing_anchor' | 'new_sentence' | string | null;
+  confidence?: number | null;
+  gate_result?: string | null;
+  insertion_hint?: string | null;
+}
 export interface SeoCandidateEvidence {
   why?: string | null;
   source?: SeoCandidateEvidenceNode | null;
   target?: SeoCandidateEvidenceNode | null;
+  anchor_context?: SeoAnchorContext | null;
   signals?: {
     embedding_cosine?: number | null;
     shared_attributes?: string[] | null;
@@ -1111,6 +1130,16 @@ export interface SeoCandidateEvidence {
 export interface SeoCandidateDetail extends PageDossierCandidate {
   gate_status: string | null;
   evidence: SeoCandidateEvidence | null;
+  // Execution lifecycle (analytics.seo_execution_candidate). Honest passthrough
+  // of the engine/executor's real state — this read-only screen never writes
+  // these. proposed -> approved -> draft_applied -> published, with rollback
+  // available; null when the executor has not reached that stage.
+  original_value?: string | null;
+  applied_value?: string | null;
+  approval_timestamp?: string | null;
+  execution_timestamp?: string | null;
+  rollback_available?: boolean | null;
+  rollback_status?: string | null;
 }
 
 export async function getSeoCandidate(id: string): Promise<SeoCandidateDetail> {

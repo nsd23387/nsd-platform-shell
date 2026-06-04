@@ -39,7 +39,7 @@ import type {
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
-  fmtInt, fmtPos, pathOf, PageDossierDrawer, mutationDisplay, sectionLabelStyle,
+  fmtInt, fmtPos, pathOf, PageDossierDrawer, mutationDisplay, sectionLabelStyle, proposalReview,
 } from './_shared';
 
 // -----------------------------------------------------------------------------
@@ -572,6 +572,11 @@ function DetectionRow({
                   <Pill tone="warn" tc={tc}>re-review</Pill>
                 </span>
               )}
+              {(() => { const review = proposalReview(c); return review.flagged ? (
+                <span title={`Not auto-approvable — ${review.reasons.join(' ')}`} data-testid={`detection-needs-review-${c.candidate_id}`}>
+                  <Pill tone="warn" tc={tc}>needs review</Pill>
+                </span>
+              ) : null; })()}
             </>
           ); })()}
         </div>
@@ -876,7 +881,10 @@ function CommandCenterContent() {
   function openReview(n: number) {
     const targets = detections.slice(0, n);
     if (targets.length === 0) return;
-    setReviewSelected(new Set(targets.map((c) => c.candidate_id)));
+    // Governance (D7): candidates flagged "needs review" (placeholder/scaffold
+    // proposals) are NOT pre-selected — a human must deliberately opt them in
+    // after authoring/checking. They still appear in the list, just unchecked.
+    setReviewSelected(new Set(targets.filter((c) => !proposalReview(c).flagged).map((c) => c.candidate_id)));
     setReviewOpen(true);
   }
 
@@ -989,6 +997,7 @@ function CommandCenterContent() {
               {reviewTargets.map((c) => {
                 const checked = reviewSelected.has(c.candidate_id);
                 const m = mutationDisplay(c.mutation_type, c.primary_remedy);
+                const review = proposalReview(c);
                 return (
                   <label
                     key={c.candidate_id}
@@ -1007,8 +1016,16 @@ function CommandCenterContent() {
                         <Pill tone="violet" tc={tc}>{m.tag}</Pill>
                         <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{m.verb(c.proposed_value)}</span>
                         {c.regate_review_flag && <Pill tone="warn" tc={tc}>re-review</Pill>}
+                        {review.flagged && (
+                          <span title={review.reasons.join(' ')} data-testid={`review-needs-review-${c.candidate_id}`}><Pill tone="warn" tc={tc}>needs review</Pill></span>
+                        )}
                       </span>
                       <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, wordBreak: 'break-all' }}>{c.target_page_url ? pathOf(c.target_page_url) : '—'}</span>
+                      {review.flagged && (
+                        <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.warn, marginTop: '2px' }}>
+                          Not auto-approvable — {review.reasons[0]}
+                        </span>
+                      )}
                     </span>
                   </label>
                 );
@@ -1087,7 +1104,7 @@ function CommandCenterContent() {
         </div>
         {!loading && detections.length > 12 && (
           <div style={{ padding: space['4'], borderTop: `1px solid ${tc.border.subtle}`, textAlign: 'center', background: tc.background.muted }}>
-            <Link href="/dashboard/seo/performance" style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-view-all-detections">
+            <Link href="/dashboard/seo/recommendations" style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-view-all-detections">
               View all {detections.length} recommendations →
             </Link>
           </div>

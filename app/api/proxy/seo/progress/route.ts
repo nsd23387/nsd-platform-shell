@@ -118,18 +118,30 @@ export async function GET() {
        WHERE status = 'new' AND canonical_confidence = 'high'`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
-    // Awaiting approval == the Command Center actionable queue (the exact same
-    // definition the /candidate-queue surface uses): gate_status='accepted' AND
-    // approval_status='pending'. Previously this summed every proposed+pending
-    // candidate (including gate-suppressed ones) plus a seo_action union, which
-    // inflated the number far above the queue reviewers actually see. "urgent" =
-    // the re-gate-flagged subset that was re-surfaced for human re-review.
+    // Awaiting approval == the Command Center actionable queue, to the exact same
+    // definition the header surfaces: gate_status='accepted' AND
+    // approval_status='pending' AND the target page is canonical_live. The
+    // canonical_live restriction matters — governance only ever surfaces live
+    // pages as targets, and the Command Center applies it client-side after
+    // joining the candidate queue to the portfolio. Without the same restriction
+    // here, Results over-counted (it included candidates whose target page is
+    // lost / pending_verification / excluded) and disagreed with the header.
+    // The join is host-normalized (candidate + inventory URLs disagree on www vs
+    // apex and trailing slash) to match analytics.seo_page_inventory's path key.
+    // "urgent" = the re-gate-flagged subset re-surfaced for human re-review.
     const awaitingApproval = await p.query<{ count: string; urgent: string }>(
-      `SELECT
+      `WITH live AS (
+         SELECT DISTINCT rtrim(regexp_replace(lower(url), '^https?://(www\\.)?', ''), '/') AS norm
+         FROM analytics.seo_page_inventory
+         WHERE status_class = 'canonical_live'
+       )
+       SELECT
          COUNT(*)::text AS count,
-         COUNT(*) FILTER (WHERE regate_review_flag IS TRUE)::text AS urgent
-       FROM analytics.seo_execution_candidate
-       WHERE gate_status = 'accepted' AND approval_status = 'pending'`,
+         COUNT(*) FILTER (WHERE c.regate_review_flag IS TRUE)::text AS urgent
+       FROM analytics.seo_execution_candidate c
+       JOIN live l
+         ON l.norm = rtrim(regexp_replace(lower(c.target_page_url), '^https?://(www\\.)?', ''), '/')
+       WHERE c.gate_status = 'accepted' AND c.approval_status = 'pending'`,
     ).catch(() => ({ rows: [{ count: '0', urgent: '0' }] }));
 
     // Pipeline health: when did each major job last run?
