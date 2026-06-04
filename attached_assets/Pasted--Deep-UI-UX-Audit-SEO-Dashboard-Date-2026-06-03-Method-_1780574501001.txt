@@ -1,0 +1,94 @@
+# Deep UI/UX Audit — SEO Dashboard
+**Date:** 2026-06-03 · **Method:** element-by-element Chrome walk of every surface + DB cross-checks. Companion to `QA_dashboard_full_test_2026-06-03.md` (functional defects D1–D9); this report focuses on **intentionality, usability, and duplication**.
+
+## Core finding
+The dashboard **renders the raw candidate database, not a curated decision surface.** Every generated variant, every status (incl. rejected), and every re-gate run is shown as its own card — with no dedup, no "one active proposal per field," and no clear "this is the live/winning one." The result is duplicate-heavy, ambiguous, and in places unusable. Severity is highest exactly on your most important pages.
+
+**Evidence (DB):** 2,529 candidates across 2,014 pages — but concentrated: **homepage = 261 candidates, /for-businesses/ = 33** (16 title variants + 16 meta variants), /neon-signs-for-weddings = 14. The Action Card for any one of a page's candidates renders **all** of them (verified: 32 cards for /for-businesses/ — 26 rejected, 6 approved).
+
+---
+
+## Duplication & "is this intentional?" defects
+
+**A1 — Variant explosion shown raw.** High-value pages have dozens of near-identical proposals (for-businesses: "Neon Sign Design", "Led Neon Signs", "Custom Neon Signs", "Neon Bar Signs", "Business Neon Signs"… all score 31). All are rendered as separate cards. *Intentional? No.* A reviewer needs **one** recommended title per page, with alternatives tucked away — not 16 cards.
+
+**A2 — The Action Card is mis-scoped (the biggest UX problem).** `/dashboard/seo/action/[id]` shows the **entire page's candidate history** (all 32 for for-businesses; 261 for the homepage), not the single action you clicked. So the same variants appear here and anywhere else they're listed = the "duplicates in different views" you saw. *Fix:* the Action Card should show **one action** (or one page's *current value + single recommended proposal* per field), with history/alternatives collapsed.
+
+**A3 — Multiple "approved" candidates for the same field (incoherent).** /for-businesses/ has **3 approved titles + 3 approved metas**. A page has exactly one title and one meta — approving three different ones is contradictory, and nothing shows which is actually live. *Fix:* enforce **one active approved proposal per (page, field)**; approving a new one supersedes/retires the prior; show the live one clearly.
+
+**A4 — Rejected candidates clutter the view.** 26 of 32 cards on the for-businesses Action Card are `rejected`. Rejected = noise; it should be **hidden/collapsed by default** behind a "show rejected" toggle, not interleaved with live options.
+
+**A5 — Unexplained tags.** Every card carries "hybrid" and "auto" badges with no legend. Users can't tell what they mean (source? confidence?). *Fix:* legend/tooltip, or drop them from the primary view.
+
+**A6 — Non-differentiating boilerplate.** Every variant repeats the identical line "Update title_tag_refinement on …/for-businesses/ — 14297 impressions at position 75.8." It's the same for all 16 variants, so it doesn't help choose between them. *Fix:* show what's *different* (the proposed text + why this one), not repeated page stats.
+
+---
+
+## Element-by-element inventory (verdict per control)
+
+### Global / nav
+| Element | Verdict |
+|---|---|
+| Left rail: Executive/Operations/Design/Media/Sales/Marketing/Competitive/SEO Intelligence | OK (other dashboards out of scope) |
+| SEO sub-nav: Command Center / Performance / Competitors / Results | OK — 4-area IA correct |
+| Dark Mode toggle, Read-Only badge, collapse-sidebar arrow | OK |
+
+### Command Center
+| Element | Verdict |
+|---|---|
+| "Diagnose a URL…" button | **Untested/unclear** — verify it does something; if not wired, flag |
+| "Review top 5…" button | ❌ **DEAD** (D3) — no modal, no action |
+| Range toggle 7d/14d/30d/Custom | ✅ works (Custom untested) |
+| KPI hero (clicks) | ⚠️ disagrees with Momentum (7d: 7 vs 4) (D5) |
+| Data Freshness rows | ✅ render; ⚠️ GSC badge flips healthy/warning (D8) |
+| GSC anonymized-query banner | ✅ |
+| Momentum / Recently-approved | ✅ render (Recently-approved empty — accurate, nothing shipped) |
+| Detections rows: Approve / Details / Defer | Approve & Defer **untested** (mutating); **Details → Action Card works** |
+| "View all N recommendations →" | ❌ **misroutes to /performance** (D1); no real list |
+| No filter/search on detections | ❌ (D4) |
+
+### Performance
+| Element | Verdict |
+|---|---|
+| "Filter by URL or query" | ✅ works |
+| Bucket tiles (Wins/Strategic/Fix/Lost/Lost-impr) | ✅ match DB; **not clickable** (are they meant to filter? unclear) |
+| Page cards | ❌ **not clickable** despite "Click any page to open its dossier" (D2) |
+
+### Competitors
+| Element | Verdict |
+|---|---|
+| Filter input + gap-type select | ✅ works |
+| KPI tiles + full gap table | ✅ works; ⚠️ shows 351/5/8 vs DB 483/9/14 (D9) |
+
+### Results
+| Element | Verdict |
+|---|---|
+| 7d/30d period blocks (clicks/impr/position) | ✅; ⚠️ clicks differ from CC (D5) |
+| Needs Attention / Yesterday's Actions / Pipeline Health | ✅ render; "Awaiting approval 454" vs CC 447 (D6) |
+
+### Action Card
+| Element | Verdict |
+|---|---|
+| Header pills (type / confidence / score / gate) | ✅ |
+| Reject / Approve & Queue | present; **untested** (mutating) |
+| Why / Before-After / Measurement plan / Keyword targets / Routed queries | ✅ render |
+| **Whole-page candidate dump (all variants)** | ❌ **A2** — shows 32 (or 261) cards instead of one action |
+| Proposed copy quality | ❌ mismatched/placeholder on some pages (D7) |
+
+---
+
+## Recommended model (make it intentional)
+Re-frame the surface from "show the candidate table" to "one decision per page per field":
+1. **Per page, per field (title/meta/H1/schema): show the current live value + ONE recommended proposal** (the highest-scoring active one). Alternatives collapse behind "see N alternatives"; **rejected hidden by default**.
+2. **Enforce one active approved proposal per (page, field)** — approving supersedes the prior; always show which is live.
+3. **The Action Card shows the single action you clicked**, not the page's whole history.
+4. **Build the missing Recommendations list** (D1) with filter by page/type/status — deduped to one row per (page, field) by default, expandable to variants.
+5. **Fix dead controls** (Review top N, Performance cards) and **standardize metrics/counts** (D5/D6).
+6. **Explain or remove the hybrid/auto tags**; replace repeated boilerplate with the differentiating "why this variant."
+7. **Fix candidate generation** so it doesn't emit 16 variants + placeholder/mismatched copy per page (backend) — the UI curation above mitigates, but the root cause is over-generation.
+
+## Priority
+1. Action Card mis-scope (A2) + one-active-per-field (A3) — these make the highest-value pages unusable.
+2. Hide rejected / collapse variants (A1, A4).
+3. Workflow defects (D1 list+filter, D2 cards, D3 batch button).
+4. Consistency (D5/D6), tags/boilerplate (A5/A6), generation root cause (A1/D7).
