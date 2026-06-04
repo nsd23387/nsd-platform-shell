@@ -407,9 +407,15 @@ function ActionDetailContent() {
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: space['2'], flexWrap: 'wrap' }}>
                 <Pill tone="violet" tc={tc}>{md.tag}</Pill>
-                {candidate.confidence_tier && <Pill tone="info" tc={tc}>confidence: {candidate.confidence_tier}</Pill>}
+                {candidate.confidence_tier && (
+                  <span title="auto = engine-confident, eligible for auto-approval; review = needs a human to author/check before approval">
+                    <Pill tone="info" tc={tc}>confidence: {candidate.confidence_tier}</Pill>
+                  </span>
+                )}
                 {score != null && <Pill tone="neutral" tc={tc}>score {score}</Pill>}
                 {candidate.gate_status && <Pill tone="good" tc={tc}>gate: {candidate.gate_status}</Pill>}
+                {candidate.approval_status === 'approved' && <Pill tone="good" tc={tc}>approved · active draft</Pill>}
+                {candidate.approval_status === 'rejected' && <Pill tone="bad" tc={tc}>rejected</Pill>}
               </div>
               <h1 style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>
                 {md.verb(candidate.proposed_value)}
@@ -418,24 +424,38 @@ function ActionDetailContent() {
                 {candidate.target_page_url ? pathOf(candidate.target_page_url) : '—'}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap' }}>
-              <button
-                onClick={() => act('reject')}
-                disabled={busy !== null || done !== null}
-                data-testid="button-reject"
-                style={{ padding: '8px 14px', background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.bad, cursor: (busy || done) ? 'default' : 'pointer', opacity: (busy || done) ? 0.6 : 1 }}
+            {candidate.approval_status === 'approved' || candidate.approval_status === 'rejected' ? (
+              // A3: this candidate is already decided. The page has exactly one title/meta/H1,
+              // so we surface the single active decision instead of re-offering Approve/Reject
+              // (which would let a reviewer queue a second conflicting proposal for the field).
+              <div
+                data-testid="text-decided-state"
+                style={{ padding: '8px 14px', maxWidth: 340, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', lineHeight: 1.5, background: candidate.approval_status === 'approved' ? PALETTE.goodSoft : PALETTE.badSoft, color: candidate.approval_status === 'approved' ? PALETTE.good : PALETTE.bad }}
               >
-                {busy === 'reject' ? 'Rejecting…' : 'Reject'}
-              </button>
-              <button
-                onClick={() => act('approve')}
-                disabled={busy !== null || done !== null}
-                data-testid="button-approve-queue"
-                style={{ padding: '8px 18px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (busy || done) ? 'default' : 'pointer', opacity: (busy || done) ? 0.6 : 1 }}
-              >
-                {busy === 'approve' ? 'Queuing…' : 'Approve & queue (draft)'}
-              </button>
-            </div>
+                {candidate.approval_status === 'approved'
+                  ? 'Approved — the active proposal for this field (recorded as a draft). No further action here.'
+                  : 'Rejected — not queued. No further action here.'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => act('reject')}
+                  disabled={busy !== null || done !== null}
+                  data-testid="button-reject"
+                  style={{ padding: '8px 14px', background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.bad, cursor: (busy || done) ? 'default' : 'pointer', opacity: (busy || done) ? 0.6 : 1 }}
+                >
+                  {busy === 'reject' ? 'Rejecting…' : 'Reject'}
+                </button>
+                <button
+                  onClick={() => act('approve')}
+                  disabled={busy !== null || done !== null}
+                  data-testid="button-approve-queue"
+                  style={{ padding: '8px 18px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (busy || done) ? 'default' : 'pointer', opacity: (busy || done) ? 0.6 : 1 }}
+                >
+                  {busy === 'approve' ? 'Queuing…' : 'Approve & queue (draft)'}
+                </button>
+              </div>
+            )}
           </div>
 
           {done && (
