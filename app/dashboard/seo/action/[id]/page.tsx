@@ -418,7 +418,7 @@ function ActionDetailContent() {
                 {candidate.approval_status === 'rejected' && <Pill tone="bad" tc={tc}>rejected</Pill>}
               </div>
               <h1 style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>
-                {md.verb(candidate.proposed_value)}
+                {candidate.mutation_label ?? md.verb(candidate.proposed_value)}
               </h1>
               <div style={{ fontFamily: monoStack, fontSize: '13px', color: tc.text.muted, marginTop: '4px', wordBreak: 'break-all' }}>
                 {candidate.page_url_canonical ?? (candidate.target_page_url ? pathOf(candidate.target_page_url) : '—')}
