@@ -107,51 +107,20 @@ export async function getClusterById(id: string) {
   };
 }
 
-// Migrated 2026-05-12: these functions now read from analytics.seo_action
-// (the unified pipeline introduced by migration 20260501000035) instead of
-// the legacy seo_recommendations + seo_recommendation_approvals tables.
-//
-// The response shape is preserved so dashboard pages don't need UI changes:
-//   - cluster_id/cluster_topic   <- source_cluster
-//   - primary_keyword            <- source_keyword
-//   - recommended_action         <- mutation_type
-//   - recommended_title          <- proposed_value (when mutation is title)
-//   - recommended_meta_description <- proposed_value (when mutation is meta)
-//   - estimated_impact / priority  <- agent_review_score
-//   - rationale                  <- proposed_reason ?? agent_review_notes
-//   - status                     <- normalised lifecycle string
-
-const SEO_ACTION_STATUS_CASE = `
-  CASE
-    WHEN sa.human_decision = 'approved' THEN 'approved'
-    WHEN sa.human_decision = 'rejected' THEN 'rejected'
-    WHEN sa.executed_at IS NOT NULL THEN 'executed'
-    WHEN sa.status = 'reviewed' THEN 'pending_review'
-    WHEN sa.status = 'proposed' THEN 'pending_review'
-    ELSE sa.status
-  END`;
-
 export async function getClusterOpportunities() {
   const p = getPool();
   const result = await p.query(`
     SELECT
-      MIN(sa.id::text) AS id,
-      sa.source_cluster AS cluster_id,
-      COALESCE(sa.source_cluster, sa.source_keyword, 'Unclustered') AS cluster_topic,
-      MIN(sa.mutation_type) AS opportunity_type,
-      COALESCE(SUM(sa.gsc_impressions), 0) AS total_impressions,
-      ROUND(
-        COALESCE(
-          SUM(sa.gsc_position * sa.gsc_impressions) / NULLIF(SUM(sa.gsc_impressions), 0),
-          0
-        ),
-        1
-      ) AS avg_position,
-      MIN(sa.proposed_reason) AS suggested_action
-    FROM analytics.seo_action sa
-    WHERE sa.source_cluster IS NOT NULL OR sa.source_keyword IS NOT NULL
-    GROUP BY sa.source_cluster, sa.source_keyword
-    ORDER BY total_impressions DESC
+      MIN(q.candidate_id::text) AS id,
+      q.mutation_type AS cluster_id,
+      q.mutation_label AS cluster_topic,
+      MIN(q.mutation_type) AS opportunity_type,
+      COUNT(*)::int AS total_impressions,
+      ROUND(AVG(COALESCE(q.opportunity_score, 0))::numeric, 1) AS avg_position,
+      MIN(COALESCE(q.why, q.evidence_summary)) AS suggested_action
+    FROM analytics.v_seo_dashboard_queue q
+    GROUP BY q.mutation_type, q.mutation_label
+    ORDER BY COUNT(*) DESC, AVG(COALESCE(q.opportunity_score, 0)) DESC
   `);
   return result.rows.map(r => ({
     ...r,
@@ -164,25 +133,25 @@ export async function getRecommendations() {
   const p = getPool();
   const result = await p.query(`
     SELECT
-      sa.id,
-      sa.source_cluster AS cluster_id,
-      COALESCE(sa.source_cluster, sa.source_keyword, 'Unclustered') AS cluster_topic,
-      sa.source_keyword AS primary_keyword,
-      sa.mutation_type AS recommended_action,
-      COALESCE(sa.target_url, '') AS recommended_url,
-      CASE WHEN sa.mutation_type ILIKE '%title%'
-           THEN sa.proposed_value ELSE NULL END AS recommended_title,
-      CASE WHEN sa.mutation_type ILIKE '%meta%' OR sa.mutation_type ILIKE '%description%'
-           THEN sa.proposed_value ELSE NULL END AS recommended_meta_description,
-      COALESCE(sa.target_url, '') AS target_url,
-      sa.mutation_type AS opportunity_type,
-      sa.agent_review_score AS estimated_impact,
-      ${SEO_ACTION_STATUS_CASE} AS status,
-      COALESCE(sa.proposed_reason, sa.agent_review_notes) AS rationale,
-      sa.agent_review_score AS priority,
-      sa.created_at
-    FROM analytics.seo_action sa
-    ORDER BY sa.created_at DESC
+      q.candidate_id AS id,
+      q.mutation_type AS cluster_id,
+      q.mutation_label AS cluster_topic,
+      q.target_field AS primary_keyword,
+      q.mutation_type AS recommended_action,
+      COALESCE(q.target_page_url, '') AS recommended_url,
+      CASE WHEN q.mutation_type ILIKE '%title%'
+           THEN q.proposed_value ELSE NULL END AS recommended_title,
+      CASE WHEN q.mutation_type ILIKE '%meta%' OR q.mutation_type ILIKE '%description%'
+           THEN q.proposed_value ELSE NULL END AS recommended_meta_description,
+      COALESCE(q.target_page_url, '') AS target_url,
+      q.mutation_type AS opportunity_type,
+      q.opportunity_score AS estimated_impact,
+      'pending_review' AS status,
+      COALESCE(q.why, q.evidence_summary) AS rationale,
+      q.opportunity_score AS priority,
+      q.created_at
+    FROM analytics.v_seo_dashboard_queue q
+    ORDER BY q.created_at DESC
   `);
   // pg returns NUMERIC as string; UI calls .toFixed() and other math.
   return result.rows.map((r) => ({

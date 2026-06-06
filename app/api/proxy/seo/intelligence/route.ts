@@ -13,37 +13,30 @@ const pool = new Pool({
 });
 
 async function getOverviewKpis() {
-  // Migrated 2026-05-12: legacy reads on seo_opportunity_queue_balanced
-  // (which had a runaway-join bug returning 4.3B rows),
-  // seo_execution_queue, and seo_execution_candidate replaced with
-  // seo_action lifecycle counts. Non-legacy panels (Ahrefs, page index,
-  // content artifacts, internal links, generation settings, cluster run
-  // metadata) keep their existing tables.
   const [actionCounts, pageOpts, internalLinks, contentArtifacts, ahrefsKw, pageIndex, autoApproveSettings, autoApprovedToday, pipelineRuns] = await Promise.all([
     pool.query(`
+      WITH queue AS (
+        SELECT * FROM analytics.v_seo_dashboard_queue
+      ),
+      lifecycle AS (
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE approval_status = 'approved' AND execution_status IN ('approved', 'executing'))::int AS approved,
+          COUNT(*) FILTER (WHERE execution_status IN ('published', 'draft_applied'))::int AS published
+        FROM analytics.seo_execution_candidate
+      )
       SELECT
-        COUNT(*)::int AS total_opportunities,
-        COUNT(DISTINCT source_cluster)::int AS total_clusters,
-        COUNT(*) FILTER (
-          WHERE agent_review_score >= 7
-            AND human_decision IS NULL
-            AND executed_at IS NULL
-        )::int AS high_urgency,
-        COUNT(*) FILTER (
-          WHERE agent_review_score >= 4 AND agent_review_score < 7
-            AND human_decision IS NULL
-            AND executed_at IS NULL
-        )::int AS medium_urgency,
-        COUNT(*) FILTER (
-          WHERE (agent_review_score IS NULL OR agent_review_score < 4)
-            AND human_decision IS NULL
-            AND executed_at IS NULL
-        )::int AS low_urgency,
-        COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE status = 'reviewed' AND human_decision IS NULL)::int AS awaiting_approval,
-        COUNT(*) FILTER (WHERE human_decision = 'approved' AND executed_at IS NULL)::int AS approved,
-        COUNT(*) FILTER (WHERE executed_at IS NOT NULL)::int AS published
-      FROM analytics.seo_action
+        COUNT(queue.*)::int AS total_opportunities,
+        COUNT(DISTINCT queue.mutation_type)::int AS total_clusters,
+        COUNT(*) FILTER (WHERE COALESCE(queue.opportunity_score, 0) >= 70)::int AS high_urgency,
+        COUNT(*) FILTER (WHERE COALESCE(queue.opportunity_score, 0) >= 40 AND COALESCE(queue.opportunity_score, 0) < 70)::int AS medium_urgency,
+        COUNT(*) FILTER (WHERE COALESCE(queue.opportunity_score, 0) < 40)::int AS low_urgency,
+        COALESCE(MAX(lifecycle.total), 0)::int AS total,
+        COUNT(queue.*)::int AS awaiting_approval,
+        COALESCE(MAX(lifecycle.approved), 0)::int AS approved,
+        COALESCE(MAX(lifecycle.published), 0)::int AS published
+      FROM queue
+      CROSS JOIN lifecycle
     `).catch(() => ({ rows: [{ total_opportunities: 0, total_clusters: 0, high_urgency: 0, medium_urgency: 0, low_urgency: 0, total: 0, awaiting_approval: 0, approved: 0, published: 0 }] })),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_page_optimization_recommendations`).catch(() => ({ rows: [{ cnt: 0 }] })),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.internal_link_recommendations`).catch(() => ({ rows: [{ cnt: 0 }] })),
@@ -66,14 +59,13 @@ async function getOverviewKpis() {
     `).catch(() => ({ rows: [] })),
     pool.query(`
       SELECT COUNT(*)::int AS cnt
-      FROM analytics.seo_action
-      WHERE agent_model IN ('claude-haiku-4-5', 'claude-haiku-4-5-20251001')
-        AND agent_reviewed_at::date = CURRENT_DATE
-        AND human_decision = 'approved'
+      FROM analytics.seo_execution_candidate
+      WHERE reviewed_at::date = CURRENT_DATE
+        AND approval_status = 'approved'
     `).catch(() => ({ rows: [{ cnt: 0 }] })),
     pool.query(`
       SELECT MAX(created_at) AS run_at
-      FROM analytics.seo_action
+      FROM analytics.seo_execution_candidate
     `).catch(() => ({ rows: [] })),
   ]);
 
@@ -549,7 +541,7 @@ function extractPhase1Fields(detail: Record<string, unknown>) {
 }
 
 // Deprecated 2026-05-12: Phase 1 commercial-gating views (seo_phase1_*)
-// were superseded by analytics.seo_action (migration 20260501000035).
+// were superseded by the canonical candidate pipeline.
 // Returns an empty array so existing dashboard pages render an empty
 // state instead of failing. Delete the dashboard's Phase 1 panel when
 // it's confirmed unused.
@@ -711,21 +703,21 @@ async function getPhase1Suppressed() {
   }>;
 }
 
-// Migrated 2026-05-12: replaced seo_opportunity_queue_balanced (the runaway
-// view) + seo_execution_queue with a direct seo_action read.
+// Migrated again in 2026-06: recommendations come from
+// analytics.v_seo_dashboard_queue, the same guarded source as Command Center.
 //
 // Score fields the legacy queue computed (total_opportunity_score,
 // demand_score, competitive_opportunity_score, authority_gap_score,
 // paid_support_score, execution_readiness_score, ahrefs_search_volume,
 // ads_cost, competitor_domain_rating, evidence_summary_long, etc.) don't
-// exist in seo_action and are returned as null. The dashboard UI gracefully
-// degrades when these are missing.
+// are not available on the canonical queue and are returned as null. The
+// dashboard UI gracefully degrades when these are missing.
 //
 // Mappings:
-//   opportunity_id    <- id
-//   opportunity_family / opportunity_type / primary_remedy <- mutation_type
-//   topic_cluster     <- source_cluster
-//   primary_subject   <- source_keyword
+//   opportunity_id    <- opportunity_id or candidate_id
+//   opportunity_family / opportunity_type / primary_remedy <- mutation fields
+//   topic_cluster     <- mutation_label
+//   primary_subject   <- target_field
 //   nsd_page_url      <- target_url
 //   total_opportunity_score <- agent_review_score
 //   gsc_impressions / gsc_best_position <- gsc_impressions / gsc_position
@@ -741,76 +733,70 @@ async function getEngineRecommendations(limit: number, family?: string | null, r
   let paramIdx = 1;
 
   if (family || remedy) {
-    conditions.push(`sa.mutation_type = $${paramIdx++}`);
+    conditions.push(`q.mutation_type = $${paramIdx++}`);
     params.push((family || remedy) as string);
   }
-  if (urgency === 'high') conditions.push(`sa.agent_review_score >= 7`);
-  else if (urgency === 'medium') conditions.push(`sa.agent_review_score >= 4 AND sa.agent_review_score < 7`);
-  else if (urgency === 'low') conditions.push(`(sa.agent_review_score IS NULL OR sa.agent_review_score < 4)`);
+  if (urgency === 'high') conditions.push(`q.opportunity_score >= 70`);
+  else if (urgency === 'medium') conditions.push(`q.opportunity_score >= 40 AND q.opportunity_score < 70`);
+  else if (urgency === 'low') conditions.push(`(q.opportunity_score IS NULL OR q.opportunity_score < 40)`);
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const { rows } = await pool.query(`
     SELECT
-      ROW_NUMBER() OVER (ORDER BY sa.agent_review_score DESC NULLS LAST, sa.gsc_impressions DESC NULLS LAST)::int AS balanced_rank,
-      ROW_NUMBER() OVER (ORDER BY sa.agent_review_score DESC NULLS LAST, sa.gsc_impressions DESC NULLS LAST)::int AS canonical_queue_rank,
-      ROW_NUMBER() OVER (ORDER BY sa.agent_review_score DESC NULLS LAST, sa.gsc_impressions DESC NULLS LAST)::int AS portfolio_position,
-      'agent_score' AS balancing_strategy,
-      'sorted by agent review score then GSC impressions' AS balancing_reason,
-      sa.id::text AS opportunity_id,
-      sa.mutation_type AS opportunity_family,
-      sa.mutation_type AS opportunity_type,
-      sa.source_cluster AS topic_cluster,
-      sa.source_keyword AS primary_subject,
-      sa.target_url AS nsd_page_url,
+      ROW_NUMBER() OVER (ORDER BY q.opportunity_score DESC NULLS LAST, q.created_at DESC)::int AS balanced_rank,
+      ROW_NUMBER() OVER (ORDER BY q.opportunity_score DESC NULLS LAST, q.created_at DESC)::int AS canonical_queue_rank,
+      ROW_NUMBER() OVER (ORDER BY q.opportunity_score DESC NULLS LAST, q.created_at DESC)::int AS portfolio_position,
+      'dashboard_queue' AS balancing_strategy,
+      'sorted by canonical opportunity score' AS balancing_reason,
+      COALESCE(q.opportunity_id::text, q.candidate_id::text) AS opportunity_id,
+      q.mutation_type AS opportunity_family,
+      q.mutation_type AS opportunity_type,
+      q.mutation_label AS topic_cluster,
+      q.target_field AS primary_subject,
+      q.target_page_url AS nsd_page_url,
       NULL::text AS competitor_domain,
-      sa.agent_review_score::numeric AS total_opportunity_score,
-      sa.gsc_impressions::numeric AS demand_score,
+      q.opportunity_score::numeric AS total_opportunity_score,
+      NULL::numeric AS demand_score,
       NULL::numeric AS competitive_opportunity_score,
       NULL::numeric AS authority_gap_score,
       NULL::numeric AS paid_support_score,
-      sa.agent_review_score::numeric AS execution_readiness_score,
-      sa.mutation_type AS primary_remedy,
+      q.opportunity_score::numeric AS execution_readiness_score,
+      q.primary_remedy,
       NULL::text AS secondary_remedy,
-      CASE WHEN sa.agent_review_score IS NOT NULL THEN 'high' ELSE 'medium' END AS data_confidence,
+      COALESCE(q.confidence_tier, 'medium') AS data_confidence,
       1::int AS source_coverage_count,
       CASE
-        WHEN sa.agent_review_score >= 7 THEN 'high'
-        WHEN sa.agent_review_score >= 4 THEN 'medium'
+        WHEN q.opportunity_score >= 70 THEN 'high'
+        WHEN q.opportunity_score >= 40 THEN 'medium'
         ELSE 'low'
       END AS urgency_band,
       'fresh' AS source_freshness_label,
-      sa.agent_review_notes AS confidence_reason,
+      q.why AS confidence_reason,
       NULL::int AS ahrefs_search_volume,
       NULL::int AS ahrefs_keyword_difficulty,
       NULL::numeric AS ahrefs_cpc,
-      sa.gsc_impressions::numeric AS gsc_impressions,
-      sa.gsc_position::numeric AS gsc_best_position,
+      NULL::numeric AS gsc_impressions,
+      NULL::numeric AS gsc_best_position,
       NULL::numeric AS ads_cost,
       NULL::numeric AS ads_conversions,
       NULL::int AS competitor_referring_domains,
       NULL::numeric AS competitor_domain_rating,
-      sa.proposed_reason AS evidence_summary_short,
-      sa.proposed_reason AS evidence_summary_long,
+      COALESCE(q.why, q.evidence_summary) AS evidence_summary_short,
+      COALESCE(q.why, q.evidence_summary) AS evidence_summary_long,
       NULL::text AS internal_link_signal_strength,
-      sa.target_url AS nsd_ranking_page,
+      q.target_page_url AS nsd_ranking_page,
       false AS ahrefs_data_stale,
-      CASE
-        WHEN sa.executed_at IS NOT NULL AND sa.execution_error IS NULL THEN 'published'
-        WHEN sa.executed_at IS NOT NULL AND sa.execution_error IS NOT NULL THEN 'failed'
-        WHEN sa.human_decision = 'approved' THEN 'approved'
-        WHEN sa.status = 'reviewed' THEN 'proposed'
-        ELSE sa.status
-      END AS execution_status,
-      COALESCE(sa.human_decision, 'pending') AS approval_status,
-      sa.id::text AS candidate_id,
-      sa.mutation_type,
-      CASE WHEN sa.rolled_back_at IS NOT NULL THEN 'rolled_back' ELSE NULL END AS rollback_status,
-      (sa.status = 'reviewed' AND sa.human_decision IS NULL) AS awaiting_approval,
-      (sa.human_decision = 'approved' AND sa.executed_at IS NULL) AS ready_to_execute
-    FROM analytics.seo_action sa
+      q.execution_status,
+      q.approval_status,
+      q.candidate_id::text AS candidate_id,
+      q.mutation_type,
+      NULL::text AS rollback_status,
+      true AS awaiting_approval,
+      false AS ready_to_execute
+    FROM analytics.v_seo_dashboard_queue q
     ${whereClause}
-    ORDER BY sa.agent_review_score DESC NULLS LAST, sa.gsc_impressions DESC NULLS LAST
+    ORDER BY q.opportunity_score DESC NULLS LAST, q.created_at DESC
     LIMIT $${paramIdx}
   `, [...params, limit]);
 
@@ -829,79 +815,69 @@ async function getEngineRecommendations(limit: number, family?: string | null, r
   });
 }
 
-// Migrated 2026-05-12: single-table seo_action lookup.
-// execution_candidates returns a synthetic single-row array derived from
-// seo_action's own execution fields (executed_at, executed_by, applied_value,
-// mutation_type, status, rollback_available, rolled_back_at).
 async function getEngineRecommendationDetail(opportunityId: string) {
   const { rows } = await pool.query(`
     SELECT
-      sa.id::text AS opportunity_id,
-      sa.mutation_type AS opportunity_family,
-      sa.mutation_type AS opportunity_type,
-      sa.source_cluster AS topic_cluster,
-      sa.source_keyword AS primary_subject,
-      sa.target_url AS nsd_page_url,
-      sa.agent_review_score::numeric AS total_opportunity_score,
-      sa.gsc_impressions::numeric AS demand_score,
+      COALESCE(q.opportunity_id::text, q.candidate_id::text) AS opportunity_id,
+      q.mutation_type AS opportunity_family,
+      q.mutation_type AS opportunity_type,
+      q.mutation_label AS topic_cluster,
+      q.target_field AS primary_subject,
+      q.target_page_url AS nsd_page_url,
+      q.opportunity_score::numeric AS total_opportunity_score,
+      NULL::numeric AS demand_score,
       NULL::numeric AS competitive_opportunity_score,
       NULL::numeric AS authority_gap_score,
       NULL::numeric AS paid_support_score,
-      sa.agent_review_score::numeric AS execution_readiness_score,
-      sa.mutation_type AS primary_remedy,
+      q.opportunity_score::numeric AS execution_readiness_score,
+      q.primary_remedy,
       NULL::text AS secondary_remedy,
       CASE
-        WHEN sa.agent_review_score >= 7 THEN 'high'
-        WHEN sa.agent_review_score >= 4 THEN 'medium'
+        WHEN q.opportunity_score >= 70 THEN 'high'
+        WHEN q.opportunity_score >= 40 THEN 'medium'
         ELSE 'low'
       END AS urgency_band,
-      CASE WHEN sa.agent_review_score IS NOT NULL THEN 'high' ELSE 'medium' END AS data_confidence,
+      COALESCE(q.confidence_tier, 'medium') AS data_confidence,
       1::int AS source_coverage_count,
       'fresh' AS source_freshness_label,
-      sa.agent_review_notes AS confidence_reason,
+      q.why AS confidence_reason,
       NULL::int AS ahrefs_search_volume,
       NULL::int AS ahrefs_keyword_difficulty,
       NULL::numeric AS ahrefs_cpc,
-      sa.gsc_impressions::numeric AS gsc_impressions,
-      sa.gsc_position::numeric AS gsc_best_position,
+      NULL::numeric AS gsc_impressions,
+      NULL::numeric AS gsc_best_position,
       NULL::numeric AS ads_cost,
       NULL::numeric AS ads_conversions,
       NULL::int AS competitor_referring_domains,
       NULL::numeric AS competitor_domain_rating,
-      sa.proposed_reason AS evidence_summary_short,
-      sa.proposed_reason AS evidence_summary_long,
+      COALESCE(q.why, q.evidence_summary) AS evidence_summary_short,
+      COALESCE(q.why, q.evidence_summary) AS evidence_summary_long,
       NULL::text AS internal_link_signal_strength,
-      sa.target_url AS nsd_ranking_page,
+      q.target_page_url AS nsd_ranking_page,
       false AS ahrefs_data_stale,
-      sa.proposed_value,
-      sa.target_field,
-      sa.status,
-      sa.human_decision,
-      sa.executed_at,
-      sa.execution_error,
-      sa.rollback_available,
-      sa.rolled_back_at
-    FROM analytics.seo_action sa
-    WHERE sa.id::text = $1
+      q.proposed_value,
+      q.target_field,
+      q.approval_status AS status,
+      q.approval_status AS human_decision,
+      q.published_at AS executed_at,
+      NULL::text AS execution_error,
+      false AS rollback_available,
+      NULL::timestamptz AS rolled_back_at,
+      q.candidate_id::text AS candidate_id,
+      q.execution_status
+    FROM analytics.v_seo_dashboard_queue q
+    WHERE q.candidate_id::text = $1
+       OR q.opportunity_id::text = $1
   `, [opportunityId]);
 
   if (rows.length === 0) return null;
   const opp = rows[0];
 
-  // Build the execution_candidates array from this row's own fields so the
-  // dashboard's existing execution-candidate panel keeps working with the
-  // shape it expects.
-  const execStatus = opp.executed_at
-    ? (opp.execution_error ? 'failed' : 'published')
-    : (opp.human_decision === 'approved' ? 'approved' : 'proposed');
-  const apprStatus = opp.human_decision === 'approved'
-    ? 'approved'
-    : opp.human_decision === 'rejected'
-    ? 'rejected'
-    : 'pending';
+  const execStatus = opp.execution_status ?? 'proposed';
+  const apprStatus = opp.human_decision ?? 'pending';
 
   const execRows = [{
-    candidate_id: opportunityId,
+    candidate_id: opp.candidate_id ?? opportunityId,
     execution_status: execStatus,
     approval_status: apprStatus,
     mutation_type: opp.opportunity_type,

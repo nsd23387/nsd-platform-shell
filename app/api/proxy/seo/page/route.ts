@@ -4,8 +4,8 @@
 // are matched on a NORMALIZED url (protocol + leading www. stripped, trailing
 // slash removed) because inventory uses www., while execution candidates and
 // GSC query/page metrics mix www. and apex hosts. Surfaces three lanes:
-//   Lane 1 (engine) — analytics.seo_execution_candidate, gate_status='accepted'
-//                     only. Approve/reject routes back through the existing
+//   Lane 1 (engine) — analytics.v_seo_dashboard_queue guarded queue.
+//                     Approve/reject routes back through the existing
 //                     /api/proxy/seo/recommendations write path.
 //   Lane 2/3 (manual Rank Math + off-page) — derived client-side from the
 //     inventory row; no DB writes originate here.
@@ -98,14 +98,14 @@ export async function GET(req: NextRequest) {
     );
 
     const candQ = pool.query(
-      `SELECT candidate_id, opportunity_id, mutation_type, primary_remedy,
-              proposed_value, current_value_snapshot, evidence_summary, gate_reasons,
+      `SELECT candidate_id, opportunity_id, mutation_type, mutation_label, primary_remedy,
+              proposed_value, current_value_snapshot, evidence_summary, why, gate_reasons,
               opportunity_score::numeric AS opportunity_score, opportunity_urgency,
-              confidence_tier, source_confidence, approval_status, execution_status,
-              target_page_url, regate_review_flag, lane, executor
-       FROM analytics.seo_execution_candidate
-       WHERE rtrim(regexp_replace(lower(target_page_url), '^https?://(www\\.)?', ''), '/') = $1
-         AND gate_status = 'accepted'
+              confidence_tier, source_confidence, gate_status, approval_status, execution_status,
+              target_page_url, page_url_canonical, page_is_live, page_status_class,
+              regate_review_flag, needs_evidence, qa_status, outcome_verdict
+       FROM analytics.v_seo_dashboard_queue
+       WHERE page_url_canonical = $1
        ORDER BY opportunity_score DESC NULLS LAST`,
       [norm],
     );
@@ -188,21 +188,28 @@ export async function GET(req: NextRequest) {
       candidate_id: r.candidate_id,
       opportunity_id: r.opportunity_id,
       mutation_type: r.mutation_type,
+      mutation_label: r.mutation_label,
       primary_remedy: r.primary_remedy,
       proposed_value: r.proposed_value,
       current_value_snapshot: r.current_value_snapshot,
       evidence_summary: r.evidence_summary,
+      why: r.why,
       gate_reasons: Array.isArray(r.gate_reasons) ? r.gate_reasons : [],
       opportunity_score: r.opportunity_score != null ? Number(r.opportunity_score) : null,
       opportunity_urgency: r.opportunity_urgency,
       confidence_tier: r.confidence_tier,
       source_confidence: r.source_confidence,
+      gate_status: r.gate_status,
       approval_status: r.approval_status,
       execution_status: r.execution_status,
       target_page_url: r.target_page_url,
-      regate_review_flag: r.regate_review_flag ?? null,
-      lane: r.lane != null ? Number(r.lane) : null,
-      executor: r.executor ?? null,
+      page_url_canonical: r.page_url_canonical,
+      page_is_live: r.page_is_live === true,
+      page_status_class: r.page_status_class,
+      regate_review_flag: r.regate_review_flag === true,
+      needs_evidence: r.needs_evidence === true,
+      qa_status: r.qa_status,
+      outcome_verdict: r.outcome_verdict,
     }));
 
     const num = (v: unknown): number | null =>

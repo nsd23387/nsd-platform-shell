@@ -7,9 +7,9 @@
 // approveEngineCandidate / rejectEngineCandidate -> /api/proxy/seo/recommendations.
 // Lanes 2 (Rank Math manual) and 3 (off-page) are advisory only — no mutations.
 // Ahrefs is decommissioned — keyword value is sourced from DataForSEO via
-// analytics.external_query_intelligence. Only canonical_live pages are surfaced
-// as optimization targets; lost pages live in the Lost queue; pending pages
-// carry a verify flag; excluded pages are never shown.
+// analytics.external_query_intelligence. The candidate queue itself comes from
+// analytics.v_seo_dashboard_queue; non-live redirect work is sectioned, not
+// silently hidden.
 // =============================================================================
 
 import React, { useEffect, useState } from 'react';
@@ -64,6 +64,47 @@ export function Pill({ children, tone, tc }: { children: React.ReactNode; tone: 
       {children}
     </span>
   );
+}
+
+// Mutation-type presentation: color-coded category tag + human title + effort +
+// lane. Drives the "DO THIS NEXT" detection rows and the Action Card so each of the
+// six action types renders distinctly (not all as "INTERNAL LINK").
+// -----------------------------------------------------------------------------
+export type ActionMeta = { label: string; tone: ToneKey; title: string; effort: string; lane: 1 | 2 | 3 };
+
+export function actionMeta(mutationType: string | null | undefined, proposedValue?: string | null): ActionMeta {
+  switch (mutationType) {
+    case 'title_tag_refinement':
+      return { label: 'TITLE', tone: 'info', title: 'Rewrite title tag', effort: 'Low', lane: 1 };
+    case 'meta_description_update':
+      return { label: 'META', tone: 'violet', title: 'Rewrite meta description', effort: 'Low', lane: 1 };
+    case 'h1_tag_refinement':
+      return { label: 'H1', tone: 'good', title: 'Refine H1 heading', effort: 'Low', lane: 1 };
+    case 'product_offer_schema':
+      return { label: 'SCHEMA', tone: 'warn', title: 'Add Product/Offer schema', effort: 'Medium', lane: 1 };
+    case 'organization_schema_addition':
+      return { label: 'ORG SCHEMA', tone: 'warn', title: 'Add Organization schema', effort: 'Medium', lane: 1 };
+    case 'website_schema_addition':
+      return { label: 'WEBSITE SCHEMA', tone: 'warn', title: 'Add WebSite schema', effort: 'Medium', lane: 1 };
+    case 'breadcrumb_schema_addition':
+      return { label: 'BREADCRUMB', tone: 'warn', title: 'Add Breadcrumb schema', effort: 'Medium', lane: 1 };
+    case 'local_business_schema_addition':
+      return { label: 'LOCALBUSINESS', tone: 'warn', title: 'Add LocalBusiness schema', effort: 'Medium', lane: 1 };
+    case 'faq_schema_addition':
+      return { label: 'FAQ SCHEMA', tone: 'warn', title: 'Add FAQ schema', effort: 'Medium', lane: 1 };
+    case 'image_alt_text_improvement':
+      return { label: 'IMAGE ALT', tone: 'neutral', title: 'Improve image alt text', effort: 'Low', lane: 1 };
+    case 'internal_link_insertion':
+      return { label: 'INTERNAL LINK', tone: 'violet', title: proposedValue ? `Add internal link → ${proposedValue}` : 'Add internal link', effort: 'Low', lane: 1 };
+    case 'lost_page_redirect':
+      return { label: 'REDIRECT', tone: 'bad', title: 'Lost-page 301 redirect (Rank Math)', effort: 'Manual', lane: 2 };
+    case 'canonical_consolidation':
+      return { label: 'CANONICAL', tone: 'warn', title: 'Canonical consolidation (Rank Math)', effort: 'Manual', lane: 2 };
+    case 'noindex_hygiene':
+      return { label: 'NOINDEX', tone: 'neutral', title: 'Noindex / sitemap hygiene (Rank Math)', effort: 'Manual', lane: 2 };
+    default:
+      return { label: (mutationType || 'ACTION').replace(/_/g, ' ').toUpperCase(), tone: 'neutral', title: mutationType || 'Action', effort: '—', lane: 1 };
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -357,11 +398,11 @@ export function CandidateCard({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: space['3'], alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', alignItems: 'center' }}>
-          <Pill tone="violet" tc={tc}>{c.primary_remedy || c.mutation_type || 'remedy'}</Pill>
+          <Pill tone="violet" tc={tc}>{c.mutation_label || c.primary_remedy || c.mutation_type || 'remedy'}</Pill>
           {c.confidence_tier && <Pill tone="info" tc={tc}>{c.confidence_tier}</Pill>}
           {c.opportunity_score != null && (
             <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>
-              score {Math.round(c.opportunity_score * 100)}
+              score {Math.round(c.opportunity_score)}
             </span>
           )}
         </div>
@@ -375,7 +416,7 @@ export function CandidateCard({
       )}
       {c.evidence_summary && (
         <div style={{ marginTop: space['1'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-          {c.evidence_summary}
+          {c.why ?? c.evidence_summary}
         </div>
       )}
 

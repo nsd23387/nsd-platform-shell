@@ -7,9 +7,9 @@
 // approveEngineCandidate / rejectEngineCandidate -> /api/proxy/seo/recommendations.
 // Lanes 2 (Rank Math manual) and 3 (off-page) are advisory only — no mutations.
 // Ahrefs is decommissioned — keyword value is sourced from DataForSEO via
-// analytics.external_query_intelligence. Only canonical_live pages are surfaced
-// as optimization targets; lost pages live in the Lost queue; pending pages
-// carry a verify flag; excluded pages are never shown.
+// analytics.external_query_intelligence. The approvable queue comes from
+// analytics.v_seo_dashboard_queue; lost/non-live redirect work is sectioned,
+// not silently hidden.
 //
 // Data truthfulness: every number on this screen is a live read. We do NOT
 // fabricate predicted lift, share-of-voice, or velocity figures. Detection
@@ -35,7 +35,7 @@ import type {
   PortfolioPage, PortfolioBucket, PageDossierCandidate,
   SeoTimeseriesResponse, GscPipelineHealth, SeoCompetitorGap,
   SeoTimeseriesPoint, CompetitiveVelocitySummary, CompetitivePageChange,
-  SeoShippedAction, SeoOffpageBrief, SuppressedAudit,
+  SeoShippedAction, SeoCandidateQueue, SeoOffpageBrief, SuppressedAudit,
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
@@ -551,7 +551,7 @@ function DetectionRow({
   onDefer: (id: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const score = c.opportunity_score != null ? Math.round(c.opportunity_score * 100) : null;
+  const score = c.opportunity_score != null ? Math.round(c.opportunity_score) : null;
   // Honest impact: the target page's real GSC demand, not a modelled lift.
   const impr = page?.top_q_impr ?? page?.gsc_impressions ?? null;
   const pos = page?.top_q_pos ?? page?.gsc_best_position ?? null;
@@ -563,7 +563,7 @@ function DetectionRow({
         <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
           {(() => { const m = mutationDisplay(c.mutation_type, c.primary_remedy); return (
             <>
-              <Pill tone="violet" tc={tc}>{m.tag}</Pill>
+              <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>
               <span style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>
                 {m.verb(c.proposed_value)}
               </span>
@@ -581,11 +581,11 @@ function DetectionRow({
           ); })()}
         </div>
         <div style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, marginBottom: '4px', wordBreak: 'break-all' }}>
-          {c.target_page_url ? pathOf(c.target_page_url) : '—'}
+          {c.page_url_canonical ?? (c.target_page_url ? pathOf(c.target_page_url) : '—')}
         </div>
-        {c.evidence_summary && (
+        {(c.why || c.evidence_summary) && (
           <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.secondary, lineHeight: 1.5 }}>
-            <span style={{ color: tc.text.muted }}>Why: </span>{c.evidence_summary}
+            <span style={{ color: tc.text.muted }}>Why: </span>{c.why ?? c.evidence_summary}
           </div>
         )}
       </div>
@@ -792,6 +792,7 @@ function CommandCenterContent() {
   const tc = useThemeColors();
 
   const [candidates, setCandidates] = useState<PageDossierCandidate[] | null>(null);
+  const [queueSummary, setQueueSummary] = useState<SeoCandidateQueue['summary'] | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioPage[] | null>(null);
   const [gaps, setGaps] = useState<SeoCompetitorGap[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -814,6 +815,7 @@ function CommandCenterContent() {
     ])
       .then(([q, p, g]) => {
         setCandidates(q.candidates);
+        setQueueSummary(q.summary ?? null);
         setPortfolio(p);
         setGaps(g);
       })
@@ -848,18 +850,20 @@ function CommandCenterContent() {
     return c;
   }, [portfolio]);
 
-  // Detections: pending engine candidates whose target page is verified
-  // canonical_live (governance — never surface targets we can't confirm are
-  // live). Ranked by opportunity score (already DESC from the API).
   const detections = useMemo(() => {
     return (candidates ?? [])
-      .filter((c) => !deferred.has(c.candidate_id))
-      .filter((c) => {
-        if (!c.target_page_url) return false;
-        const p = portfolioByPath.get(pathOf(c.target_page_url));
-        return p != null && p.status_class === 'canonical_live';
-      });
-  }, [candidates, deferred, portfolioByPath]);
+      .filter((c) => !deferred.has(c.candidate_id));
+  }, [candidates, deferred]);
+
+  const liveDetections = useMemo(
+    () => detections.filter((c) => c.page_is_live === true),
+    [detections],
+  );
+
+  const redirectDetections = useMemo(
+    () => detections.filter((c) => c.page_is_live !== true),
+    [detections],
+  );
 
   async function approveOne(c: PageDossierCandidate) {
     await approveEngineCandidate({
@@ -923,6 +927,12 @@ function CommandCenterContent() {
     () => detections.slice(0, TOP_N),
     [detections],
   );
+  const summaryTiles = [
+    { label: 'Decisions', value: queueSummary?.decisions ?? detections.length, help: 'Guarded recommendations awaiting approval' },
+    { label: 'Total proposals', value: queueSummary?.total_proposals ?? detections.length, help: 'Canonical queue rows' },
+    { label: 'Re-review flagged', value: queueSummary?.re_review_flagged ?? 0, help: 'Needs another gate review' },
+    { label: 'Needs review', value: queueSummary?.needs_review ?? 0, help: 'Evidence or QA attention needed' },
+  ];
 
   return (
     <div style={{ padding: space['6'], maxWidth: 1200, margin: '0 auto' }}>
@@ -932,7 +942,7 @@ function CommandCenterContent() {
           <h1 style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>SEO Command Center</h1>
           <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-subtitle">
             {loading ? 'Loading governed recommendations…'
-              : `${detections.length} gate-accepted recommendation${detections.length === 1 ? '' : 's'} awaiting approval on live pages.`}
+              : `${detections.length} guarded recommendation${detections.length === 1 ? '' : 's'} awaiting approval (${liveDetections.length} live-page, ${redirectDetections.length} lost/non-live).`}
           </p>
         </div>
         <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap' }}>
@@ -1062,6 +1072,22 @@ function CommandCenterContent() {
         <div style={{ marginBottom: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>
       )}
 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: space['3'], marginBottom: space['4'] }}>
+        {summaryTiles.map((tile) => (
+          <Card key={tile.label} tc={tc} style={{ padding: space['4'] }}>
+            <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: fontWeight.semibold }}>
+              {tile.label}
+            </div>
+            <div style={{ fontFamily: monoStack, fontSize: '28px', lineHeight: 1.1, color: tc.text.primary, marginTop: '6px' }}>
+              {loading ? '—' : fmtInt(tile.value)}
+            </div>
+            <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '4px' }}>
+              {tile.help}
+            </div>
+          </Card>
+        ))}
+      </div>
+
       {/* HERO — trend + freshness */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: space['4'], marginBottom: space['4'] }}>
         <TrendChart tc={tc} />
@@ -1077,7 +1103,7 @@ function CommandCenterContent() {
       {/* DO THIS NEXT */}
       <SectionTitle
         tc={tc}
-        sub="Gate-accepted engine recommendations on live pages, ranked by opportunity score"
+        sub="Guarded engine recommendations, ranked by opportunity score"
         right={<Pill tone="neutral" tc={tc}>Lane 1 · draft-only approvals</Pill>}
       >
         Do this next
@@ -1087,13 +1113,34 @@ function CommandCenterContent() {
           {loading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading recommendations…</div>}
           {!loading && detections.length === 0 && (
             <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-detections">
-              No gate-accepted recommendations awaiting approval on live pages.
+              No guarded recommendations awaiting approval.
             </div>
           )}
-          {!loading && detections.slice(0, 12).map((c, i) => (
+          {!loading && liveDetections.length > 0 && (
+            <div style={{ padding: `${space['4']} 0 ${space['2']}`, fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              On-page optimizations ({liveDetections.length})
+            </div>
+          )}
+          {!loading && liveDetections.slice(0, 12).map((c, i) => (
             <DetectionRow
               key={c.candidate_id}
               rank={i + 1}
+              c={c}
+              page={c.target_page_url ? portfolioByPath.get(pathOf(c.target_page_url)) : undefined}
+              tc={tc}
+              onApprove={approveOne}
+              onDefer={deferOne}
+            />
+          ))}
+          {!loading && redirectDetections.length > 0 && (
+            <div style={{ padding: `${space['5']} 0 ${space['2']}`, fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, color: PALETTE.bad, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Lost pages / redirects ({redirectDetections.length})
+            </div>
+          )}
+          {!loading && redirectDetections.slice(0, 20).map((c, i) => (
+            <DetectionRow
+              key={c.candidate_id}
+              rank={liveDetections.length + i + 1}
               c={c}
               page={c.target_page_url ? portfolioByPath.get(pathOf(c.target_page_url)) : undefined}
               tc={tc}
