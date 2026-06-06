@@ -565,7 +565,7 @@ function DetectionRow({
             <>
               <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>
               <span style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-                {m.verb(c.proposed_value)}
+                {c.mutation_label ?? m.verb(c.proposed_value)}
               </span>
               {c.regate_review_flag && (
                 <span title="Re-surfaced for human re-review after a prior decision">
@@ -1062,8 +1062,8 @@ function CommandCenterContent() {
                     />
                     <span style={{ minWidth: 0 }}>
                       <span style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap', marginBottom: '2px' }}>
-                        <Pill tone="violet" tc={tc}>{m.tag}</Pill>
-                        <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{m.verb(c.proposed_value)}</span>
+                        <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{c.mutation_label ?? m.verb(c.proposed_value)}</span>
                         {c.regate_review_flag && <Pill tone="warn" tc={tc}>re-review</Pill>}
                         {review.flagged && (
                           <span title={review.reasons.join(' ')} data-testid={`review-needs-review-${c.candidate_id}`}><Pill tone="warn" tc={tc}>needs review</Pill></span>

@@ -83,10 +83,10 @@ function CandidateRow({
     >
       <td style={{ padding: isAlt ? '8px 12px 8px 28px' : '10px 12px', color: isAlt ? tc.text.secondary : tc.text.primary, fontWeight: isAlt ? fontWeight.normal : fontWeight.medium }}>
         {isAlt && <span style={{ color: tc.text.muted, marginRight: 6 }}>↳</span>}
-        {m.verb(c.proposed_value)}
+        {c.mutation_label ?? m.verb(c.proposed_value)}
       </td>
       <td style={{ padding: '10px 12px' }}>
-        <Pill tone="violet" tc={tc}>{m.tag}</Pill>
+        <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>
       </td>
       <td style={{ padding: '10px 12px', fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, wordBreak: 'break-all' }}>
         {c.target_page_url ? pathOf(c.target_page_url) : '—'}
