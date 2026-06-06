@@ -17,7 +17,7 @@
 // modelled click projection.
 // =============================================================================
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../hooks/useRBAC';
 import { AccessDenied } from '../../../components/dashboard';
@@ -795,8 +795,12 @@ function CommandCenterContent() {
   const [queueSummary, setQueueSummary] = useState<SeoCandidateQueue['summary'] | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioPage[] | null>(null);
   const [gaps, setGaps] = useState<SeoCompetitorGap[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [queueLoading, setQueueLoading] = useState(true);
+  const [portfolioLoading, setPortfolioLoading] = useState(true);
+  const [gapsLoading, setGapsLoading] = useState(true);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const [portfolioError, setPortfolioError] = useState<string | null>(null);
+  const [gapsError, setGapsError] = useState<string | null>(null);
   const [deferred, setDeferred] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
@@ -806,24 +810,59 @@ function CommandCenterContent() {
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
   const [diagnoseUrl, setDiagnoseUrl] = useState('');
 
-  function loadAll() {
-    setLoading(true); setError(null);
-    Promise.all([
-      getSeoCandidateQueue(),
-      getSeoPortfolio(),
-      getSeoCompetitorGaps().catch(() => [] as SeoCompetitorGap[]),
-    ])
-      .then(([q, p, g]) => {
-        setCandidates(q.candidates);
+  const loadQueue = useCallback(() => {
+    let alive = true;
+    setQueueLoading(true);
+    setQueueError(null);
+    getSeoCandidateQueue()
+      .then((q) => {
+        if (!alive) return;
+        setCandidates(q.candidates ?? []);
         setQueueSummary(q.summary ?? null);
-        setPortfolio(p);
-        setGaps(g);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load command center'))
-      .finally(() => setLoading(false));
-  }
+      .catch((e) => {
+        if (!alive) return;
+        setCandidates([]);
+        setQueueSummary(null);
+        setQueueError(e instanceof Error ? e.message : 'Failed to load recommendations');
+      })
+      .finally(() => {
+        if (alive) setQueueLoading(false);
+      });
+    return () => { alive = false; };
+  }, []);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => loadQueue(), [loadQueue]);
+
+  useEffect(() => {
+    let alive = true;
+    setPortfolioLoading(true);
+    setPortfolioError(null);
+    getSeoPortfolio()
+      .then((p) => { if (alive) setPortfolio(p); })
+      .catch((e) => {
+        if (!alive) return;
+        setPortfolio([]);
+        setPortfolioError(e instanceof Error ? e.message : 'Failed to load portfolio');
+      })
+      .finally(() => { if (alive) setPortfolioLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    setGapsLoading(true);
+    setGapsError(null);
+    getSeoCompetitorGaps()
+      .then((g) => { if (alive) setGaps(g); })
+      .catch((e) => {
+        if (!alive) return;
+        setGaps([]);
+        setGapsError(e instanceof Error ? e.message : 'Failed to load competitor gaps');
+      })
+      .finally(() => { if (alive) setGapsLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   // Portfolio lookup keyed by path (host-robust: portfolio + candidate URLs
   // disagree on www vs apex host, so we normalize to pathname before joining).
@@ -918,7 +957,7 @@ function CommandCenterContent() {
     setActionMsg(`Queued ${ok} recommendation${ok === 1 ? '' : 's'} as DRAFT${failed ? ` · ${failed} failed (still pending)` : ''}.`);
     setBulkBusy(false);
     setReviewOpen(false);
-    if (failed) loadAll();
+    if (failed) loadQueue();
   }
 
   const TOP_N = 5;
@@ -941,7 +980,7 @@ function CommandCenterContent() {
         <div>
           <h1 style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>SEO Command Center</h1>
           <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-subtitle">
-            {loading ? 'Loading governed recommendations…'
+            {queueLoading ? 'Loading governed recommendations…'
               : `${detections.length} guarded recommendation${detections.length === 1 ? '' : 's'} awaiting approval (${liveDetections.length} live-page, ${redirectDetections.length} lost/non-live).`}
           </p>
         </div>
@@ -1068,8 +1107,8 @@ function CommandCenterContent() {
           {actionMsg}
         </div>
       )}
-      {error && (
-        <div style={{ marginBottom: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>
+      {queueError && (
+        <div style={{ marginBottom: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{queueError}</div>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: space['3'], marginBottom: space['4'] }}>
@@ -1079,7 +1118,7 @@ function CommandCenterContent() {
               {tile.label}
             </div>
             <div style={{ fontFamily: monoStack, fontSize: '28px', lineHeight: 1.1, color: tc.text.primary, marginTop: '6px' }}>
-              {loading ? '—' : fmtInt(tile.value)}
+              {queueLoading ? '—' : fmtInt(tile.value)}
             </div>
             <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '4px' }}>
               {tile.help}
@@ -1110,18 +1149,23 @@ function CommandCenterContent() {
       </SectionTitle>
       <Card tc={tc} style={{ padding: 0 }}>
         <div style={{ padding: `0 ${space['5']}` }}>
-          {loading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading recommendations…</div>}
-          {!loading && detections.length === 0 && (
+          {queueLoading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading recommendations…</div>}
+          {!queueLoading && queueError && (
+            <div style={{ padding: space['6'], textAlign: 'center', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="error-detections">
+              Recommendations unavailable.
+            </div>
+          )}
+          {!queueLoading && !queueError && detections.length === 0 && (
             <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-detections">
               No guarded recommendations awaiting approval.
             </div>
           )}
-          {!loading && liveDetections.length > 0 && (
+          {!queueLoading && !queueError && liveDetections.length > 0 && (
             <div style={{ padding: `${space['4']} 0 ${space['2']}`, fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               On-page optimizations ({liveDetections.length})
             </div>
           )}
-          {!loading && liveDetections.slice(0, 12).map((c, i) => (
+          {!queueLoading && !queueError && liveDetections.slice(0, 12).map((c, i) => (
             <DetectionRow
               key={c.candidate_id}
               rank={i + 1}
@@ -1132,12 +1176,12 @@ function CommandCenterContent() {
               onDefer={deferOne}
             />
           ))}
-          {!loading && redirectDetections.length > 0 && (
+          {!queueLoading && !queueError && redirectDetections.length > 0 && (
             <div style={{ padding: `${space['5']} 0 ${space['2']}`, fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, color: PALETTE.bad, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Lost pages / redirects ({redirectDetections.length})
             </div>
           )}
-          {!loading && redirectDetections.slice(0, 20).map((c, i) => (
+          {!queueLoading && !queueError && redirectDetections.slice(0, 20).map((c, i) => (
             <DetectionRow
               key={c.candidate_id}
               rank={liveDetections.length + i + 1}
@@ -1149,7 +1193,7 @@ function CommandCenterContent() {
             />
           ))}
         </div>
-        {!loading && detections.length > 12 && (
+        {!queueLoading && !queueError && detections.length > 12 && (
           <div style={{ padding: space['4'], borderTop: `1px solid ${tc.border.subtle}`, textAlign: 'center', background: tc.background.muted }}>
             <Link href="/dashboard/seo/recommendations" style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-view-all-detections">
               View all {detections.length} recommendations →
@@ -1164,13 +1208,18 @@ function CommandCenterContent() {
           Competitor intelligence
         </SectionTitle>
         <Card tc={tc} style={{ padding: 0 }}>
-          {loading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading competitor gaps…</div>}
-          {!loading && (!gaps || gaps.length === 0) && (
+          {gapsLoading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading competitor gaps…</div>}
+          {!gapsLoading && gapsError && (
+            <div style={{ padding: space['6'], textAlign: 'center', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="error-gaps">
+              Competitor gaps unavailable.
+            </div>
+          )}
+          {!gapsLoading && !gapsError && (!gaps || gaps.length === 0) && (
             <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-gaps">
               No competitor gaps recorded in the governed feed.
             </div>
           )}
-          {!loading && gaps && gaps.length > 0 && (
+          {!gapsLoading && !gapsError && gaps && gaps.length > 0 && (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: tc.background.muted, color: tc.text.muted, textAlign: 'left' }}>
@@ -1196,7 +1245,7 @@ function CommandCenterContent() {
               </tbody>
             </table>
           )}
-          {!loading && gaps && gaps.length > 8 && (
+          {!gapsLoading && !gapsError && gaps && gaps.length > 8 && (
             <div style={{ padding: '10px 16px', borderTop: `1px solid ${tc.border.subtle}`, background: tc.background.muted, textAlign: 'right' }}>
               <Link href="/dashboard/seo/competitors" style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-view-all-gaps">
                 View all {gaps.length} gaps →
@@ -1225,6 +1274,11 @@ function CommandCenterContent() {
         <SectionTitle tc={tc} sub="Governed page portfolio by bucket — open Performance to triage">
           Portfolio at a glance
         </SectionTitle>
+        {portfolioError && (
+          <div style={{ marginBottom: space['3'], padding: space['3'], borderRadius: radius.sm, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="error-portfolio">
+            Portfolio unavailable.
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: space['3'] }}>
           {BUCKETS.map((b) => (
             <Link
@@ -1237,8 +1291,8 @@ function CommandCenterContent() {
                 <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{b.label}</span>
                 <Pill tone={bucketTone(b.key)} tc={tc}>{b.key}</Pill>
               </div>
-              <div style={{ fontFamily: monoStack, fontSize: '26px', color: tc.text.primary, marginTop: '4px' }}>{loading ? '—' : counts[b.key]}</div>
-              {!loading && verifyCounts[b.key] > 0 && (
+              <div style={{ fontFamily: monoStack, fontSize: '26px', color: tc.text.primary, marginTop: '4px' }}>{portfolioLoading ? '—' : counts[b.key]}</div>
+              {!portfolioLoading && verifyCounts[b.key] > 0 && (
                 <div style={{ marginTop: '4px' }} data-testid={`text-verify-count-${b.key}`}>
                   <Pill tone="warn" tc={tc}>{verifyCounts[b.key]} need verify</Pill>
                 </div>
