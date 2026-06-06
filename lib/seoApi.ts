@@ -142,14 +142,14 @@ export async function getRecommendations(): Promise<SeoRecommendation[]> {
 export async function approveRecommendation(id: string): Promise<void> {
   await seoFetch(`/api/proxy/seo/recommendations`, {
     method: 'POST',
-    body: JSON.stringify({ id, action: 'approve' }),
+    body: JSON.stringify({ candidate_id: id, action: 'approve', target: 'engine' }),
   });
 }
 
 export async function rejectRecommendation(id: string): Promise<void> {
   await seoFetch(`/api/proxy/seo/recommendations`, {
     method: 'POST',
-    body: JSON.stringify({ id, action: 'reject' }),
+    body: JSON.stringify({ candidate_id: id, action: 'reject', target: 'engine' }),
   });
 }
 
@@ -947,11 +947,14 @@ export interface PageDossierCandidate {
   candidate_id: string;
   opportunity_id: string | null;
   mutation_type: string | null;
+  mutation_label?: string | null;
   primary_remedy: string | null;
   proposed_value: string | null;
   current_value_snapshot: string | null;
   evidence_summary: string | null;
+  why?: string | null;
   gate_reasons: string[];
+  gate_status?: string | null;
   opportunity_score: number | null;
   opportunity_urgency: string | null;
   confidence_tier: string | null;
@@ -959,6 +962,12 @@ export interface PageDossierCandidate {
   approval_status: string | null;
   execution_status: string | null;
   target_page_url: string | null;
+  page_url_canonical?: string | null;
+  page_is_live?: boolean | null;
+  page_status_class?: string | null;
+  needs_evidence?: boolean | null;
+  qa_status?: string | null;
+  outcome_verdict?: string | null;
   // Engine re-gate signal: the candidate was re-surfaced for human re-review
   // after a prior decision (e.g. demand shifted). Honest passthrough — null
   // when the column is absent. lane/executor describe which of the three lanes
@@ -1075,6 +1084,14 @@ export async function getSeoPageDossier(url: string): Promise<PageDossier> {
 export interface SeoCandidateQueue {
   candidates: PageDossierCandidate[];
   returned: number;
+  summary?: {
+    decisions: number;
+    total_proposals: number;
+    re_review_flagged: number;
+    needs_review: number;
+    live_page_decisions: number;
+    lost_or_nonlive_decisions: number;
+  } | null;
 }
 
 export async function getSeoCandidateQueue(limit?: number): Promise<SeoCandidateQueue> {
@@ -1140,6 +1157,12 @@ export interface SeoCandidateDetail extends PageDossierCandidate {
   execution_timestamp?: string | null;
   rollback_available?: boolean | null;
   rollback_status?: string | null;
+  published_at?: string | null;
+  outcome_verdict?: string | null;
+  outcome_live_confirmed_at?: string | null;
+  outcome_live_drift_at?: string | null;
+  outcome_leading_metric?: string | null;
+  outcome_decided_at?: string | null;
 }
 
 export async function getSeoCandidate(id: string): Promise<SeoCandidateDetail> {
@@ -1232,7 +1255,7 @@ export async function getCompetitiveChanges(limit = 100): Promise<CompetitivePag
 
 // =============================================================================
 // Recently approved / shipped SEO actions (read-only)
-// Sourced from analytics.seo_action via /api/proxy/seo/actions. We surface the
+// Sourced from analytics.seo_execution_candidate via /api/proxy/seo/actions. We surface the
 // real lifecycle status, timestamps, and the engine-measured GSC click delta
 // where one exists — we never fabricate predicted lift and never offer a
 // rollback write from this read-only surface. Empty until the engine approves
@@ -1249,12 +1272,10 @@ export interface SeoShippedAction {
   outcome_clicks_delta: number | null;
 }
 
-// Shipped lifecycle statuses. The /actions route falls back to
-// awaiting-approval execution CANDIDATES (status='awaiting_approval') when
-// analytics.seo_action is empty — those are NOT shipped, so we hard-filter to
-// this allowlist here. Without it, pending candidates would masquerade as
-// shipped work, breaking data truthfulness. This keeps the honest empty state.
-const SHIPPED_STATUSES = ['approved', 'executing', 'published', 'measuring', 'rolled_back'];
+// Shipped lifecycle statuses from analytics.seo_execution_candidate. Pending
+// approval rows are intentionally excluded so queued recommendations cannot
+// masquerade as shipped work.
+const SHIPPED_STATUSES = ['approved', 'draft_applied', 'published', 'rolled_back', 'failed'];
 
 export async function getSeoShipped(limit = 8): Promise<SeoShippedAction[]> {
   const rows = await getSeoActions(SHIPPED_STATUSES.join(','), limit);
@@ -1263,10 +1284,10 @@ export async function getSeoShipped(limit = 8): Promise<SeoShippedAction[]> {
     .map((r) => ({
       id: String(r.id ?? ''),
       target_url: (r.target_url as string) ?? null,
-      mutation_type: (r.mutation_type as string) ?? null,
+      mutation_type: (r.mutation_label as string) ?? (r.mutation_type as string) ?? null,
       status: (r.status as string) ?? null,
       created_at: (r.created_at as string) ?? null,
-      executed_at: (r.executed_at as string) ?? null,
+      executed_at: ((r.executed_at ?? r.published_at) as string) ?? null,
       outcome_clicks_delta: r.outcome_clicks_delta != null ? Number(r.outcome_clicks_delta) : null,
     }));
 }

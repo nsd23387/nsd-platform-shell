@@ -1,9 +1,13 @@
 /**
- * GET /api/proxy/seo/actions — List SEO actions from the simplified seo_action table
- * POST /api/proxy/seo/actions — Approve/reject an action by ID
+ * GET /api/proxy/seo/actions — List SEO dashboard recommendations/results
+ * from the canonical candidate pipeline.
  *
- * This replaces the complex recommendations proxy that went through
- * Phase 1 opportunities + execution candidates.
+ * Read source:
+ *   - pending review: analytics.v_seo_dashboard_queue
+ *   - shipped/results: analytics.seo_execution_candidate + seo_published_outcome
+ *
+ * Legacy dashboard action writes are intentionally not supported here;
+ * approve/reject UI uses the existing candidate path.
  */
 
 export const runtime = 'nodejs';
@@ -19,80 +23,121 @@ const pool = new Pool({
 });
 
 export async function GET(req: NextRequest) {
-  const status = req.nextUrl.searchParams.get('status') || 'proposed,reviewed,approved';
+  const status = req.nextUrl.searchParams.get('status') || 'pending';
   const limit = parseInt(req.nextUrl.searchParams.get('limit') || '30', 10);
 
   try {
     const statuses = status.split(',').map(s => s.trim());
-    let rows: Record<string, unknown>[] = [];
+    const pendingAliases = new Set(['pending', 'proposed', 'reviewed', 'needs_review', 'awaiting_approval']);
+    const wantsPending = statuses.some((s) => pendingAliases.has(s));
+    const lifecycleStatuses = statuses.filter((s) => !pendingAliases.has(s));
+    const resultRows: Record<string, unknown>[] = [];
 
-    try {
+    if (wantsPending) {
       const result = await pool.query(
-        `SELECT *, 'seo_action' AS source
-         FROM analytics.seo_action
-         WHERE status = ANY($1::text[])
-         ORDER BY
-           CASE status
-             WHEN 'proposed' THEN 1
-             WHEN 'reviewed' THEN 2
-             WHEN 'approved' THEN 3
-             WHEN 'executing' THEN 4
-             WHEN 'published' THEN 5
-             WHEN 'measuring' THEN 6
-             WHEN 'failed' THEN 7
-             WHEN 'rejected' THEN 8
-             WHEN 'rolled_back' THEN 9
-           END,
-           gsc_impressions DESC NULLS LAST,
-           created_at DESC
-         LIMIT $2`,
-        [statuses, limit],
+        `SELECT
+           candidate_id::text AS id,
+           candidate_id,
+           opportunity_id,
+           target_page_url AS target_url,
+           page_url_canonical,
+           page_is_live,
+           page_status_class,
+           mutation_type,
+           mutation_label,
+           target_field,
+           current_value_snapshot AS current_value,
+           proposed_value,
+           why AS proposed_reason,
+           evidence_summary,
+           evidence,
+           opportunity_score::numeric AS agent_review_score,
+           opportunity_urgency,
+           confidence_tier,
+           source_confidence,
+           approval_status AS status,
+           approval_status,
+           execution_status,
+           gate_status,
+           regate_review_flag,
+           needs_evidence,
+           qa_status,
+           outcome_verdict AS outcome_label,
+           created_at,
+           published_at,
+           'seo_dashboard_queue' AS source
+         FROM analytics.v_seo_dashboard_queue
+         ORDER BY opportunity_score DESC NULLS LAST
+         LIMIT $1`,
+        [limit],
       );
-      // pg returns NUMERIC columns as JS strings by default. The UI calls
-      // .toFixed() on these — coerce to number here so the API contract
-      // never leaks string-numerics.
-      rows = result.rows.map((r) => ({
-        ...r,
-        agent_review_score: r.agent_review_score != null ? Number(r.agent_review_score) : null,
-        gsc_position: r.gsc_position != null ? Number(r.gsc_position) : null,
-        gsc_ctr: r.gsc_ctr != null ? Number(r.gsc_ctr) : null,
-        gsc_impressions: r.gsc_impressions != null ? Number(r.gsc_impressions) : null,
-        gsc_clicks: r.gsc_clicks != null ? Number(r.gsc_clicks) : null,
-        outcome_position_delta: r.outcome_position_delta != null ? Number(r.outcome_position_delta) : null,
-        outcome_impressions_delta: r.outcome_impressions_delta != null ? Number(r.outcome_impressions_delta) : null,
-        outcome_ctr_delta: r.outcome_ctr_delta != null ? Number(r.outcome_ctr_delta) : null,
-        outcome_clicks_delta: r.outcome_clicks_delta != null ? Number(r.outcome_clicks_delta) : null,
-      }));
-    } catch {
-      // seo_action table may not exist yet — fall through to candidate fallback
+      resultRows.push(...result.rows);
     }
 
-    // Fallback: if seo_action is empty, surface awaiting-approval execution candidates
-    if (rows.length === 0) {
-      try {
-        const fallback = await pool.query(
-          `SELECT
-             candidate_id::text AS id,
-             target_page_url AS target_url,
-             mutation_type AS action_type,
-             COALESCE(proposed_value, recommendation_detail->>'proposed_value') AS proposed_value,
-             opportunity_score AS quality_score,
-             evidence_summary AS rationale,
-             'awaiting_approval' AS status,
-             created_at,
+    if (lifecycleStatuses.length > 0) {
+      const result = await pool.query(
+        `SELECT
+             c.candidate_id::text AS id,
+             c.candidate_id,
+             c.opportunity_id,
+             c.target_page_url AS target_url,
+             analytics.seo_norm_url(c.target_page_url) AS page_url_canonical,
+             (i.status_class = 'canonical_live') AS page_is_live,
+             i.status_class AS page_status_class,
+             c.mutation_type,
+             analytics.seo_mutation_label(c.mutation_type) AS mutation_label,
+             c.target_field,
+             c.current_value_snapshot AS current_value,
+             c.proposed_value,
+             COALESCE(c.evidence#>>'{why}', c.evidence_summary) AS proposed_reason,
+             c.evidence_summary,
+             c.evidence,
+             CASE
+               WHEN c.opportunity_score IS NULL THEN NULL::numeric
+               WHEN abs(c.opportunity_score::numeric) <= 1 THEN round(c.opportunity_score::numeric * 100, 1)
+               ELSE round(c.opportunity_score::numeric, 1)
+             END AS agent_review_score,
+             c.opportunity_urgency,
+             c.confidence_tier,
+             c.source_confidence,
+             c.execution_status AS status,
+             c.approval_status,
+             c.execution_status,
+             c.gate_status,
+             c.regate_review_flag,
+             c.needs_evidence,
+             c.evidence#>>'{qa,status}' AS qa_status,
+             o.verdict AS outcome_label,
+             c.created_at,
+             COALESCE(o.published_at, c.published_at, c.execution_timestamp) AS published_at,
+             COALESCE(o.published_at, c.published_at, c.execution_timestamp) AS executed_at,
              'seo_execution_candidate' AS source
-           FROM analytics.seo_execution_candidate
-           WHERE execution_status = 'awaiting_approval'
-              OR (execution_status = 'proposed' AND approval_status = 'pending')
-           ORDER BY opportunity_score DESC NULLS LAST, created_at DESC
-           LIMIT $1`,
-          [limit],
-        );
-        rows = fallback.rows;
-      } catch {
-        // No fallback data available — return empty
-      }
+           FROM analytics.seo_execution_candidate c
+           LEFT JOIN analytics.seo_page_inventory i
+             ON analytics.seo_norm_url(i.url) = analytics.seo_norm_url(c.target_page_url)
+           LEFT JOIN analytics.seo_published_outcome o
+             ON o.candidate_id = c.candidate_id
+           WHERE c.execution_status = ANY($1::text[])
+           ORDER BY COALESCE(o.published_at, c.published_at, c.execution_timestamp, c.created_at) DESC
+           LIMIT $2`,
+        [lifecycleStatuses, limit],
+      );
+      resultRows.push(...result.rows);
     }
+
+    const rows = resultRows.slice(0, limit).map((r) => ({
+      ...r,
+      agent_review_score: r.agent_review_score != null ? Number(r.agent_review_score) : null,
+      opportunity_score: r.agent_review_score != null ? Number(r.agent_review_score) : null,
+      gsc_position: null,
+      gsc_ctr: null,
+      gsc_impressions: null,
+      gsc_clicks: null,
+      outcome_position_delta: null,
+      outcome_impressions_delta: null,
+      outcome_ctr_delta: null,
+      outcome_clicks_delta: null,
+    }));
 
     return NextResponse.json({ data: rows });
   } catch (err: unknown) {
@@ -111,7 +156,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'id and action required' }, { status: 400 });
     }
 
-    const fromCandidate = source === 'seo_execution_candidate';
+    const fromCandidate = source === 'seo_execution_candidate' || source === 'seo_dashboard_queue';
 
     if (action === 'approve') {
       if (fromCandidate) {
@@ -131,21 +176,7 @@ export async function POST(req: NextRequest) {
         }
         return NextResponse.json({ success: true, id, status: 'approved' });
       }
-      const result = await pool.query(
-        `UPDATE analytics.seo_action
-         SET status = 'approved',
-             human_decision = 'approve',
-             human_notes = $2,
-             human_decided_at = NOW()
-         WHERE id = $1::uuid
-           AND status IN ('proposed', 'reviewed', 'rejected')
-         RETURNING id, status`,
-        [id, notes || null],
-      );
-      if (!result.rowCount) {
-        return NextResponse.json({ error: 'Action not found or not in approvable state' }, { status: 404 });
-      }
-      return NextResponse.json({ success: true, id, status: 'approved' });
+      return NextResponse.json({ error: 'Legacy action approval is retired; use candidate source.' }, { status: 410 });
     }
 
     if (action === 'reject') {
@@ -166,21 +197,7 @@ export async function POST(req: NextRequest) {
         }
         return NextResponse.json({ success: true, id, status: 'rejected' });
       }
-      const result = await pool.query(
-        `UPDATE analytics.seo_action
-         SET status = 'rejected',
-             human_decision = 'reject',
-             human_notes = $2,
-             human_decided_at = NOW()
-         WHERE id = $1::uuid
-           AND status IN ('proposed', 'reviewed', 'approved')
-         RETURNING id, status`,
-        [id, notes || null],
-      );
-      if (!result.rowCount) {
-        return NextResponse.json({ error: 'Action not found or not in rejectable state' }, { status: 404 });
-      }
-      return NextResponse.json({ success: true, id, status: 'rejected' });
+      return NextResponse.json({ error: 'Legacy action rejection is retired; use candidate source.' }, { status: 410 });
     }
 
     return NextResponse.json({ error: 'Invalid action. Use approve or reject.' }, { status: 400 });

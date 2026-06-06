@@ -279,7 +279,7 @@ function ActionDetailContent() {
   const sourceNode = evidence?.source ?? null;
   const targetNode = evidence?.target ?? null;
   const signals = evidence?.signals ?? null;
-  const score = candidate?.opportunity_score != null ? Math.round(candidate.opportunity_score * 100) : null;
+  const score = candidate?.opportunity_score != null ? Math.round(candidate.opportunity_score) : null;
 
   // Real GSC baseline for the page being edited (the source page).
   // Position AND impressions are both the TOP-QUERY figures from the SAME
@@ -406,7 +406,7 @@ function ActionDetailContent() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['5'], gap: space['4'], flexWrap: 'wrap' }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: space['2'], flexWrap: 'wrap' }}>
-                <Pill tone="violet" tc={tc}>{md.tag}</Pill>
+                <Pill tone="violet" tc={tc}>{candidate.mutation_label ?? md.tag}</Pill>
                 {candidate.confidence_tier && (
                   <span title="auto = engine-confident, eligible for auto-approval; review = needs a human to author/check before approval">
                     <Pill tone="info" tc={tc}>confidence: {candidate.confidence_tier}</Pill>
@@ -421,7 +421,7 @@ function ActionDetailContent() {
                 {md.verb(candidate.proposed_value)}
               </h1>
               <div style={{ fontFamily: monoStack, fontSize: '13px', color: tc.text.muted, marginTop: '4px', wordBreak: 'break-all' }}>
-                {candidate.target_page_url ? pathOf(candidate.target_page_url) : '—'}
+                {candidate.page_url_canonical ?? (candidate.target_page_url ? pathOf(candidate.target_page_url) : '—')}
               </div>
             </div>
             {candidate.approval_status === 'approved' || candidate.approval_status === 'rejected' ? (
@@ -479,12 +479,31 @@ function ActionDetailContent() {
             </div>
           )}
 
+          {/* LIFECYCLE */}
+          <Card tc={tc} style={{ marginBottom: space['4'] }}>
+            <Label tc={tc}>Lifecycle &amp; trace</Label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: space['2'], alignItems: 'center' }}>
+              {candidate.gate_status && <Pill tone="good" tc={tc}>Gate: {candidate.gate_status}</Pill>}
+              {candidate.approval_status && <Pill tone={candidate.approval_status === 'pending' ? 'warn' : candidate.approval_status === 'approved' ? 'good' : 'bad'} tc={tc}>Approval: {candidate.approval_status}</Pill>}
+              {candidate.execution_status && <Pill tone="info" tc={tc}>Execution: {candidate.execution_status}</Pill>}
+              {candidate.qa_status && <Pill tone={candidate.qa_status === 'pass' ? 'good' : candidate.qa_status === 'warn' ? 'warn' : 'bad'} tc={tc}>QA: {candidate.qa_status}</Pill>}
+              <Pill tone={candidate.page_is_live ? 'good' : 'bad'} tc={tc}>{candidate.page_is_live ? 'Live page' : 'Lost/non-live page'}</Pill>
+              {candidate.outcome_verdict && <Pill tone="violet" tc={tc}>Outcome: {candidate.outcome_verdict}</Pill>}
+            </div>
+            <div style={{ marginTop: space['3'], display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: space['3'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.secondary }}>
+              <div><span style={{ color: tc.text.muted }}>Candidate:</span> <span style={{ fontFamily: monoStack }}>{candidate.candidate_id}</span></div>
+              <div><span style={{ color: tc.text.muted }}>Canonical page:</span> <span style={{ fontFamily: monoStack }}>{candidate.page_url_canonical ?? '—'}</span></div>
+              <div><span style={{ color: tc.text.muted }}>Published:</span> <span style={{ fontFamily: monoStack }}>{candidate.published_at ?? '—'}</span></div>
+              <div><span style={{ color: tc.text.muted }}>Outcome decided:</span> <span style={{ fontFamily: monoStack }}>{candidate.outcome_decided_at ?? '—'}</span></div>
+            </div>
+          </Card>
+
           {/* WHY */}
           <Card tc={tc} style={{ marginBottom: space['4'] }}>
             <Label tc={tc}>Why we&apos;re recommending this</Label>
             <ul style={{ margin: 0, paddingLeft: 20, fontFamily: fontFamily.body, fontSize: '14px', lineHeight: 1.7, color: tc.text.primary }}>
-              {evidence?.why && <li data-testid="text-why">{evidence.why}</li>}
-              {candidate.evidence_summary && candidate.evidence_summary !== evidence?.why && <li>{candidate.evidence_summary}</li>}
+              {(candidate.why ?? evidence?.why) && <li data-testid="text-why">{candidate.why ?? evidence?.why}</li>}
+              {candidate.evidence_summary && candidate.evidence_summary !== (candidate.why ?? evidence?.why) && <li>{candidate.evidence_summary}</li>}
               {isInternalLink && sourceNode?.entity && targetNode?.entity && (
                 <li>
                   Source page <strong>{sourceNode.entity}</strong>{sourceNode.intent ? ` (${sourceNode.intent})` : ''} is topically related to <strong>{targetNode.entity}</strong>{targetNode.intent ? ` (${targetNode.intent})` : ''} — an internal link passes relevance &amp; equity between them.
@@ -497,7 +516,7 @@ function ActionDetailContent() {
                   {Array.isArray(signals.shared_attributes) && signals.shared_attributes.length > 0 && <> · shared attributes: {signals.shared_attributes.join(', ')}</>}
                 </li>
               )}
-              {!evidence?.why && !candidate.evidence_summary && !sourceNode?.entity && (
+              {!candidate.why && !evidence?.why && !candidate.evidence_summary && !sourceNode?.entity && (
                 <li style={{ color: tc.text.muted }}>No structured rationale recorded for this candidate beyond the gate decision.</li>
               )}
             </ul>

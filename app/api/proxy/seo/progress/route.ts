@@ -5,7 +5,7 @@
  *   1. Today's Brief — actions taken yesterday, decisions needed today
  *   2. Progress Scoreboard — weekly + monthly trends in organic traffic
  *
- * All data sourced from existing tables — no schema changes required.
+ * All data sourced from current engine tables and the canonical dashboard queue.
  *
  * Response shape:
  * {
@@ -84,25 +84,24 @@ export async function GET() {
     const p = getPool();
 
     // ── TODAY: actions taken in last 24h ─────────────────────────────────────
-    // Query both old pipeline (seo_execution_log) and new pipeline (seo_action)
     const yesterdayApplied = await p.query<{ count: string; target_url: string | null }>(
       `SELECT COUNT(*) AS count, target_url FROM (
          SELECT target_url FROM analytics.seo_execution_log WHERE executed_at >= NOW() - INTERVAL '24 hours'
          UNION ALL
-         SELECT target_url FROM analytics.seo_action WHERE executed_at >= NOW() - INTERVAL '24 hours' AND status IN ('published', 'measuring')
+         SELECT target_page_url AS target_url
+         FROM analytics.seo_execution_candidate
+         WHERE COALESCE(published_at, execution_timestamp) >= NOW() - INTERVAL '24 hours'
+           AND execution_status IN ('published', 'draft_applied')
        ) combined
        GROUP BY target_url`,
     ).catch(() => ({ rows: [] as Array<{ count: string; target_url: string | null }> }));
 
     const yesterdayApprovals = await p.query<{ approved: string; rejected: string }>(
       `SELECT
-         COUNT(*) FILTER (WHERE status = 'approved' OR status = 'published')::text AS approved,
-         COUNT(*) FILTER (WHERE status = 'rejected')::text AS rejected
-       FROM (
-         SELECT approval_status AS status, reviewed_at FROM analytics.seo_execution_candidate WHERE reviewed_at >= NOW() - INTERVAL '24 hours'
-         UNION ALL
-         SELECT status, human_decided_at AS reviewed_at FROM analytics.seo_action WHERE (human_decided_at >= NOW() - INTERVAL '24 hours' OR agent_reviewed_at >= NOW() - INTERVAL '24 hours')
-       ) combined`,
+         COUNT(*) FILTER (WHERE approval_status = 'approved')::text AS approved,
+         COUNT(*) FILTER (WHERE approval_status = 'rejected')::text AS rejected
+       FROM analytics.seo_execution_candidate
+       WHERE reviewed_at >= NOW() - INTERVAL '24 hours'`,
     ).catch(() => ({ rows: [{ approved: '0', rejected: '0' }] }));
 
     // ── TODAY: needs attention ──────────────────────────────────────────────
@@ -118,30 +117,11 @@ export async function GET() {
        WHERE status = 'new' AND canonical_confidence = 'high'`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
-    // Awaiting approval == the Command Center actionable queue, to the exact same
-    // definition the header surfaces: gate_status='accepted' AND
-    // approval_status='pending' AND the target page is canonical_live. The
-    // canonical_live restriction matters — governance only ever surfaces live
-    // pages as targets, and the Command Center applies it client-side after
-    // joining the candidate queue to the portfolio. Without the same restriction
-    // here, Results over-counted (it included candidates whose target page is
-    // lost / pending_verification / excluded) and disagreed with the header.
-    // The join is host-normalized (candidate + inventory URLs disagree on www vs
-    // apex and trailing slash) to match analytics.seo_page_inventory's path key.
-    // "urgent" = the re-gate-flagged subset re-surfaced for human re-review.
     const awaitingApproval = await p.query<{ count: string; urgent: string }>(
-      `WITH live AS (
-         SELECT DISTINCT rtrim(regexp_replace(lower(url), '^https?://(www\\.)?', ''), '/') AS norm
-         FROM analytics.seo_page_inventory
-         WHERE status_class = 'canonical_live'
-       )
-       SELECT
-         COUNT(*)::text AS count,
-         COUNT(*) FILTER (WHERE c.regate_review_flag IS TRUE)::text AS urgent
-       FROM analytics.seo_execution_candidate c
-       JOIN live l
-         ON l.norm = rtrim(regexp_replace(lower(c.target_page_url), '^https?://(www\\.)?', ''), '/')
-       WHERE c.gate_status = 'accepted' AND c.approval_status = 'pending'`,
+      `SELECT
+         decisions::text AS count,
+         needs_review::text AS urgent
+       FROM analytics.v_seo_dashboard_summary`,
     ).catch(() => ({ rows: [{ count: '0', urgent: '0' }] }));
 
     // Pipeline health: when did each major job last run?
@@ -175,7 +155,10 @@ export async function GET() {
       `SELECT COUNT(DISTINCT target_url)::text AS count FROM (
          SELECT target_url FROM analytics.seo_execution_log WHERE executed_at >= NOW() - INTERVAL '7 days'
          UNION ALL
-         SELECT target_url FROM analytics.seo_action WHERE executed_at >= NOW() - INTERVAL '7 days' AND status IN ('published', 'measuring')
+         SELECT target_page_url AS target_url
+         FROM analytics.seo_execution_candidate
+         WHERE COALESCE(published_at, execution_timestamp) >= NOW() - INTERVAL '7 days'
+           AND execution_status IN ('published', 'draft_applied')
        ) u`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
@@ -183,7 +166,10 @@ export async function GET() {
       `SELECT COUNT(DISTINCT target_url)::text AS count FROM (
          SELECT target_url FROM analytics.seo_execution_log WHERE executed_at >= NOW() - INTERVAL '30 days'
          UNION ALL
-         SELECT target_url FROM analytics.seo_action WHERE executed_at >= NOW() - INTERVAL '30 days' AND status IN ('published', 'measuring')
+         SELECT target_page_url AS target_url
+         FROM analytics.seo_execution_candidate
+         WHERE COALESCE(published_at, execution_timestamp) >= NOW() - INTERVAL '30 days'
+           AND execution_status IN ('published', 'draft_applied')
        ) u`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
@@ -191,11 +177,16 @@ export async function GET() {
       `SELECT COUNT(*)::text AS count FROM (
          SELECT 1 FROM analytics.seo_execution_log WHERE measured_at_14d IS NULL AND executed_at >= NOW() - INTERVAL '14 days'
          UNION ALL
-         SELECT 1 FROM analytics.seo_action WHERE measured_at_14d IS NULL AND executed_at >= NOW() - INTERVAL '14 days' AND status IN ('published', 'measuring')
+         SELECT 1
+         FROM analytics.seo_execution_candidate c
+         LEFT JOIN analytics.seo_published_outcome o ON o.candidate_id = c.candidate_id
+         WHERE COALESCE(c.published_at, c.execution_timestamp) >= NOW() - INTERVAL '14 days'
+           AND c.execution_status IN ('published', 'draft_applied')
+           AND o.decided_at IS NULL
        ) u`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
-    // Win rate: from both old learning_outcomes AND new seo_action
+    // Win rate: from legacy learning_outcomes plus current candidate outcomes.
     const winRate = await p.query<{ positive: string; total: string }>(
       `SELECT
          COUNT(*) FILTER (WHERE label = 'positive')::text AS positive,
@@ -203,7 +194,14 @@ export async function GET() {
        FROM (
          SELECT outcome_label AS label FROM analytics.seo_learning_outcomes WHERE measurement_date >= CURRENT_DATE - INTERVAL '90 days' AND outcome_label IN ('positive', 'negative', 'neutral')
          UNION ALL
-         SELECT outcome_label AS label FROM analytics.seo_action WHERE measured_at_14d IS NOT NULL AND outcome_label IN ('positive', 'negative', 'neutral')
+         SELECT CASE
+           WHEN verdict = 'improved' THEN 'positive'
+           WHEN verdict IN ('regressed', 'regressed_advisory') THEN 'negative'
+           WHEN verdict IN ('flat', 'inconclusive', 'live_confirmed', 'drift') THEN 'neutral'
+           ELSE NULL
+         END AS label
+         FROM analytics.seo_published_outcome
+         WHERE decided_at >= CURRENT_DATE - INTERVAL '90 days'
        ) u`,
     ).catch(() => ({ rows: [{ positive: '0', total: '0' }] }));
 
