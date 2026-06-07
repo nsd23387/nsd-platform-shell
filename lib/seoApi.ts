@@ -856,16 +856,46 @@ export interface SeoCompetitorGap {
   search_volume: number | null;
   keyword_difficulty: number | null;
   status: string;
+  dismissed_reason: string | null;
   discovered_at: string;
 }
 
+export interface SeoCompetitorGapMeta {
+  total_count: number;
+  filtered_count: number;
+  returned_count: number;
+  status_counts: Record<string, number>;
+  limit: number;
+  filter_note: string;
+}
+
+export interface SeoCompetitorGapFeed {
+  data: SeoCompetitorGap[];
+  meta: SeoCompetitorGapMeta;
+}
+
 export async function getSeoCompetitorGaps(opts?: { type?: string; status?: string }): Promise<SeoCompetitorGap[]> {
+  const feed = await getSeoCompetitorGapFeed(opts);
+  return feed.data;
+}
+
+export async function getSeoCompetitorGapFeed(opts?: { type?: string; status?: string }): Promise<SeoCompetitorGapFeed> {
   const sp = new URLSearchParams();
   if (opts?.type) sp.set('type', opts.type);
   if (opts?.status) sp.set('status', opts.status);
   const qs = sp.toString();
-  const data = await seoFetch<{ data: SeoCompetitorGap[] }>(`/api/proxy/seo/competitor-gaps${qs ? `?${qs}` : ''}`);
-  return data.data ?? [];
+  const data = await seoFetch<SeoCompetitorGapFeed>(`/api/proxy/seo/competitor-gaps${qs ? `?${qs}` : ''}`);
+  return {
+    data: data.data ?? [],
+    meta: data.meta ?? {
+      total_count: data.data?.length ?? 0,
+      filtered_count: data.data?.length ?? 0,
+      returned_count: data.data?.length ?? 0,
+      status_counts: {},
+      limit: data.data?.length ?? 0,
+      filter_note: 'Filtered competitor gaps.',
+    },
+  };
 }
 
 export async function markBacklinkContacted(domain: string): Promise<void> {

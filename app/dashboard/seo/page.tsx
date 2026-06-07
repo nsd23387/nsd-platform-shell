@@ -26,7 +26,7 @@ import { fontFamily, fontWeight } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
 import {
   getSeoTimeseries, getGscPipelineHealth, getSeoCandidateQueue,
-  getSeoPortfolio, getSeoCompetitorGaps,
+  getSeoPortfolio, getSeoCompetitorGapFeed,
   approveEngineCandidate, rejectEngineCandidate,
   getCompetitiveVelocitySummary, getCompetitiveChanges, getSeoShipped,
 } from '../../../lib/seoApi';
@@ -34,7 +34,7 @@ import type {
   PortfolioPage, PortfolioBucket, PageDossierCandidate,
   SeoTimeseriesResponse, GscPipelineHealth, SeoCompetitorGap,
   SeoTimeseriesPoint, CompetitiveVelocitySummary, CompetitivePageChange,
-  SeoShippedAction,
+  SeoShippedAction, SeoCompetitorGapMeta,
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
@@ -157,6 +157,14 @@ function timeAgo(iso: string | null): string {
   if (days < 30) return `${days}d ago`;
   const months = Math.floor(days / 30);
   return months === 1 ? '1mo ago' : `${months}mo ago`;
+}
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
 }
 
 function shippedTone(status: string | null): ToneKey {
@@ -482,16 +490,19 @@ function FreshnessCard({ tc }: { tc: Tc }) {
       {error && <div style={{ color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
 
       {health && (
+        (() => {
+          const observedAt = health.raw_data_last_date || health.last_successful_run || health.last_run_at;
+          return (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${tc.border.subtle}` }}>
             <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.primary }}>Google Search Console</span>
             <span style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
               <Pill tone={statusTone[health.status] ?? 'warn'} tc={tc}>{health.status}</Pill>
-              <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted }}>{rel(health.raw_data_last_date || health.last_successful_run)}</span>
+              <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted }}>{rel(observedAt)}</span>
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Last successful run</span><span style={{ fontFamily: monoStack }}>{rel(health.last_successful_run)}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Last successful GSC data</span><span style={{ fontFamily: monoStack }}>{rel(observedAt)}</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Data lag</span><span style={{ fontFamily: monoStack }}>{health.days_behind == null ? '—' : `${health.days_behind}d`}</span></div>
             {health.last_error && (
               <div style={{ marginTop: space['1'], color: PALETTE.bad, fontSize: '11px' }}>{health.last_error}</div>
@@ -501,6 +512,8 @@ function FreshnessCard({ tc }: { tc: Tc }) {
             GA4, Google Ads &amp; the cluster engine sync on their own schedules and aren&apos;t exposed through this freshness probe yet — this surface tracks GSC only.
           </div>
         </>
+          );
+        })()
       )}
     </Card>
   );
@@ -596,6 +609,7 @@ function CommandCenterContent() {
   const [candidates, setCandidates] = useState<PageDossierCandidate[] | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioPage[] | null>(null);
   const [gaps, setGaps] = useState<SeoCompetitorGap[] | null>(null);
+  const [gapMeta, setGapMeta] = useState<SeoCompetitorGapMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deferred, setDeferred] = useState<Set<string>>(new Set());
@@ -610,12 +624,13 @@ function CommandCenterContent() {
     Promise.all([
       getSeoCandidateQueue(),
       getSeoPortfolio(),
-      getSeoCompetitorGaps().catch(() => [] as SeoCompetitorGap[]),
+      getSeoCompetitorGapFeed().catch(() => ({ data: [] as SeoCompetitorGap[], meta: null })),
     ])
-      .then(([q, p, g]) => {
+      .then(([q, p, feed]) => {
         setCandidates(q.candidates);
         setPortfolio(p);
-        setGaps(g);
+        setGaps(feed.data);
+        setGapMeta(feed.meta);
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load command center'))
       .finally(() => setLoading(false));
@@ -800,7 +815,7 @@ function CommandCenterContent() {
 
       {/* COMPETITOR INTELLIGENCE */}
       <div style={{ marginTop: space['6'] }}>
-        <SectionTitle tc={tc} sub="Queries competitors rank for that you don't — from the governed competitive feed">
+        <SectionTitle tc={tc} sub="Informational competitive intel from the governed feed; dispatch decisions are shown inline">
           Competitor intelligence
         </SectionTitle>
         <Card tc={tc} style={{ padding: 0 }}>
@@ -811,35 +826,67 @@ function CommandCenterContent() {
             </div>
           )}
           {!loading && gaps && gaps.length > 0 && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '13px' }}>
-              <thead>
-                <tr style={{ background: tc.background.muted, color: tc.text.muted, textAlign: 'left' }}>
-                  <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Keyword</th>
-                  <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Competitor</th>
-                  <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Their pos</th>
-                  <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Your pos</th>
-                  <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Volume</th>
-                  <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Score</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gaps.slice(0, 8).map((g) => (
-                  <tr key={g.id} style={{ borderTop: `1px solid ${tc.border.subtle}` }} data-testid={`row-gap-${g.id}`}>
-                    <td style={{ padding: '10px 16px', color: tc.text.primary, fontWeight: fontWeight.medium }}>{g.keyword || '—'}</td>
-                    <td style={{ padding: '10px 8px', color: PALETTE.bad, fontFamily: monoStack, fontSize: '12px' }}>{(() => { try { return new URL(g.competitor_url).hostname; } catch { return g.competitor_url; } })()}</td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{g.competitor_ranking_position ?? '—'}</td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.muted }}>{g.our_ranking_position ?? 'unranked'}</td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(g.search_volume)}</td>
-                    <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{g.opportunity_score == null ? '—' : g.opportunity_score.toFixed(0)}</td>
+            <>
+              {gapMeta && (
+                <div style={{ padding: `${space['4']} ${space['5']}`, borderBottom: `1px solid ${tc.border.subtle}`, background: tc.background.muted }} data-testid="competitor-gap-meta">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: space['2'], alignItems: 'center', marginBottom: '4px' }}>
+                    <Pill tone="info" tc={tc}>{fmtInt(gapMeta.filtered_count)} governed gaps</Pill>
+                    <Pill tone={gapMeta.status_counts.dismissed === gapMeta.filtered_count ? 'neutral' : 'warn'} tc={tc}>
+                      {fmtInt(gapMeta.status_counts.dismissed ?? 0)} reviewed / dismissed
+                    </Pill>
+                    <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
+                      from {fmtInt(gapMeta.total_count)} raw competitor rows
+                    </span>
+                  </div>
+                  <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: 1.5 }}>
+                    {gapMeta.filter_note} Showing the top {fmtInt(Math.min(gapMeta.returned_count, gapMeta.limit))}; dismissed rows are market intel, not open actions.
+                  </div>
+                </div>
+              )}
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ background: tc.background.muted, color: tc.text.muted, textAlign: 'left' }}>
+                    <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Keyword</th>
+                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Competitor</th>
+                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Dispatch decision</th>
+                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Their pos</th>
+                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Your pos</th>
+                    <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Score</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {gaps.slice(0, 8).map((g) => {
+                    const dismissed = g.status === 'dismissed';
+                    return (
+                      <tr key={g.id} style={{ borderTop: `1px solid ${tc.border.subtle}` }} data-testid={`row-gap-${g.id}`}>
+                        <td style={{ padding: '10px 16px', color: tc.text.primary, fontWeight: fontWeight.medium }}>{g.keyword || '—'}</td>
+                        <td style={{ padding: '10px 8px', color: PALETTE.bad, fontFamily: monoStack, fontSize: '12px' }}>{hostnameOf(g.competitor_url)}</td>
+                        <td style={{ padding: '10px 8px', color: tc.text.secondary }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <Pill tone={dismissed ? 'neutral' : g.status === 'new' ? 'warn' : 'info'} tc={tc}>
+                              {dismissed ? 'reviewed — not prioritized' : g.status}
+                            </Pill>
+                            {dismissed && (
+                              <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: 1.4 }}>
+                                {g.dismissed_reason || 'Dispatch dismissed this signal below the current prioritization threshold.'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{g.competitor_ranking_position ?? '—'}</td>
+                        <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.muted }}>{g.our_ranking_position ?? 'unranked'}</td>
+                        <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{g.opportunity_score == null ? '—' : g.opportunity_score.toFixed(0)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
           )}
           {!loading && gaps && gaps.length > 8 && (
             <div style={{ padding: '10px 16px', borderTop: `1px solid ${tc.border.subtle}`, background: tc.background.muted, textAlign: 'right' }}>
               <Link href="/dashboard/seo/competitors" style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-view-all-gaps">
-                View all {gaps.length} gaps →
+                View governed competitive intel ({fmtInt(gapMeta?.filtered_count ?? gaps.length)}) →
               </Link>
             </div>
           )}

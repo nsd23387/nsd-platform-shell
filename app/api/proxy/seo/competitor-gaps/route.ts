@@ -79,12 +79,28 @@ export async function GET(req: NextRequest) {
     // Skip ultra-short/single-character queries (low intent, no ranking potential)
     where += ` AND LENGTH(COALESCE(g.keyword, '')) >= 4`;
 
+    const [totalResult, filteredResult, statusResult] = await Promise.all([
+      p.query(`SELECT COUNT(*)::int AS count FROM analytics.seo_competitor_gap`),
+      p.query(`
+        SELECT COUNT(*)::int AS count
+        FROM analytics.seo_competitor_gap g
+        ${where}
+      `, params),
+      p.query(`
+        SELECT g.status, COUNT(*)::int AS count
+        FROM analytics.seo_competitor_gap g
+        ${where}
+        GROUP BY g.status
+      `, params),
+    ]);
+
     // Note: seo_competitor_gap (post-Ahrefs source) does not carry search_volume
     // or keyword_difficulty — those came from Ahrefs. We expose nulls so callers
     // can degrade gracefully without breaking their type contracts.
     const { rows } = await p.query(`
       SELECT
         g.*,
+        g.dismissed_reason,
         COALESCE(g.opportunity_score, null) AS opportunity_score,
         NULL::int AS keyword_difficulty,
         NULL::int AS search_volume,
@@ -96,7 +112,21 @@ export async function GET(req: NextRequest) {
       LIMIT 100
     `, params);
 
-    return NextResponse.json({ data: rows });
+    const statusCounts = Object.fromEntries(
+      statusResult.rows.map((r) => [r.status ?? 'unknown', Number(r.count ?? 0)])
+    );
+
+    return NextResponse.json({
+      data: rows,
+      meta: {
+        total_count: Number(totalResult.rows[0]?.count ?? 0),
+        filtered_count: Number(filteredResult.rows[0]?.count ?? 0),
+        returned_count: rows.length,
+        status_counts: statusCounts,
+        limit: 100,
+        filter_note: 'Filtered to the governed competitor allow-list, excluding competitor-branded/low-intent queries and keywords under 4 characters.',
+      },
+    });
   } catch (err: any) {
     console.error('[seo/competitor-gaps] Error:', err.message);
     return NextResponse.json({ error: 'Failed to load competitor gaps' }, { status: 500 });
