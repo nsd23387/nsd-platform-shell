@@ -1,0 +1,104 @@
+# Replit task — build the SEO Command Center + Action Card on the now-live dossier data
+
+Rebuild `/dashboard/seo` to match the two approved mockups (the **SEO Command Center** and the **before/after Action Card**). **Attach both mockup images to this Replit session — they are the visual source of truth.** The numbers in them are placeholders; bind real data.
+
+Repo: **nsd-platform-shell** (Next.js, read-only governance lint — no inline DB writes; approve/reject only via `lib/seoApi`).
+
+> **What changed since the last attempt:** the backend is now complete and populated. The engine generates **6 demand-ranked action types** (not just internal links), there's a **per-page dossier table**, the **position bug source is known**, and the gate is **idempotent** (candidates surface/retire as demand changes). So this is no longer "assemble from raw tables" — bind to the dossier. The current bottleneck is **review throughput**: only 11 of ~747 accepted candidates have been approved, so the UI's #1 job is making batch review and one-page dossiers fast.
+
+---
+
+## Live data (Supabase prod `fssgkgyconuzukcwptvc`, `analytics` schema) — verified shapes
+
+- **`seo_page_inventory`** — the Page Universe / governance filter. 1,638 `canonical_live` · 17 `lost` · 8 `excluded` · 44 `pending_verification`. Cols incl. `url, content_type, status_class, gsc_impressions, gsc_best_position, gsc_top_query, http_status`.
+- **`seo_page_dossier`** — 1,638 rows, **one per canonical_live page** (read this for Level 2): `page_url, norm_url, content_type, intent, status_class, priority, demand(jsonb), keyword_targets(jsonb), routed_queries(jsonb), state(jsonb), ranked_actions(jsonb), generated_at`. All have `keyword_targets`; **395 have non-empty `ranked_actions`** (the rest are monitor/maintain — render as "monitoring," not an error).
+  - `demand` = array of `{query, impressions, position, clicks, search_volume, cpc, keyword_difficulty, read}` (the page's queries with demand + DataForSEO value + a real/mirage/route `read`).
+  - `keyword_targets` = `{primary:{keyword,volume,cpc,kd,position,...}, secondary:[…]}`.
+  - `routed_queries` = `[{query, decision, target_page}]` where decision ∈ own | route | content_gap | discard (+reason).
+  - `ranked_actions` = `[{action, change, evidence, impact, speed, score, lane(1|2|3), executor, status}]`.
+- **`seo_execution_candidate`** — the actionable rows behind Lane-1 actions: `candidate_id, opportunity_score, mutation_type, target_page_url, target_field, proposed_value, current_value_snapshot, evidence_summary, evidence(jsonb), relevance_score, confidence_tier, gate_status, gate_reasons(array), approval_status, last_gated_at, regate_review_flag`. Accepted set ≈ 747 across **6 types**: `h1_tag_refinement, product_offer_schema, meta_description_update, title_tag_refinement, internal_link_insertion, lost_page_redirect`. `evidence` jsonb = `{gsc:{…populated…}, why, source, target, signals}`.
+- **`seo_offpage_brief`** — Lane-3 authority-bound pages: `page_url, target_keyword, search_volume, current_position, impressions, keyword_difficulty, reason`.
+- **`seo_gate_transition`** — `candidate_id, run_id, from_status, to_status, reason(array), gated_at` (why a candidate recently surfaced/retired).
+- **`external_query_intelligence`** — `normalized_query, search_volume, cpc, keyword_difficulty, metrics_source` (DataForSEO).
+
+---
+
+## Non-negotiable rules (don't regress)
+1. **Only `status_class='canonical_live'` pages are optimization targets.** `lost` → restore/redirect queue; `excluded` → never shown; `pending_verification` → only with a "verify" badge. Filter through `seo_page_inventory`.
+2. **Position = the top query's average position, NOT `gsc_best_position`.** The earlier UI showed `gsc_best_position` (all-time min = 1) and bucketed off it, mislabeling the homepage a "win" when "neon signs" ranks ~46. Use the **top query's `position` from `seo_page_dossier.demand`** (the highest-impression query), or compute `top_q_pos` via the validated query below. Bucket off that.
+3. **Draft-only.** Approve/Defer/Reject write to `seo_execution_candidate.approval_status` via `lib/seoApi` — never publish to WordPress, never auto-approve. No inline POST in pages.
+4. **One backing source per screen; honest empty/pending states** (verified-vs-pending explicit; "no DataForSEO volume" when missing).
+
+Validated `top_q_pos` query (use if not taking it from `demand[0]`):
+```sql
+WITH pq AS (SELECT regexp_replace(page_url,'^https?://[^/]+','') path, query,
+                   sum(impressions) qi, round(avg(avg_position),1) qp
+            FROM analytics.metrics_search_console_query_page_daily GROUP BY 1,2),
+top AS (SELECT DISTINCT ON (path) path, query topq, qi, round(qp,0) qpos
+        FROM pq ORDER BY path, qi DESC)
+SELECT regexp_replace(i.url,'^https?://[^/]+','') path, t.topq top_query, t.qpos top_q_pos
+FROM analytics.seo_page_inventory i
+LEFT JOIN top t ON t.path = regexp_replace(i.url,'^https?://[^/]+','')
+WHERE i.status_class IN ('canonical_live','lost');
+```
+
+---
+
+## Proxy read routes (`app/api/proxy/seo/…`, Node pg, read-only, parameterized)
+- `GET /portfolio` — Level-1 page list: `seo_page_inventory` (canonical_live + lost) joined to `seo_page_dossier.priority` + top-query/`top_q_pos` + keyword value. Bucket: `lost` (status lost) · `win` (canonical_live & top_q_pos 1–30) · `strategic` (canonical_live & top_q_pos >30 or null) · `fix` (trailing-slash/dupe).
+- `GET /queue` — the **Detections / "DO THIS NEXT"** list: `seo_execution_candidate WHERE gate_status='accepted' AND approval_status='pending'`, joined to inventory (canonical_live only) and dossier, ranked by `opportunity_score` desc. Include `mutation_type, target_page_url, evidence_summary, opportunity_score, confidence_tier, regate_review_flag`.
+- `GET /page?url=` — Level-2 dossier: the `seo_page_dossier` row (demand, keyword_targets, routed_queries, state, ranked_actions) + that page's accepted `seo_execution_candidate` rows (for Approve/Reject + `evidence` + `current_value_snapshot`/`proposed_value`) + recent `seo_gate_transition` rows for those candidates.
+- `GET /offpage` — `seo_offpage_brief` (Lane-3 list).
+- `GET /suppressed` — gate-suppressed audit (existing); group by `gate_reasons`.
+
+---
+
+## SCREEN 1 — "SEO Command Center" (route `/dashboard/seo`)
+Match mockup #1, top to bottom:
+
+**A. Header.** Title "SEO Command Center". Right: secondary **"Diagnose a URL"** (single-URL dossier lookup) + primary **"Approve top N (X)"** where X = pending high-confidence accepted candidates; clicking opens a batch-approve flow (review N cards, approve all or deselect). This is the throughput lever — make it prominent.
+
+**B. KPI hero + trend (left ~2/3).** Headline metric (page-level GSC clicks/impressions for the range) + delta, over an area/line chart. Range toggle **7d/14d/30d/Custom**. Use the **page-level (complete) GSC grain**, not the query×page floor.
+
+**C. "DATA FRESHNESS" card (right ~1/3).** Rows for Google Search Console, GA4, Google Ads, Cluster engine, Rank Math — each with a color-coded last-ingest pill bound to real timestamps (amber/red if stale; don't fake green).
+
+**D. Data-quality banner (yellow).** The GSC anonymized-query caveat: query-level totals understate true demand (Google suppresses low-volume queries); page-level clicks/impressions are complete. "See detail" link.
+
+**E. "DO THIS NEXT" — Detections list (core).** Rows from `/queue`, ranked by `opportunity_score`: color-coded **category tag** = `mutation_type` (TITLE / META / H1 / SCHEMA / INTERNAL LINK / REDIRECT), **title + target page**, one-line `evidence_summary`, columns **EST. IMPACT** (intent-qualified demand from evidence.gsc) · **EFFORT** · **SCORE**, inline **Approve / Defer**. Show a small **"re-review"** badge when `regate_review_flag=true` (a human-decided row that now contradicts current demand — surfaced for re-decision, never auto-flipped). "View all N →". Row click → Screen 2.
+
+**F. Competitors strip (bottom).** Domain · share-of-voice · overlap, filtered through the universe (no ungoverned global dump).
+
+> The legacy bucket tiles (Wins/Strategic/Fix/Lost) may remain as a compact summary, but the **Detections list leads** — match the mockup.
+
+## SCREEN 2 — "Action Card" (route `/dashboard/seo/action/[candidate_id]` or modal)
+Match mockup #2. Read from `/page?url=` + the specific candidate.
+
+**A. "WHY WE'RE RECOMMENDING THIS"** — bullets from `evidence` (`why`, the `gsc` demand numbers, competitor/signals). If `seo_gate_transition` shows it recently surfaced, note "newly surfaced as demand crossed threshold."
+
+**B. BEFORE / AFTER cards.** BEFORE (red) = `current_value_snapshot` + current metrics (top-query position, impressions, CTR). AFTER (green) = `proposed_value` + projected. Pull metrics from `dossier.demand` / `evidence.gsc`.
+
+**C. "EXPECTED OUTCOME & MEASUREMENT PLAN" table.** Rows: Clicks/wk, CTR, Avg position, Conversions. Cols: Baseline · Target · Time horizon · How measured. Footnote the window (e.g. day 14→42). Conversions = Ads conversion **count** (quote-form conversions are $0-valued — never weight by value).
+
+**D. Keyword targets + routed queries + supporting evidence.** From `dossier.keyword_targets` (primary + secondary) and `dossier.routed_queries` (show own/route/content_gap; **discard rows visibly marked as mirages with reason**, never as opportunities). Plus the linked queries/competitors.
+
+**E. Actions routed by lane** (from `dossier.ranked_actions`, each tagged `lane`+`executor`+`status`):
+- **Lane 1 `engine_draft`** (title/meta/H1/schema/internal-link): **Approve & Queue** / **Modify** / **Reject** → `lib/seoApi` writes `approval_status` (draft-only; "queued for WordPress draft — pending human publish"). Never publishes.
+- **Lane 2 `rankmath_human`** (lost-page redirect [intent-validated], canonical consolidation, noindex hygiene): render the **exact prepped change** as a checklist item to execute in Rank Math — *not* an engine-draftable button (these are `allowed=false` by governance).
+- **Lane 3 `seo_pr_human`** (off-page/content): show the brief; no actuation.
+
+## Lost / off-page / suppressed
+- **Lost** pages → own restore/redirect queue (intent-validated target, never slug-matched).
+- **Off-page** → a section/tab reading `/offpage` (authority-bound pages + target keyword + position + why).
+- **Suppressed** → audit view from `/suppressed` (grouped by `gate_reasons`); a tab under Command Center, not a top-level legacy page.
+
+---
+
+## Navigation — consolidate to 4 areas, retire the legacy 15-item nav
+The old nav and its ungoverned pages are still live. Collapse to: **Command Center** (`/dashboard/seo`, Screens 1–2 + suppressed/off-page sub-tabs) · **Performance** (`/dashboard/seo/performance`, canonical_live-filtered) · **Competitors** (`/dashboard/seo/competitors`, SERP features + deep dive merged) · **Results** (`/dashboard/seo/results`, attribution + outcomes + content scores merged). Delete the legacy nav entries **and** redirect the retired routes (301 in next.config) so old URLs aren't reachable: `/actions,/internal-links,/schema,/content,/execution-log → /dashboard/seo`; `/pages → /performance`; `/serp-features,/competitive → /competitors`; `/attribution,/outcomes,/content-scores → /results`; `/suppressed → Command Center sub-tab`. Remove the old ungoverned "Top 50 internal links" and "All Recommendations" reads entirely; every retained surface reads through the Page Universe.
+
+## Acceptance
+1. `/dashboard/seo` = Command Center matching mockup #1: header + **Approve top N** batch flow, KPI hero + trend + range toggle, Data Freshness bound to real ingest times, GSC banner, **Detections** list from `/queue` (6 mutation types, re-review badge, Approve/Defer), competitors strip.
+2. Clicking a detection → Action Card matching mockup #2, reading `seo_page_dossier` (Why / BEFORE-AFTER / measurement plan / keyword_targets / routed_queries with mirages marked / lane-routed actions). Lane-1 Approve & Queue writes draft-only via `lib/seoApi`; Lane-2 shows prepped Rank Math steps; Lane-3 shows the brief.
+3. Position everywhere = top-query avg position; homepage `/` reads ~46 for "neon signs" and buckets **strategic**, not win; wholesale pages (e.g. `/wholesale/`) appear with their accepted h1 actions; KPI/bucket counts recomputed.
+4. Nav = exactly 4 areas; every legacy path 301s to its new home; no ungoverned legacy page reachable.
+5. `npm run build` clean (read-only lint passes); PR open with before/after screenshots of both screens vs the mockups.

@@ -1,0 +1,65 @@
+# Task — fix the dashboard data-surfacing defects found in the 2026-06-03 front-end↔back-end test
+
+Repo: **nsd-platform-shell** (read-only proxies; no write paths; draft-only invariant; `canonical_live` governance preserved). All issues are in the **metric-surfacing layer** — the governance/ranking logic is correct and must not change. Verified against Supabase prod `fssgkgyconuzukcwptvc`. Full report: `TEST_frontend_vs_backend_2026-06-03.md`.
+
+Fix in priority order.
+
+---
+
+## 1. HIGH — Competitors screen reads ~2% of its data
+**Symptom:** UI shows **10 gaps / 1 competitor / 0 content gaps**. DB `analytics.seo_competitor_gap` has **483 rows (469 keyword + 14 content), 9 distinct `competitor_url`, all `status='new'`, all `opportunity_score>0`**. The proxy route `/api/proxy/seo/competitor-gaps` itself returns only 10 rows / 1 competitor (a backend `LIMIT 10` + implicit single-competitor scoping) — confirmed by calling it directly, so the cap is in the route, not the component.
+
+**Fix (`app/api/proxy/seo/competitor-gaps/route.ts` + the Competitors page):**
+- Remove the `LIMIT 10` and any single-competitor `WHERE`. Return the full governed feed (all 9 competitors, both `gap_type`s), ordered by `opportunity_score DESC`. Paginate if needed (e.g. server-side page size 50 + "load more"), but the KPI counts must reflect the **full** table.
+- Fix the KPI tiles to count the whole table: **Total gaps = 483, Competitors tracked = 9, Keyword gaps = 469, Content gaps = 14** (compute from the data, don't hardcode). "Content gaps 0" is currently flatly wrong.
+- Populate the **Volume / Difficulty** columns (currently all "—") by joining each gap `keyword` to `analytics.external_query_intelligence` on normalized query (`search_volume`, `keyword_difficulty`, `cpc`); leave "—" only when genuinely absent.
+- Columns: `competitor_url, gap_type, keyword, competitor_ranking_position, our_ranking_position, competitor_page_url, opportunity_score, status`.
+
+**Out of scope (note, don't build):** the competitor *set* is only 9 and DataForSEO competitor enrichment is thin — expanding the tracked competitor list / ingesting `metrics_ahrefs_keyword_gap` (5,960) + `authority_gap_intelligence` (3,913) is a separate backend ingest task. This fix is to surface the full governed feed that already exists.
+
+**Acceptance:** Competitors KPIs read 483 / 9 / 469 / 14; the table lists gaps across all 9 competitors; volume/difficulty populated where `external_query_intelligence` has the keyword; the proxy returns the full set (paginated), verified `count == 483`.
+
+---
+
+## 2. MEDIUM — one GSC metric, three different numbers across screens
+**Symptom:** "30-day organic clicks" shows as **9** (Command Center hero), **10** (Command Center Momentum), **7** (Results). Same for impressions/position. Cause: each surface computes from a different grain (date-only `metrics_search_console_daily` vs page-level `metrics_search_console_page_daily` vs query-level) and/or a different window anchor.
+
+**Fix — a single shared metrics module (`lib/seoMetrics.ts`) every surface reads:**
+- `organicClicks(windowDays)` and `organicImpressions(windowDays)` = sum over **`analytics.metrics_search_console_daily`** (the complete date-only grain — most accurate; page/query grains undercount), window = `metric_date > (max(metric_date) - windowDays)` (anchor to the table's max date, since GSC lags ~4 days — do NOT anchor to `CURRENT_DATE`, which silently drops the lag days).
+- `avgPosition(windowDays)` = impression-weighted avg position over the same grain/window.
+- `topQueryPosition(pagePath)` = the highest-impression query's avg position from `metrics_search_console_query_page_daily` (the same `DISTINCT ON (path) … ORDER BY impressions DESC` used by `/portfolio`).
+- Point the **Command Center hero, Command Center Momentum, and Results** cards at these functions. Result: one "30-day clicks" number dashboard-wide (fixes the hero 9-vs-10 off-by-one too).
+
+**Acceptance:** Command Center hero == Momentum == Results for the same window (e.g. 30-day clicks identical on all three); each equals the `metrics_search_console_daily` sum over the max-date-anchored window.
+
+---
+
+## 3. MEDIUM — Results "Awaiting approval" overstates the backlog
+**Symptom:** Results shows **863** ("awaiting approval") = *all* `approval_status='pending'` rows including gate-**suppressed** ones. The actionable number is **450** = `gate_status='accepted' AND approval_status='pending' AND target page canonical_live` — which is what Command Center correctly shows. Suppressed candidates are not "awaiting approval."
+
+**Fix:** Results "Awaiting approval" must use the same actionable definition as Command Center (= 450). If a total-pending figure is still wanted, label it separately (e.g. "suppressed (not actionable): N"). Reuse Command Center's count logic so the two screens can never diverge.
+
+**Acceptance:** Results "Awaiting approval" == Command Center header count (450); they read the same query/helper.
+
+---
+
+## 4. MEDIUM — Action Card BEFORE block mislabels page-level metrics as top-query
+**Symptom:** On the homepage meta card, the BEFORE/"current state" block shows **position 33.4** and **impressions 48,157** — these are **page-level aggregates across all queries**, but they sit under the "Top query: neon signs" label. The real top-query figures (`neon signs` = pos **45.6**, impr **4,849**, from `seo_page_dossier.demand[0]` / `keyword_targets.primary`) are shown correctly elsewhere on the same card, and the candidate evidence cites 47.5 — so one card shows 4 positions / 3 impression values.
+
+**Fix (preferred):** populate the BEFORE block with the **top-query** position + impressions via `topQueryPosition()` (#2), so BEFORE agrees with the detection row (46) and the keyword target (45.6). The card is about a query-targeted change, so the top-query metric is the right baseline.
+**Alternative (if page-level is intended there):** relabel the block explicitly — "Page avg position" / "Page total impressions" — so it's not read as the top-query baseline.
+
+**Acceptance:** the homepage meta Action Card shows **one** position for "neon signs" baseline (≈45.6/46) across the detection row, BEFORE block, and keyword target; no field labeled "top-query" displays the page-level aggregate.
+
+---
+
+## 5. LOW — cosmetic
+- The hero-vs-Momentum click off-by-one is resolved by #2 (shared definition).
+- The 44 `pending_verification` pages are folded into the **strategic** bucket count on Command Center / Performance. They already carry `needs_verify=true`; either show them as a distinct flagged subgroup or badge them within the bucket so the strategic count isn't silently inflated by unverified pages.
+
+---
+
+## Governance & acceptance (whole task)
+- Read-only proxies; no new write paths; approve/reject still via `lib/seoApi`; `canonical_live` filters and draft-only invariant unchanged.
+- Don't touch the verified-correct surfaces: Command Center header 450, detection ordering/scores, Performance lost-impressions/totals, the position-bucket fix, wholesale, `needs_verify` flagging.
+- `npm run build` clean (read-only lint passes); PR open with before/after of the Competitors screen (483/9/14) and a screenshot showing the same 30-day-clicks number on Command Center + Results.

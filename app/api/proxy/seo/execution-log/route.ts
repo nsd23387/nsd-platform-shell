@@ -25,26 +25,26 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Migrated 2026-05-12: read from analytics.seo_action instead of the
-    // legacy seo_execution_log. seo_action.gsc_position/gsc_impressions are
-    // the at-creation baselines; mutation_type is the equivalent of
-    // execution_type. measured_at_90d isn't tracked in seo_action — null.
     const p = getPool();
     const { rows } = await p.query(`
       SELECT
-        sa.id,
-        sa.target_url,
-        sa.mutation_type AS execution_type,
-        sa.executed_by,
-        sa.executed_at,
-        sa.gsc_position::numeric AS baseline_position,
-        sa.gsc_impressions AS baseline_impressions,
-        sa.measured_at_14d,
-        sa.measured_at_30d,
+        c.candidate_id::text AS id,
+        c.target_page_url AS target_url,
+        c.mutation_type AS execution_type,
+        analytics.seo_mutation_label(c.mutation_type) AS mutation_label,
+        c.reviewer_id AS executed_by,
+        COALESCE(o.published_at, c.published_at, c.execution_timestamp) AS executed_at,
+        NULL::numeric AS baseline_position,
+        NULL::bigint AS baseline_impressions,
+        o.decided_at AS measured_at_14d,
+        o.decided_at AS measured_at_30d,
         NULL::timestamptz AS measured_at_90d
-      FROM analytics.seo_action sa
-      WHERE sa.executed_at IS NOT NULL
-      ORDER BY sa.executed_at DESC
+      FROM analytics.seo_execution_candidate c
+      LEFT JOIN analytics.seo_published_outcome o
+        ON o.candidate_id = c.candidate_id
+      WHERE c.execution_status IN ('published', 'draft_applied', 'rolled_back', 'failed')
+        AND COALESCE(o.published_at, c.published_at, c.execution_timestamp) IS NOT NULL
+      ORDER BY COALESCE(o.published_at, c.published_at, c.execution_timestamp) DESC
       LIMIT 100
     `);
 

@@ -1,0 +1,45 @@
+# FIX 1 — FRONT-END: SEO dashboard workflow + curation
+
+## ⚠️ Repo in scope: `nsd-platform-shell` ONLY (the SEO dashboard front-end / Replit)
+Do **not** touch the engine, generators, or Convex publisher — those are a separate back-end task (`nsd-ods-api` / `nsd-integrations`). This prompt is UI + read proxies only. Governance: read-only proxies for reads; approve/reject only via `lib/seoApi` (draft-only, never auto-publish); only `status_class='canonical_live'` pages surface as targets.
+
+Source reports: `QA_dashboard_full_test_2026-06-03.md` (D1–D9) and `UI_UX_deep_audit_2026-06-03.md` (A1–A6). The dashboard currently renders the raw candidate table (every variant/status/run) instead of a curated decision — fix that.
+
+## The reframe (do this first): one decision per page, per field
+Today a page can have dozens of candidate cards (homepage = 261, /for-businesses/ = 33 incl. 16 title + 16 meta variants, mostly rejected). Re-frame the surface so the default view is **one current value + one recommended proposal per (page, field)**:
+- Default: show the **single highest-scoring active (pending/approved) proposal** per `(page, mutation_type/field)`.
+- **Collapse alternatives** behind a "See N alternatives" control; **hide `rejected` by default** behind a "Show rejected" toggle.
+- Show clearly **which proposal is live/approved** for that field.
+
+### A2 — Action Card must show ONE action (highest priority)
+`/dashboard/seo/action/[id]` currently dumps the page's *entire* candidate list (32 cards for for-businesses; 261 for homepage). It must render **only the single candidate `[id]`** (its current value, proposed value, evidence, lane, measurement plan). Page-level history/alternatives belong in a collapsed "alternatives" section, not the default.
+
+### A3 — Reflect one-active-approved per field
+A page has one title and one meta, but the data has 3 approved titles + 3 approved metas for for-businesses. In the UI: surface only the **single active/winning approved proposal** per field (use the back-end's active flag once available; until then pick highest score among approved) and label it "live." Don't render multiple conflicting "approved" cards as equals.
+
+### A4/A1 — De-clutter
+Hide rejected by default; collapse the variant pile to one recommended + "see alternatives."
+
+### A5/A6 — Labels & copy
+Add a legend/tooltip for the `hybrid`/`auto` tags (or remove them from the primary view). Replace the repeated boilerplate ("Update title_tag_refinement on … 14297 impressions at position 75.8" on every variant) with the **differentiating** info — the proposed text + a one-line "why this one."
+
+## Workflow defects (from QA)
+- **D1 + D4 — Build the Recommendations list.** New page (e.g. `/dashboard/seo/recommendations`) listing all gate-accepted pending recommendations, **deduped to one row per (page, field) by default** (expandable to variants), paginated, with **filter/sort by page URL, mutation_type, status, score**. Reuse the Competitors filterable-table pattern. **Repoint "View all N recommendations →"** here (currently misroutes to `/performance`). *Acceptance:* "View all" → full list; filter to "/for-businesses/" or "title" works; rows open the (single-action) Action Card.
+- **D2 — Performance cards clickable.** "Click any page to open its dossier" must navigate (to the page's recommendations / dossier). Currently dead.
+- **D3 — "Review top N" batch modal.** Implement review-then-confirm with per-item deselect → Approve & Queue via `lib/seoApi` (draft-only). Currently the button does nothing.
+
+## Consistency / guards
+- **D5 — One clicks metric** across Command Center hero, Momentum, Results (read the same source/window; today 7d shows 7 vs 4).
+- **D6 — One "awaiting approval" count** everywhere (header 447 vs Results 454) — use accepted+pending+canonical_live.
+- **D7 (UI guard) — Don't present placeholder/mismatched proposals as approvable.** Flag candidates whose `proposed_value` is a placeholder (e.g. starts with "Set H1…") or whose title/meta keyword doesn't match the page's `keyword_targets.primary` as "needs review — not auto-approvable." (Root fix is back-end.)
+- **D8 — Data Freshness badge** deterministic (stop flipping healthy/warning).
+- **D9 — Competitors** show the full governed feed (or state the filter); today 351/5/8 vs DB 483/9/14.
+
+## Don't regress
+4-area nav + legacy redirects; range toggle; data-freshness panel + GSC banner; detection→Details→Action Card; Performance URL filter + bucket KPIs; Competitors table; Results sections; no console errors.
+
+## Acceptance
+- Action Card shows one action; default views show one recommended proposal per field with rejected hidden + alternatives collapsed; live/approved proposal labeled.
+- Recommendations list exists, filterable, deduped, linked from "View all."
+- Performance cards and "Review top N" work; metrics/counts consistent across screens; placeholder/mismatched proposals flagged.
+- Draft-only intact; `npm run build` clean; PR open with before/after screenshots of the Action Card (single action), the Recommendations list, and a de-cluttered page view.

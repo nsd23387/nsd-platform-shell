@@ -53,10 +53,17 @@ export async function GET() {
       );
     }
 
+    // Lag-aware, deterministic thresholds. Google Search Console finalizes data
+    // ~2-3 days late, and a weekend gap pushes the effective lag to ~4 days even
+    // when ingestion is perfectly healthy. The previous "warning > 3 days" band
+    // sat right inside that normal lag window, so the badge flipped between
+    // healthy and warning day-to-day on a healthy pipeline. Widen "healthy" to
+    // absorb the normal lag (<= 4 days) so "warning" only fires when data is
+    // genuinely late, and the same days_behind always maps to the same status.
     let status: 'healthy' | 'warning' | 'stale';
     if (daysBehind === null || daysBehind > 7) {
       status = 'stale';
-    } else if (daysBehind > 3) {
+    } else if (daysBehind > 4) {
       status = 'warning';
     } else {
       status = 'healthy';

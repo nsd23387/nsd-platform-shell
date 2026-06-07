@@ -68,7 +68,10 @@ export async function GET(req: NextRequest) {
         COALESCE(ctr, 0)::numeric(8,4) AS ctr,
         avg_position::numeric(6,2) AS avg_position
       FROM analytics.metrics_search_console_daily
-      WHERE date >= (CURRENT_DATE - $1::int)
+      -- Anchor the window to the latest ingested metric_date, not CURRENT_DATE:
+      -- GSC lags ~3 days, so a CURRENT_DATE anchor silently drops the most
+      -- recent (still-empty) days and undercounts the window. See lib/seoMetrics.
+      WHERE date > ((SELECT MAX(date) FROM analytics.metrics_search_console_daily) - $1::int)
       ORDER BY date ASC
       `,
       [days],

@@ -7,9 +7,9 @@
 // approveEngineCandidate / rejectEngineCandidate -> /api/proxy/seo/recommendations.
 // Lanes 2 (Rank Math manual) and 3 (off-page) are advisory only — no mutations.
 // Ahrefs is decommissioned — keyword value is sourced from DataForSEO via
-// analytics.external_query_intelligence. Only canonical_live pages are surfaced
-// as optimization targets; lost pages live in the Lost queue; pending pages
-// carry a verify flag; excluded pages are never shown.
+// analytics.external_query_intelligence. The approvable queue comes from
+// analytics.v_seo_dashboard_queue; lost/non-live redirect work is sectioned,
+// not silently hidden.
 //
 // Data truthfulness: every number on this screen is a live read. We do NOT
 // fabricate predicted lift, share-of-voice, or velocity figures. Detection
@@ -17,7 +17,7 @@
 // modelled click projection.
 // =============================================================================
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../hooks/useRBAC';
 import { AccessDenied } from '../../../components/dashboard';
@@ -29,16 +29,18 @@ import {
   getSeoPortfolio, getSeoCompetitorGapFeed,
   approveEngineCandidate, rejectEngineCandidate,
   getCompetitiveVelocitySummary, getCompetitiveChanges, getSeoShipped,
+  getSeoOffpageBriefs, getSeoSuppressed,
 } from '../../../lib/seoApi';
 import type {
   PortfolioPage, PortfolioBucket, PageDossierCandidate,
   SeoTimeseriesResponse, GscPipelineHealth, SeoCompetitorGap,
   SeoTimeseriesPoint, CompetitiveVelocitySummary, CompetitivePageChange,
-  SeoShippedAction, SeoCompetitorGapMeta,
+  SeoShippedAction, SeoCandidateQueue, SeoOffpageBrief, SuppressedAudit,
+  SeoCompetitorGapMeta,
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
-  fmtInt, fmtPos, pathOf, PageDossierDrawer, actionMeta,
+  fmtInt, fmtPos, pathOf, PageDossierDrawer, mutationDisplay, sectionLabelStyle, proposalReview,
 } from './_shared';
 
 // -----------------------------------------------------------------------------
@@ -81,14 +83,27 @@ type MomentumWindow = {
 };
 
 function computeMomentum(series: SeoTimeseriesPoint[], n: number, label: string): MomentumWindow {
-  const clicks = series.map((p) => p.clicks ?? 0);
-  const cur = clicks.slice(-n);
-  const prior = clicks.slice(-2 * n, -n);
-  const curSum = cur.reduce((a, b) => a + b, 0);
-  const priorSum = prior.reduce((a, b) => a + b, 0);
-  const full = cur.length === n && prior.length === n;
+  // Window by calendar DATE (anchored to the most recent point), not by array
+  // index. The GSC daily series can be missing zero-traffic days, so slicing the
+  // last N rows would span more than N calendar days and disagree with the hero /
+  // Results 30-day number. Date-windowing keeps every surface on one number.
+  if (series.length === 0) {
+    return { label, curSum: 0, priorSum: 0, deltaPct: null, full: false, haveDays: 0, needDays: 2 * n };
+  }
+  const DAY = 86_400_000;
+  const anchor = Date.parse(`${series[series.length - 1].date}T00:00:00Z`);
+  const earliest = Date.parse(`${series[0].date}T00:00:00Z`);
+  const sumWindow = (fromDaysAgo: number, toDaysAgo: number) =>
+    series.reduce((sum, p) => {
+      const t = Date.parse(`${p.date}T00:00:00Z`);
+      return t > anchor - fromDaysAgo * DAY && t <= anchor - toDaysAgo * DAY ? sum + (p.clicks ?? 0) : sum;
+    }, 0);
+  const curSum = sumWindow(n, 0);
+  const priorSum = sumWindow(2 * n, n);
+  const haveDays = Math.round((anchor - earliest) / DAY) + 1;
+  const full = haveDays >= 2 * n;
   const deltaPct = full && priorSum > 0 ? ((curSum - priorSum) / priorSum) * 100 : null;
-  return { label, curSum, priorSum, deltaPct, full, haveDays: clicks.length, needDays: 2 * n };
+  return { label, curSum, priorSum, deltaPct, full, haveDays, needDays: 2 * n };
 }
 
 function MomentumRow({ w, tc }: { w: MomentumWindow; tc: Tc }) {
@@ -508,8 +523,25 @@ function FreshnessCard({ tc }: { tc: Tc }) {
               <div style={{ marginTop: space['1'], color: PALETTE.bad, fontSize: '11px' }}>{health.last_error}</div>
             )}
           </div>
-          <div style={{ marginTop: space['3'], paddingTop: space['3'], borderTop: `1px solid ${tc.border.subtle}`, fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: 1.5 }}>
-            GA4, Google Ads &amp; the cluster engine sync on their own schedules and aren&apos;t exposed through this freshness probe yet — this surface tracks GSC only.
+          <div style={{ marginTop: space['3'], paddingTop: space['3'], borderTop: `1px solid ${tc.border.subtle}` }}>
+            {[
+              { name: 'Google Analytics 4' },
+              { name: 'Google Ads' },
+              { name: 'Cluster engine' },
+              { name: 'Rank Math' },
+            ].map((s) => (
+              <div
+                key={s.name}
+                data-testid={`row-freshness-${s.name.replace(/\W+/g, '-').toLowerCase()}`}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}
+              >
+                <span>{s.name}</span>
+                <Pill tone="neutral" tc={tc}>no freshness probe</Pill>
+              </div>
+            ))}
+            <div style={{ marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: 1.5 }}>
+              These sources sync on their own schedules and aren&apos;t wired to a freshness probe yet — only GSC is observed here.
+            </div>
           </div>
         </>
           );
@@ -533,8 +565,7 @@ function DetectionRow({
   onDefer: (id: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const meta = actionMeta(c.mutation_type, c.proposed_value);
-  const score = c.opportunity_score != null ? Math.round(c.opportunity_score * 100) : null;
+  const score = c.opportunity_score != null ? Math.round(c.opportunity_score) : null;
   // Honest impact: the target page's real GSC demand, not a modelled lift.
   const impr = page?.top_q_impr ?? page?.gsc_impressions ?? null;
   const pos = page?.top_q_pos ?? page?.gsc_best_position ?? null;
@@ -544,18 +575,31 @@ function DetectionRow({
       <div style={{ fontFamily: monoStack, fontSize: '18px', fontWeight: fontWeight.semibold, color: tc.text.muted }}>#{rank}</div>
       <div style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
-          <Pill tone={meta.tone} tc={tc}>{meta.label}</Pill>
-          {c.regate_review_flag && <Pill tone="warn" tc={tc}>RE-REVIEW</Pill>}
-          <span style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-            {meta.title}
-          </span>
+          {(() => { const m = mutationDisplay(c.mutation_type, c.primary_remedy); return (
+            <>
+              <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>
+              <span style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>
+                {c.mutation_label ?? m.verb(c.proposed_value)}
+              </span>
+              {c.regate_review_flag && (
+                <span title="Re-surfaced for human re-review after a prior decision">
+                  <Pill tone="warn" tc={tc}>re-review</Pill>
+                </span>
+              )}
+              {(() => { const review = proposalReview(c); return review.flagged ? (
+                <span title={`Not auto-approvable — ${review.reasons.join(' ')}`} data-testid={`detection-needs-review-${c.candidate_id}`}>
+                  <Pill tone="warn" tc={tc}>needs review</Pill>
+                </span>
+              ) : null; })()}
+            </>
+          ); })()}
         </div>
         <div style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, marginBottom: '4px', wordBreak: 'break-all' }}>
-          {c.target_page_url ? pathOf(c.target_page_url) : '—'}
+          {c.page_url_canonical ?? (c.target_page_url ? pathOf(c.target_page_url) : '—')}
         </div>
-        {c.evidence_summary && (
+        {(c.why || c.evidence_summary) && (
           <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.secondary, lineHeight: 1.5 }}>
-            <span style={{ color: tc.text.muted }}>Why: </span>{c.evidence_summary}
+            <span style={{ color: tc.text.muted }}>Why: </span>{c.why ?? c.evidence_summary}
           </div>
         )}
       </div>
@@ -570,7 +614,7 @@ function DetectionRow({
       </div>
       <div>
         <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Effort</div>
-        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary }}>{meta.effort}</div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary }}>Low</div>
       </div>
       <div style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
         <button
@@ -601,42 +645,244 @@ function DetectionRow({
 }
 
 // =============================================================================
+// Off-page authority briefs — portfolio-wide Lane 3 advisory (read-only).
+// Sourced from analytics.seo_offpage_brief. All figures are real observed GSC /
+// DataForSEO values — no fabricated link counts or projected authority.
+// =============================================================================
+function OffpageBriefsSection({ tc }: { tc: Tc }) {
+  const [briefs, setBriefs] = useState<SeoOffpageBrief[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getSeoOffpageBriefs()
+      .then((b) => { if (alive) setBriefs(b); })
+      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load off-page briefs'); });
+    return () => { alive = false; };
+  }, []);
+
+  return (
+    <div style={{ marginTop: space['6'] }}>
+      <SectionTitle
+        tc={tc}
+        sub="Authority-bound pages where on-page is adequate — earn links / digital PR to break into the top 10"
+        right={<Pill tone="neutral" tc={tc}>Lane 3 · advisory</Pill>}
+      >
+        Off-page authority briefs
+      </SectionTitle>
+      <Card tc={tc} style={{ padding: 0 }}>
+        {!briefs && !error && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading off-page briefs…</div>}
+        {error && <div style={{ padding: space['4'], color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
+        {briefs && briefs.length === 0 && (
+          <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-offpage">
+            No off-page authority briefs — on-page work (Lanes 1 &amp; 2) is the priority.
+          </div>
+        )}
+        {briefs && briefs.length > 0 && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '13px' }}>
+            <thead>
+              <tr style={{ background: tc.background.muted, color: tc.text.muted, textAlign: 'left' }}>
+                <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Page</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Target keyword</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Pos</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Impr</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Vol</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>KD</th>
+                <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {briefs.map((b, i) => (
+                <tr key={i} style={{ borderTop: `1px solid ${tc.border.subtle}` }} data-testid={`row-offpage-${i}`}>
+                  <td style={{ padding: '10px 16px', fontFamily: monoStack, fontSize: '12px', color: tc.text.primary, wordBreak: 'break-all' }}>{pathOf(b.page_url)}</td>
+                  <td style={{ padding: '10px 8px', color: tc.text.primary }}>{b.target_keyword || '—'}</td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtPos(b.current_position)}</td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(b.impressions)}</td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(b.search_volume)}</td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{b.keyword_difficulty == null ? '—' : b.keyword_difficulty.toFixed(0)}</td>
+                  <td style={{ padding: '10px 16px', color: tc.text.muted, fontSize: '12px', maxWidth: 320 }}>{b.reason || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// =============================================================================
+// Suppressed candidates — read-only audit grouped by gate reason. Sourced from
+// the engine's gate-rejected pile (analytics). Shows WHY the engine withheld a
+// candidate so the absence of action is transparent, never hidden.
+// =============================================================================
+function SuppressedSection({ tc }: { tc: Tc }) {
+  const [audit, setAudit] = useState<SuppressedAudit | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [openReason, setOpenReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getSeoSuppressed()
+      .then((a) => { if (alive) setAudit(a); })
+      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load suppressed audit'); });
+    return () => { alive = false; };
+  }, []);
+
+  // Group rows by their gate reason(s). A row with multiple reasons appears
+  // under each — the rollup counts already reflect the engine's own tally.
+  const grouped = useMemo(() => {
+    const m = new Map<string, SuppressedAudit['rows']>();
+    (audit?.rows ?? []).forEach((r) => {
+      const reasons = r.gate_reasons.length > 0 ? r.gate_reasons : ['(no reason recorded)'];
+      reasons.forEach((reason) => {
+        const list = m.get(reason) ?? [];
+        list.push(r);
+        m.set(reason, list);
+      });
+    });
+    return Array.from(m.entries()).sort((a, b) => b[1].length - a[1].length);
+  }, [audit]);
+
+  return (
+    <div style={{ marginTop: space['6'] }}>
+      <SectionTitle
+        tc={tc}
+        sub="Candidates the engine withheld at the gate — grouped by reason, for transparency"
+        right={audit ? <Pill tone="neutral" tc={tc}>{audit.total} suppressed</Pill> : undefined}
+      >
+        Suppressed by the gate
+      </SectionTitle>
+      <Card tc={tc} style={{ padding: 0 }}>
+        {!audit && !error && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading suppressed audit…</div>}
+        {error && <div style={{ padding: space['4'], color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
+        {audit && grouped.length === 0 && (
+          <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-suppressed">
+            Nothing suppressed — every candidate the engine produced passed the gate.
+          </div>
+        )}
+        {audit && grouped.map(([reason, rows]) => {
+          const open = openReason === reason;
+          return (
+            <div key={reason} style={{ borderTop: `1px solid ${tc.border.subtle}` }}>
+              <button
+                onClick={() => setOpenReason(open ? null : reason)}
+                data-testid={`button-suppressed-reason-${reason.replace(/\W+/g, '-').toLowerCase()}`}
+                style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: space['3'], padding: `${space['3']} ${space['5']}`, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <span style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Pill tone="warn" tc={tc}>{reason}</Pill>
+                  <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{rows.length} candidate{rows.length === 1 ? '' : 's'}</span>
+                </span>
+                <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted }}>{open ? '▾' : '▸'}</span>
+              </button>
+              {open && (
+                <div style={{ padding: `0 ${space['5']} ${space['3']}` }}>
+                  {rows.map((r) => (
+                    <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: space['3'], padding: '6px 0', borderTop: `1px solid ${tc.border.subtle}`, fontFamily: fontFamily.body, fontSize: '12px' }} data-testid={`row-suppressed-${r.id}`}>
+                      <span style={{ minWidth: 0 }}>
+                        <Pill tone="neutral" tc={tc}>{mutationDisplay(r.mutation_type).tag}</Pill>
+                        <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, marginLeft: space['2'], wordBreak: 'break-all' }}>{r.target_url ? pathOf(r.target_url) : '—'}</span>
+                      </span>
+                      <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, flexShrink: 0 }}>
+                        {r.relevance_score == null ? '' : `rel ${(r.relevance_score * 100).toFixed(0)}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </Card>
+    </div>
+  );
+}
+
+// =============================================================================
 // Main content
 // =============================================================================
 function CommandCenterContent() {
   const tc = useThemeColors();
 
   const [candidates, setCandidates] = useState<PageDossierCandidate[] | null>(null);
+  const [queueSummary, setQueueSummary] = useState<SeoCandidateQueue['summary'] | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioPage[] | null>(null);
   const [gaps, setGaps] = useState<SeoCompetitorGap[] | null>(null);
   const [gapMeta, setGapMeta] = useState<SeoCompetitorGapMeta | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [queueLoading, setQueueLoading] = useState(true);
+  const [portfolioLoading, setPortfolioLoading] = useState(true);
+  const [gapsLoading, setGapsLoading] = useState(true);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const [portfolioError, setPortfolioError] = useState<string | null>(null);
+  const [gapsError, setGapsError] = useState<string | null>(null);
   const [deferred, setDeferred] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewSelected, setReviewSelected] = useState<Set<string>>(new Set());
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
   const [diagnoseUrl, setDiagnoseUrl] = useState('');
 
-  function loadAll() {
-    setLoading(true); setError(null);
-    Promise.all([
-      getSeoCandidateQueue(),
-      getSeoPortfolio(),
-      getSeoCompetitorGapFeed().catch(() => ({ data: [] as SeoCompetitorGap[], meta: null })),
-    ])
-      .then(([q, p, feed]) => {
-        setCandidates(q.candidates);
-        setPortfolio(p);
+  const loadQueue = useCallback(() => {
+    let alive = true;
+    setQueueLoading(true);
+    setQueueError(null);
+    getSeoCandidateQueue()
+      .then((q) => {
+        if (!alive) return;
+        setCandidates(q.candidates ?? []);
+        setQueueSummary(q.summary ?? null);
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setCandidates([]);
+        setQueueSummary(null);
+        setQueueError(e instanceof Error ? e.message : 'Failed to load recommendations');
+      })
+      .finally(() => {
+        if (alive) setQueueLoading(false);
+      });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => loadQueue(), [loadQueue]);
+
+  useEffect(() => {
+    let alive = true;
+    setPortfolioLoading(true);
+    setPortfolioError(null);
+    getSeoPortfolio()
+      .then((p) => { if (alive) setPortfolio(p); })
+      .catch((e) => {
+        if (!alive) return;
+        setPortfolio([]);
+        setPortfolioError(e instanceof Error ? e.message : 'Failed to load portfolio');
+      })
+      .finally(() => { if (alive) setPortfolioLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    setGapsLoading(true);
+    setGapsError(null);
+    getSeoCompetitorGapFeed()
+      .then((feed) => {
+        if (!alive) return;
         setGaps(feed.data);
         setGapMeta(feed.meta);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load command center'))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => { loadAll(); }, []);
+      .catch((e) => {
+        if (!alive) return;
+        setGaps([]);
+        setGapMeta(null);
+        setGapsError(e instanceof Error ? e.message : 'Failed to load competitor gaps');
+      })
+      .finally(() => { if (alive) setGapsLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   // Portfolio lookup keyed by path (host-robust: portfolio + candidate URLs
   // disagree on www vs apex host, so we normalize to pathname before joining).
@@ -653,18 +899,30 @@ function CommandCenterContent() {
     return c;
   }, [portfolio]);
 
-  // Detections: pending engine candidates whose target page is verified
-  // canonical_live (governance — never surface targets we can't confirm are
-  // live). Ranked by opportunity score (already DESC from the API).
+  // How many of the pages in each bucket are unverified (needs_verify). These
+  // are pending_verification pages folded into Strategic — surfaced as a
+  // subgroup so the bucket count is not silently inflated by pages we cannot
+  // yet confirm are canonical_live.
+  const verifyCounts = useMemo(() => {
+    const c: Record<PortfolioBucket, number> = { win: 0, strategic: 0, fix: 0, lost: 0 };
+    (portfolio ?? []).forEach((p) => { if (p.needs_verify) c[p.bucket] += 1; });
+    return c;
+  }, [portfolio]);
+
   const detections = useMemo(() => {
     return (candidates ?? [])
-      .filter((c) => !deferred.has(c.candidate_id))
-      .filter((c) => {
-        if (!c.target_page_url) return false;
-        const p = portfolioByPath.get(pathOf(c.target_page_url));
-        return p != null && p.status_class === 'canonical_live';
-      });
-  }, [candidates, deferred, portfolioByPath]);
+      .filter((c) => !deferred.has(c.candidate_id));
+  }, [candidates, deferred]);
+
+  const liveDetections = useMemo(
+    () => detections.filter((c) => c.page_is_live === true),
+    [detections],
+  );
+
+  const redirectDetections = useMemo(
+    () => detections.filter((c) => c.page_is_live !== true),
+    [detections],
+  );
 
   async function approveOne(c: PageDossierCandidate) {
     await approveEngineCandidate({
@@ -680,10 +938,31 @@ function CommandCenterContent() {
     setDeferred((prev) => new Set(prev).add(id));
   }
 
-  async function approveTopN(n: number) {
-    if (bulkBusy) return;
+  // Open the review-then-confirm panel for the top N detections. Nothing is
+  // approved until the user confirms — and they may deselect any candidate
+  // first (governance: bulk approve must remain a deliberate, reviewable act).
+  function openReview(n: number) {
     const targets = detections.slice(0, n);
     if (targets.length === 0) return;
+    // Governance (D7): candidates flagged "needs review" (placeholder/scaffold
+    // proposals) are NOT pre-selected — a human must deliberately opt them in
+    // after authoring/checking. They still appear in the list, just unchecked.
+    setReviewSelected(new Set(targets.filter((c) => !proposalReview(c).flagged).map((c) => c.candidate_id)));
+    setReviewOpen(true);
+  }
+
+  function toggleReview(id: string) {
+    setReviewSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function confirmReview() {
+    if (bulkBusy) return;
+    const targets = detections.filter((c) => reviewSelected.has(c.candidate_id));
+    if (targets.length === 0) { setReviewOpen(false); return; }
     setBulkBusy(true); setActionMsg(null);
     const ids = new Set(targets.map((c) => c.candidate_id));
     setCandidates((prev) => (prev ?? []).filter((c) => !ids.has(c.candidate_id)));
@@ -697,11 +976,22 @@ function CommandCenterContent() {
     const failed = results.length - ok;
     setActionMsg(`Queued ${ok} recommendation${ok === 1 ? '' : 's'} as DRAFT${failed ? ` · ${failed} failed (still pending)` : ''}.`);
     setBulkBusy(false);
-    if (failed) loadAll();
+    setReviewOpen(false);
+    if (failed) loadQueue();
   }
 
   const TOP_N = 5;
   const topCount = Math.min(TOP_N, detections.length);
+  const reviewTargets = useMemo(
+    () => detections.slice(0, TOP_N),
+    [detections],
+  );
+  const summaryTiles = [
+    { label: 'Decisions', value: queueSummary?.decisions ?? detections.length, help: 'Guarded recommendations awaiting approval' },
+    { label: 'Total proposals', value: queueSummary?.total_proposals ?? detections.length, help: 'Canonical queue rows' },
+    { label: 'Re-review flagged', value: queueSummary?.re_review_flagged ?? 0, help: 'Needs another gate review' },
+    { label: 'Needs review', value: queueSummary?.needs_review ?? 0, help: 'Evidence or QA attention needed' },
+  ];
 
   return (
     <div style={{ padding: space['6'], maxWidth: 1200, margin: '0 auto' }}>
@@ -710,8 +1000,8 @@ function CommandCenterContent() {
         <div>
           <h1 style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>SEO Command Center</h1>
           <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-subtitle">
-            {loading ? 'Loading governed recommendations…'
-              : `${detections.length} gate-accepted recommendation${detections.length === 1 ? '' : 's'} awaiting approval on live pages.`}
+            {queueLoading ? 'Loading governed recommendations…'
+              : `${detections.length} guarded recommendation${detections.length === 1 ? '' : 's'} awaiting approval (${liveDetections.length} live-page, ${redirectDetections.length} lost/non-live).`}
           </p>
         </div>
         <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap' }}>
@@ -723,12 +1013,12 @@ function CommandCenterContent() {
             Diagnose a URL…
           </button>
           <button
-            onClick={() => approveTopN(TOP_N)}
+            onClick={() => openReview(TOP_N)}
             disabled={bulkBusy || topCount === 0}
             data-testid="button-approve-top"
             style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (bulkBusy || topCount === 0) ? 'default' : 'pointer', opacity: (bulkBusy || topCount === 0) ? 0.6 : 1 }}
           >
-            {bulkBusy ? 'Queuing…' : `Approve top ${topCount}`}
+            {`Review top ${topCount}…`}
           </button>
         </div>
       </div>
@@ -755,14 +1045,107 @@ function CommandCenterContent() {
         </div>
       )}
 
+      {/* Approve-top-N review-then-confirm. Governance: bulk approve is never a
+          one-click act — the user reviews each candidate and may deselect any
+          before anything is queued as DRAFT. */}
+      {reviewOpen && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: space['6'], overflowY: 'auto' }}
+          onClick={() => { if (!bulkBusy) setReviewOpen(false); }}
+          data-testid="overlay-review"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: 640, background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, padding: space['5'], marginTop: '48px' }}
+          >
+            <div style={sectionLabelStyle(tc)}>Review before queuing as DRAFT</div>
+            <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginBottom: space['4'] }}>
+              Deselect anything you don&apos;t want to approve. Selected items are queued as DRAFT for human governance — nothing is published.
+            </div>
+            <div style={{ borderTop: `1px solid ${tc.border.subtle}`, marginBottom: space['4'] }}>
+              {reviewTargets.map((c) => {
+                const checked = reviewSelected.has(c.candidate_id);
+                const m = mutationDisplay(c.mutation_type, c.primary_remedy);
+                const review = proposalReview(c);
+                return (
+                  <label
+                    key={c.candidate_id}
+                    data-testid={`review-row-${c.candidate_id}`}
+                    style={{ display: 'flex', gap: space['3'], alignItems: 'flex-start', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}`, cursor: 'pointer' }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleReview(c.candidate_id)}
+                      data-testid={`review-check-${c.candidate_id}`}
+                      style={{ marginTop: '3px', flexShrink: 0 }}
+                    />
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap', marginBottom: '2px' }}>
+                        <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{c.mutation_label ?? m.verb(c.proposed_value)}</span>
+                        {c.regate_review_flag && <Pill tone="warn" tc={tc}>re-review</Pill>}
+                        {review.flagged && (
+                          <span title={review.reasons.join(' ')} data-testid={`review-needs-review-${c.candidate_id}`}><Pill tone="warn" tc={tc}>needs review</Pill></span>
+                        )}
+                      </span>
+                      <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, wordBreak: 'break-all' }}>{c.target_page_url ? pathOf(c.target_page_url) : '—'}</span>
+                      {review.flagged && (
+                        <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.warn, marginTop: '2px' }}>
+                          Not auto-approvable — {review.reasons[0]}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: space['2'], justifyContent: 'flex-end', alignItems: 'center' }}>
+              <button
+                onClick={() => setReviewOpen(false)}
+                disabled={bulkBusy}
+                data-testid="button-review-cancel"
+                style={{ padding: '8px 14px', background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary, cursor: bulkBusy ? 'default' : 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmReview}
+                disabled={bulkBusy || reviewSelected.size === 0}
+                data-testid="button-review-confirm"
+                style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (bulkBusy || reviewSelected.size === 0) ? 'default' : 'pointer', opacity: (bulkBusy || reviewSelected.size === 0) ? 0.6 : 1 }}
+              >
+                {bulkBusy ? 'Queuing…' : `Queue ${reviewSelected.size} as DRAFT`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {actionMsg && (
         <div style={{ marginBottom: space['4'], padding: space['3'], borderRadius: radius.sm, background: PALETTE.goodSoft, color: PALETTE.good, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="text-action-msg">
           {actionMsg}
         </div>
       )}
-      {error && (
-        <div style={{ marginBottom: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>
+      {queueError && (
+        <div style={{ marginBottom: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{queueError}</div>
       )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: space['3'], marginBottom: space['4'] }}>
+        {summaryTiles.map((tile) => (
+          <Card key={tile.label} tc={tc} style={{ padding: space['4'] }}>
+            <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: fontWeight.semibold }}>
+              {tile.label}
+            </div>
+            <div style={{ fontFamily: monoStack, fontSize: '28px', lineHeight: 1.1, color: tc.text.primary, marginTop: '6px' }}>
+              {queueLoading ? '—' : fmtInt(tile.value)}
+            </div>
+            <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '4px' }}>
+              {tile.help}
+            </div>
+          </Card>
+        ))}
+      </div>
 
       {/* HERO — trend + freshness */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: space['4'], marginBottom: space['4'] }}>
@@ -779,20 +1162,30 @@ function CommandCenterContent() {
       {/* DO THIS NEXT */}
       <SectionTitle
         tc={tc}
-        sub="Gate-accepted engine recommendations on live pages, ranked by opportunity score"
+        sub="Guarded engine recommendations, ranked by opportunity score"
         right={<Pill tone="neutral" tc={tc}>Lane 1 · draft-only approvals</Pill>}
       >
         Do this next
       </SectionTitle>
       <Card tc={tc} style={{ padding: 0 }}>
         <div style={{ padding: `0 ${space['5']}` }}>
-          {loading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading recommendations…</div>}
-          {!loading && detections.length === 0 && (
-            <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-detections">
-              No gate-accepted recommendations awaiting approval on live pages.
+          {queueLoading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading recommendations…</div>}
+          {!queueLoading && queueError && (
+            <div style={{ padding: space['6'], textAlign: 'center', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="error-detections">
+              Recommendations unavailable.
             </div>
           )}
-          {!loading && detections.slice(0, 12).map((c, i) => (
+          {!queueLoading && !queueError && detections.length === 0 && (
+            <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-detections">
+              No guarded recommendations awaiting approval.
+            </div>
+          )}
+          {!queueLoading && !queueError && liveDetections.length > 0 && (
+            <div style={{ padding: `${space['4']} 0 ${space['2']}`, fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              On-page optimizations ({liveDetections.length})
+            </div>
+          )}
+          {!queueLoading && !queueError && liveDetections.slice(0, 12).map((c, i) => (
             <DetectionRow
               key={c.candidate_id}
               rank={i + 1}
@@ -803,10 +1196,26 @@ function CommandCenterContent() {
               onDefer={deferOne}
             />
           ))}
+          {!queueLoading && !queueError && redirectDetections.length > 0 && (
+            <div style={{ padding: `${space['5']} 0 ${space['2']}`, fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, color: PALETTE.bad, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Lost pages / redirects ({redirectDetections.length})
+            </div>
+          )}
+          {!queueLoading && !queueError && redirectDetections.slice(0, 20).map((c, i) => (
+            <DetectionRow
+              key={c.candidate_id}
+              rank={liveDetections.length + i + 1}
+              c={c}
+              page={c.target_page_url ? portfolioByPath.get(pathOf(c.target_page_url)) : undefined}
+              tc={tc}
+              onApprove={approveOne}
+              onDefer={deferOne}
+            />
+          ))}
         </div>
-        {!loading && detections.length > 12 && (
+        {!queueLoading && !queueError && detections.length > 12 && (
           <div style={{ padding: space['4'], borderTop: `1px solid ${tc.border.subtle}`, textAlign: 'center', background: tc.background.muted }}>
-            <Link href="/dashboard/seo/performance" style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-view-all-detections">
+            <Link href="/dashboard/seo/recommendations" style={{ fontFamily: fontFamily.body, fontSize: '13px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-view-all-detections">
               View all {detections.length} recommendations →
             </Link>
           </div>
@@ -819,13 +1228,18 @@ function CommandCenterContent() {
           Competitor intelligence
         </SectionTitle>
         <Card tc={tc} style={{ padding: 0 }}>
-          {loading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading competitor gaps…</div>}
-          {!loading && (!gaps || gaps.length === 0) && (
+          {gapsLoading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading competitor gaps…</div>}
+          {!gapsLoading && gapsError && (
+            <div style={{ padding: space['6'], textAlign: 'center', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="error-gaps">
+              Competitor gaps unavailable.
+            </div>
+          )}
+          {!gapsLoading && !gapsError && (!gaps || gaps.length === 0) && (
             <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-gaps">
               No competitor gaps recorded in the governed feed.
             </div>
           )}
-          {!loading && gaps && gaps.length > 0 && (
+          {!gapsLoading && !gapsError && gaps && gaps.length > 0 && (
             <>
               {gapMeta && (
                 <div style={{ padding: `${space['4']} ${space['5']}`, borderBottom: `1px solid ${tc.border.subtle}`, background: tc.background.muted }} data-testid="competitor-gap-meta">
@@ -839,7 +1253,7 @@ function CommandCenterContent() {
                     </span>
                   </div>
                   <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: 1.5 }}>
-                    {gapMeta.filter_note} Showing the top {fmtInt(Math.min(gapMeta.returned_count, gapMeta.limit))}; dismissed rows are market intel, not open actions.
+                    {gapMeta.filter_note} Showing {fmtInt(gapMeta.returned_count)} matching rows; dismissed rows are market intel, not open actions.
                   </div>
                 </div>
               )}
@@ -851,6 +1265,7 @@ function CommandCenterContent() {
                     <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Dispatch decision</th>
                     <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Their pos</th>
                     <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Your pos</th>
+                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Volume</th>
                     <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Score</th>
                   </tr>
                 </thead>
@@ -864,7 +1279,7 @@ function CommandCenterContent() {
                         <td style={{ padding: '10px 8px', color: tc.text.secondary }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                             <Pill tone={dismissed ? 'neutral' : g.status === 'new' ? 'warn' : 'info'} tc={tc}>
-                              {dismissed ? 'reviewed — not prioritized' : g.status}
+                              {dismissed ? 'reviewed - not prioritized' : g.status}
                             </Pill>
                             {dismissed && (
                               <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: 1.4 }}>
@@ -875,6 +1290,7 @@ function CommandCenterContent() {
                         </td>
                         <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{g.competitor_ranking_position ?? '—'}</td>
                         <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.muted }}>{g.our_ranking_position ?? 'unranked'}</td>
+                        <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(g.search_volume)}</td>
                         <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{g.opportunity_score == null ? '—' : g.opportunity_score.toFixed(0)}</td>
                       </tr>
                     );
@@ -883,7 +1299,7 @@ function CommandCenterContent() {
               </table>
             </>
           )}
-          {!loading && gaps && gaps.length > 8 && (
+          {!gapsLoading && !gapsError && gaps && gaps.length > 8 && (
             <div style={{ padding: '10px 16px', borderTop: `1px solid ${tc.border.subtle}`, background: tc.background.muted, textAlign: 'right' }}>
               <Link href="/dashboard/seo/competitors" style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-view-all-gaps">
                 View governed competitive intel ({fmtInt(gapMeta?.filtered_count ?? gaps.length)}) →
@@ -901,11 +1317,22 @@ function CommandCenterContent() {
         <CompetitorVelocityCard tc={tc} />
       </div>
 
+      {/* OFF-PAGE AUTHORITY BRIEFS (Lane 3 advisory) */}
+      <OffpageBriefsSection tc={tc} />
+
+      {/* SUPPRESSED BY THE GATE (read-only audit) */}
+      <SuppressedSection tc={tc} />
+
       {/* PORTFOLIO STRIP */}
       <div style={{ marginTop: space['6'] }}>
         <SectionTitle tc={tc} sub="Governed page portfolio by bucket — open Performance to triage">
           Portfolio at a glance
         </SectionTitle>
+        {portfolioError && (
+          <div style={{ marginBottom: space['3'], padding: space['3'], borderRadius: radius.sm, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="error-portfolio">
+            Portfolio unavailable.
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: space['3'] }}>
           {BUCKETS.map((b) => (
             <Link
@@ -918,7 +1345,12 @@ function CommandCenterContent() {
                 <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{b.label}</span>
                 <Pill tone={bucketTone(b.key)} tc={tc}>{b.key}</Pill>
               </div>
-              <div style={{ fontFamily: monoStack, fontSize: '26px', color: tc.text.primary, marginTop: '4px' }}>{loading ? '—' : counts[b.key]}</div>
+              <div style={{ fontFamily: monoStack, fontSize: '26px', color: tc.text.primary, marginTop: '4px' }}>{portfolioLoading ? '—' : counts[b.key]}</div>
+              {!portfolioLoading && verifyCounts[b.key] > 0 && (
+                <div style={{ marginTop: '4px' }} data-testid={`text-verify-count-${b.key}`}>
+                  <Pill tone="warn" tc={tc}>{verifyCounts[b.key]} need verify</Pill>
+                </div>
+              )}
               <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '2px' }}>{b.blurb}</div>
             </Link>
           ))}

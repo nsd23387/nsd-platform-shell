@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getRecommendations,
-  approveRecommendation,
-  rejectRecommendation,
-  submitFeedback,
   approveExecutionCandidate,
   rejectExecutionCandidate,
   approveByOpportunityId,
@@ -42,7 +39,7 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
-  const { id, action, feedback_text, candidate_id, opportunity_id, review_notes, target, proposed_value, target_page_url } = body || {};
+  const { id, action, candidate_id, opportunity_id, review_notes, target, proposed_value, target_page_url } = body || {};
 
   console.log(`[seo/recommendations] POST received | action=${action} target=${target} candidate_id=${candidate_id || 'none'} opportunity_id=${opportunity_id || 'none'} id=${id || 'none'}`);
 
@@ -107,35 +104,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, action, candidate_id, opportunity_id, target: 'engine' });
     }
 
-    if (!id) {
-      return NextResponse.json({
-        error: 'Missing required field: id',
-        action, target,
-        has_candidate_id: !!candidate_id, has_opportunity_id: !!opportunity_id,
-      }, { status: 400 });
-    }
-
-    if (action === 'approve') {
-      await approveRecommendation(id);
-    } else if (action === 'reject') {
-      await rejectRecommendation(id);
-    } else if (action === 'feedback') {
-      await submitFeedback(id, feedback_text || '');
-    } else {
-      return NextResponse.json({
-        error: 'Invalid action',
-        action, mode: 'legacy', target: null,
-        has_candidate_id: false, has_opportunity_id: false,
-      }, { status: 400 });
-    }
-    return NextResponse.json({ success: true, id, action });
+    return NextResponse.json({
+      error: 'Legacy recommendation writes are retired; pass candidate_id or opportunity_id.',
+      action, target,
+      has_candidate_id: !!candidate_id, has_opportunity_id: !!opportunity_id,
+    }, { status: 410 });
   } catch (err: any) {
     const approvalMode = candidate_id ? 'candidate' : opportunity_id ? 'opportunity' : 'legacy';
     const helperName = candidate_id
       ? (action === 'approve' ? 'approveExecutionCandidate' : 'rejectExecutionCandidate')
       : opportunity_id
       ? (action === 'approve' ? 'approveByOpportunityId' : 'rejectByOpportunityId')
-      : (action === 'approve' ? 'approveRecommendation' : action === 'reject' ? 'rejectRecommendation' : 'submitFeedback');
+      : 'legacyRecommendationWrite';
     console.error(`[seo/recommendations] POST Error | action=${action} mode=${approvalMode} helper=${helperName}:`, err.message, err.stack?.split('\n')[1]);
     const notFound = err.message?.includes('not found');
     const status = notFound ? 404 : 500;

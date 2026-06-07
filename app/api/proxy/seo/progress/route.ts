@@ -5,7 +5,7 @@
  *   1. Today's Brief — actions taken yesterday, decisions needed today
  *   2. Progress Scoreboard — weekly + monthly trends in organic traffic
  *
- * All data sourced from existing tables — no schema changes required.
+ * All data sourced from current engine tables and the canonical dashboard queue.
  *
  * Response shape:
  * {
@@ -36,6 +36,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { organicWindow } from '../../../../../lib/seoMetrics';
 
 const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 let pool: Pool | null = null;
@@ -54,30 +55,14 @@ function getPool(): Pool {
   return pool;
 }
 
-// Aggregate GSC metrics over a window. Returns null if no data.
-async function gscWindow(p: Pool, daysAgoStart: number, daysAgoEnd: number) {
-  const { rows } = await p.query<{
-    clicks: string | null;
-    impressions: string | null;
-    position: string | null;
-  }>(
-    `SELECT
-       SUM((payload->>'clicks')::int) AS clicks,
-       SUM((payload->>'impressions')::int) AS impressions,
-       AVG((payload->>'position')::numeric) AS position
-     FROM analytics.raw_search_console
-     WHERE (payload->>'date')::date >= CURRENT_DATE - $1::interval
-       AND (payload->>'date')::date <  CURRENT_DATE - $2::interval
-       AND payload->>'page' ILIKE '%neonsignsdepot.com%'`,
-    [`${daysAgoStart} days`, `${daysAgoEnd} days`],
-  );
-  const r = rows[0];
-  if (!r) return { clicks: 0, impressions: 0, position: null as number | null };
-  return {
-    clicks: r.clicks ? parseInt(r.clicks, 10) : 0,
-    impressions: r.impressions ? parseInt(r.impressions, 10) : 0,
-    position: r.position != null ? parseFloat(r.position) : null,
-  };
+// Organic traffic windows now come from the canonical lib/seoMetrics helper
+// (analytics.metrics_search_console_daily, anchored to the latest metric_date,
+// impression-weighted position) so this Results surface reports the SAME 7d/30d
+// clicks number as the Command Center hero and Momentum card. The previous
+// raw_search_console + CURRENT_DATE path was a different grain and anchor and
+// produced a smaller, inconsistent number.
+function gscShape(w: { clicks: number; impressions: number; avgPosition: number | null }) {
+  return { clicks: w.clicks, impressions: w.impressions, position: w.avgPosition };
 }
 
 function deltaPct(current: number, prior: number): number {
@@ -99,25 +84,24 @@ export async function GET() {
     const p = getPool();
 
     // ── TODAY: actions taken in last 24h ─────────────────────────────────────
-    // Query both old pipeline (seo_execution_log) and new pipeline (seo_action)
     const yesterdayApplied = await p.query<{ count: string; target_url: string | null }>(
       `SELECT COUNT(*) AS count, target_url FROM (
          SELECT target_url FROM analytics.seo_execution_log WHERE executed_at >= NOW() - INTERVAL '24 hours'
          UNION ALL
-         SELECT target_url FROM analytics.seo_action WHERE executed_at >= NOW() - INTERVAL '24 hours' AND status IN ('published', 'measuring')
+         SELECT target_page_url AS target_url
+         FROM analytics.seo_execution_candidate
+         WHERE COALESCE(published_at, execution_timestamp) >= NOW() - INTERVAL '24 hours'
+           AND execution_status IN ('published', 'draft_applied')
        ) combined
        GROUP BY target_url`,
     ).catch(() => ({ rows: [] as Array<{ count: string; target_url: string | null }> }));
 
     const yesterdayApprovals = await p.query<{ approved: string; rejected: string }>(
       `SELECT
-         COUNT(*) FILTER (WHERE status = 'approved' OR status = 'published')::text AS approved,
-         COUNT(*) FILTER (WHERE status = 'rejected')::text AS rejected
-       FROM (
-         SELECT approval_status AS status, reviewed_at FROM analytics.seo_execution_candidate WHERE reviewed_at >= NOW() - INTERVAL '24 hours'
-         UNION ALL
-         SELECT status, human_decided_at AS reviewed_at FROM analytics.seo_action WHERE (human_decided_at >= NOW() - INTERVAL '24 hours' OR agent_reviewed_at >= NOW() - INTERVAL '24 hours')
-       ) combined`,
+         COUNT(*) FILTER (WHERE approval_status = 'approved')::text AS approved,
+         COUNT(*) FILTER (WHERE approval_status = 'rejected')::text AS rejected
+       FROM analytics.seo_execution_candidate
+       WHERE reviewed_at >= NOW() - INTERVAL '24 hours'`,
     ).catch(() => ({ rows: [{ approved: '0', rejected: '0' }] }));
 
     // ── TODAY: needs attention ──────────────────────────────────────────────
@@ -133,14 +117,11 @@ export async function GET() {
        WHERE status = 'new' AND canonical_confidence = 'high'`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
-    // Count from both old pipeline and new seo_action table
     const awaitingApproval = await p.query<{ count: string; urgent: string }>(
       `SELECT
-         (COALESCE(old.cnt, 0) + COALESCE(new.cnt, 0))::text AS count,
-         COALESCE(new.cnt, 0)::text AS urgent
-       FROM
-         (SELECT COUNT(*) AS cnt FROM analytics.seo_execution_candidate WHERE execution_status = 'proposed' AND approval_status = 'pending') old,
-         (SELECT COUNT(*) AS cnt FROM analytics.seo_action WHERE status IN ('proposed', 'reviewed')) new`,
+         decisions::text AS count,
+         needs_review::text AS urgent
+       FROM analytics.v_seo_dashboard_summary`,
     ).catch(() => ({ rows: [{ count: '0', urgent: '0' }] }));
 
     // Pipeline health: when did each major job last run?
@@ -161,20 +142,23 @@ export async function GET() {
     ).catch(() => ({ rows: [{ max_date: null }] }));
 
     // ── WEEK & MONTH: organic traffic trends ─────────────────────────────────
-    // Compare last 7 days (1-7) vs prior 7 days (8-14)
-    const week = await gscWindow(p, 7, 0);
-    const weekPrior = await gscWindow(p, 14, 7);
+    // Canonical windows anchored to the latest metric_date (see lib/seoMetrics).
+    // Last 7 days vs prior 7 days; last 30 days vs prior 30 days.
+    const week = gscShape(await organicWindow(p, 7, 0));
+    const weekPrior = gscShape(await organicWindow(p, 7, 7));
 
-    // Last 30 days vs prior 30 days
-    const month = await gscWindow(p, 30, 0);
-    const monthPrior = await gscWindow(p, 60, 30);
+    const month = gscShape(await organicWindow(p, 30, 0));
+    const monthPrior = gscShape(await organicWindow(p, 30, 30));
 
     // Pages optimized: union old + new pipelines
     const pagesOptimizedWeek = await p.query<{ count: string }>(
       `SELECT COUNT(DISTINCT target_url)::text AS count FROM (
          SELECT target_url FROM analytics.seo_execution_log WHERE executed_at >= NOW() - INTERVAL '7 days'
          UNION ALL
-         SELECT target_url FROM analytics.seo_action WHERE executed_at >= NOW() - INTERVAL '7 days' AND status IN ('published', 'measuring')
+         SELECT target_page_url AS target_url
+         FROM analytics.seo_execution_candidate
+         WHERE COALESCE(published_at, execution_timestamp) >= NOW() - INTERVAL '7 days'
+           AND execution_status IN ('published', 'draft_applied')
        ) u`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
@@ -182,7 +166,10 @@ export async function GET() {
       `SELECT COUNT(DISTINCT target_url)::text AS count FROM (
          SELECT target_url FROM analytics.seo_execution_log WHERE executed_at >= NOW() - INTERVAL '30 days'
          UNION ALL
-         SELECT target_url FROM analytics.seo_action WHERE executed_at >= NOW() - INTERVAL '30 days' AND status IN ('published', 'measuring')
+         SELECT target_page_url AS target_url
+         FROM analytics.seo_execution_candidate
+         WHERE COALESCE(published_at, execution_timestamp) >= NOW() - INTERVAL '30 days'
+           AND execution_status IN ('published', 'draft_applied')
        ) u`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
@@ -190,11 +177,16 @@ export async function GET() {
       `SELECT COUNT(*)::text AS count FROM (
          SELECT 1 FROM analytics.seo_execution_log WHERE measured_at_14d IS NULL AND executed_at >= NOW() - INTERVAL '14 days'
          UNION ALL
-         SELECT 1 FROM analytics.seo_action WHERE measured_at_14d IS NULL AND executed_at >= NOW() - INTERVAL '14 days' AND status IN ('published', 'measuring')
+         SELECT 1
+         FROM analytics.seo_execution_candidate c
+         LEFT JOIN analytics.seo_published_outcome o ON o.candidate_id = c.candidate_id
+         WHERE COALESCE(c.published_at, c.execution_timestamp) >= NOW() - INTERVAL '14 days'
+           AND c.execution_status IN ('published', 'draft_applied')
+           AND o.decided_at IS NULL
        ) u`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
-    // Win rate: from both old learning_outcomes AND new seo_action
+    // Win rate: from legacy learning_outcomes plus current candidate outcomes.
     const winRate = await p.query<{ positive: string; total: string }>(
       `SELECT
          COUNT(*) FILTER (WHERE label = 'positive')::text AS positive,
@@ -202,7 +194,14 @@ export async function GET() {
        FROM (
          SELECT outcome_label AS label FROM analytics.seo_learning_outcomes WHERE measurement_date >= CURRENT_DATE - INTERVAL '90 days' AND outcome_label IN ('positive', 'negative', 'neutral')
          UNION ALL
-         SELECT outcome_label AS label FROM analytics.seo_action WHERE measured_at_14d IS NOT NULL AND outcome_label IN ('positive', 'negative', 'neutral')
+         SELECT CASE
+           WHEN verdict = 'improved' THEN 'positive'
+           WHEN verdict IN ('regressed', 'regressed_advisory') THEN 'negative'
+           WHEN verdict IN ('flat', 'inconclusive', 'live_confirmed', 'drift') THEN 'neutral'
+           ELSE NULL
+         END AS label
+         FROM analytics.seo_published_outcome
+         WHERE decided_at >= CURRENT_DATE - INTERVAL '90 days'
        ) u`,
     ).catch(() => ({ rows: [{ positive: '0', total: '0' }] }));
 

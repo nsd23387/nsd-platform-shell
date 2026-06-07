@@ -5,7 +5,7 @@
 // candidate-queue list endpoint deliberately omits the heavy jsonb). Approve /
 // reject still routes back through /api/proxy/seo/recommendations (Lane 1) —
 // this endpoint never mutates. Single backing source:
-// analytics.seo_execution_candidate.
+// analytics.v_seo_dashboard_queue.
 // =============================================================================
 
 export const runtime = 'nodejs';
@@ -36,14 +36,16 @@ export async function GET(req: NextRequest) {
 
   try {
     const { rows } = await pool.query(
-      `SELECT candidate_id, opportunity_id, mutation_type, primary_remedy,
-              proposed_value, current_value_snapshot, evidence_summary, gate_reasons,
+      `SELECT candidate_id, opportunity_id, mutation_type, mutation_label, primary_remedy,
+              proposed_value, current_value_snapshot, evidence_summary, why, gate_reasons,
               gate_status, opportunity_score::numeric AS opportunity_score, opportunity_urgency,
               confidence_tier, source_confidence, approval_status, execution_status,
-              target_page_url, evidence
-       FROM analytics.seo_execution_candidate
+              target_page_url, page_url_canonical, page_is_live, page_status_class,
+              needs_evidence, qa_status, evidence, published_at, outcome_verdict,
+              outcome_live_confirmed_at, outcome_live_drift_at, outcome_leading_metric,
+              outcome_decided_at
+       FROM analytics.v_seo_dashboard_queue
        WHERE candidate_id = $1
-         AND gate_status = 'accepted'
        LIMIT 1`,
       [id],
     );
@@ -57,10 +59,12 @@ export async function GET(req: NextRequest) {
       candidate_id: r.candidate_id,
       opportunity_id: r.opportunity_id,
       mutation_type: r.mutation_type,
+      mutation_label: r.mutation_label,
       primary_remedy: r.primary_remedy,
       proposed_value: r.proposed_value,
       current_value_snapshot: r.current_value_snapshot,
       evidence_summary: r.evidence_summary,
+      why: r.why,
       gate_reasons: Array.isArray(r.gate_reasons) ? r.gate_reasons : [],
       gate_status: r.gate_status,
       opportunity_score: r.opportunity_score != null ? Number(r.opportunity_score) : null,
@@ -70,7 +74,26 @@ export async function GET(req: NextRequest) {
       approval_status: r.approval_status,
       execution_status: r.execution_status,
       target_page_url: r.target_page_url,
+      page_url_canonical: r.page_url_canonical,
+      page_is_live: r.page_is_live === true,
+      page_status_class: r.page_status_class,
+      needs_evidence: r.needs_evidence === true,
+      qa_status: r.qa_status,
       evidence: r.evidence ?? null,
+      lane: null,
+      executor: null,
+      original_value: null,
+      applied_value: null,
+      approval_timestamp: null,
+      execution_timestamp: null,
+      rollback_available: null,
+      rollback_status: null,
+      published_at: r.published_at,
+      outcome_verdict: r.outcome_verdict,
+      outcome_live_confirmed_at: r.outcome_live_confirmed_at,
+      outcome_live_drift_at: r.outcome_live_drift_at,
+      outcome_leading_metric: r.outcome_leading_metric,
+      outcome_decided_at: r.outcome_decided_at,
     };
 
     return NextResponse.json({ data: candidate });

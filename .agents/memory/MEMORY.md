@@ -1,5 +1,8 @@
-- [SEO analytics schema joins](seo-analytics-schema.md) — analytics.* SEO tables disagree on URL host (www vs apex); normalize before any cross-table join, plus inventory bucketing + candidate gating rules.
-- [Project env & DB probing](env-and-db-probing.md) — how to run ad-hoc Supabase queries here: code_execution sandbox has NO process.env; use bash+node with pg resolved from project root.
-- [SEO content must be neon-specific](seo-neon-specificity.md) — never generic "LED"/"signs" copy or competitors; canonical neon competitor set + the one led-vs-neon exception.
-- [SEO /actions silent candidate fallback](seo-actions-shipped-fallback.md) — /api/proxy/seo/actions returns awaiting-approval candidates when seo_action is empty; shipped consumers must filter by status allowlist.
-- [Page dossier demand is capped](seo-analytics-schema.md) — /api/proxy/seo/page demand table is LIMIT 12 (top queries); never label sums of it as a full page total — say "top queries".
+- [SEO analytics schema joins](seo-analytics-schema.md) — analytics.* SEO tables disagree on URL host (www vs apex); normalize before any cross-table join.
+- [Project env & DB probing](env-and-db-probing.md) — ad-hoc Supabase queries: code_execution sandbox has NO process.env; use bash+node with pg from project root.
+- [SEO content must be neon-specific](seo-neon-specificity.md) — never generic "LED"/"signs" copy or competitors; canonical neon set + the one led-vs-neon exception.
+- [SEO action-card governance scoping](seo-screen-governance.md) — Screen 2 action/[id] readOnly-gates all non-URL candidates; only the URL-scoped one is writable.
+- [SEO /actions silent candidate fallback](seo-actions-shipped-fallback.md) — /actions falls back to awaiting-approval candidates; consumers must filter by status allowlist.
+- [Page dossier demand is capped](seo-analytics-schema.md) — /api/proxy/seo/page demand table is LIMIT 12 top queries; never label sums of it as a full page total.
+- [SEO candidate BEFORE value source](seo-analytics-schema.md) — current_value_snapshot is empty for all candidates; real BEFORE = live seo_page_dossier.state, needs entity/mojibake decode.
+- [Running next build in this env](next-build-in-replit.md) — dev workflow shares .next (corruption); nohup builds get SIGKILLed by tool lifecycle; run build as a managed console workflow.

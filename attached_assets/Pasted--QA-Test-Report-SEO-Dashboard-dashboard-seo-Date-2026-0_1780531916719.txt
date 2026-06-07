@@ -1,0 +1,76 @@
+# QA Test Report — SEO Dashboard (`/dashboard/seo`)
+**Date:** 2026-06-03 · **Method:** live Chrome user-testing of every surface + interaction, with DB cross-checks. **Build:** current prod (analytics.neonsignsdepot.com). **Tester note:** Approve/Reject/Queue actions were *not* executed (they mutate prod / queue drafts) — presence verified, behavior not triggered.
+
+## Verdict
+Core read surfaces work, navigation is clean, and no console errors were observed. **But the recommendation-approval workflow is broken in three places** — which is exactly why you can't see all recommendations or filter to your core pages. There is **no all-recommendations list view at all**, the **Performance page cards don't open**, and the **"Review top 5" batch button is dead**. Net: the queue is effectively un-workable from the UI beyond the ~12 detections on the Command Center, each reachable only one at a time via "Details."
+
+---
+
+## Defect log (by severity)
+
+### 🔴 HIGH
+
+**D1 — "View all 447 recommendations →" goes to the wrong place (no recommendations list exists).**
+- Steps: Command Center → click "View all 447 recommendations →".
+- Expected: a list of all 447 recommendations, filterable/sortable (by page, type, status).
+- Actual: routes to `/dashboard/seo/performance` — the **pages portfolio** (1,699 pages, bucket tiles). It never mentions "recommendations." There is **no all-recommendations view anywhere** in the app.
+- Impact: you cannot see all 447, and cannot filter recommendations to specific pages (e.g. core pages). **This is the root of the reported complaint.**
+
+**D2 — Performance page cards are not clickable.**
+- Steps: Performance → filter "for-businesses" → click the `/for-businesses/` card.
+- Expected: opens that page's dossier (the subtitle literally says "Click any page to open its dossier").
+- Actual: nothing happens — no navigation, no drawer, URL stays `/dashboard/seo/performance`. Verified via the card's own element ref, not a misclick.
+- Impact: the page→dossier drill-in is dead, so you can't reach a page's recommendations through Performance either.
+
+**D3 — "Review top 5…" header button does nothing.**
+- Steps: Command Center → click "Review top 5…".
+- Expected: a review-then-confirm batch-approval modal.
+- Actual: no modal, no scroll, no state change. The primary batch-approval CTA — the main throughput lever — is non-functional.
+
+### 🟠 MEDIUM
+
+**D4 — Command Center detections have no filter/search/pagination.**
+- Only ~12 detections render; the only "more" control is the broken D1 link. No way to filter by page/type/status. (Contrast: the **Competitors** screen *does* have a filterable table of all 351 gaps + a gap-type select — that's the pattern recommendations should follow.)
+
+**D5 — KPI hero vs Momentum clicks still disagree.**
+- 7-day window: hero shows **7**, Momentum shows **4**. (30-day matched at 10.) Two figures for the same metric on one screen — the "standardize the GSC metric" item from the prior reconciliation isn't fully resolved.
+
+**D6 — "Awaiting approval" count differs across screens.**
+- Command Center header: **447**; Results "Awaiting approval": **454**. ~7-row divergence (lost-targeting candidates counted on Results but not the canonical_live-only header). Same definitional split flagged before; pick one definition.
+
+**D7 — Engine-proposed copy is mismatched to the page (data/content defect, surfaced in the Action Cards).**
+- Homepage's top title/meta proposal is "**Business** Neon Signs…" (homepage targets "neon signs"); the for-businesses page's proposed meta is "Shop **Wedding** Neon Signs…"; H1 proposals are the literal placeholder "**Set H1 to the page primary keyword**." Approving these as-is would push wrong/placeholder copy live. The dossier's *keyword targets* are correct — the generated title/meta/H1 text is not page-aware.
+
+### 🟡 LOW
+- **D8** — Data Freshness GSC badge flips between "healthy" and "warning" across loads (cosmetic).
+- **D9** — Competitors shows 351 gaps / 5 competitors / 8 content vs DB 483 / 9 / 14 (residual under-surfacing from the earlier fix; functionally fine).
+
+---
+
+## Pass log (works as expected) ✅
+| Area | Result |
+|---|---|
+| 4-area nav (Command Center / Performance / Competitors / Results) | renders correctly |
+| Legacy redirects | `/actions`→`/dashboard/seo`, `/internal-links`→`/performance`; no 404s, no legacy pages reachable |
+| Command Center KPI hero + trend + **range toggle** (7d/14d/30d) | functional |
+| Data Freshness panel + GSC anonymized-query banner | render; honest "no freshness probe" states |
+| Detections list — distinct type tags (META/TITLE/H1/INTERNAL LINK), Approve/Details/Defer | render |
+| Detection **"Details" → Action Card** | works; Action Card shows Approve & Reject |
+| Performance — **filter by URL/query** | works (filtered to 2 pages for "for-businesses") |
+| Performance — bucket KPIs (Wins 127 / Strategic 1,544 / Fix 11 / Lost 17 / Lost impr 18,687) | match DB |
+| Competitors — filterable table of all gaps + gap-type select | works |
+| Results — loads; metrics + NEEDS ATTENTION + PIPELINE HEALTH; awaiting-approval uses actionable count | works |
+| Console errors (Competitors, Results) | none observed |
+
+*(Not exercised, by design: Approve / Reject / Approve-&-Queue — they mutate prod/queue drafts.)*
+
+---
+
+## Priority fixes (what unblocks you)
+1. **Build a real recommendations list view** (filter + sort by page / mutation type / status / score, paginated to all 447) and point "View all recommendations →" at it. Reuse the Competitors table pattern, which already does this well. *(Fixes D1 + D4 — the core complaint, including filtering to core pages.)*
+2. **Make Performance cards open the dossier/Action Card** (D2).
+3. **Fix the "Review top 5" batch-approve modal** (D3) — this is the throughput lever; with it dead, nothing gets approved at scale.
+4. **Standardize the clicks metric** (D5) and the "awaiting approval" definition (D6) across Command Center / Momentum / Results.
+5. **Fix candidate copy generation** (D7) so proposed title/meta/H1 are page-aware (use the dossier's correct keyword target; no placeholder H1s) — otherwise the queue isn't safe to bulk-approve.
+
+The first three are why the dashboard isn't usable for working the queue right now; #5 is why it wouldn't be safe to bulk-approve even if it were.
