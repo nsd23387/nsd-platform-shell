@@ -19,6 +19,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { parseSeoWindow } from '../_window';
 
 const pool = new Pool({
   connectionString: process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL,
@@ -55,46 +56,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
   }
   const norm = normUrl(rawUrl);
+  const window = parseSeoWindow(req);
 
   try {
     const invQ = pool.query(
-      `SELECT url, content_type, status_class, gsc_impressions, gsc_top_query,
-              gsc_best_position::numeric AS gsc_best_position, has_rankmath_redirect,
-              rankmath_redirect_target, http_status, canonical_url, indexable, noindex,
-              in_404_monitor
-       FROM analytics.seo_page_inventory
-       WHERE rtrim(regexp_replace(lower(url), '^https?://(www\\.)?', ''), '/') = $1
-       ORDER BY (status_class = 'canonical_live') DESC
+      `SELECT
+              p.url, p.content_type, p.status_class, p.gsc_impressions, p.gsc_top_query,
+              p.gsc_best_position::numeric AS gsc_best_position, p.has_rankmath_redirect,
+              p.rankmath_redirect_target, p.http_status,
+              i.canonical_url, i.indexable, i.noindex, i.in_404_monitor,
+              p.gsc_window_start, p.gsc_window_end, p.gsc_available_start, p.gsc_available_end
+       FROM analytics.seo_command_center_portfolio($2::int, $3::date, $4::date) p
+       JOIN analytics.seo_page_inventory i
+         ON rtrim(regexp_replace(lower(i.url), '^https?://(www\\.)?', ''), '/') =
+            rtrim(regexp_replace(lower(p.url), '^https?://(www\\.)?', ''), '/')
+       WHERE rtrim(regexp_replace(lower(p.url), '^https?://(www\\.)?', ''), '/') = $1
+       ORDER BY (p.status_class = 'canonical_live') DESC
        LIMIT 1`,
-      [norm],
+      [norm, window.days, window.start, window.end],
     );
 
     const demandQ = pool.query(
-      `WITH agg AS (
-         SELECT
-           m.query,
-           lower(trim(m.query)) AS norm_query,
-           SUM(m.impressions)::bigint AS impressions,
-           SUM(m.clicks)::bigint AS clicks,
-           CASE WHEN SUM(m.impressions) > 0
-                THEN SUM(m.avg_position * m.impressions) / SUM(m.impressions)
-                ELSE AVG(m.avg_position) END AS avg_position
-         FROM analytics.metrics_search_console_query_page_daily m
-         WHERE rtrim(regexp_replace(lower(m.page_url), '^https?://(www\\.)?', ''), '/') = $1
-         GROUP BY m.query
-       )
-       SELECT
-         agg.query, agg.impressions, agg.clicks, agg.avg_position::numeric AS avg_position,
-         COALESCE(eqi.search_volume, eqi.ahrefs_search_volume) AS kw_volume,
-         COALESCE(eqi.keyword_difficulty, eqi.ahrefs_keyword_difficulty)::numeric AS kw_difficulty,
-         COALESCE(eqi.cpc, eqi.ahrefs_cpc)::numeric AS kw_cpc,
-         COALESCE(eqi.is_competitor_only, false) AS is_competitor_only
-       FROM agg
-       LEFT JOIN analytics.external_query_intelligence eqi
-         ON eqi.normalized_query = agg.norm_query
-       ORDER BY agg.impressions DESC
+      `SELECT *
+       FROM analytics.seo_command_center_page_demand($1::text, $2::int, $3::date, $4::date)
        LIMIT 12`,
-      [norm],
+      [rawUrl, window.days, window.start, window.end],
     );
 
     const candQ = pool.query(
@@ -159,6 +145,10 @@ export async function GET(req: NextRequest) {
       noindex: inv.noindex,
       in_404_monitor: inv.in_404_monitor,
       needs_verify: inv.status_class === 'pending_verification',
+      gsc_window_start: inv.gsc_window_start ?? null,
+      gsc_window_end: inv.gsc_window_end ?? null,
+      gsc_available_start: inv.gsc_available_start ?? null,
+      gsc_available_end: inv.gsc_available_end ?? null,
     };
 
     const demand = demandR.rows.map((r) => {
@@ -179,6 +169,8 @@ export async function GET(req: NextRequest) {
         kw_volume: r.kw_volume != null ? Number(r.kw_volume) : null,
         kw_difficulty: r.kw_difficulty != null ? Number(r.kw_difficulty) : null,
         kw_cpc: r.kw_cpc != null ? Number(r.kw_cpc) : null,
+        reference_metrics_source: r.reference_metrics_source ?? null,
+        reference_metrics_observed_at: r.reference_metrics_observed_at ?? null,
         is_discard: discard,
         discard_reason,
       };
