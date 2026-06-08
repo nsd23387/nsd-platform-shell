@@ -186,6 +186,20 @@ export interface SeoOverviewKpis {
   auto_approve_min_score: number;
   auto_approved_today: number;
   seo_auto_execute_env: boolean;
+  metric_contracts?: SeoDashboardMetricContract[];
+}
+
+export interface SeoDashboardMetricContract {
+  metric_key: string;
+  panel: string;
+  label: string;
+  grain: string;
+  window_kind: 'windowed' | 'lifetime' | 'window_less';
+  freshness_source: string | null;
+  source_label: string;
+  window_label: string;
+  display_order: number;
+  notes: string | null;
 }
 
 export interface PageQueryPerformance {
