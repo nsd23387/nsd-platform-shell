@@ -36,7 +36,7 @@ import type {
   SeoTimeseriesResponse, GscPipelineHealth, SeoCompetitorGap,
   SeoTimeseriesPoint, CompetitiveVelocitySummary, CompetitivePageChange,
   SeoShippedAction, SeoCandidateQueue, SeoOffpageBrief, SuppressedAudit,
-  SeoCompetitorGapMeta,
+  SeoCompetitorGapMeta, SeoWindowRequest,
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
@@ -130,26 +130,28 @@ function MomentumRow({ w, tc }: { w: MomentumWindow; tc: Tc }) {
   );
 }
 
-function MomentumCard({ tc }: { tc: Tc }) {
+function MomentumCard({ tc, window }: { tc: Tc; window: SeoWindowRequest }) {
   const [series, setSeries] = useState<SeoTimeseriesPoint[] | null>(null);
   const [err, setErr] = useState(false);
   useEffect(() => {
     let alive = true;
-    getSeoTimeseries(60)
+    setErr(false);
+    setSeries(null);
+    getSeoTimeseries({ ...window, days: Math.min(180, window.days * 2) })
       .then((r) => { if (alive) setSeries(r.series ?? []); })
       .catch(() => { if (alive) setErr(true); });
     return () => { alive = false; };
-  }, []);
+  }, [window]);
 
   const windows = useMemo(() => {
     if (!series) return null;
-    return [computeMomentum(series, 7, '7d'), computeMomentum(series, 30, '30d')];
-  }, [series]);
+    return [computeMomentum(series, window.days, `${window.days}d`)];
+  }, [series, window.days]);
 
   return (
     <Card tc={tc} style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>Momentum</div>
-      <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px', marginBottom: space['1'] }}>Real GSC clicks, period over equal prior period</div>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '2px', marginBottom: space['1'] }}>Selected GSC window vs equal prior period</div>
       {err && <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: PALETTE.bad, paddingTop: space['3'] }} data-testid="momentum-error">Timeseries unavailable.</div>}
       {!err && !windows && <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, paddingTop: space['3'] }} data-testid="momentum-loading">Loading momentum…</div>}
       {!err && windows && windows.map((w) => <MomentumRow key={w.label} w={w} tc={tc} />)}
@@ -328,28 +330,122 @@ function CompetitorVelocityCard({ tc }: { tc: Tc }) {
 }
 
 // =============================================================================
+// Global GSC window — one selected range for every GSC-derived panel.
+// =============================================================================
+type RangeKey = '7' | '30' | '90' | 'custom';
+
+function formatDate(d: string | null | undefined): string {
+  if (!d) return '—';
+  const dt = new Date(`${d.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(dt.getTime())) return d.slice(0, 10);
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+function referenceSourceLabel(source?: string | null, observedAt?: string | null): string {
+  const src = source === 'dataforseo' ? 'DataForSEO' : source === 'ahrefs_fallback' ? 'Ahrefs fallback' : 'Keyword refs';
+  return `${src}${observedAt ? ` · as of ${formatDate(observedAt)}` : ''}`;
+}
+
+function selectedWindow(range: RangeKey, customDays: number, customStart: string, customEnd: string): SeoWindowRequest {
+  if (range === 'custom') {
+    return { days: customDays, start: customStart || null, end: customEnd || null };
+  }
+  return { days: Number(range) };
+}
+
+function WindowControls({
+  range, customDays, customStart, customEnd, onRange, onCustomDays, onCustomStart, onCustomEnd, data, tc,
+}: {
+  range: RangeKey;
+  customDays: number;
+  customStart: string;
+  customEnd: string;
+  onRange: (r: RangeKey) => void;
+  onCustomDays: (d: number) => void;
+  onCustomStart: (d: string) => void;
+  onCustomEnd: (d: string) => void;
+  data: SeoTimeseriesResponse | null;
+  tc: Tc;
+}) {
+  const btn = (key: RangeKey, label: string) => {
+    const active = range === key;
+    return (
+      <button
+        key={key}
+        onClick={() => onRange(key)}
+        data-testid={`button-range-${key}`}
+        style={{
+          padding: '6px 12px', borderRadius: radius.sm, cursor: 'pointer',
+          background: active ? PALETTE.violet : tc.background.surface,
+          color: active ? '#fff' : tc.text.primary,
+          border: `1px solid ${active ? PALETTE.violet : tc.border.default}`,
+          fontFamily: fontFamily.body, fontSize: '12px', fontWeight: active ? fontWeight.semibold : fontWeight.medium,
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: space['2'], alignItems: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
+        {btn('7', '7d')}
+        {btn('30', '30d')}
+        {btn('90', '90d')}
+        {btn('custom', 'Custom')}
+        {range === 'custom' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <input
+              type="range" min={1} max={180} value={customDays}
+              onChange={(e) => onCustomDays(Number(e.target.value))}
+              data-testid="input-custom-days"
+              style={{ width: 140 }}
+            />
+            <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, minWidth: 58 }}>{customDays} days</span>
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => onCustomStart(e.target.value)}
+              data-testid="input-custom-start"
+              style={{ padding: '5px 8px', borderRadius: radius.sm, border: `1px solid ${tc.border.default}`, background: tc.background.surface, color: tc.text.primary, fontFamily: fontFamily.body, fontSize: '12px' }}
+            />
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => onCustomEnd(e.target.value)}
+              data-testid="input-custom-end"
+              style={{ padding: '5px 8px', borderRadius: radius.sm, border: `1px solid ${tc.border.default}`, background: tc.background.surface, color: tc.text.primary, fontFamily: fontFamily.body, fontSize: '12px' }}
+            />
+          </div>
+        )}
+      </div>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textAlign: 'right' }} data-testid="text-gsc-window">
+        Showing: last {data?.range_days ?? (range === 'custom' ? customDays : Number(range))} days
+        {' · '}GSC data {formatDate(data?.gsc_available_start)} → {formatDate(data?.gsc_available_end)}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // Trend chart — live GSC timeseries
 // =============================================================================
-type RangeKey = '7' | '14' | '30' | 'custom';
 
-function TrendChart({ tc }: { tc: Tc }) {
-  const [range, setRange] = useState<RangeKey>('30');
-  const [customDays, setCustomDays] = useState(45);
+function TrendChart({ tc, window, onData }: { tc: Tc; window: SeoWindowRequest; onData: (d: SeoTimeseriesResponse | null) => void }) {
   const [data, setData] = useState<SeoTimeseriesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const days = range === 'custom' ? customDays : Number(range);
-
   useEffect(() => {
     let alive = true;
     setLoading(true); setError(null);
-    getSeoTimeseries(days)
-      .then((d) => { if (alive) setData(d); })
+    getSeoTimeseries(window)
+      .then((d) => { if (alive) { setData(d); onData(d); } })
       .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load trend'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [days]);
+  }, [window, onData]);
 
   const series = data?.series ?? [];
   const total = data?.summary.total_clicks ?? 0;
@@ -368,52 +464,16 @@ function TrendChart({ tc }: { tc: Tc }) {
   const ticks = [0, 1, 2, 3].map((i) => min + (span / 3) * i);
   const labelEvery = Math.max(1, Math.floor(series.length / 6));
 
-  const rangeBtn = (key: RangeKey, label: string) => {
-    const active = range === key;
-    return (
-      <button
-        key={key}
-        onClick={() => setRange(key)}
-        data-testid={`button-range-${key}`}
-        style={{
-          padding: '6px 12px', borderRadius: radius.sm, cursor: 'pointer',
-          background: active ? PALETTE.violet : tc.background.surface,
-          color: active ? '#fff' : tc.text.primary,
-          border: `1px solid ${active ? PALETTE.violet : tc.border.default}`,
-          fontFamily: fontFamily.body, fontSize: '12px', fontWeight: active ? fontWeight.semibold : fontWeight.medium,
-        }}
-      >
-        {label}
-      </button>
-    );
-  };
-
   return (
     <Card tc={tc} style={{ background: tc.background.surface }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['3'], flexWrap: 'wrap', gap: space['3'] }}>
-        <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', alignItems: 'center' }}>
-          {rangeBtn('7', '7d')}
-          {rangeBtn('14', '14d')}
-          {rangeBtn('30', '30d')}
-          {rangeBtn('custom', 'Custom')}
-          {range === 'custom' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginLeft: space['2'] }}>
-              <input
-                type="range" min={7} max={90} value={customDays}
-                onChange={(e) => setCustomDays(Number(e.target.value))}
-                data-testid="input-custom-days"
-                style={{ width: 140 }}
-              />
-              <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted, minWidth: 56 }}>{customDays} days</span>
-            </div>
-          )}
-        </div>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>Organic trend</div>
         <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>GSC organic · vs prior period</span>
       </div>
 
       <div style={{ marginBottom: space['2'] }}>
         <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Organic clicks · last {data?.range_days ?? days} days
+          Organic clicks · last {data?.range_days ?? window.days} days
         </div>
         <div style={{ display: 'flex', gap: space['3'], alignItems: 'baseline', marginTop: '4px' }}>
           <span style={{ fontFamily: fontFamily.display, fontSize: '34px', fontWeight: fontWeight.semibold, color: tc.text.primary }} data-testid="text-total-clicks">
@@ -649,17 +709,17 @@ function DetectionRow({
 // Sourced from analytics.seo_offpage_brief. All figures are real observed GSC /
 // DataForSEO values — no fabricated link counts or projected authority.
 // =============================================================================
-function OffpageBriefsSection({ tc }: { tc: Tc }) {
+function OffpageBriefsSection({ tc, window }: { tc: Tc; window: SeoWindowRequest }) {
   const [briefs, setBriefs] = useState<SeoOffpageBrief[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    getSeoOffpageBriefs()
+    getSeoOffpageBriefs(undefined, window)
       .then((b) => { if (alive) setBriefs(b); })
       .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load off-page briefs'); });
     return () => { alive = false; };
-  }, []);
+  }, [window]);
 
   return (
     <div style={{ marginTop: space['6'] }}>
@@ -686,8 +746,8 @@ function OffpageBriefsSection({ tc }: { tc: Tc }) {
                 <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Target keyword</th>
                 <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Pos</th>
                 <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Impr</th>
-                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Vol</th>
-                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>KD</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Vol ref</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>KD ref</th>
                 <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Why</th>
               </tr>
             </thead>
@@ -698,8 +758,18 @@ function OffpageBriefsSection({ tc }: { tc: Tc }) {
                   <td style={{ padding: '10px 8px', color: tc.text.primary }}>{b.target_keyword || '—'}</td>
                   <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtPos(b.current_position)}</td>
                   <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(b.impressions)}</td>
-                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(b.search_volume)}</td>
-                  <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{b.keyword_difficulty == null ? '—' : b.keyword_difficulty.toFixed(0)}</td>
+                  <td
+                    style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}
+                    title={referenceSourceLabel(b.reference_metrics_source, b.reference_metrics_observed_at)}
+                  >
+                    {fmtInt(b.search_volume)}
+                  </td>
+                  <td
+                    style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}
+                    title={referenceSourceLabel(b.reference_metrics_source, b.reference_metrics_observed_at)}
+                  >
+                    {b.keyword_difficulty == null ? '—' : b.keyword_difficulty.toFixed(0)}
+                  </td>
                   <td style={{ padding: '10px 16px', color: tc.text.muted, fontSize: '12px', maxWidth: 320 }}>{b.reason || '—'}</td>
                 </tr>
               ))}
@@ -824,6 +894,13 @@ function CommandCenterContent() {
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
   const [diagnoseUrl, setDiagnoseUrl] = useState('');
+  const [range, setRange] = useState<RangeKey>('30');
+  const [customDays, setCustomDays] = useState(45);
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [trendData, setTrendData] = useState<SeoTimeseriesResponse | null>(null);
+  const seoWindow = useMemo(() => selectedWindow(range, customDays, customStart, customEnd), [range, customDays, customStart, customEnd]);
+  const handleTrendData = useCallback((d: SeoTimeseriesResponse | null) => setTrendData(d), []);
 
   const loadQueue = useCallback(() => {
     let alive = true;
@@ -853,7 +930,7 @@ function CommandCenterContent() {
     let alive = true;
     setPortfolioLoading(true);
     setPortfolioError(null);
-    getSeoPortfolio()
+    getSeoPortfolio(seoWindow)
       .then((p) => { if (alive) setPortfolio(p); })
       .catch((e) => {
         if (!alive) return;
@@ -862,13 +939,13 @@ function CommandCenterContent() {
       })
       .finally(() => { if (alive) setPortfolioLoading(false); });
     return () => { alive = false; };
-  }, []);
+  }, [seoWindow]);
 
   useEffect(() => {
     let alive = true;
     setGapsLoading(true);
     setGapsError(null);
-    getSeoCompetitorGapFeed()
+    getSeoCompetitorGapFeed(seoWindow)
       .then((feed) => {
         if (!alive) return;
         setGaps(feed.data);
@@ -882,7 +959,7 @@ function CommandCenterContent() {
       })
       .finally(() => { if (alive) setGapsLoading(false); });
     return () => { alive = false; };
-  }, []);
+  }, [seoWindow]);
 
   // Portfolio lookup keyed by path (host-robust: portfolio + candidate URLs
   // disagree on www vs apex host, so we normalize to pathname before joining).
@@ -1004,22 +1081,36 @@ function CommandCenterContent() {
               : `${detections.length} guarded recommendation${detections.length === 1 ? '' : 's'} awaiting approval (${liveDetections.length} live-page, ${redirectDetections.length} lost/non-live).`}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setDiagnoseOpen((v) => !v)}
-            data-testid="button-diagnose"
-            style={{ padding: '8px 14px', background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary, cursor: 'pointer' }}
-          >
-            Diagnose a URL…
-          </button>
-          <button
-            onClick={() => openReview(TOP_N)}
-            disabled={bulkBusy || topCount === 0}
-            data-testid="button-approve-top"
-            style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (bulkBusy || topCount === 0) ? 'default' : 'pointer', opacity: (bulkBusy || topCount === 0) ? 0.6 : 1 }}
-          >
-            {`Review top ${topCount}…`}
-          </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: space['3'], alignItems: 'flex-end' }}>
+          <WindowControls
+            range={range}
+            customDays={customDays}
+            customStart={customStart}
+            customEnd={customEnd}
+            onRange={setRange}
+            onCustomDays={setCustomDays}
+            onCustomStart={setCustomStart}
+            onCustomEnd={setCustomEnd}
+            data={trendData}
+            tc={tc}
+          />
+          <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setDiagnoseOpen((v) => !v)}
+              data-testid="button-diagnose"
+              style={{ padding: '8px 14px', background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary, cursor: 'pointer' }}
+            >
+              Diagnose a URL…
+            </button>
+            <button
+              onClick={() => openReview(TOP_N)}
+              disabled={bulkBusy || topCount === 0}
+              data-testid="button-approve-top"
+              style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (bulkBusy || topCount === 0) ? 'default' : 'pointer', opacity: (bulkBusy || topCount === 0) ? 0.6 : 1 }}
+            >
+              {`Review top ${topCount}…`}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1149,13 +1240,13 @@ function CommandCenterContent() {
 
       {/* HERO — trend + freshness */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: space['4'], marginBottom: space['4'] }}>
-        <TrendChart tc={tc} />
+        <TrendChart tc={tc} window={seoWindow} onData={handleTrendData} />
         <FreshnessCard tc={tc} />
       </div>
 
       {/* MOMENTUM + RECENTLY SHIPPED */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: space['4'], marginBottom: space['6'] }}>
-        <MomentumCard tc={tc} />
+        <MomentumCard tc={tc} window={seoWindow} />
         <ShippedCard tc={tc} />
       </div>
 
@@ -1265,7 +1356,7 @@ function CommandCenterContent() {
                     <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Dispatch decision</th>
                     <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Their pos</th>
                     <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Your pos</th>
-                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Volume</th>
+                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Volume ref</th>
                     <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Score</th>
                   </tr>
                 </thead>
@@ -1290,7 +1381,12 @@ function CommandCenterContent() {
                         </td>
                         <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{g.competitor_ranking_position ?? '—'}</td>
                         <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.muted }}>{g.our_ranking_position ?? 'unranked'}</td>
-                        <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(g.search_volume)}</td>
+                        <td
+                          style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}
+                          title={referenceSourceLabel(g.reference_metrics_source, g.reference_metrics_observed_at)}
+                        >
+                          {fmtInt(g.search_volume)}
+                        </td>
                         <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{g.opportunity_score == null ? '—' : g.opportunity_score.toFixed(0)}</td>
                       </tr>
                     );
@@ -1318,7 +1414,7 @@ function CommandCenterContent() {
       </div>
 
       {/* OFF-PAGE AUTHORITY BRIEFS (Lane 3 advisory) */}
-      <OffpageBriefsSection tc={tc} />
+      <OffpageBriefsSection tc={tc} window={seoWindow} />
 
       {/* SUPPRESSED BY THE GATE (read-only audit) */}
       <SuppressedSection tc={tc} />
@@ -1358,7 +1454,7 @@ function CommandCenterContent() {
       </div>
 
       {selectedUrl && (
-        <PageDossierDrawer url={selectedUrl} tc={tc} onClose={() => setSelectedUrl(null)} />
+        <PageDossierDrawer url={selectedUrl} tc={tc} window={seoWindow} onClose={() => setSelectedUrl(null)} />
       )}
     </div>
   );

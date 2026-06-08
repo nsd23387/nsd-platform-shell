@@ -13,8 +13,9 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { parseSeoWindow } from '../_window';
 
 const pool = new Pool({
   connectionString: process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL,
@@ -51,95 +52,25 @@ export interface PortfolioPageRow {
   kw_cpc: number | null;
   has_dataforseo: boolean;
   is_competitor_only: boolean;
+  reference_metrics_source: string | null;
+  reference_metrics_observed_at: string | null;
+  gsc_window_start: string | null;
+  gsc_window_end: string | null;
+  gsc_available_start: string | null;
+  gsc_available_end: string | null;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   if (!isConfigured()) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
   }
 
   try {
-    const { rows } = await pool.query(`
-      WITH ts_dups AS (
-        -- Trailing-slash / canonicalization duplicates: the same normalized path
-        -- resolves to more than one distinct inventory URL. These need a
-        -- redirect/canonical fix and form the "Fix" bucket.
-        SELECT rtrim(regexp_replace(lower(url), '^https?://(www\\.)?', ''), '/') AS norm_path
-        FROM analytics.seo_page_inventory
-        GROUP BY 1
-        HAVING COUNT(DISTINCT url) > 1
-      ),
-      pq AS (
-        -- Per (page, query) demand from the GSC query×page rollup.
-        SELECT regexp_replace(page_url, '^https?://[^/]+', '') AS path,
-               query,
-               SUM(impressions) AS qi,
-               ROUND(AVG(avg_position), 1) AS qp
-        FROM analytics.metrics_search_console_query_page_daily
-        GROUP BY 1, 2
-      ),
-      top AS (
-        -- The single highest-demand query for each page, with its average
-        -- position. This (NOT gsc_best_position) is the governed position.
-        SELECT DISTINCT ON (path) path,
-               query AS topq,
-               qi,
-               ROUND(qp, 0) AS qpos
-        FROM pq
-        ORDER BY path, qi DESC
-      ),
-      inv AS (
-        SELECT
-          i.url,
-          i.content_type,
-          i.status_class,
-          i.gsc_impressions,
-          i.gsc_top_query,
-          i.gsc_best_position,
-          i.has_rankmath_redirect,
-          i.rankmath_redirect_target,
-          i.http_status,
-          rtrim(regexp_replace(lower(i.url), '^https?://(www\\.)?', ''), '/') AS norm_path,
-          regexp_replace(i.url, '^https?://[^/]+', '') AS path
-        FROM analytics.seo_page_inventory i
-        WHERE i.status_class IN ('canonical_live', 'lost', 'pending_verification')
-      )
-      SELECT
-        inv.url,
-        inv.content_type,
-        inv.status_class,
-        inv.gsc_impressions,
-        inv.gsc_top_query,
-        inv.gsc_best_position::numeric AS gsc_best_position,
-        t.topq AS top_query,
-        t.qi::bigint AS top_q_impr,
-        t.qpos::int AS top_q_pos,
-        inv.has_rankmath_redirect,
-        inv.rankmath_redirect_target,
-        inv.http_status,
-        (inv.status_class = 'pending_verification') AS needs_verify,
-        CASE
-          WHEN inv.status_class = 'lost' THEN 'lost'
-          -- pending_verification pages are never confident targets: they are
-          -- shown in Strategic with a needs_verify flag, never as Wins/Fix.
-          WHEN inv.status_class = 'pending_verification' THEN 'strategic'
-          WHEN d.norm_path IS NOT NULL THEN 'fix'
-          -- Win = top-query avg position in 1..30 (NOT best-ever position).
-          WHEN t.qpos IS NOT NULL
-               AND t.qpos BETWEEN 1 AND 30 THEN 'win'
-          ELSE 'strategic'
-        END AS bucket,
-        COALESCE(eqi.search_volume, eqi.ahrefs_search_volume) AS kw_volume,
-        COALESCE(eqi.keyword_difficulty, eqi.ahrefs_keyword_difficulty)::numeric AS kw_difficulty,
-        COALESCE(eqi.cpc, eqi.ahrefs_cpc)::numeric AS kw_cpc,
-        COALESCE(eqi.is_competitor_only, false) AS is_competitor_only
-      FROM inv
-      LEFT JOIN ts_dups d ON d.norm_path = inv.norm_path
-      LEFT JOIN top t ON t.path = inv.path
-      LEFT JOIN analytics.external_query_intelligence eqi
-        ON eqi.normalized_query = lower(trim(inv.gsc_top_query))
-      ORDER BY inv.gsc_impressions DESC NULLS LAST
-    `);
+    const window = parseSeoWindow(req);
+    const { rows } = await pool.query(
+      `SELECT * FROM analytics.seo_command_center_portfolio($1::int, $2::date, $3::date)`,
+      [window.days, window.start, window.end],
+    );
 
     const data: PortfolioPageRow[] = rows.map((r) => {
       const vol = r.kw_volume != null ? Number(r.kw_volume) : null;
@@ -165,6 +96,12 @@ export async function GET() {
         kw_cpc: cpc,
         has_dataforseo: vol != null,
         is_competitor_only: r.is_competitor_only,
+        reference_metrics_source: r.reference_metrics_source ?? null,
+        reference_metrics_observed_at: r.reference_metrics_observed_at ?? null,
+        gsc_window_start: r.gsc_window_start ?? null,
+        gsc_window_end: r.gsc_window_end ?? null,
+        gsc_available_start: r.gsc_available_start ?? null,
+        gsc_available_end: r.gsc_available_end ?? null,
       };
     });
 

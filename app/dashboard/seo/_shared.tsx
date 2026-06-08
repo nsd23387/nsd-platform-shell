@@ -23,7 +23,7 @@ import {
 import type {
   PortfolioPage, PortfolioBucket, PageDossier, PageDossierCandidate,
   PageDossierMeta, PageDossierKeywordTarget, PageGateTransition, SeoOffpageBrief,
-  PageDossierRankedAction,
+  PageDossierRankedAction, SeoWindowRequest,
 } from '../../../lib/seoApi';
 
 // -----------------------------------------------------------------------------
@@ -153,6 +153,16 @@ export function cardRead(p: PortfolioPage): string {
 export const fmtInt = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('en-US'));
 export const fmtPos = (n: number | null | undefined) => (n == null ? '—' : n.toFixed(1));
 export const fmtMoney = (n: number | null | undefined) => (n == null ? '—' : `$${n.toFixed(2)}`);
+const formatRefDate = (d: string | null | undefined) => {
+  if (!d) return '—';
+  const dt = new Date(`${d.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(dt.getTime())) return d.slice(0, 10);
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+};
+const referenceSourceLabel = (source?: string | null, observedAt?: string | null) => {
+  const src = source === 'dataforseo' ? 'DataForSEO' : source === 'ahrefs_fallback' ? 'Ahrefs fallback' : 'Keyword refs';
+  return `${src}${observedAt ? ` · as of ${formatRefDate(observedAt)}` : ''}`;
+};
 
 // Mutation-type display — the engine emits several distinct candidate types
 // (title, meta, h1, schema, internal_link, redirect). The UI must reflect the
@@ -678,16 +688,16 @@ export function GateTransitionNote({ transitions, tc }: { transitions: PageGateT
 }
 
 // Lane 3 off-page briefs. Self-fetches by url so it is reusable in either screen.
-export function OffpageBriefSection({ url, tc }: { url: string; tc: Tc }) {
+export function OffpageBriefSection({ url, tc, window }: { url: string; tc: Tc; window?: SeoWindowRequest }) {
   const [briefs, setBriefs] = useState<SeoOffpageBrief[] | null>(null);
   const [err, setErr] = useState(false);
   useEffect(() => {
     let alive = true;
-    getSeoOffpageBriefs(url)
+    getSeoOffpageBriefs(url, window)
       .then((b) => { if (alive) setBriefs(b); })
       .catch(() => { if (alive) setErr(true); });
     return () => { alive = false; };
-  }, [url]);
+  }, [url, window]);
 
   if (err) {
     return <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted }}>Off-page briefs unavailable.</div>;
@@ -750,7 +760,15 @@ function RankedActionPlanRow({ a, tc }: { a: PageDossierRankedAction; tc: Tc }) 
   );
 }
 
-export function LaneRoutedActions({ dossier, tc, onDone, readOnly = false }: { dossier: PageDossier; tc: Tc; onDone: () => void; readOnly?: boolean }) {
+export function LaneRoutedActions({
+  dossier, tc, onDone, readOnly = false, seoWindow,
+}: {
+  dossier: PageDossier;
+  tc: Tc;
+  onDone: () => void;
+  readOnly?: boolean;
+  seoWindow?: SeoWindowRequest;
+}) {
   const meta = dossier.dossier;
   const ranked = meta?.ranked_actions ?? [];
   const lane1Plan = ranked.filter((a) => a.lane === 1);
@@ -804,7 +822,7 @@ export function LaneRoutedActions({ dossier, tc, onDone, readOnly = false }: { d
       {/* Lane 3 — off-page authority */}
       <div style={{ marginTop: space['6'] }}>
         <div style={sectionLabelStyle(tc)}>Lane 3 · Off-page authority</div>
-        <OffpageBriefSection url={dossier.page.url} tc={tc} />
+        <OffpageBriefSection url={dossier.page.url} tc={tc} window={seoWindow} />
         {lane3Plan.length > 0 && (
           <div style={{ marginTop: space['3'] }}>
             {lane3Plan.map((a, i) => <RankedActionPlanRow key={i} a={a} tc={tc} />)}
@@ -876,11 +894,12 @@ export function MeasurementPlan({ dossier, tc }: { dossier: PageDossier; tc: Tc 
 }
 
 export function PageDossierDrawer({
-  url, tc, onClose,
+  url, tc, onClose, window,
 }: {
   url: string;
   tc: Tc;
   onClose: () => void;
+  window?: SeoWindowRequest;
 }) {
   const [dossier, setDossier] = useState<PageDossier | null>(null);
   const [loading, setLoading] = useState(true);
@@ -890,12 +909,12 @@ export function PageDossierDrawer({
   useEffect(() => {
     let alive = true;
     setLoading(true); setError(null);
-    getSeoPageDossier(url)
+    getSeoPageDossier(url, window)
       .then((d) => { if (alive) setDossier(d); })
       .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load page'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [url, reloadKey]);
+  }, [url, reloadKey, window]);
 
   const sectionLabel = {
     fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold,
@@ -1002,8 +1021,8 @@ export function PageDossierDrawer({
                         <th style={{ textAlign: 'left', padding: '8px 10px' }}>Query</th>
                         <th style={{ textAlign: 'right', padding: '8px 10px' }}>Impr.</th>
                         <th style={{ textAlign: 'right', padding: '8px 10px' }}>Pos.</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>Vol.</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>KD</th>
+                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>Vol. ref</th>
+                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>KD ref</th>
                         <th style={{ textAlign: 'left', padding: '8px 10px' }}>Read</th>
                       </tr>
                     </thead>
@@ -1013,8 +1032,18 @@ export function PageDossierDrawer({
                           <td style={{ padding: '8px 10px', color: tc.text.primary }}>{q.query}</td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(q.impressions)}</td>
                           <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtPos(q.avg_position)}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(q.kw_volume)}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{q.kw_difficulty == null ? '—' : q.kw_difficulty.toFixed(0)}</td>
+                          <td
+                            style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}
+                            title={referenceSourceLabel(q.reference_metrics_source, q.reference_metrics_observed_at)}
+                          >
+                            {fmtInt(q.kw_volume)}
+                          </td>
+                          <td
+                            style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}
+                            title={referenceSourceLabel(q.reference_metrics_source, q.reference_metrics_observed_at)}
+                          >
+                            {q.kw_difficulty == null ? '—' : q.kw_difficulty.toFixed(0)}
+                          </td>
                           <td style={{ padding: '8px 10px' }}>
                             {q.is_discard
                               ? <span title={q.discard_reason ?? ''}><Pill tone="bad" tc={tc}>discard</Pill></span>
@@ -1033,7 +1062,7 @@ export function PageDossierDrawer({
 
             {/* Lane-routed actions (Lane 1 engine candidates + plan, Lane 2 Rank Math, Lane 3 off-page) */}
             <div style={{ marginBottom: space['6'] }}>
-              <LaneRoutedActions dossier={dossier} tc={tc} onDone={() => setReloadKey((k) => k + 1)} />
+              <LaneRoutedActions dossier={dossier} tc={tc} seoWindow={window} onDone={() => setReloadKey((k) => k + 1)} />
             </div>
           </>
         )}
@@ -1078,9 +1107,9 @@ export function PageCard({ p, tc, onOpen }: { p: PortfolioPage; tc: Tc; onOpen: 
       <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
         {p.has_dataforseo ? (
           <>
-            <span>vol <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(p.kw_volume)}</span></span>
-            <span>KD <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{p.kw_difficulty == null ? '—' : p.kw_difficulty.toFixed(0)}</span></span>
-            <span>cpc <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtMoney(p.kw_cpc)}</span></span>
+            <span title={referenceSourceLabel(p.reference_metrics_source, p.reference_metrics_observed_at)}>vol ref <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(p.kw_volume)}</span></span>
+            <span title={referenceSourceLabel(p.reference_metrics_source, p.reference_metrics_observed_at)}>KD ref <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{p.kw_difficulty == null ? '—' : p.kw_difficulty.toFixed(0)}</span></span>
+            <span title={referenceSourceLabel(p.reference_metrics_source, p.reference_metrics_observed_at)}>cpc ref <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtMoney(p.kw_cpc)}</span></span>
             {p.is_competitor_only && <Pill tone="bad" tc={tc}>competitor-only</Pill>}
           </>
         ) : (

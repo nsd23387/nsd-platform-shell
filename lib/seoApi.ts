@@ -607,6 +607,7 @@ export interface CompetitorGapSummary {
   keyword: string | null;
   competitor_ranking_position: number | null;
   our_ranking_position: number | null;
+  our_ranking_position_window?: number | null;
   competitor_page_url: string | null;
   cluster_keyword: string | null;
   opportunity_score: number | null;
@@ -823,6 +824,10 @@ export interface SeoTimeseriesResponse {
   range_days: number;
   start_date: string | null;
   end_date: string | null;
+  gsc_window_start?: string | null;
+  gsc_window_end?: string | null;
+  gsc_available_start?: string | null;
+  gsc_available_end?: string | null;
   series: SeoTimeseriesPoint[];
   summary: {
     total_clicks: number;
@@ -831,8 +836,24 @@ export interface SeoTimeseriesResponse {
   };
 }
 
-export async function getSeoTimeseries(days: number): Promise<SeoTimeseriesResponse> {
-  return seoFetch<SeoTimeseriesResponse>(`/api/proxy/seo/timeseries?days=${days}`);
+export interface SeoWindowRequest {
+  days: number;
+  start?: string | null;
+  end?: string | null;
+}
+
+function seoWindowQuery(window?: SeoWindowRequest): string {
+  const sp = new URLSearchParams();
+  if (window?.days) sp.set('days', String(window.days));
+  if (window?.start) sp.set('start', window.start);
+  if (window?.end) sp.set('end', window.end);
+  const qs = sp.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export async function getSeoTimeseries(window: number | SeoWindowRequest): Promise<SeoTimeseriesResponse> {
+  const req = typeof window === 'number' ? { days: window } : window;
+  return seoFetch<SeoTimeseriesResponse>(`/api/proxy/seo/timeseries${seoWindowQuery(req)}`);
 }
 
 // =============================================================================
@@ -859,6 +880,12 @@ export interface SeoCompetitorGap {
   status: string;
   dismissed_reason: string | null;
   discovered_at: string;
+  reference_metrics_source?: string | null;
+  reference_metrics_observed_at?: string | null;
+  gsc_window_start?: string | null;
+  gsc_window_end?: string | null;
+  gsc_available_start?: string | null;
+  gsc_available_end?: string | null;
 }
 
 export interface SeoCompetitorGapMeta {
@@ -875,15 +902,18 @@ export interface SeoCompetitorGapFeed {
   meta: SeoCompetitorGapMeta;
 }
 
-export async function getSeoCompetitorGaps(opts?: { type?: string; status?: string }): Promise<SeoCompetitorGap[]> {
+export async function getSeoCompetitorGaps(opts?: { type?: string; status?: string } & SeoWindowRequest): Promise<SeoCompetitorGap[]> {
   const feed = await getSeoCompetitorGapFeed(opts);
   return feed.data;
 }
 
-export async function getSeoCompetitorGapFeed(opts?: { type?: string; status?: string }): Promise<SeoCompetitorGapFeed> {
+export async function getSeoCompetitorGapFeed(opts?: { type?: string; status?: string } & SeoWindowRequest): Promise<SeoCompetitorGapFeed> {
   const sp = new URLSearchParams();
   if (opts?.type) sp.set('type', opts.type);
   if (opts?.status) sp.set('status', opts.status);
+  if (opts?.days) sp.set('days', String(opts.days));
+  if (opts?.start) sp.set('start', opts.start);
+  if (opts?.end) sp.set('end', opts.end);
   const qs = sp.toString();
   const data = await seoFetch<SeoCompetitorGapFeed>(`/api/proxy/seo/competitor-gaps${qs ? `?${qs}` : ''}`);
   return {
@@ -937,10 +967,16 @@ export interface PortfolioPage {
   kw_cpc: number | null;
   has_dataforseo: boolean;
   is_competitor_only: boolean;
+  reference_metrics_source?: string | null;
+  reference_metrics_observed_at?: string | null;
+  gsc_window_start?: string | null;
+  gsc_window_end?: string | null;
+  gsc_available_start?: string | null;
+  gsc_available_end?: string | null;
 }
 
-export async function getSeoPortfolio(): Promise<PortfolioPage[]> {
-  const data = await seoFetch<{ data: PortfolioPage[] }>('/api/proxy/seo/portfolio');
+export async function getSeoPortfolio(window?: SeoWindowRequest): Promise<PortfolioPage[]> {
+  const data = await seoFetch<{ data: PortfolioPage[] }>(`/api/proxy/seo/portfolio${seoWindowQuery(window)}`);
   return data.data ?? [];
 }
 
@@ -959,6 +995,10 @@ export interface PageDossierPage {
   noindex: boolean | null;
   in_404_monitor: boolean | null;
   needs_verify: boolean;
+  gsc_window_start?: string | null;
+  gsc_window_end?: string | null;
+  gsc_available_start?: string | null;
+  gsc_available_end?: string | null;
 }
 
 export interface PageDossierDemandRow {
@@ -969,6 +1009,8 @@ export interface PageDossierDemandRow {
   kw_volume: number | null;
   kw_difficulty: number | null;
   kw_cpc: number | null;
+  reference_metrics_source?: string | null;
+  reference_metrics_observed_at?: string | null;
   is_discard: boolean;
   discard_reason: string | null;
 }
@@ -1100,9 +1142,13 @@ export interface PageDossier {
   transitions?: PageGateTransition[];
 }
 
-export async function getSeoPageDossier(url: string): Promise<PageDossier> {
+export async function getSeoPageDossier(url: string, window?: SeoWindowRequest): Promise<PageDossier> {
+  const params = new URLSearchParams({ url });
+  if (window?.days) params.set('days', String(window.days));
+  if (window?.start) params.set('start', window.start);
+  if (window?.end) params.set('end', window.end);
   const data = await seoFetch<{ data: PageDossier }>(
-    `/api/proxy/seo/page?url=${encodeURIComponent(url)}`,
+    `/api/proxy/seo/page?${params.toString()}`,
   );
   return data.data;
 }
@@ -1339,10 +1385,21 @@ export interface SeoOffpageBrief {
   keyword_difficulty: number | null;
   reason: string | null;
   generated_at: string | null;
+  reference_metrics_source?: string | null;
+  reference_metrics_observed_at?: string | null;
+  gsc_window_start?: string | null;
+  gsc_window_end?: string | null;
+  gsc_available_start?: string | null;
+  gsc_available_end?: string | null;
 }
 
-export async function getSeoOffpageBriefs(url?: string): Promise<SeoOffpageBrief[]> {
-  const qs = url ? `?url=${encodeURIComponent(url)}` : '';
-  const data = await seoFetch<{ data: SeoOffpageBrief[] }>(`/api/proxy/seo/offpage${qs}`);
+export async function getSeoOffpageBriefs(url?: string, window?: SeoWindowRequest): Promise<SeoOffpageBrief[]> {
+  const params = new URLSearchParams();
+  if (url) params.set('url', url);
+  if (window?.days) params.set('days', String(window.days));
+  if (window?.start) params.set('start', window.start);
+  if (window?.end) params.set('end', window.end);
+  const qs = params.toString();
+  const data = await seoFetch<{ data: SeoOffpageBrief[] }>(`/api/proxy/seo/offpage${qs ? `?${qs}` : ''}`);
   return data.data ?? [];
 }
