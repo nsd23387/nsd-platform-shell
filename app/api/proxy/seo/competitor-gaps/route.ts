@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { Pool } from 'pg';
+import { parseSeoWindow } from '../_window';
 
 const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 
@@ -50,11 +51,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const p = getPool();
+    const window = parseSeoWindow(req);
     const gapType = req.nextUrl.searchParams.get('type');
     const status = req.nextUrl.searchParams.get('status');
 
     let where = 'WHERE 1=1';
-    const params: any[] = [];
+    const params: any[] = [window.days, window.start, window.end];
 
     if (gapType) {
       params.push(gapType);
@@ -87,41 +89,45 @@ export async function GET(req: NextRequest) {
       p.query(`SELECT COUNT(*)::int AS count FROM analytics.seo_competitor_gap`),
       p.query(`
         SELECT COUNT(*)::int AS count
-        FROM analytics.seo_competitor_gap g
+        FROM analytics.seo_command_center_competitor_gaps($1::int, $2::date, $3::date) g
         ${where}
       `, params),
       p.query(`
         SELECT g.status, COUNT(*)::int AS count
-        FROM analytics.seo_competitor_gap g
+        FROM analytics.seo_command_center_competitor_gaps($1::int, $2::date, $3::date) g
         ${where}
         GROUP BY g.status
       `, params),
     ]);
 
-    // seo_competitor_gap (post-Ahrefs source) does not carry search_volume /
-    // keyword_difficulty / cpc. We join analytics.external_query_intelligence on
-    // the normalized query to populate them where measured, leaving null only
-    // when the keyword genuinely has no intelligence row. The dedup subquery
-    // (DISTINCT ON normalized_query, newest metrics first) guards against any
-    // row fan-out so the gap count stays exact.
     const { rows } = await p.query(`
       SELECT
-        g.*,
+        g.id,
+        g.competitor_url,
+        g.gap_type,
+        g.keyword,
+        g.competitor_ranking_position,
+        COALESCE(g.our_ranking_position_window, g.our_ranking_position)::numeric AS our_ranking_position,
+        g.our_ranking_position_window,
+        g.competitor_page_url,
+        g.competitor_page_title,
+        g.content_gap_notes,
+        g.cluster_id,
+        g.cluster_keyword,
         COALESCE(g.opportunity_score, null) AS opportunity_score,
-        e.keyword_difficulty::int AS keyword_difficulty,
-        e.search_volume::int     AS search_volume,
-        e.cpc::numeric           AS cpc,
-        kc.primary_keyword       AS cluster_keyword
-      FROM analytics.seo_competitor_gap g
-      LEFT JOIN analytics.keyword_clusters kc ON kc.id = g.cluster_id
-      LEFT JOIN (
-        SELECT DISTINCT ON (LOWER(TRIM(normalized_query)))
-          LOWER(TRIM(normalized_query)) AS nq,
-          search_volume, keyword_difficulty, cpc
-        FROM analytics.external_query_intelligence
-        WHERE normalized_query IS NOT NULL
-        ORDER BY LOWER(TRIM(normalized_query)), metrics_observed_at DESC NULLS LAST
-      ) e ON e.nq = LOWER(TRIM(g.keyword))
+        g.keyword_difficulty::int AS keyword_difficulty,
+        g.search_volume::int AS search_volume,
+        g.kw_cpc::numeric AS cpc,
+        g.reference_metrics_source,
+        g.reference_metrics_observed_at,
+        g.gsc_window_start,
+        g.gsc_window_end,
+        g.gsc_available_start,
+        g.gsc_available_end,
+        g.status,
+        g.dismissed_reason,
+        g.discovered_at
+      FROM analytics.seo_command_center_competitor_gaps($1::int, $2::date, $3::date) g
       ${where}
       ORDER BY g.opportunity_score DESC NULLS LAST
     `, params);

@@ -25,6 +25,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { parseSeoWindow } from '../_window';
 
 const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 
@@ -43,38 +44,37 @@ function getPool(): Pool {
   return pool;
 }
 
-const ALLOWED_RANGES = new Set([7, 14, 30, 60, 90]);
-
 export async function GET(req: NextRequest) {
   if (!databaseUrl) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
   }
 
-  const raw = Number(req.nextUrl.searchParams.get('days') ?? '30');
-  // Clamp custom values into a sane window: [7, 90]
-  let days = Number.isFinite(raw) ? Math.round(raw) : 30;
-  if (!ALLOWED_RANGES.has(days)) {
-    days = Math.max(7, Math.min(90, days));
-  }
+  const window = parseSeoWindow(req);
 
   try {
     const p = getPool();
     const { rows } = await p.query(
       `
+      WITH w AS (
+        SELECT * FROM analytics.seo_command_center_gsc_window($1::int, $2::date, $3::date)
+      )
       SELECT
-        date::text AS date,
-        clicks::bigint AS clicks,
-        impressions::bigint AS impressions,
-        COALESCE(ctr, 0)::numeric(8,4) AS ctr,
-        avg_position::numeric(6,2) AS avg_position
-      FROM analytics.metrics_search_console_daily
-      -- Anchor the window to the latest ingested metric_date, not CURRENT_DATE:
-      -- GSC lags ~3 days, so a CURRENT_DATE anchor silently drops the most
-      -- recent (still-empty) days and undercounts the window. See lib/seoMetrics.
-      WHERE date > ((SELECT MAX(date) FROM analytics.metrics_search_console_daily) - $1::int)
-      ORDER BY date ASC
+        m.date::text AS date,
+        m.clicks::bigint AS clicks,
+        m.impressions::bigint AS impressions,
+        COALESCE(m.ctr, 0)::numeric(8,4) AS ctr,
+        m.avg_position::numeric(6,2) AS avg_position,
+        w.start_date::text AS window_start,
+        w.end_date::text AS window_end,
+        w.available_start::text AS available_start,
+        w.available_end::text AS available_end,
+        w.range_days::int AS range_days
+      FROM analytics.metrics_search_console_daily m
+      CROSS JOIN w
+      WHERE m.date BETWEEN w.start_date AND w.end_date
+      ORDER BY m.date ASC
       `,
-      [days],
+      [window.days, window.start, window.end],
     );
 
     const series = rows.map((r) => ({
@@ -97,9 +97,13 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      range_days: days,
+      range_days: rows[0]?.range_days ?? window.days,
       start_date: series[0]?.date ?? null,
       end_date: series[series.length - 1]?.date ?? null,
+      gsc_window_start: rows[0]?.window_start ?? null,
+      gsc_window_end: rows[0]?.window_end ?? null,
+      gsc_available_start: rows[0]?.available_start ?? null,
+      gsc_available_end: rows[0]?.available_end ?? null,
       series,
       summary: { total_clicks, total_impressions, half_over_half_delta_pct },
     });
