@@ -13,7 +13,7 @@ const pool = new Pool({
 });
 
 async function getOverviewKpis() {
-  const [actionCounts, pageOpts, internalLinks, contentArtifacts, ahrefsKw, pageIndex, autoApproveSettings, autoApprovedToday, pipelineRuns] = await Promise.all([
+  const [actionCounts, pageOpts, internalLinks, contentArtifacts, ahrefsKw, pageIndex, autoApproveSettings, autoApprovedToday, pipelineRuns, metricContracts] = await Promise.all([
     pool.query(`
       WITH queue AS (
         SELECT * FROM analytics.v_seo_dashboard_queue
@@ -24,18 +24,28 @@ async function getOverviewKpis() {
           COUNT(*) FILTER (WHERE approval_status = 'approved' AND execution_status IN ('approved', 'executing'))::int AS approved,
           COUNT(*) FILTER (WHERE execution_status IN ('published', 'draft_applied'))::int AS published
         FROM analytics.seo_execution_candidate
+      ),
+      queue_counts AS (
+        SELECT
+          COUNT(*)::int AS total_opportunities,
+          COUNT(DISTINCT mutation_type)::int AS total_clusters,
+          COUNT(*) FILTER (WHERE COALESCE(opportunity_score, 0) >= 70)::int AS high_urgency,
+          COUNT(*) FILTER (WHERE COALESCE(opportunity_score, 0) >= 40 AND COALESCE(opportunity_score, 0) < 70)::int AS medium_urgency,
+          COUNT(*) FILTER (WHERE COALESCE(opportunity_score, 0) < 40)::int AS low_urgency,
+          COUNT(*)::int AS awaiting_approval
+        FROM queue
       )
       SELECT
-        COUNT(queue.*)::int AS total_opportunities,
-        COUNT(DISTINCT queue.mutation_type)::int AS total_clusters,
-        COUNT(*) FILTER (WHERE COALESCE(queue.opportunity_score, 0) >= 70)::int AS high_urgency,
-        COUNT(*) FILTER (WHERE COALESCE(queue.opportunity_score, 0) >= 40 AND COALESCE(queue.opportunity_score, 0) < 70)::int AS medium_urgency,
-        COUNT(*) FILTER (WHERE COALESCE(queue.opportunity_score, 0) < 40)::int AS low_urgency,
-        COALESCE(MAX(lifecycle.total), 0)::int AS total,
-        COUNT(queue.*)::int AS awaiting_approval,
-        COALESCE(MAX(lifecycle.approved), 0)::int AS approved,
-        COALESCE(MAX(lifecycle.published), 0)::int AS published
-      FROM queue
+        queue_counts.total_opportunities,
+        queue_counts.total_clusters,
+        queue_counts.high_urgency,
+        queue_counts.medium_urgency,
+        queue_counts.low_urgency,
+        lifecycle.total,
+        queue_counts.awaiting_approval,
+        lifecycle.approved,
+        lifecycle.published
+      FROM queue_counts
       CROSS JOIN lifecycle
     `).catch(() => ({ rows: [{ total_opportunities: 0, total_clusters: 0, high_urgency: 0, medium_urgency: 0, low_urgency: 0, total: 0, awaiting_approval: 0, approved: 0, published: 0 }] })),
     pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_page_optimization_recommendations`).catch(() => ({ rows: [{ cnt: 0 }] })),
@@ -50,7 +60,7 @@ async function getOverviewKpis() {
       )
       SELECT COUNT(*)::int AS cnt FROM deduped
     `).catch(() => ({ rows: [{ cnt: 0 }] })),
-    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_page_index`).catch(() => ({ rows: [{ cnt: 0 }] })),
+    pool.query(`SELECT COUNT(*)::int AS cnt FROM analytics.seo_page_inventory WHERE status_class = 'canonical_live'`).catch(() => ({ rows: [{ cnt: 0 }] })),
     pool.query(`
       SELECT auto_approve_enabled, auto_approve_daily_cap, auto_approve_min_score
       FROM analytics.seo_generation_settings
@@ -66,6 +76,12 @@ async function getOverviewKpis() {
     pool.query(`
       SELECT MAX(created_at) AS run_at
       FROM analytics.seo_execution_candidate
+    `).catch(() => ({ rows: [] })),
+    pool.query(`
+      SELECT metric_key, panel, label, grain, window_kind, freshness_source,
+             source_label, window_label, display_order, notes
+      FROM analytics.v_seo_dashboard_metric_contract
+      ORDER BY panel, display_order, metric_key
     `).catch(() => ({ rows: [] })),
   ]);
 
@@ -99,6 +115,7 @@ async function getOverviewKpis() {
       : 7.0,
     auto_approved_today: autoTodayCount,
     seo_auto_execute_env: process.env.SEO_AUTO_EXECUTE_ENABLED === 'true',
+    metric_contracts: metricContracts.rows,
   };
 }
 
