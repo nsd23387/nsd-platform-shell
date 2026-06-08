@@ -165,6 +165,36 @@ export async function getOutcomes(): Promise<SeoOutcome[]> {
   return data.data ?? [];
 }
 
+export interface SeoSystemHealthRow {
+  check_name: string;
+  status: 'pass' | 'warn' | 'fail' | string;
+  count: number;
+  run_id: string | null;
+  run_at: string | null;
+  sample: Array<Record<string, unknown>>;
+  human_title: string;
+  what_it_means: string;
+  why_it_matters: string;
+  category: 'data' | 'queue' | 'execution' | 'learning' | 'dashboard' | string;
+  owner: string;
+  remediation: string;
+  auto_remediated: boolean;
+  severity_when_failing: 'warn' | 'fail' | string;
+  display_order: number;
+  remediation_id: string | null;
+  last_remediation_at: string | null;
+  last_remediation_action: string | null;
+  last_remediation_result: 'queued' | 'success' | 'failed' | 'skipped' | string | null;
+  last_remediation_notes: string | null;
+  last_remediation_target: Record<string, unknown> | null;
+  health_group: 'green' | 'amber' | 'red' | string;
+}
+
+export async function getSeoSystemHealth(): Promise<SeoSystemHealthRow[]> {
+  const data = await seoFetch<{ data: SeoSystemHealthRow[] }>('/api/proxy/seo/system-health');
+  return data.data ?? [];
+}
+
 export interface SeoOverviewKpis {
   total_clusters: number;
   total_opportunities: number;
