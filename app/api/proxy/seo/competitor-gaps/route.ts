@@ -83,6 +83,21 @@ export async function GET(req: NextRequest) {
     // Skip ultra-short/single-character queries (low intent, no ranking potential)
     where += ` AND LENGTH(COALESCE(g.keyword, '')) >= 4`;
 
+    const [totalResult, filteredResult, statusResult] = await Promise.all([
+      p.query(`SELECT COUNT(*)::int AS count FROM analytics.seo_competitor_gap`),
+      p.query(`
+        SELECT COUNT(*)::int AS count
+        FROM analytics.seo_competitor_gap g
+        ${where}
+      `, params),
+      p.query(`
+        SELECT g.status, COUNT(*)::int AS count
+        FROM analytics.seo_competitor_gap g
+        ${where}
+        GROUP BY g.status
+      `, params),
+    ]);
+
     // seo_competitor_gap (post-Ahrefs source) does not carry search_volume /
     // keyword_difficulty / cpc. We join analytics.external_query_intelligence on
     // the normalized query to populate them where measured, leaving null only
@@ -111,7 +126,21 @@ export async function GET(req: NextRequest) {
       ORDER BY g.opportunity_score DESC NULLS LAST
     `, params);
 
-    return NextResponse.json({ data: rows });
+    const statusCounts = Object.fromEntries(
+      statusResult.rows.map((r) => [r.status ?? 'unknown', Number(r.count ?? 0)])
+    );
+
+    return NextResponse.json({
+      data: rows,
+      meta: {
+        total_count: Number(totalResult.rows[0]?.count ?? 0),
+        filtered_count: Number(filteredResult.rows[0]?.count ?? 0),
+        returned_count: rows.length,
+        status_counts: statusCounts,
+        limit: null,
+        filter_note: 'Filtered to the governed competitor allow-list, excluding competitor-branded/low-intent queries and keywords under 4 characters.',
+      },
+    });
   } catch (err: any) {
     console.error('[seo/competitor-gaps] Error:', err.message);
     return NextResponse.json({ error: 'Failed to load competitor gaps' }, { status: 500 });
