@@ -29,14 +29,14 @@ import {
   getSeoPortfolio, getSeoCompetitorGapFeed,
   approveEngineCandidate, rejectEngineCandidate,
   getCompetitiveVelocitySummary, getCompetitiveChanges, getSeoShipped,
-  getSeoOffpageBriefs, getSeoSuppressed,
+  getSeoOffpageBriefs, getSeoSuppressed, getSeoOverviewKpis,
 } from '../../../lib/seoApi';
 import type {
   PortfolioPage, PortfolioBucket, PageDossierCandidate,
   SeoTimeseriesResponse, GscPipelineHealth, SeoCompetitorGap,
   SeoTimeseriesPoint, CompetitiveVelocitySummary, CompetitivePageChange,
   SeoShippedAction, SeoCandidateQueue, SeoOffpageBrief, SuppressedAudit,
-  SeoCompetitorGapMeta, SeoWindowRequest,
+  SeoCompetitorGapMeta, SeoDashboardMetricContract, SeoWindowRequest,
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
@@ -64,6 +64,13 @@ function Card({ children, style, tc }: { children: React.ReactNode; style?: Reac
       {children}
     </div>
   );
+}
+
+function provenanceText(contract?: SeoDashboardMetricContract): string | null {
+  if (!contract) return null;
+  const parts = [contract.source_label || contract.freshness_source || 'Source declared', contract.grain, contract.window_label]
+    .filter(Boolean);
+  return parts.join(' · ');
 }
 
 // =============================================================================
@@ -432,7 +439,14 @@ function WindowControls({
 // Trend chart — live GSC timeseries
 // =============================================================================
 
-function TrendChart({ tc, window, onData }: { tc: Tc; window: SeoWindowRequest; onData: (d: SeoTimeseriesResponse | null) => void }) {
+function TrendChart({
+  tc, window, onData, contract,
+}: {
+  tc: Tc;
+  window: SeoWindowRequest;
+  onData: (d: SeoTimeseriesResponse | null) => void;
+  contract?: SeoDashboardMetricContract;
+}) {
   const [data, setData] = useState<SeoTimeseriesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -468,7 +482,7 @@ function TrendChart({ tc, window, onData }: { tc: Tc; window: SeoWindowRequest; 
     <Card tc={tc} style={{ background: tc.background.surface }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['3'], flexWrap: 'wrap', gap: space['3'] }}>
         <div style={{ fontFamily: fontFamily.body, fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted }}>Organic trend</div>
-        <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>GSC organic · vs prior period</span>
+        <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>{provenanceText(contract) ?? 'GSC organic · vs prior period'}</span>
       </div>
 
       <div style={{ marginBottom: space['2'] }}>
@@ -530,7 +544,7 @@ function TrendChart({ tc, window, onData }: { tc: Tc; window: SeoWindowRequest; 
 // =============================================================================
 // Data freshness — live GSC pipeline health (honest about un-wired sources)
 // =============================================================================
-function FreshnessCard({ tc }: { tc: Tc }) {
+function FreshnessCard({ tc, contract }: { tc: Tc; contract?: SeoDashboardMetricContract }) {
   const [health, setHealth] = useState<GscPipelineHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -560,6 +574,11 @@ function FreshnessCard({ tc }: { tc: Tc }) {
   return (
     <Card tc={tc}>
       <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: space['3'] }}>Data freshness</div>
+      {provenanceText(contract) && (
+        <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginBottom: space['3'] }}>
+          {provenanceText(contract)}
+        </div>
+      )}
 
       {loading && <div style={{ color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Checking…</div>}
       {error && <div style={{ color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
@@ -894,6 +913,7 @@ function CommandCenterContent() {
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
   const [diagnoseUrl, setDiagnoseUrl] = useState('');
+  const [metricContracts, setMetricContracts] = useState<Record<string, SeoDashboardMetricContract>>({});
   const [range, setRange] = useState<RangeKey>('30');
   const [customDays, setCustomDays] = useState(45);
   const [customStart, setCustomStart] = useState('');
@@ -925,6 +945,20 @@ function CommandCenterContent() {
   }, []);
 
   useEffect(() => loadQueue(), [loadQueue]);
+
+  useEffect(() => {
+    let alive = true;
+    getSeoOverviewKpis()
+      .then((kpis) => {
+        if (!alive) return;
+        const rows = kpis.metric_contracts ?? [];
+        setMetricContracts(Object.fromEntries(rows.map((row) => [row.metric_key, row])));
+      })
+      .catch(() => {
+        if (alive) setMetricContracts({});
+      });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -1064,8 +1098,8 @@ function CommandCenterContent() {
     [detections],
   );
   const summaryTiles = [
-    { label: 'Decisions', value: queueSummary?.decisions ?? detections.length, help: 'Guarded recommendations awaiting approval' },
-    { label: 'Total proposals', value: queueSummary?.total_proposals ?? detections.length, help: 'Canonical queue rows' },
+    { label: 'Decisions', value: queueSummary?.decisions ?? detections.length, help: 'Guarded recommendations awaiting approval', metricKey: 'awaiting_approval' },
+    { label: 'Total proposals', value: queueSummary?.total_proposals ?? detections.length, help: 'Canonical queue rows', metricKey: 'total_proposals' },
     { label: 'Re-review flagged', value: queueSummary?.re_review_flagged ?? 0, help: 'Needs another gate review' },
     { label: 'Needs review', value: queueSummary?.needs_review ?? 0, help: 'Evidence or QA attention needed' },
   ];
@@ -1234,14 +1268,19 @@ function CommandCenterContent() {
             <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '4px' }}>
               {tile.help}
             </div>
+            {'metricKey' in tile && tile.metricKey && provenanceText(metricContracts[tile.metricKey]) && (
+              <div style={{ fontFamily: fontFamily.body, fontSize: '10px', color: tc.text.muted, marginTop: '6px', lineHeight: 1.35 }}>
+                {provenanceText(metricContracts[tile.metricKey])}
+              </div>
+            )}
           </Card>
         ))}
       </div>
 
       {/* HERO — trend + freshness */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: space['4'], marginBottom: space['4'] }}>
-        <TrendChart tc={tc} window={seoWindow} onData={handleTrendData} />
-        <FreshnessCard tc={tc} />
+        <TrendChart tc={tc} window={seoWindow} onData={handleTrendData} contract={metricContracts.organic_clicks_30d} />
+        <FreshnessCard tc={tc} contract={metricContracts.gsc_latest_data_age_days} />
       </div>
 
       {/* MOMENTUM + RECENTLY SHIPPED */}
