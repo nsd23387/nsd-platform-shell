@@ -23,6 +23,7 @@ interface KPICard {
   value: string;
   delta: number | null;
   testId: string;
+  provenance?: string;
   sparkData?: number[];
   sparkColor?: string;
 }
@@ -73,6 +74,7 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
       value: formatNumber(kpis.sessions),
       delta: comparisons?.sessions.delta_pct ?? null,
       testId: 'exec-kpi-sessions',
+      provenance: 'GA4 sessions · daily · selected Marketing window',
       sparkData: timeseries?.sessions?.map(d => d.value),
       sparkColor: indigo[600],
     },
@@ -98,12 +100,14 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
         value: formatCurrency(googleAdsOverview.spend),
         delta: null,
         testId: 'exec-kpi-spend',
+        provenance: 'Google Ads · campaign grain · selected Marketing window',
       },
       {
         label: 'ROAS',
         value: googleAdsOverview.roas.toFixed(2) + 'x',
         delta: null,
         testId: 'exec-kpi-roas',
+        provenance: 'Google Ads spend + attributed conversion value · selected Marketing window',
       },
     );
   }
@@ -135,6 +139,12 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
               <Sparkline data={card.sparkData} color={card.sparkColor} width={80} height={32} />
             )}
           </div>
+          {card.provenance && (
+            // TODO(C2b): repoint overlapping Marketing KPIs to governed sources/windows where the data architecture prompt requires it.
+            <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['2'] }}>
+              {card.provenance}
+            </div>
+          )}
         </div>
       ))}
     </div>

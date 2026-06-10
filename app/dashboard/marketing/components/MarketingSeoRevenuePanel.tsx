@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import type { MarketingPage } from '../../../../types/activity-spine';
 import { DashboardSection, EmptyStateCard } from '../../../../components/dashboard';
 import { DataTable } from '../../../sales-engine/components/ui/DataTable';
@@ -36,7 +37,16 @@ function shortenUrl(url: string): string {
 }
 
 const COLUMNS = [
-  { key: 'page_url', header: 'Page', width: '28%', render: (r: RevenueRow) => shortenUrl(r.page_url) },
+  {
+    key: 'page_url',
+    header: 'Page',
+    width: '28%',
+    render: (r: RevenueRow) => (
+      <Link href={`/dashboard/seo?url=${encodeURIComponent(r.page_url)}`} style={{ color: 'inherit', fontWeight: 500, textDecoration: 'none' }}>
+        {shortenUrl(r.page_url)}
+      </Link>
+    ),
+  },
   { key: 'clicks', header: 'Organic Clicks', width: '13%', align: 'right' as const, render: (r: RevenueRow) => formatNumber(r.clicks) },
   { key: 'submissions', header: 'Submissions', width: '13%', align: 'right' as const, render: (r: RevenueRow) => formatNumber(r.submissions) },
   { key: 'pipeline_value_usd', header: 'Pipeline ($)', width: '14%', align: 'right' as const, render: (r: RevenueRow) => formatCurrency(r.pipeline_value_usd) },

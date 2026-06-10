@@ -13,12 +13,12 @@ export const ENGINE_COLORS = {
   },
   post_free_content: {
     accent: violet[500],
-    label: 'SEO',
-    href: '/dashboard/marketing/content',
+    label: 'SEO Summary',
+    href: '/dashboard/marketing/seo',
   },
   run_paid_ads: {
     accent: magenta[700],
-    label: 'Run Paid Ads',
+    label: 'Paid Summary',
     href: '/dashboard/marketing/paid-ads',
   },
 } as const;

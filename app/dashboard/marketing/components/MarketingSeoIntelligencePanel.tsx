@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import type { MarketingSEOQuery, MarketingSEOQueryMover } from '../../../../types/activity-spine';
 import { DashboardSection, DashboardGrid, EmptyStateCard } from '../../../../components/dashboard';
 import { SkeletonCard } from '../../../../components/dashboard';
@@ -67,7 +68,19 @@ function OpportunityBadge({ row }: { row: MarketingSEOQuery }) {
 }
 
 const COLUMNS = [
-  { key: 'query', header: 'Query', width: '24%' },
+  {
+    key: 'query',
+    header: 'Query',
+    width: '24%',
+    render: (r: MarketingSEOQuery) => (
+      <Link
+        href={`/dashboard/seo/performance?query=${encodeURIComponent(r.query)}`}
+        style={{ color: violet[700], fontWeight: fontWeight.medium, textDecoration: 'none' }}
+      >
+        {r.query}
+      </Link>
+    ),
+  },
   { key: 'clicks', header: 'Clicks', width: '9%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatNumber(r.clicks) },
   { key: 'impressions', header: 'Impressions', width: '10%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatNumber(r.impressions) },
   { key: 'ctr', header: 'CTR', width: '8%', align: 'right' as const, render: (r: MarketingSEOQuery) => formatPercent(r.ctr) },

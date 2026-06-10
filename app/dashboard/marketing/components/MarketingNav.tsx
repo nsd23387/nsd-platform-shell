@@ -30,31 +30,24 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: 'Core 4 Engines',
+    title: 'Engines',
     items: [
+      { href: '/dashboard/marketing/seo', label: 'SEO Summary', icon: 'search' },
+      { href: '/dashboard/marketing/paid-ads', label: 'Paid Summary', icon: 'campaign' },
       { href: '/dashboard/marketing/warm-outreach', label: 'Warm Outreach', icon: 'users' },
       { href: '/dashboard/marketing/cold-outreach', label: 'Cold Outreach', icon: 'send' },
-      { href: '/dashboard/marketing/content', label: 'SEO', icon: 'search' },
-      { href: '/dashboard/marketing/paid-ads', label: 'Run Paid Ads', icon: 'campaign' },
-    ],
-  },
-  {
-    title: 'Automation',
-    items: [
       { href: '/dashboard/marketing/social', label: 'Social Automation', icon: 'campaign' },
     ],
   },
   {
-    title: 'Deep Dives',
+    title: 'Intelligence',
     items: [
-      { href: '/dashboard/marketing/seo', label: 'SEO Command Center', icon: 'search' },
-      { href: '/dashboard/marketing/google-ads', label: 'Google Ads War Room', icon: 'target' },
       { href: '/dashboard/marketing/ahrefs', label: 'Keyword & Competitive Intelligence', icon: 'trending' },
       { href: '/dashboard/marketing/attribution', label: 'Attribution Intelligence', icon: 'metrics' },
     ],
   },
   {
-    title: 'Sales Funnel',
+    title: 'Funnel',
     items: [
       { href: '/dashboard/marketing/quote-funnel', label: 'Quote Pipeline', icon: 'chart' },
     ],
@@ -63,8 +56,8 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'System',
     items: [
       { href: '/dashboard/marketing/data-health', label: 'Data Health', icon: 'shield' },
-      { href: '/dashboard/marketing/experiments', label: 'Experiments', icon: 'lightbulb' },
-      { href: '/dashboard/marketing/forecasting', label: 'Forecasting', icon: 'trending' },
+      { href: '/dashboard/marketing/forecasting', label: 'Forecasting (tool - no live data)', icon: 'trending' },
+      { href: '/dashboard/marketing/experiments', label: 'Experiments (tool - no live data)', icon: 'lightbulb' },
     ],
   },
 ];

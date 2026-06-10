@@ -33,7 +33,7 @@ const decisionLabels: Record<Experiment['decision'], { label: string; variant: '
   pending: { label: 'Pending', variant: 'info' },
 };
 
-const defaultEngineOptions = ['Warm Outreach', 'Cold Outreach', 'SEO', 'Run Paid Ads'];
+const defaultEngineOptions = ['SEO Summary', 'Paid Summary', 'Warm Outreach', 'Cold Outreach', 'Social Automation'];
 
 export function ExperimentLog({
   experiments,

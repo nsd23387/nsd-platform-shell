@@ -161,7 +161,7 @@ export default function ColdOutreachPage() {
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
-        <DrilldownBreadcrumb items={[{ label: 'Marketing', href: '/dashboard/marketing' }, { label: 'Core 4 Engines' }, { label: 'Cold Outreach' }]} />
+        <DrilldownBreadcrumb items={[{ label: 'Marketing', href: '/dashboard/marketing' }, { label: 'Engines' }, { label: 'Cold Outreach' }]} />
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['6'] }}>

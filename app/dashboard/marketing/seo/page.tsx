@@ -41,7 +41,14 @@ function TechnicalHealthPlaceholder() {
   );
 }
 
-export default function SeoCommandCenterPage() {
+const provenanceStyle: React.CSSProperties = {
+  fontFamily: fontFamily.body,
+  fontSize: fontSize.xs,
+  color: 'var(--text-muted)',
+  marginTop: space['2'],
+};
+
+export default function SeoSummaryPage() {
   const tc = useThemeColors();
   const { data, loading, error } = useContext(MarketingContext);
 
@@ -99,7 +106,7 @@ export default function SeoCommandCenterPage() {
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
-        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Deep Dives'}, {label:'SEO Command Center'}]} />
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Engines'}, {label:'SEO Summary'}]} />
         <div style={{ marginBottom: space['6'], display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: space['4'], flexWrap: 'wrap' }}>
           <div>
             <h1
@@ -113,15 +120,22 @@ export default function SeoCommandCenterPage() {
               }}
               data-testid="text-page-title"
             >
-              SEO Command Center
+              SEO Summary
             </h1>
             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
-              Query opportunities, page performance, and technical health.
+              Executive SEO performance, organic attribution, and drill-down links into the governed command center.
             </p>
+            <Link
+              href="/dashboard/seo"
+              style={{ display: 'inline-flex', marginTop: space['3'], fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: violet[600], textDecoration: 'none' }}
+              data-testid="link-open-seo-command-center"
+            >
+              Open SEO Command Center →
+            </Link>
           </div>
           <PageExportBar
-            filename="seo-command-center"
-            pdfTitle="SEO Command Center"
+            filename="seo-summary"
+            pdfTitle="SEO Summary"
             sections={exportSections}
             loading={loading}
           />
@@ -131,7 +145,31 @@ export default function SeoCommandCenterPage() {
           <DashboardCard title="Error" error={error} />
         )}
 
-        <DashboardSection title="Search Performance Trend" description="Daily clicks and impressions from Google Search Console." index={0}>
+        <DashboardSection title="Organic Sessions Trend" description="Daily organic-search sessions from the Marketing summary source." index={0}>
+          {/* TODO(C2b): repoint to governed SEO window when Marketing summary reads the governed GSC surface. */}
+          {(() => {
+            const sessions = data?.timeseries?.sessions ?? [];
+            if (!sessions.length && !loading) return null;
+            const chartData = sessions.map((s) => ({ date: s.date, sessions: s.value }));
+            const target = getTargetForMetric('sessions', chartData.length || 30);
+            return (
+              <>
+                <AreaLineChart
+                  data={chartData}
+                  series={[{ dataKey: 'sessions', label: 'Sessions', color: violet[500] }]}
+                  height={220}
+                  targetValue={target?.daily}
+                  targetLabel={target?.label}
+                  formatXAxis={(d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                />
+                <div style={provenanceStyle}>GA4 organic sessions · daily · selected Marketing window</div>
+              </>
+            );
+          })()}
+        </DashboardSection>
+
+        <DashboardSection title="Search Performance Trend" description="Daily clicks and impressions from Google Search Console." index={1}>
+          {/* TODO(C2b): repoint to governed SEO window when Marketing summary reads the governed GSC surface. */}
           {(() => {
             const clicks = data?.timeseries?.clicks ?? [];
             const impressions = data?.timeseries?.impressions ?? [];
@@ -143,22 +181,25 @@ export default function SeoCommandCenterPage() {
             }));
             const clicksTarget = getTargetForMetric('clicks', merged.length || 30);
             return (
-              <AreaLineChart
-                data={merged}
-                series={[
-                  { dataKey: 'clicks', label: 'Clicks', color: indigo[600] },
-                  { dataKey: 'impressions', label: 'Impressions', color: violet[500] },
-                ]}
-                height={220}
-                targetValue={clicksTarget?.daily}
-                targetLabel={clicksTarget?.label}
-                formatXAxis={(d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              />
+              <>
+                <AreaLineChart
+                  data={merged}
+                  series={[
+                    { dataKey: 'clicks', label: 'Clicks', color: indigo[600] },
+                    { dataKey: 'impressions', label: 'Impressions', color: violet[500] },
+                  ]}
+                  height={220}
+                  targetValue={clicksTarget?.daily}
+                  targetLabel={clicksTarget?.label}
+                  formatXAxis={(d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                />
+                <div style={provenanceStyle}>GSC clicks/impressions · daily · selected Marketing window</div>
+              </>
             );
           })()}
         </DashboardSection>
 
-        <DashboardSection title="Query Opportunities" description="Search queries with opportunity tags for optimization." index={1}>
+        <DashboardSection title="Query Opportunities" description="Search queries with opportunity tags for optimization." index={2}>
           <MarketingSeoIntelligencePanel
             seoQueries={data?.seo_queries ?? []}
             seoMovers={data?.seo_movers ?? []}
@@ -167,7 +208,7 @@ export default function SeoCommandCenterPage() {
           />
         </DashboardSection>
 
-        <DashboardSection title="Page Performance" description="Organic page engagement and pipeline attribution." index={2}>
+        <DashboardSection title="Page Performance" description="Organic page engagement and pipeline attribution." index={3}>
           <MarketingSeoRevenuePanel
             pages={data?.pages ?? []}
             loading={loading}
@@ -180,7 +221,7 @@ export default function SeoCommandCenterPage() {
           />
         </DashboardSection>
 
-        <DashboardSection title="Technical Health" index={3}>
+        <DashboardSection title="Technical Health" index={4}>
           <TechnicalHealthPlaceholder />
         </DashboardSection>
       </div>

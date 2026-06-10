@@ -374,7 +374,7 @@ export default function WarmOutreachPage() {
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
-        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Core 4 Engines'}, {label:'Warm Outreach'}]} />
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Engines'}, {label:'Warm Outreach'}]} />
         <div style={{ marginBottom: space['6'] }}>
           <h1
             style={{
