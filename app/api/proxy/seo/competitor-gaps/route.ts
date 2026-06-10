@@ -33,6 +33,10 @@ const ALLOWED_COMPETITORS = [
   'neonmfg.com',
 ];
 
+// Producer contract: 10 configured competitors feed the raw table; the Command
+// Center governance layer allows only the 5 neon shops above as actionable intel.
+const CONFIGURED_COMPETITOR_COUNT = 10;
+
 // Branded keyword patterns to exclude — these are competitor brand searches that
 // NSD will never rank for and shouldn't target.
 const BRANDED_KEYWORD_PATTERNS = [
@@ -85,8 +89,13 @@ export async function GET(req: NextRequest) {
     // Skip ultra-short/single-character queries (low intent, no ranking potential)
     where += ` AND LENGTH(COALESCE(g.keyword, '')) >= 4`;
 
-    const [totalResult, filteredResult, statusResult] = await Promise.all([
+    const [totalResult, rawCompetitorsResult, filteredResult, statusResult] = await Promise.all([
       p.query(`SELECT COUNT(*)::int AS count FROM analytics.seo_competitor_gap`),
+      p.query(`
+        SELECT COUNT(DISTINCT lower(regexp_replace(regexp_replace(competitor_url, '^https?://(www\\.)?', ''), '/.*$', '')))::int AS count
+        FROM analytics.seo_competitor_gap
+        WHERE competitor_url IS NOT NULL AND btrim(competitor_url) <> ''
+      `),
       p.query(`
         SELECT COUNT(*)::int AS count
         FROM analytics.seo_command_center_competitor_gaps($1::int, $2::date, $3::date) g
@@ -142,6 +151,9 @@ export async function GET(req: NextRequest) {
         total_count: Number(totalResult.rows[0]?.count ?? 0),
         filtered_count: Number(filteredResult.rows[0]?.count ?? 0),
         returned_count: rows.length,
+        governed_competitors_count: ALLOWED_COMPETITORS.length,
+        raw_competitors_count: Number(rawCompetitorsResult.rows[0]?.count ?? 0),
+        configured_competitors_count: CONFIGURED_COMPETITOR_COUNT,
         status_counts: statusCounts,
         limit: null,
         filter_note: 'Filtered to the governed competitor allow-list, excluding competitor-branded/low-intent queries and keywords under 4 characters.',

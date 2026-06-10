@@ -12,8 +12,8 @@ import { AccessDenied } from '../../../../components/dashboard';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
-import { getSeoCompetitorGaps } from '../../../../lib/seoApi';
-import type { SeoCompetitorGap } from '../../../../lib/seoApi';
+import { getSeoCompetitorGapFeed } from '../../../../lib/seoApi';
+import type { SeoCompetitorGap, SeoCompetitorGapMeta } from '../../../../lib/seoApi';
 import { PALETTE, monoStack, Pill, fmtInt } from '../_shared';
 
 function hostOf(url: string): string {
@@ -23,6 +23,7 @@ function hostOf(url: string): string {
 function CompetitorsContent() {
   const tc = useThemeColors();
   const [gaps, setGaps] = useState<SeoCompetitorGap[] | null>(null);
+  const [meta, setMeta] = useState<SeoCompetitorGapMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState('all');
@@ -31,8 +32,8 @@ function CompetitorsContent() {
   useEffect(() => {
     let alive = true;
     setLoading(true); setError(null);
-    getSeoCompetitorGaps()
-      .then((d) => { if (alive) setGaps(d); })
+    getSeoCompetitorGapFeed()
+      .then((feed) => { if (alive) { setGaps(feed.data); setMeta(feed.meta); } })
       .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load competitor gaps'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -52,6 +53,9 @@ function CompetitorsContent() {
   }, [gaps, typeFilter, search]);
 
   const competitors = useMemo(() => Array.from(new Set((gaps ?? []).map((g) => hostOf(g.competitor_url)))), [gaps]);
+  const governedCount = meta?.governed_competitors_count ?? competitors.length;
+  const rawCount = meta?.raw_competitors_count ?? competitors.length;
+  const configuredCount = meta?.configured_competitors_count ?? rawCount;
 
   const th: React.CSSProperties = { padding: '10px 12px', fontSize: '11px', fontWeight: fontWeight.semibold, color: tc.text.muted, textTransform: 'uppercase', textAlign: 'left' };
   const thR: React.CSSProperties = { ...th, textAlign: 'right' };
@@ -64,7 +68,7 @@ function CompetitorsContent() {
           Keyword and content gaps where competitors rank and you don&apos;t — from the governed competitive feed. Read-only.
         </p>
         <p style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-competitor-scope">
-          Scope: neon competitors only (generic-sign printers and marketplaces excluded), branded and ultra-short queries removed. Counts below reflect this filtered scope, not the full raw feed.
+          Scope: {fmtInt(governedCount)} governed / {fmtInt(rawCount)} raw / {fmtInt(configuredCount)} configured competitors. Neon competitors only; generic-sign printers, marketplaces, branded, and ultra-short queries are excluded from the governed view.
         </p>
       </div>
 
@@ -72,7 +76,7 @@ function CompetitorsContent() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: space['3'], marginBottom: space['5'] }}>
         {[
           { label: 'Total gaps', value: loading ? '—' : fmtInt(gaps?.length ?? 0) },
-          { label: 'Competitors tracked', value: loading ? '—' : fmtInt(competitors.length) },
+          { label: 'Governed competitors', value: loading ? '—' : fmtInt(governedCount) },
           { label: 'Keyword gaps', value: loading ? '—' : fmtInt((gaps ?? []).filter((g) => g.gap_type === 'keyword').length) },
           { label: 'Content gaps', value: loading ? '—' : fmtInt((gaps ?? []).filter((g) => g.gap_type === 'content').length) },
         ].map((t) => (

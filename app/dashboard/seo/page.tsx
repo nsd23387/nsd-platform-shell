@@ -40,7 +40,7 @@ import type {
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
-  fmtInt, fmtPos, pathOf, PageDossierDrawer, mutationDisplay, sectionLabelStyle, proposalReview,
+  fmtInt, fmtPos, fmtScore, pathOf, PageDossierDrawer, mutationDisplay, sectionLabelStyle, proposalReview, isSchemaMutation,
 } from './_shared';
 
 // -----------------------------------------------------------------------------
@@ -812,7 +812,8 @@ function DetectionRow({
   onDefer: (id: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const score = c.opportunity_score != null ? Math.round(c.opportunity_score) : null;
+  const score = fmtScore(c.opportunity_score);
+  const schemaPaused = isSchemaMutation(c.mutation_type);
   // Honest impact: the target page's real GSC demand, not a modelled lift.
   const impr = page?.top_q_impr ?? page?.gsc_impressions ?? null;
   const pos = page?.top_q_pos ?? page?.gsc_best_position ?? null;
@@ -856,7 +857,7 @@ function DetectionRow({
           {impr == null ? '—' : `${fmtInt(impr)} impr`}
         </div>
         <div style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>
-          {pos == null ? 'pos —' : `pos ${fmtPos(pos)}`} {score != null && `· score ${score}`}
+          {pos == null ? 'pos —' : `pos ${fmtPos(pos)}`} {score !== '—' && `· score ${score}`}
         </div>
       </div>
       <div>
@@ -865,12 +866,13 @@ function DetectionRow({
       </div>
       <div style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
         <button
-          onClick={async () => { setBusy(true); try { await onApprove(c); } finally { setBusy(false); } }}
-          disabled={busy}
+          onClick={async () => { if (schemaPaused) return; setBusy(true); try { await onApprove(c); } finally { setBusy(false); } }}
+          disabled={busy || schemaPaused}
           data-testid={`button-approve-detection-${c.candidate_id}`}
-          style={{ padding: '6px 12px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
+          title={schemaPaused ? 'Schema execution temporarily paused — write path under repair.' : undefined}
+          style={{ padding: '6px 12px', background: schemaPaused ? tc.background.muted : PALETTE.violet, color: schemaPaused ? tc.text.muted : '#fff', border: schemaPaused ? `1px solid ${tc.border.default}` : 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, cursor: busy || schemaPaused ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
         >
-          {busy ? '…' : 'Approve'}
+          {busy ? '…' : schemaPaused ? 'Paused' : 'Approve'}
         </button>
         <Link
           href={`/dashboard/seo/action/${encodeURIComponent(c.candidate_id)}`}
@@ -986,9 +988,9 @@ function SuppressedSection({ tc }: { tc: Tc }) {
     return () => { alive = false; };
   }, []);
 
-  // Group rows by their gate reason(s). A row with multiple reasons appears
-  // under each — the rollup counts already reflect the engine's own tally.
-  const grouped = useMemo(() => {
+  // Group returned sample rows for expansion details. Headline counts come from
+  // audit.reasons, which is the full-table rollup and not limited by sample size.
+  const sampleRowsByReason = useMemo(() => {
     const m = new Map<string, SuppressedAudit['rows']>();
     (audit?.rows ?? []).forEach((r) => {
       const reasons = r.gate_reasons.length > 0 ? r.gate_reasons : ['(no reason recorded)'];
@@ -998,8 +1000,9 @@ function SuppressedSection({ tc }: { tc: Tc }) {
         m.set(reason, list);
       });
     });
-    return Array.from(m.entries()).sort((a, b) => b[1].length - a[1].length);
+    return m;
   }, [audit]);
+  const reasonRollups = audit?.reasons ?? [];
 
   return (
     <div style={{ marginTop: space['6'] }}>
@@ -1013,12 +1016,15 @@ function SuppressedSection({ tc }: { tc: Tc }) {
       <Card tc={tc} style={{ padding: 0 }}>
         {!audit && !error && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading suppressed audit…</div>}
         {error && <div style={{ padding: space['4'], color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
-        {audit && grouped.length === 0 && (
+        {audit && reasonRollups.length === 0 && (
           <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-suppressed">
             Nothing suppressed — every candidate the engine produced passed the gate.
           </div>
         )}
-        {audit && grouped.map(([reason, rows]) => {
+        {audit && reasonRollups.map((rollup) => {
+          const reason = rollup.reason;
+          const rows = sampleRowsByReason.get(reason) ?? [];
+          const pct = audit.total > 0 ? Math.round((rollup.count / audit.total) * 1000) / 10 : 0;
           const open = openReason === reason;
           return (
             <div key={reason} style={{ borderTop: `1px solid ${tc.border.subtle}` }}>
@@ -1029,12 +1035,19 @@ function SuppressedSection({ tc }: { tc: Tc }) {
               >
                 <span style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap' }}>
                   <Pill tone="warn" tc={tc}>{reason}</Pill>
-                  <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{rows.length} candidate{rows.length === 1 ? '' : 's'}</span>
+                  <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
+                    {fmtInt(rollup.count)} suppressed · {pct.toFixed(1)}%
+                  </span>
                 </span>
                 <span style={{ fontFamily: monoStack, fontSize: '12px', color: tc.text.muted }}>{open ? '▾' : '▸'}</span>
               </button>
               {open && (
                 <div style={{ padding: `0 ${space['5']} ${space['3']}` }}>
+                  {rows.length === 0 && (
+                    <div style={{ padding: '6px 0', fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
+                      No sampled rows for this reason in the current response; the count above is the full gate-suppressed rollup.
+                    </div>
+                  )}
                   {rows.map((r) => (
                     <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', gap: space['3'], padding: '6px 0', borderTop: `1px solid ${tc.border.subtle}`, fontFamily: fontFamily.body, fontSize: '12px' }} data-testid={`row-suppressed-${r.id}`}>
                       <span style={{ minWidth: 0 }}>
@@ -1217,8 +1230,13 @@ function CommandCenterContent() {
     () => detections.filter((c) => c.page_is_live !== true),
     [detections],
   );
+  const schemaDetectionCount = useMemo(
+    () => detections.filter((c) => isSchemaMutation(c.mutation_type)).length,
+    [detections],
+  );
 
   async function approveOne(c: PageDossierCandidate) {
+    if (isSchemaMutation(c.mutation_type)) return;
     await approveEngineCandidate({
       candidate_id: c.candidate_id,
       opportunity_id: c.opportunity_id ?? undefined,
@@ -1241,7 +1259,9 @@ function CommandCenterContent() {
     // Governance (D7): candidates flagged "needs review" (placeholder/scaffold
     // proposals) are NOT pre-selected — a human must deliberately opt them in
     // after authoring/checking. They still appear in the list, just unchecked.
-    setReviewSelected(new Set(targets.filter((c) => !proposalReview(c).flagged).map((c) => c.candidate_id)));
+    // Schema execution is temporarily paused pending Batch 1 write-path repair,
+    // so schema-family rows are visible but never preselected for approval.
+    setReviewSelected(new Set(targets.filter((c) => !proposalReview(c).flagged && !isSchemaMutation(c.mutation_type)).map((c) => c.candidate_id)));
     setReviewOpen(true);
   }
 
@@ -1255,7 +1275,7 @@ function CommandCenterContent() {
 
   async function confirmReview() {
     if (bulkBusy) return;
-    const targets = detections.filter((c) => reviewSelected.has(c.candidate_id));
+    const targets = detections.filter((c) => reviewSelected.has(c.candidate_id) && !isSchemaMutation(c.mutation_type));
     if (targets.length === 0) { setReviewOpen(false); return; }
     setBulkBusy(true); setActionMsg(null);
     const ids = new Set(targets.map((c) => c.candidate_id));
@@ -1375,16 +1395,18 @@ function CommandCenterContent() {
                 const checked = reviewSelected.has(c.candidate_id);
                 const m = mutationDisplay(c.mutation_type, c.primary_remedy);
                 const review = proposalReview(c);
+                const schemaPaused = isSchemaMutation(c.mutation_type);
                 return (
                   <label
                     key={c.candidate_id}
                     data-testid={`review-row-${c.candidate_id}`}
-                    style={{ display: 'flex', gap: space['3'], alignItems: 'flex-start', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}`, cursor: 'pointer' }}
+                    style={{ display: 'flex', gap: space['3'], alignItems: 'flex-start', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}`, cursor: schemaPaused ? 'default' : 'pointer', opacity: schemaPaused ? 0.75 : 1 }}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
-                      onChange={() => toggleReview(c.candidate_id)}
+                      disabled={schemaPaused}
+                      onChange={() => { if (!schemaPaused) toggleReview(c.candidate_id); }}
                       data-testid={`review-check-${c.candidate_id}`}
                       style={{ marginTop: '3px', flexShrink: 0 }}
                     />
@@ -1396,8 +1418,14 @@ function CommandCenterContent() {
                         {review.flagged && (
                           <span title={review.reasons.join(' ')} data-testid={`review-needs-review-${c.candidate_id}`}><Pill tone="warn" tc={tc}>needs review</Pill></span>
                         )}
+                        {schemaPaused && <Pill tone="warn" tc={tc}>schema paused</Pill>}
                       </span>
                       <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, wordBreak: 'break-all' }}>{c.target_page_url ? pathOf(c.target_page_url) : '—'}</span>
+                      {schemaPaused && (
+                        <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.warn, marginTop: '2px' }}>
+                          Schema execution temporarily paused — write path under repair.
+                        </span>
+                      )}
                       {review.flagged && (
                         <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.warn, marginTop: '2px' }}>
                           Not auto-approvable — {review.reasons[0]}
@@ -1482,13 +1510,18 @@ function CommandCenterContent() {
       {/* DO THIS NEXT */}
       <SectionTitle
         tc={tc}
-        sub="Guarded engine recommendations, ranked by opportunity score"
+        sub="Guarded engine recommendations, ordered by queue type and target page while opportunity scoring is recalibrated"
         right={<Pill tone="neutral" tc={tc}>Lane 1 · draft-only approvals</Pill>}
       >
         Do this next
       </SectionTitle>
       <Card tc={tc} style={{ padding: 0 }}>
         <div style={{ padding: `0 ${space['5']}` }}>
+          {schemaDetectionCount > 0 && (
+            <div style={{ marginTop: space['4'], padding: space['3'], borderRadius: radius.sm, background: PALETTE.warnSoft, color: PALETTE.warn, fontFamily: fontFamily.body, fontSize: '13px', lineHeight: 1.5 }} data-testid="banner-schema-approval-paused">
+              Schema execution temporarily paused — write path under repair. Schema recommendations remain visible, but Approve is disabled until Batch 1 re-enables the lane.
+            </div>
+          )}
           {queueLoading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading recommendations…</div>}
           {!queueLoading && queueError && (
             <div style={{ padding: space['6'], textAlign: 'center', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="error-detections">
@@ -1565,6 +1598,9 @@ function CommandCenterContent() {
                 <div style={{ padding: `${space['4']} ${space['5']}`, borderBottom: `1px solid ${tc.border.subtle}`, background: tc.background.muted }} data-testid="competitor-gap-meta">
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: space['2'], alignItems: 'center', marginBottom: '4px' }}>
                     <Pill tone="info" tc={tc}>{fmtInt(gapMeta.filtered_count)} governed gaps</Pill>
+                    <Pill tone="neutral" tc={tc}>
+                      {fmtInt(gapMeta.governed_competitors_count)} governed / {fmtInt(gapMeta.raw_competitors_count)} raw / {fmtInt(gapMeta.configured_competitors_count)} configured competitors
+                    </Pill>
                     <Pill tone={gapMeta.status_counts.dismissed === gapMeta.filtered_count ? 'neutral' : 'warn'} tc={tc}>
                       {fmtInt(gapMeta.status_counts.dismissed ?? 0)} reviewed / dismissed
                     </Pill>

@@ -48,6 +48,25 @@ function PositionStat({ label, d, tc }: { label: string; d: SeoProgressPositionD
   );
 }
 
+function OutcomeStat({
+  label, value, detail, tone, tc,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+  tone: 'good' | 'bad' | 'neutral' | 'warn';
+  tc: Tc;
+}) {
+  const color = tone === 'good' ? PALETTE.good : tone === 'bad' ? PALETTE.bad : tone === 'warn' ? PALETTE.warn : tc.text.primary;
+  return (
+    <div style={{ border: `1px solid ${tc.border.subtle}`, borderRadius: radius.sm, padding: space['3'], background: tc.background.muted }}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontFamily: monoStack, fontSize: '22px', color, marginTop: '2px' }}>{value}</div>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '2px' }}>{detail}</div>
+    </div>
+  );
+}
+
 function ResultsContent() {
   const tc = useThemeColors();
   const [data, setData] = useState<SeoProgressResponse | null>(null);
@@ -90,12 +109,24 @@ function ResultsContent() {
             <Card tc={tc}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: space['4'] }}>
                 <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>Last 7 days</span>
-                <Pill tone="neutral" tc={tc}>{data.week.pages_optimized} optimized · {data.week.pages_measuring} measuring</Pill>
+                <Pill tone="neutral" tc={tc}>{data.week.execution_outcomes.total_attempts} execution attempts</Pill>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: space['4'] }}>
                 <DeltaStat label="Clicks" d={data.week.organic_clicks} tc={tc} />
                 <DeltaStat label="Impressions" d={data.week.organic_impressions} tc={tc} />
                 <PositionStat label="Avg position" d={data.week.avg_position} tc={tc} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: space['3'], marginTop: space['4'] }}>
+                <OutcomeStat label="Succeeded" value={fmtInt(data.week.execution_outcomes.succeeded)} detail="terminal success" tone="good" tc={tc} />
+                <OutcomeStat label="Failed" value={fmtInt(data.week.execution_outcomes.failed)} detail="terminal failure" tone="bad" tc={tc} />
+                <OutcomeStat label="Measuring" value={fmtInt(data.week.execution_outcomes.measuring)} detail="outcome pending only" tone="neutral" tc={tc} />
+                <OutcomeStat
+                  label="Failure rate"
+                  value={data.week.execution_outcomes.failure_rate_pct == null ? '—' : `${data.week.execution_outcomes.failure_rate_pct.toFixed(0)}%`}
+                  detail={`${fmtInt(data.week.execution_outcomes.failed)} / ${fmtInt(data.week.execution_outcomes.total_attempts)} attempts`}
+                  tone={data.week.execution_outcomes.failure_rate_pct != null && data.week.execution_outcomes.failure_rate_pct > 0 ? 'bad' : 'good'}
+                  tc={tc}
+                />
               </div>
             </Card>
             <Card tc={tc}>

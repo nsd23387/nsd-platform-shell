@@ -153,6 +153,7 @@ export function cardRead(p: PortfolioPage): string {
 export const fmtInt = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('en-US'));
 export const fmtPos = (n: number | null | undefined) => (n == null ? '—' : n.toFixed(1));
 export const fmtMoney = (n: number | null | undefined) => (n == null ? '—' : `$${n.toFixed(2)}`);
+export const fmtScore = (n: number | null | undefined) => (n == null ? '—' : n.toFixed(1));
 const formatRefDate = (d: string | null | undefined) => {
   if (!d) return '—';
   const dt = new Date(`${d.slice(0, 10)}T00:00:00Z`);
@@ -180,6 +181,21 @@ export function mutationDisplay(
   if (t.includes('redirect')) {
     return { tag: 'REDIRECT', verb: (v) => `Add redirect${tgt(v)}` };
   }
+  if (t.includes('organization_schema')) {
+    return { tag: 'ORG SCHEMA', verb: () => 'Organization schema' };
+  }
+  if (t.includes('website_schema')) {
+    return { tag: 'WEBSITE SCHEMA', verb: () => 'WebSite schema' };
+  }
+  if (t.includes('breadcrumb_schema')) {
+    return { tag: 'BREADCRUMB', verb: () => 'Breadcrumb schema' };
+  }
+  if (t.includes('local_business_schema')) {
+    return { tag: 'LOCALBUSINESS', verb: () => 'LocalBusiness schema' };
+  }
+  if (t.includes('faq_schema')) {
+    return { tag: 'FAQ SCHEMA', verb: () => 'FAQ schema' };
+  }
   if (t.includes('schema') || t.includes('offer')) {
     return { tag: 'SCHEMA', verb: () => 'Add structured-data schema' };
   }
@@ -199,6 +215,11 @@ export function mutationDisplay(
   const raw = mutationType || primaryRemedy;
   if (!raw) return { tag: 'UNKNOWN', verb: () => 'Unknown change type' };
   return { tag: raw.replace(/_/g, ' ').toUpperCase(), verb: () => raw.replace(/_/g, ' ') };
+}
+
+export function isSchemaMutation(mutationType: string | null | undefined): boolean {
+  const t = (mutationType ?? '').toLowerCase();
+  return t.includes('schema') || t.includes('structured_data') || t.includes('offer');
 }
 
 // -----------------------------------------------------------------------------
@@ -368,8 +389,10 @@ export function CandidateCard({
   const [err, setErr] = useState<string | null>(null);
 
   const pending = !readOnly && c.approval_status === 'pending' && !done;
+  const schemaPaused = isSchemaMutation(c.mutation_type);
 
   async function act(kind: 'approve' | 'reject') {
+    if (kind === 'approve' && schemaPaused) return;
     setBusy(kind); setErr(null);
     try {
       if (kind === 'approve') {
@@ -412,7 +435,7 @@ export function CandidateCard({
           {c.confidence_tier && <Pill tone="info" tc={tc}>{c.confidence_tier}</Pill>}
           {c.opportunity_score != null && (
             <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>
-              score {Math.round(c.opportunity_score)}
+              score {fmtScore(c.opportunity_score)}
             </span>
           )}
         </div>
@@ -441,14 +464,15 @@ export function CandidateCard({
           <button
             data-testid={`button-approve-${c.candidate_id}`}
             onClick={() => act('approve')}
-            disabled={busy !== null}
+            disabled={busy !== null || schemaPaused}
+            title={schemaPaused ? 'Schema execution temporarily paused — write path under repair.' : undefined}
             style={{
-              padding: '6px 14px', borderRadius: radius.sm, border: 'none', cursor: busy ? 'default' : 'pointer',
-              background: PALETTE.good, color: '#fff', fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium,
+              padding: '6px 14px', borderRadius: radius.sm, border: schemaPaused ? `1px solid ${tc.border.default}` : 'none', cursor: (busy || schemaPaused) ? 'default' : 'pointer',
+              background: schemaPaused ? tc.background.muted : PALETTE.good, color: schemaPaused ? tc.text.muted : '#fff', fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium,
               opacity: busy ? 0.6 : 1,
             }}
           >
-            {busy === 'approve' ? 'Approving…' : 'Approve'}
+            {busy === 'approve' ? 'Approving…' : schemaPaused ? 'Schema paused' : 'Approve'}
           </button>
           <button
             data-testid={`button-reject-${c.candidate_id}`}
@@ -1100,9 +1124,9 @@ export function PageCard({ p, tc, onOpen }: { p: PortfolioPage; tc: Tc; onOpen: 
         {cardRead(p)}
       </div>
       <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['3'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-        <span><span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(p.top_q_impr ?? p.gsc_impressions)}</span> impr.</span>
-        <span>pos <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(p.top_q_pos ?? p.gsc_best_position)}</span></span>
-        {(p.top_query || p.gsc_top_query) && <span>“{p.top_query || p.gsc_top_query}”</span>}
+        <span><span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(p.top_q_impr ?? p.gsc_impressions)}</span> impr. (30d)</span>
+        <span>pos <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(p.top_q_pos ?? p.gsc_best_position)}</span> (30d)</span>
+        {(p.top_query || p.gsc_top_query) && <span>top query (30d): “{p.top_query || p.gsc_top_query}”</span>}
       </div>
       <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
         {p.has_dataforseo ? (
