@@ -29,14 +29,14 @@ import {
   getSeoPortfolio, getSeoCompetitorGapFeed,
   approveEngineCandidate, rejectEngineCandidate,
   getCompetitiveVelocitySummary, getCompetitiveChanges, getSeoShipped,
-  getSeoOffpageBriefs, getSeoSuppressed, getSeoSystemHealth,
+  getSeoOffpageBriefs, getSeoSuppressed, getSeoSystemHealth, getSeoOverviewKpis,
 } from '../../../lib/seoApi';
 import type {
   PortfolioPage, PortfolioBucket, PageDossierCandidate,
   SeoTimeseriesResponse, GscPipelineHealth, SeoCompetitorGap,
   SeoTimeseriesPoint, CompetitiveVelocitySummary, CompetitivePageChange,
   SeoShippedAction, SeoCandidateQueue, SeoOffpageBrief, SuppressedAudit,
-  SeoCompetitorGapMeta, SeoWindowRequest, SeoSystemHealthRow,
+  SeoCompetitorGapMeta, SeoWindowRequest, SeoSystemHealthRow, SeoDashboardMetricContract,
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
