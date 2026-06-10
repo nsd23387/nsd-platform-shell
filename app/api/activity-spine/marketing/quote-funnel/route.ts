@@ -64,7 +64,7 @@ async function getSummary() {
       COALESCE(AVG(EXTRACT(EPOCH FROM (quote_paid_at - created_at)) / 86400) FILTER (WHERE quote_paid_at IS NOT NULL), 0) AS avg_sales_cycle_days,
       MIN(created_at)::text AS earliest_quote,
       MAX(created_at)::text AS latest_quote
-    FROM analytics.raw_qms_deals
+    FROM marketing.quote_dashboard_deals
   `);
 
   const r = rows[0];
@@ -109,7 +109,7 @@ async function getAging() {
           ELSE 6
         END AS band_order,
         total_price_cents
-      FROM analytics.raw_qms_deals
+      FROM marketing.quote_dashboard_deals
       WHERE quote_active = true
         AND quote_activity NOT IN ('Quote Paid', 'Not Interested')
     )
@@ -147,7 +147,7 @@ async function getWinRateByType() {
       COUNT(*) FILTER (WHERE quote_paid_at IS NOT NULL) AS won,
       COALESCE(SUM(total_price_cents) FILTER (WHERE quote_paid_at IS NOT NULL), 0) AS won_revenue_cents,
       COALESCE(AVG(total_price_cents) FILTER (WHERE quote_paid_at IS NOT NULL AND total_price_cents > 0), 0) AS avg_won_cents
-    FROM analytics.raw_qms_deals
+    FROM marketing.quote_dashboard_deals
     GROUP BY quote_type
     ORDER BY COUNT(*) DESC
   `);
@@ -159,7 +159,7 @@ async function getWinRateByType() {
       COUNT(*) FILTER (WHERE quote_paid_at IS NOT NULL) AS won,
       COALESCE(SUM(total_price_cents) FILTER (WHERE quote_paid_at IS NOT NULL), 0) AS won_revenue_cents,
       COALESCE(AVG(total_price_cents) FILTER (WHERE quote_paid_at IS NOT NULL AND total_price_cents > 0), 0) AS avg_won_cents
-    FROM analytics.raw_qms_deals
+    FROM marketing.quote_dashboard_deals
     GROUP BY sign_type
     ORDER BY COUNT(*) DESC
   `);
@@ -187,7 +187,7 @@ async function getPipelineTrend() {
       COUNT(*) FILTER (WHERE quote_paid_at IS NOT NULL) AS won,
       COALESCE(SUM(total_price_cents), 0) AS pipeline_cents,
       COALESCE(SUM(total_price_cents) FILTER (WHERE quote_paid_at IS NOT NULL), 0) AS won_cents
-    FROM analytics.raw_qms_deals
+    FROM marketing.quote_dashboard_deals
     GROUP BY 1
     ORDER BY 1
   `);
@@ -209,7 +209,7 @@ async function getStageBreakdown() {
       COUNT(*) AS count,
       COALESCE(SUM(total_price_cents), 0) AS pipeline_cents,
       COALESCE(AVG(EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400), 0) AS avg_age_days
-    FROM analytics.raw_qms_deals
+    FROM marketing.quote_dashboard_deals
     GROUP BY quote_activity, quote_active
     ORDER BY COUNT(*) DESC
   `);
@@ -231,7 +231,7 @@ async function getAttribution() {
       COUNT(*) AS total,
       COUNT(*) FILTER (WHERE quote_paid_at IS NOT NULL) AS won,
       COALESCE(SUM(total_price_cents) FILTER (WHERE quote_paid_at IS NOT NULL), 0) AS won_cents
-    FROM analytics.raw_qms_deals
+    FROM marketing.quote_dashboard_deals
     GROUP BY utm_source, utm_medium
     ORDER BY COUNT(*) DESC
   `);
