@@ -40,7 +40,7 @@ import type {
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
-  fmtInt, fmtPos, fmtScore, pathOf, PageDossierDrawer, mutationDisplay, sectionLabelStyle, proposalReview, isSchemaMutation,
+  fmtInt, fmtPos, fmtScore, pathOf, PageDossierDrawer, mutationDisplay, sectionLabelStyle, proposalReview,
 } from './_shared';
 
 // -----------------------------------------------------------------------------
@@ -813,7 +813,6 @@ function DetectionRow({
 }) {
   const [busy, setBusy] = useState(false);
   const score = fmtScore(c.opportunity_score);
-  const schemaPaused = isSchemaMutation(c.mutation_type);
   // Honest impact: the target page's real GSC demand, not a modelled lift.
   const impr = page?.top_q_impr ?? page?.gsc_impressions ?? null;
   const pos = page?.top_q_pos ?? page?.gsc_best_position ?? null;
@@ -866,13 +865,12 @@ function DetectionRow({
       </div>
       <div style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
         <button
-          onClick={async () => { if (schemaPaused) return; setBusy(true); try { await onApprove(c); } finally { setBusy(false); } }}
-          disabled={busy || schemaPaused}
+          onClick={async () => { setBusy(true); try { await onApprove(c); } finally { setBusy(false); } }}
+          disabled={busy}
           data-testid={`button-approve-detection-${c.candidate_id}`}
-          title={schemaPaused ? 'Schema execution temporarily paused — write path under repair.' : undefined}
-          style={{ padding: '6px 12px', background: schemaPaused ? tc.background.muted : PALETTE.violet, color: schemaPaused ? tc.text.muted : '#fff', border: schemaPaused ? `1px solid ${tc.border.default}` : 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, cursor: busy || schemaPaused ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
+          style={{ padding: '6px 12px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
         >
-          {busy ? '…' : schemaPaused ? 'Paused' : 'Approve'}
+          {busy ? '…' : 'Approve'}
         </button>
         <Link
           href={`/dashboard/seo/action/${encodeURIComponent(c.candidate_id)}`}
@@ -1230,13 +1228,8 @@ function CommandCenterContent() {
     () => detections.filter((c) => c.page_is_live !== true),
     [detections],
   );
-  const schemaDetectionCount = useMemo(
-    () => detections.filter((c) => isSchemaMutation(c.mutation_type)).length,
-    [detections],
-  );
 
   async function approveOne(c: PageDossierCandidate) {
-    if (isSchemaMutation(c.mutation_type)) return;
     await approveEngineCandidate({
       candidate_id: c.candidate_id,
       opportunity_id: c.opportunity_id ?? undefined,
@@ -1259,9 +1252,7 @@ function CommandCenterContent() {
     // Governance (D7): candidates flagged "needs review" (placeholder/scaffold
     // proposals) are NOT pre-selected — a human must deliberately opt them in
     // after authoring/checking. They still appear in the list, just unchecked.
-    // Schema execution is temporarily paused pending Batch 1 write-path repair,
-    // so schema-family rows are visible but never preselected for approval.
-    setReviewSelected(new Set(targets.filter((c) => !proposalReview(c).flagged && !isSchemaMutation(c.mutation_type)).map((c) => c.candidate_id)));
+    setReviewSelected(new Set(targets.filter((c) => !proposalReview(c).flagged).map((c) => c.candidate_id)));
     setReviewOpen(true);
   }
 
@@ -1275,7 +1266,7 @@ function CommandCenterContent() {
 
   async function confirmReview() {
     if (bulkBusy) return;
-    const targets = detections.filter((c) => reviewSelected.has(c.candidate_id) && !isSchemaMutation(c.mutation_type));
+    const targets = detections.filter((c) => reviewSelected.has(c.candidate_id));
     if (targets.length === 0) { setReviewOpen(false); return; }
     setBulkBusy(true); setActionMsg(null);
     const ids = new Set(targets.map((c) => c.candidate_id));
@@ -1395,18 +1386,16 @@ function CommandCenterContent() {
                 const checked = reviewSelected.has(c.candidate_id);
                 const m = mutationDisplay(c.mutation_type, c.primary_remedy);
                 const review = proposalReview(c);
-                const schemaPaused = isSchemaMutation(c.mutation_type);
                 return (
                   <label
                     key={c.candidate_id}
                     data-testid={`review-row-${c.candidate_id}`}
-                    style={{ display: 'flex', gap: space['3'], alignItems: 'flex-start', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}`, cursor: schemaPaused ? 'default' : 'pointer', opacity: schemaPaused ? 0.75 : 1 }}
+                    style={{ display: 'flex', gap: space['3'], alignItems: 'flex-start', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}`, cursor: 'pointer' }}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
-                      disabled={schemaPaused}
-                      onChange={() => { if (!schemaPaused) toggleReview(c.candidate_id); }}
+                      onChange={() => { toggleReview(c.candidate_id); }}
                       data-testid={`review-check-${c.candidate_id}`}
                       style={{ marginTop: '3px', flexShrink: 0 }}
                     />
@@ -1418,14 +1407,8 @@ function CommandCenterContent() {
                         {review.flagged && (
                           <span title={review.reasons.join(' ')} data-testid={`review-needs-review-${c.candidate_id}`}><Pill tone="warn" tc={tc}>needs review</Pill></span>
                         )}
-                        {schemaPaused && <Pill tone="warn" tc={tc}>schema paused</Pill>}
                       </span>
                       <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, wordBreak: 'break-all' }}>{c.target_page_url ? pathOf(c.target_page_url) : '—'}</span>
-                      {schemaPaused && (
-                        <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.warn, marginTop: '2px' }}>
-                          Schema execution temporarily paused — write path under repair.
-                        </span>
-                      )}
                       {review.flagged && (
                         <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.warn, marginTop: '2px' }}>
                           Not auto-approvable — {review.reasons[0]}
@@ -1517,11 +1500,6 @@ function CommandCenterContent() {
       </SectionTitle>
       <Card tc={tc} style={{ padding: 0 }}>
         <div style={{ padding: `0 ${space['5']}` }}>
-          {schemaDetectionCount > 0 && (
-            <div style={{ marginTop: space['4'], padding: space['3'], borderRadius: radius.sm, background: PALETTE.warnSoft, color: PALETTE.warn, fontFamily: fontFamily.body, fontSize: '13px', lineHeight: 1.5 }} data-testid="banner-schema-approval-paused">
-              Schema execution temporarily paused — write path under repair. Schema recommendations remain visible, but Approve is disabled until Batch 1 re-enables the lane.
-            </div>
-          )}
           {queueLoading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading recommendations…</div>}
           {!queueLoading && queueError && (
             <div style={{ padding: space['6'], textAlign: 'center', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="error-detections">
