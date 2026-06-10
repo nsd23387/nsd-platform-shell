@@ -110,7 +110,7 @@ const QMS_KPI_PIPELINE_SQL = `
     COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid') AS won_deals,
     COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) AS won_cents,
     COUNT(*) AS total_deals
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
 `;
 
@@ -289,7 +289,7 @@ const FRESHNESS_SQL = `
     (SELECT MAX(metric_date)::text     FROM analytics.metrics_page_engagement_daily) AS engagement_last_date,
     (SELECT MAX(metric_date)::text     FROM analytics.metrics_search_console_page_daily) AS search_console_last_date,
     (SELECT MAX(metric_date)::text FROM analytics.conversion_metrics_daily)      AS conversion_last_date,
-    (SELECT MAX(updated_at)::text FROM analytics.raw_qms_deals) AS qms_last_date
+    (SELECT MAX(updated_at)::text FROM marketing.quote_dashboard_deals) AS qms_last_date
 `;
 
 // ============================================
@@ -362,7 +362,7 @@ const TIMESERIES_PIPELINE_SQL = `
   ),
   daily AS (
     SELECT created_at::date AS metric_date, SUM(total_price_cents) / 100.0 AS val
-    FROM analytics.raw_qms_deals
+    FROM marketing.quote_dashboard_deals
     WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     GROUP BY created_at::date
   )
@@ -448,7 +448,7 @@ const ANOMALY_SUBMISSIONS_SQL = `
 const ANOMALY_PIPELINE_SQL = `
   WITH daily AS (
     SELECT created_at::date AS metric_date, SUM(total_price_cents) / 100.0 AS val
-    FROM analytics.raw_qms_deals
+    FROM marketing.quote_dashboard_deals
     WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
     GROUP BY created_at::date
   )
@@ -533,7 +533,7 @@ const PIPELINE_CATEGORY_SQL = `
     COALESCE(NULLIF(sign_type, ''), 'Unknown') AS product_category,
     COUNT(*) AS submissions,
     COALESCE(SUM(total_price_cents), 0) / 100.0 AS pipeline_value_usd
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE quote_active
   GROUP BY COALESCE(NULLIF(sign_type, ''), 'Unknown')
   ORDER BY pipeline_value_usd DESC
@@ -552,7 +552,7 @@ const RECENT_CONVERSIONS_SQL = `
     quote_number,
     customer_name,
     quote_activity AS status
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   ORDER BY created_at DESC
   LIMIT 20
 `;
@@ -761,7 +761,7 @@ const WARM_OUTREACH_SQL = `
     COALESCE(SUM(total_price_cents), 0) / 100.0 AS pipeline_value_usd,
     COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid') AS won_deals,
     COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) / 100.0 AS won_revenue_usd
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
 `;
 

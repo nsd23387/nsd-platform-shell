@@ -14,7 +14,8 @@
  *
  * If no date params are given, defaults to last 90 days.
  *
- * GOVERNANCE: Read-only. All data comes from analytics.raw_qms_deals.
+ * GOVERNANCE: Read-only. Data comes from the PII-governed
+ * marketing.quote_dashboard_deals projection over the canonical quote spine.
  */
 
 export const runtime = 'nodejs';
@@ -75,7 +76,7 @@ const PIPELINE_SUMMARY_SQL = `
     COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid') AS won_deals,
     COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) AS won_cents,
     COUNT(*) AS total_deals
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE created_at::date BETWEEN $1 AND $2
 `;
 
@@ -85,7 +86,7 @@ const AGING_BUCKETS_SQL = `
     COUNT(*) FILTER (WHERE NOW() - updated_at >= INTERVAL '2 days' AND NOW() - updated_at < INTERVAL '7 days') AS bucket_3_7d,
     COUNT(*) FILTER (WHERE NOW() - updated_at >= INTERVAL '7 days' AND NOW() - updated_at < INTERVAL '14 days') AS bucket_8_14d,
     COUNT(*) FILTER (WHERE NOW() - updated_at >= INTERVAL '14 days') AS bucket_15_plus
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE quote_active
     AND quote_activity NOT IN ('Quote Paid', 'Not Interested')
     AND created_at::date BETWEEN $1 AND $2
@@ -113,7 +114,7 @@ const CLOSE_RATE_SQL = `
     COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) AS won_revenue_cents,
     COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Not Interested'), 0) AS lost_revenue_cents,
     COUNT(*) - COUNT(*) FILTER (WHERE quote_activity IN ('Quote Paid', 'Not Interested')) AS open
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE created_at::date BETWEEN $1 AND $2
 `;
 
@@ -122,7 +123,7 @@ const DEAL_VELOCITY_SQL = `
     ROUND(AVG(EXTRACT(EPOCH FROM (quote_paid_at - created_at)) / 86400.0)::numeric, 1) AS avg_days_to_close,
     ROUND(AVG(EXTRACT(EPOCH FROM (deposit_paid_at - created_at)) / 86400.0)::numeric, 1) AS avg_days_to_deposit,
     COUNT(*) AS sample_size
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE quote_paid_at IS NOT NULL
     AND created_at::date BETWEEN $1 AND $2
 `;
@@ -132,7 +133,7 @@ const STATUS_BREAKDOWN_SQL = `
     quote_activity AS status,
     COUNT(*) AS count,
     COALESCE(SUM(total_price_cents), 0) AS value_cents
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE quote_active
     AND created_at::date BETWEEN $1 AND $2
   GROUP BY quote_activity
@@ -156,7 +157,7 @@ const RECENT_DEALS_SQL = `
     followup_count,
     revision_round,
     discount_code
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE created_at::date BETWEEN $1 AND $2
   ORDER BY updated_at DESC
   LIMIT 25
@@ -168,7 +169,7 @@ const ATTRIBUTION_SQL = `
     COUNT(*) AS count,
     COALESCE(SUM(total_price_cents), 0) AS value_cents,
     COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid') AS won
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE created_at::date BETWEEN $1 AND $2
   GROUP BY COALESCE(NULLIF(utm_source, ''), NULLIF(referrer, ''), 'direct')
   ORDER BY count DESC
@@ -181,7 +182,7 @@ const DISCOUNT_USAGE_SQL = `
     COUNT(*) AS total,
     COUNT(*) FILTER (WHERE discount_used_at IS NOT NULL) AS discount_redeemed,
     ROUND(AVG(discount_percentage) FILTER (WHERE discount_code IS NOT NULL), 1) AS avg_discount_pct
-  FROM analytics.raw_qms_deals
+  FROM marketing.quote_dashboard_deals
   WHERE created_at::date BETWEEN $1 AND $2
 `;
 
@@ -203,7 +204,7 @@ const CLICK_TO_QUOTE_SQL = `
         COUNT(*) AS total_quotes,
         COUNT(*) FILTER (WHERE COALESCE(NULLIF(utm_source, ''), NULLIF(referrer, ''), 'direct') != 'google' OR utm_medium IS NULL OR utm_medium != 'cpc') AS organic_quotes,
         COUNT(*) FILTER (WHERE utm_source = 'google' AND utm_medium = 'cpc') AS paid_quotes
-      FROM analytics.raw_qms_deals
+      FROM marketing.quote_dashboard_deals
       WHERE created_at::date BETWEEN $1 AND $2
     )
   SELECT
@@ -234,7 +235,7 @@ function makeTimeseriesSql(valueExpr: string, dateColumn: string, extraWhere: st
     ),
     daily AS (
       SELECT ${dateColumn}::date AS day, ${valueExpr} AS val
-      FROM analytics.raw_qms_deals
+      FROM marketing.quote_dashboard_deals
       WHERE ${dateColumn}::date BETWEEN $1 AND $2
         ${extraWhere}
       GROUP BY ${dateColumn}::date
@@ -264,7 +265,7 @@ async function tableExists(db: Pool): Promise<boolean> {
   const result = await db.query(`
     SELECT EXISTS (
       SELECT 1 FROM information_schema.tables
-      WHERE table_schema = 'analytics' AND table_name = 'raw_qms_deals'
+      WHERE table_schema = 'marketing' AND table_name = 'quote_dashboard_deals'
     ) AS exists
   `);
   return result.rows[0]?.exists === true;
