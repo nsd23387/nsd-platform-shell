@@ -1100,6 +1100,11 @@ function CommandCenterContent() {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [trendData, setTrendData] = useState<SeoTimeseriesResponse | null>(null);
+
+  useEffect(() => {
+    const url = new URLSearchParams(window.location.search).get('url');
+    if (url) setSelectedUrl(url);
+  }, []);
   const seoWindow = useMemo(() => selectedWindow(range, customDays, customStart, customEnd), [range, customDays, customStart, customEnd]);
   const handleTrendData = useCallback((d: SeoTimeseriesResponse | null) => setTrendData(d), []);
 
@@ -1308,6 +1313,13 @@ function CommandCenterContent() {
             {queueLoading ? 'Loading governed recommendations…'
               : `${detections.length} guarded recommendation${detections.length === 1 ? '' : 's'} awaiting approval (${liveDetections.length} live-page, ${redirectDetections.length} lost/non-live).`}
           </p>
+          <Link
+            href="/dashboard/marketing/seo"
+            style={{ display: 'inline-flex', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.semibold, color: PALETTE.violet, textDecoration: 'none' }}
+            data-testid="link-marketing-seo-summary"
+          >
+            Marketing SEO Summary →
+          </Link>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: space['3'], alignItems: 'flex-end' }}>
           <WindowControls

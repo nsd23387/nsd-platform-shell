@@ -141,8 +141,8 @@ export default function MarketingExecutiveOverview() {
       const engineLabels: Record<string, string> = {
         warm_outreach: 'Warm Outreach',
         cold_outreach: 'Cold Outreach',
-        post_free_content: 'Post Free Content',
-        run_paid_ads: 'Run Paid Ads',
+        post_free_content: 'SEO Summary',
+        run_paid_ads: 'Paid Summary',
       };
       sections.push({
         type: 'table',

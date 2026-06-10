@@ -25,7 +25,7 @@ interface Experiment {
 }
 
 const STORAGE_KEY = 'nsd-marketing-experiments';
-const ENGINES = ['Warm Outreach', 'Cold Outreach', 'SEO', 'Run Paid Ads'];
+const ENGINES = ['SEO Summary', 'Paid Summary', 'Warm Outreach', 'Cold Outreach', 'Social Automation'];
 const DECISIONS = ['keep', 'revert', 'iterate', 'pending'];
 
 function loadExperiments(): Experiment[] {

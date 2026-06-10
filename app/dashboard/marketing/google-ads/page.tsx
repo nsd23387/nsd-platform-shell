@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useContext, useMemo, useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied, DashboardCard } from '../../../../components/dashboard';
 import { PageExportBar } from '../../../../components/dashboard/PageExportBar';
@@ -590,7 +591,7 @@ export default function GoogleAdsWarRoomPage() {
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
-        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Deep Dives'}, {label:'Google Ads War Room'}]} />
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Paid Summary', href:'/dashboard/marketing/paid-ads'}, {label:'Google Ads War Room'}]} />
         <div style={{ marginBottom: space['6'], display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: space['4'], flexWrap: 'wrap' }}>
           <div>
             <h1
@@ -612,6 +613,13 @@ export default function GoogleAdsWarRoomPage() {
             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.placeholder, marginTop: space['1'] }}>
               Note: Campaign names display as IDs until name mapping is available.
             </p>
+            <Link
+              href="/dashboard/marketing/paid-ads"
+              style={{ display: 'inline-flex', marginTop: space['3'], fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: magenta[700], textDecoration: 'none' }}
+              data-testid="link-back-paid-summary"
+            >
+              Paid Summary →
+            </Link>
           </div>
           <PageExportBar
             filename="google-ads-war-room"

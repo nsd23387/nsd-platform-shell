@@ -322,6 +322,12 @@ export interface MarketingGoogleAdsCampaign {
   daily_budget: number;
 }
 
+export interface MarketingGoogleAdsTimeseries {
+  spend: MarketingTimeseriesPoint[];
+  clicks: MarketingTimeseriesPoint[];
+  conversions: MarketingTimeseriesPoint[];
+}
+
 export type MarketingPeriod = '7d' | '30d' | '90d';
 
 export type MarketingPreset = 'last_7d' | 'last_30d' | 'last_90d' | 'mtd' | 'qtd' | 'ytd';
@@ -411,6 +417,7 @@ export interface MarketingOverviewResponse {
   ga4_funnel: MarketingGA4Funnel;
   google_ads_overview: MarketingGoogleAdsOverview;
   google_ads_campaigns: MarketingGoogleAdsCampaign[];
+  google_ads_timeseries?: MarketingGoogleAdsTimeseries;
   core4_summary?: Core4Summary;
 }
 

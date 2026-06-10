@@ -86,7 +86,7 @@ export default function PaidAdsPage() {
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
-        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Core 4 Engines'}, {label:'Run Paid Ads'}]} />
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Engines'}, {label:'Paid Summary'}]} />
         <div style={{ marginBottom: space['6'] }}>
           <h1
             style={{
@@ -99,15 +99,22 @@ export default function PaidAdsPage() {
             }}
             data-testid="text-page-title"
           >
-            Run Paid Ads
+            Paid Summary
           </h1>
           <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
-            Spend, ROAS, campaign performance, and budget pacing for all paid channels.
+            Executive paid performance, ROAS, campaign pacing, and one-click drill-down into Google Ads detail.
           </p>
+          <Link
+            href="/dashboard/marketing/google-ads"
+            style={{ display: 'inline-flex', marginTop: space['3'], fontFamily: fontFamily.body, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: magenta[700], textDecoration: 'none' }}
+            data-testid="link-open-paid-war-room"
+          >
+            Open Paid War Room →
+          </Link>
           <div style={{ marginTop: space['3'] }}>
             <PageExportBar
               filename="paid-ads"
-              pdfTitle="Run Paid Ads"
+              pdfTitle="Paid Summary"
               sections={exportSections}
               loading={loading}
             />
@@ -118,9 +125,9 @@ export default function PaidAdsPage() {
           <DashboardCard title="Error" error={error} />
         )}
 
-        <DashboardSection title="Clicks Trend" description="Daily paid search clicks over the selected period." index={0}>
+        <DashboardSection title="Clicks Trend" description="Daily paid search clicks over the selected period. Google Ads · daily · selected Marketing window." index={0}>
           {(() => {
-            const clicks = data?.timeseries?.clicks ?? [];
+            const clicks = data?.google_ads_timeseries?.clicks ?? [];
             if (!clicks.length && !loading) return null;
             const chartData = clicks.map((c) => ({ date: c.date, clicks: c.value }));
             const target = getTargetForMetric('clicks', chartData.length || 30);

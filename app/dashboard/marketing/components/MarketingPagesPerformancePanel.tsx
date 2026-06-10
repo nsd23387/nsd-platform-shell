@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import type { MarketingPage } from '../../../../types/activity-spine';
 import { DashboardSection, EmptyStateCard } from '../../../../components/dashboard';
 import { DataTable } from '../../../sales-engine/components/ui/DataTable';
@@ -22,7 +23,16 @@ function shortenUrl(url: string): string {
 }
 
 const COLUMNS = [
-  { key: 'page_url', header: 'Page', width: '26%', render: (r: MarketingPage) => shortenUrl(r.page_url) },
+  {
+    key: 'page_url',
+    header: 'Page',
+    width: '26%',
+    render: (r: MarketingPage) => (
+      <Link href={`/dashboard/seo?url=${encodeURIComponent(r.page_url)}`} style={{ color: 'inherit', fontWeight: 500, textDecoration: 'none' }}>
+        {shortenUrl(r.page_url)}
+      </Link>
+    ),
+  },
   { key: 'sessions', header: 'Sessions', width: '10%', align: 'right' as const, render: (r: MarketingPage) => formatNumber(r.sessions) },
   { key: 'bounce_rate', header: 'Bounce', width: '10%', align: 'right' as const, render: (r: MarketingPage) => formatPercent(r.bounce_rate) },
   { key: 'avg_time_on_page_seconds', header: 'Avg Time', width: '10%', align: 'right' as const, render: (r: MarketingPage) => formatDuration(r.avg_time_on_page_seconds) },

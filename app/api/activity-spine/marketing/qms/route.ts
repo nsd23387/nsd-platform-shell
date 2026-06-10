@@ -190,14 +190,12 @@ const CLICK_TO_QUOTE_SQL = `
   WITH
     organic_clicks AS (
       SELECT COALESCE(SUM(clicks), 0) AS total_clicks
-      FROM analytics.metrics_search_console_page
+      FROM analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date)
     ),
     paid_clicks AS (
-      SELECT COALESCE(SUM((payload->>'clicks')::int), 0) AS total_clicks
-      FROM analytics.raw_google_ads
-      WHERE event_name = 'campaign_performance'
-        AND source_system = 'google-ads-bq'
-        AND occurred_at::date BETWEEN $1 AND $2
+      SELECT COALESCE(SUM(clicks), 0) AS total_clicks
+      FROM analytics.metrics_google_ads_campaign_daily
+      WHERE metric_date BETWEEN $1::date AND $2::date
     ),
     qms_totals AS (
       SELECT

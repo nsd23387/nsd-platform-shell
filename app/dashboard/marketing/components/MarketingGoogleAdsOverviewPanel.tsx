@@ -18,9 +18,10 @@ interface KPICardProps {
   label: string;
   value: string;
   testId: string;
+  provenance?: string;
 }
 
-function KPICard({ label, value, testId }: KPICardProps) {
+function KPICard({ label, value, testId, provenance }: KPICardProps) {
   const tc = useThemeColors();
   return (
     <div
@@ -40,6 +41,11 @@ function KPICard({ label, value, testId }: KPICardProps) {
       <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
         {value}
       </div>
+      {provenance && (
+        <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['1'] }}>
+          {provenance}
+        </div>
+      )}
     </div>
   );
 }
@@ -63,13 +69,13 @@ export function MarketingGoogleAdsOverviewPanel({ overview, loading, error }: Pr
         style={{ display: 'flex', gap: space['3'], flexWrap: 'wrap' }}
         data-testid="panel-google-ads-overview"
       >
-        <KPICard label="Spend" value={formatCurrency(overview.spend)} testId="gads-spend" />
+        <KPICard label="Spend" value={formatCurrency(overview.spend)} testId="gads-spend" provenance="Google Ads · campaign grain · selected Marketing window" />
         <KPICard label="Impressions" value={formatNumber(overview.impressions)} testId="gads-impressions" />
-        <KPICard label="Clicks" value={formatNumber(overview.clicks)} testId="gads-clicks" />
+        <KPICard label="Clicks" value={formatNumber(overview.clicks)} testId="gads-clicks" provenance="Google Ads · campaign grain · selected Marketing window" />
         <KPICard label="Conversions" value={formatNumber(overview.conversions)} testId="gads-conversions" />
         <KPICard label="CPC" value={formatCurrency(overview.cpc)} testId="gads-cpc" />
         <KPICard label="CTR" value={formatPercent(overview.ctr)} testId="gads-ctr" />
-        <KPICard label="ROAS" value={overview.roas.toFixed(2) + 'x'} testId="gads-roas" />
+        <KPICard label="ROAS" value={overview.roas.toFixed(2) + 'x'} testId="gads-roas" provenance="Google Ads spend + quote-attributed revenue · selected Marketing window" />
       </div>
     </DashboardSection>
   );
