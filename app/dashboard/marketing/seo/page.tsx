@@ -146,7 +146,6 @@ export default function SeoSummaryPage() {
         )}
 
         <DashboardSection title="Organic Sessions Trend" description="Daily organic-search sessions from the Marketing summary source." index={0}>
-          {/* TODO(C2b): repoint to governed SEO window when Marketing summary reads the governed GSC surface. */}
           {(() => {
             const sessions = data?.timeseries?.sessions ?? [];
             if (!sessions.length && !loading) return null;
@@ -169,7 +168,6 @@ export default function SeoSummaryPage() {
         </DashboardSection>
 
         <DashboardSection title="Search Performance Trend" description="Daily clicks and impressions from Google Search Console." index={1}>
-          {/* TODO(C2b): repoint to governed SEO window when Marketing summary reads the governed GSC surface. */}
           {(() => {
             const clicks = data?.timeseries?.clicks ?? [];
             const impressions = data?.timeseries?.impressions ?? [];

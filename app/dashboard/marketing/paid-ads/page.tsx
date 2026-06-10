@@ -126,9 +126,8 @@ export default function PaidAdsPage() {
         )}
 
         <DashboardSection title="Clicks Trend" description="Daily paid search clicks over the selected period. Google Ads · daily · selected Marketing window." index={0}>
-          {/* TODO(C2b): repoint to governed paid source/window if C2b changes Marketing summary inputs. */}
           {(() => {
-            const clicks = data?.timeseries?.clicks ?? [];
+            const clicks = data?.google_ads_timeseries?.clicks ?? [];
             if (!clicks.length && !loading) return null;
             const chartData = clicks.map((c) => ({ date: c.date, clicks: c.value }));
             const target = getTargetForMetric('clicks', chartData.length || 30);

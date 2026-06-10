@@ -69,14 +69,13 @@ export function MarketingGoogleAdsOverviewPanel({ overview, loading, error }: Pr
         style={{ display: 'flex', gap: space['3'], flexWrap: 'wrap' }}
         data-testid="panel-google-ads-overview"
       >
-        {/* TODO(C2b): repoint to governed paid source/window if C2b changes Marketing summary inputs. */}
         <KPICard label="Spend" value={formatCurrency(overview.spend)} testId="gads-spend" provenance="Google Ads · campaign grain · selected Marketing window" />
         <KPICard label="Impressions" value={formatNumber(overview.impressions)} testId="gads-impressions" />
         <KPICard label="Clicks" value={formatNumber(overview.clicks)} testId="gads-clicks" provenance="Google Ads · campaign grain · selected Marketing window" />
         <KPICard label="Conversions" value={formatNumber(overview.conversions)} testId="gads-conversions" />
         <KPICard label="CPC" value={formatCurrency(overview.cpc)} testId="gads-cpc" />
         <KPICard label="CTR" value={formatPercent(overview.ctr)} testId="gads-ctr" />
-        <KPICard label="ROAS" value={overview.roas.toFixed(2) + 'x'} testId="gads-roas" provenance="Google Ads spend + attributed conversion value · selected Marketing window" />
+        <KPICard label="ROAS" value={overview.roas.toFixed(2) + 'x'} testId="gads-roas" provenance="Google Ads spend + quote-attributed revenue · selected Marketing window" />
       </div>
     </DashboardSection>
   );

@@ -14,9 +14,8 @@ function listRouteFiles(dir: string): string[] {
 }
 
 describe('Marketing governed source guardrails', () => {
-  it('does not read retired Ahrefs or raw Google Ads tables outside quote-funnel', () => {
+  it('does not read retired Ahrefs or raw Google Ads tables in live Marketing routes', () => {
     const offenders = listRouteFiles(MARKETING_API_DIR)
-      .filter((file) => !relative(MARKETING_API_DIR, file).startsWith('quote-funnel/'))
       .flatMap((file) => {
         const source = readFileSync(file, 'utf8');
         const matches = source.match(FORBIDDEN_SOURCE_RE) ?? [];
@@ -24,5 +23,14 @@ describe('Marketing governed source guardrails', () => {
       });
 
     expect(offenders).toEqual([]);
+  });
+
+  it('keeps shared Marketing KPIs on governed SEO, paid, and health sources', () => {
+    const marketingQueries = readFileSync(join(process.cwd(), 'services/marketingQueries.ts'), 'utf8');
+
+    expect(marketingQueries).toContain('analytics.seo_command_center_gsc_window');
+    expect(marketingQueries).toContain('analytics.metrics_google_ads_campaign_daily');
+    expect(marketingQueries).toContain('marketing.google_ads_quote_performance');
+    expect(marketingQueries).toContain('analytics.v_seo_system_health');
   });
 });

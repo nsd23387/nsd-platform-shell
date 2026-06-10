@@ -256,25 +256,17 @@ async function getAttribution() {
 
 async function getCostPerQuote() {
   const { rows: adSpend } = await pool.query(`
-    WITH deduped AS (
-      SELECT DISTINCT ON (occurred_at, payload->>'campaign_id')
-        occurred_at,
-        payload
-      FROM analytics.raw_google_ads_campaign_daily
-      ORDER BY occurred_at, payload->>'campaign_id', ingestion_run_id DESC
-    )
     SELECT
-      SUM(COALESCE((payload->>'cost')::numeric, 0)) AS total_spend,
-      MIN(occurred_at)::text AS spend_start,
-      MAX(occurred_at)::text AS spend_end,
-      COUNT(DISTINCT occurred_at) AS spend_days
-    FROM deduped
+      COALESCE(SUM(cost), 0) AS total_spend,
+      MIN(metric_date)::text AS spend_start,
+      MAX(metric_date)::text AS spend_end,
+      COUNT(DISTINCT metric_date) AS spend_days
+    FROM analytics.metrics_google_ads_campaign_daily
   `);
 
   const { rows: quoteCount } = await pool.query(`
     SELECT COUNT(*) AS cnt
-    FROM analytics.raw_web_events
-    WHERE event_type = 'conversion'
+    FROM marketing.quote_dashboard_deals
   `);
 
   const totalSpend = Number(adSpend[0].total_spend);
@@ -289,6 +281,6 @@ async function getCostPerQuote() {
       end: adSpend[0].spend_end,
       days: Number(adSpend[0].spend_days),
     },
-    caveat: 'Cost per Quote uses total Google Ads spend divided by all web quote submissions. UTM campaign attribution is not yet available for per-campaign breakdown.',
+    caveat: 'Cost per Quote uses governed Google Ads spend divided by canonical quote submissions. Campaign-attributed ROAS is available from google_ads_quote_performance.',
   };
 }

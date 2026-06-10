@@ -30,6 +30,7 @@ import type {
   MarketingGA4Funnel,
   MarketingGoogleAdsOverview,
   MarketingGoogleAdsCampaign,
+  MarketingGoogleAdsTimeseries,
   Core4EngineMetrics,
   Core4EngineComparison,
   Core4Summary,
@@ -480,6 +481,9 @@ const DEVICE_BREAKDOWN_GA4_SQL = `
 `;
 
 const DEVICE_BREAKDOWN_SC_SQL = `
+  WITH w AS (
+    SELECT * FROM analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date)
+  )
   SELECT
     payload->>'device' AS device,
     SUM((payload->>'impressions')::int) AS impressions,
@@ -488,8 +492,9 @@ const DEVICE_BREAKDOWN_SC_SQL = `
       THEN SUM((payload->>'clicks')::float) / SUM((payload->>'impressions')::int)
       ELSE 0 END AS ctr
   FROM analytics.raw_search_console
+  CROSS JOIN w
   WHERE payload->>'date' IS NOT NULL
-    AND (payload->>'date')::date BETWEEN $1 AND $2
+    AND (payload->>'date')::date BETWEEN w.start_date AND w.end_date
   GROUP BY device
   ORDER BY impressions DESC
 `;
@@ -509,6 +514,9 @@ const COUNTRY_BREAKDOWN_GA4_SQL = `
 `;
 
 const COUNTRY_BREAKDOWN_SC_SQL = `
+  WITH w AS (
+    SELECT * FROM analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date)
+  )
   SELECT
     UPPER(payload->>'country') AS country,
     SUM((payload->>'impressions')::int) AS impressions,
@@ -517,8 +525,9 @@ const COUNTRY_BREAKDOWN_SC_SQL = `
       THEN SUM((payload->>'clicks')::float) / SUM((payload->>'impressions')::int)
       ELSE 0 END AS ctr
   FROM analytics.raw_search_console
+  CROSS JOIN w
   WHERE payload->>'date' IS NOT NULL
-    AND (payload->>'date')::date BETWEEN $1 AND $2
+    AND (payload->>'date')::date BETWEEN w.start_date AND w.end_date
   GROUP BY country
   ORDER BY impressions DESC
   LIMIT 10
@@ -562,27 +571,35 @@ const RECENT_CONVERSIONS_SQL = `
 // ============================================
 
 const SEO_MOVERS_SQL = `
-  WITH date_bounds AS (
+  WITH w AS (
+    SELECT * FROM analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date)
+  ),
+  date_bounds AS (
     SELECT
-      GREATEST(MIN(metric_date), $1::date) AS min_date,
-      LEAST(MAX(metric_date), $2::date) AS max_date
-    FROM analytics.metrics_search_console_query_daily
-    WHERE metric_date BETWEEN $1 AND $2
+      GREATEST(MIN(d.metric_date), w.start_date) AS min_date,
+      LEAST(MAX(d.metric_date), w.end_date) AS max_date
+    FROM analytics.metrics_search_console_query_daily d
+    CROSS JOIN w
+    WHERE d.metric_date BETWEEN w.start_date AND w.end_date
+    GROUP BY w.start_date, w.end_date
   ),
   midpoint AS (
-    SELECT min_date + ((max_date - min_date) / 2) AS mid
+    SELECT
+      min_date,
+      max_date,
+      min_date + ((max_date - min_date) / 2) AS mid
     FROM date_bounds
   ),
   first_half AS (
     SELECT query, SUM(impressions) AS impressions
     FROM analytics.metrics_search_console_query_daily d, midpoint m
-    WHERE d.metric_date BETWEEN $1 AND m.mid
+    WHERE d.metric_date BETWEEN m.min_date AND m.mid
     GROUP BY query
   ),
   second_half AS (
     SELECT query, SUM(impressions) AS impressions
     FROM analytics.metrics_search_console_query_daily d, midpoint m
-    WHERE d.metric_date > m.mid AND d.metric_date <= $2
+    WHERE d.metric_date > m.mid AND d.metric_date <= m.max_date
     GROUP BY query
   ),
   combined AS (
@@ -631,39 +648,22 @@ const FUNNEL_SQL = `
 `;
 
 // ============================================
-// T008: Pipeline health from ingestion_runs
+// T008: Pipeline health from the shared SEO system health surface
 // ============================================
 
 const PIPELINE_HEALTH_SQL = `
-  WITH sources AS (
-    SELECT DISTINCT source FROM analytics.ingestion_runs WHERE source IS NOT NULL
-  ),
-  last_success AS (
-    SELECT source, MAX(completed_at) AS last_success
-    FROM analytics.ingestion_runs
-    WHERE status = 'completed'
-    GROUP BY source
-  ),
-  recent_stats AS (
-    SELECT
-      source,
-      COUNT(*) FILTER (WHERE status = 'failed') AS failures,
-      COUNT(*) AS total
-    FROM analytics.ingestion_runs
-    WHERE created_at > NOW() - INTERVAL '24 hours'
-    GROUP BY source
-  )
   SELECT
-    s.source,
-    ls.last_success::text AS last_success,
-    CASE WHEN COALESCE(rs.total, 0) > 0
-      THEN rs.failures::float / rs.total
-      ELSE 0 END AS failure_rate_24h
-  FROM sources s
-  LEFT JOIN last_success ls ON s.source = ls.source
-  LEFT JOIN recent_stats rs ON s.source = rs.source
-  WHERE s.source NOT LIKE 'debug_%'
-  ORDER BY s.source
+    COALESCE(human_title, check_name) AS source,
+    run_at::text AS last_success,
+    CASE WHEN status IN ('fail', 'failing', 'red') OR health_group = 'red'
+      THEN 1
+      ELSE 0 END AS failure_rate_24h,
+    health_group
+  FROM analytics.v_seo_system_health
+  ORDER BY
+    CASE health_group WHEN 'red' THEN 1 WHEN 'amber' THEN 2 ELSE 3 END,
+    display_order,
+    check_name
 `;
 
 // ============================================
@@ -705,22 +705,34 @@ const GA4_FUNNEL_SQL = `
 // ============================================
 
 const GOOGLE_ADS_OVERVIEW_SQL = `
+  WITH quote_perf AS (
+    SELECT
+      report_date,
+      google_campaign_id,
+      SUM(paid_revenue_usd) AS paid_revenue_usd
+    FROM marketing.google_ads_quote_performance
+    WHERE report_date BETWEEN $1::date AND $2::date
+    GROUP BY report_date, google_campaign_id
+  )
   SELECT
-    COALESCE(SUM(cost), 0) AS spend,
-    COALESCE(SUM(impressions), 0) AS impressions,
-    COALESCE(SUM(clicks), 0) AS clicks,
-    COALESCE(SUM(conversions), 0) AS conversions,
-    CASE WHEN COALESCE(SUM(clicks), 0) > 0
-      THEN COALESCE(SUM(cost), 0) / SUM(clicks)
+    COALESCE(SUM(ads.cost), 0) AS spend,
+    COALESCE(SUM(ads.impressions), 0) AS impressions,
+    COALESCE(SUM(ads.clicks), 0) AS clicks,
+    COALESCE(SUM(ads.conversions), 0) AS conversions,
+    CASE WHEN COALESCE(SUM(ads.clicks), 0) > 0
+      THEN COALESCE(SUM(ads.cost), 0) / SUM(ads.clicks)
       ELSE 0 END AS cpc,
-    CASE WHEN COALESCE(SUM(impressions), 0) > 0
-      THEN COALESCE(SUM(clicks), 0)::numeric / SUM(impressions)
+    CASE WHEN COALESCE(SUM(ads.impressions), 0) > 0
+      THEN COALESCE(SUM(ads.clicks), 0)::numeric / SUM(ads.impressions)
       ELSE 0 END AS ctr,
-    CASE WHEN COALESCE(SUM(cost), 0) > 0
-      THEN COALESCE(SUM(conversion_value), 0) / SUM(cost)
+    CASE WHEN COALESCE(SUM(ads.cost), 0) > 0
+      THEN COALESCE(SUM(quote_perf.paid_revenue_usd), 0) / SUM(ads.cost)
       ELSE 0 END AS roas
-  FROM analytics.metrics_google_ads_campaign_daily
-  WHERE metric_date BETWEEN $1::date AND $2::date
+  FROM analytics.metrics_google_ads_campaign_daily ads
+  LEFT JOIN quote_perf
+    ON quote_perf.report_date = ads.metric_date
+   AND quote_perf.google_campaign_id = ads.campaign_id
+  WHERE ads.metric_date BETWEEN $1::date AND $2::date
 `;
 
 // ============================================
@@ -728,27 +740,63 @@ const GOOGLE_ADS_OVERVIEW_SQL = `
 // ============================================
 
 const GOOGLE_ADS_CAMPAIGNS_SQL = `
+  WITH quote_perf AS (
+    SELECT
+      report_date,
+      google_campaign_id,
+      SUM(paid_revenue_usd) AS paid_revenue_usd
+    FROM marketing.google_ads_quote_performance
+    WHERE report_date BETWEEN $1::date AND $2::date
+    GROUP BY report_date, google_campaign_id
+  )
   SELECT
-    campaign_name,
-    campaign_id,
-    SUM(cost) AS spend,
-    SUM(impressions) AS impressions,
-    SUM(clicks) AS clicks,
-    SUM(conversions) AS conversions,
-    CASE WHEN SUM(clicks) > 0
-      THEN SUM(cost) / SUM(clicks)
+    ads.campaign_name,
+    ads.campaign_id,
+    SUM(ads.cost) AS spend,
+    SUM(ads.impressions) AS impressions,
+    SUM(ads.clicks) AS clicks,
+    SUM(ads.conversions) AS conversions,
+    CASE WHEN SUM(ads.clicks) > 0
+      THEN SUM(ads.cost) / SUM(ads.clicks)
       ELSE 0 END AS cpc,
-    CASE WHEN SUM(impressions) > 0
-      THEN SUM(clicks)::numeric / SUM(impressions)
+    CASE WHEN SUM(ads.impressions) > 0
+      THEN SUM(ads.clicks)::numeric / SUM(ads.impressions)
       ELSE 0 END AS ctr,
-    CASE WHEN SUM(cost) > 0
-      THEN SUM(conversion_value) / SUM(cost)
+    CASE WHEN SUM(ads.cost) > 0
+      THEN COALESCE(SUM(quote_perf.paid_revenue_usd), 0) / SUM(ads.cost)
       ELSE 0 END AS roas,
-    MAX(COALESCE(daily_budget, 0)) AS daily_budget
-  FROM analytics.metrics_google_ads_campaign_daily
-  WHERE metric_date BETWEEN $1::date AND $2::date
-  GROUP BY campaign_name, campaign_id
-  ORDER BY SUM(cost) DESC
+    MAX(COALESCE(ads.daily_budget, 0)) AS daily_budget
+  FROM analytics.metrics_google_ads_campaign_daily ads
+  LEFT JOIN quote_perf
+    ON quote_perf.report_date = ads.metric_date
+   AND quote_perf.google_campaign_id = ads.campaign_id
+  WHERE ads.metric_date BETWEEN $1::date AND $2::date
+  GROUP BY ads.campaign_name, ads.campaign_id
+  ORDER BY SUM(ads.cost) DESC
+`;
+
+const GOOGLE_ADS_DAILY_SQL = `
+  WITH date_range AS (
+    SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
+  ),
+  daily AS (
+    SELECT
+      metric_date,
+      SUM(cost) AS spend,
+      SUM(clicks) AS clicks,
+      SUM(conversions) AS conversions
+    FROM analytics.metrics_google_ads_campaign_daily
+    WHERE metric_date BETWEEN $1::date AND $2::date
+    GROUP BY metric_date
+  )
+  SELECT
+    dr.d::text AS date,
+    COALESCE(dy.spend, 0) AS spend,
+    COALESCE(dy.clicks, 0) AS clicks,
+    COALESCE(dy.conversions, 0) AS conversions
+  FROM date_range dr
+  LEFT JOIN daily dy ON dr.d = dy.metric_date
+  ORDER BY dr.d ASC
 `;
 
 // ============================================
@@ -813,14 +861,26 @@ const POST_FREE_CONTENT_CONVERSIONS_SQL = `
 `;
 
 const RUN_PAID_ADS_SQL = `
+  WITH quote_perf AS (
+    SELECT
+      report_date,
+      google_campaign_id,
+      SUM(paid_revenue_usd) AS paid_revenue_usd
+    FROM marketing.google_ads_quote_performance
+    WHERE report_date BETWEEN $1::date AND $2::date
+    GROUP BY report_date, google_campaign_id
+  )
   SELECT
-    COALESCE(SUM(cost), 0) AS spend,
-    COALESCE(SUM(impressions), 0) AS impressions,
-    COALESCE(SUM(clicks), 0) AS clicks,
-    COALESCE(SUM(conversions), 0) AS conversions,
-    COALESCE(SUM(conversion_value), 0) AS pipeline_value_usd
-  FROM analytics.metrics_google_ads_campaign_daily
-  WHERE metric_date BETWEEN $1::date AND $2::date
+    COALESCE(SUM(ads.cost), 0) AS spend,
+    COALESCE(SUM(ads.impressions), 0) AS impressions,
+    COALESCE(SUM(ads.clicks), 0) AS clicks,
+    COALESCE(SUM(ads.conversions), 0) AS conversions,
+    COALESCE(SUM(quote_perf.paid_revenue_usd), 0) AS pipeline_value_usd
+  FROM analytics.metrics_google_ads_campaign_daily ads
+  LEFT JOIN quote_perf
+    ON quote_perf.report_date = ads.metric_date
+   AND quote_perf.google_campaign_id = ads.campaign_id
+  WHERE ads.metric_date BETWEEN $1::date AND $2::date
 `;
 
 const RUN_PAID_ADS_SESSIONS_SQL = `
@@ -1071,6 +1131,7 @@ export interface MarketingQueryResult {
   ga4_funnel: MarketingGA4Funnel;
   google_ads_overview: MarketingGoogleAdsOverview;
   google_ads_campaigns: MarketingGoogleAdsCampaign[];
+  google_ads_timeseries: MarketingGoogleAdsTimeseries;
   core4_summary: Core4Summary;
 }
 
@@ -1169,15 +1230,16 @@ export async function executeMarketingQueries(
     /* 39 */ db.query(WARM_OUTREACH_SQL, prevParams),
     /* 40 */ db.query(QMS_KPI_PIPELINE_SQL, curParams),
     /* 41 */ db.query(QMS_KPI_PIPELINE_SQL, prevParams),
+    /* 42 */ db.query(GOOGLE_ADS_DAILY_SQL, curParams),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 42 */ db.query(fTsSessSql, curEngP),
-      /* 43 */ db.query(fTsSubSql, curConvP),
-      /* 44 */ db.query(fTsPipeSql, curParams),
-      /* 45 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
-      /* 46 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
+      /* 43 */ db.query(fTsSessSql, curEngP),
+      /* 44 */ db.query(fTsSubSql, curConvP),
+      /* 45 */ db.query(fTsPipeSql, curParams),
+      /* 46 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
+      /* 47 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
     );
   }
 
@@ -1381,8 +1443,15 @@ export async function executeMarketingQueries(
     .map((r: Row) => {
       const lastSuccess = r.last_success ? String(r.last_success) : null;
       const failureRate = clamp(toNumber(r.failure_rate_24h), 0, 1);
+      const healthGroup = String(r.health_group ?? '');
       let status: 'healthy' | 'warning' | 'stale' = 'healthy';
-      if (!lastSuccess) {
+      if (healthGroup === 'red') {
+        status = 'stale';
+      } else if (healthGroup === 'amber') {
+        status = 'warning';
+      } else if (healthGroup === 'green') {
+        status = 'healthy';
+      } else if (!lastSuccess) {
         status = 'stale';
       } else {
         const parsed = new Date(lastSuccess).getTime();
@@ -1461,14 +1530,30 @@ export async function executeMarketingQueries(
       daily_budget: nonNegative(toNumber(r.daily_budget)),
     }));
 
+  const googleAdsDailyRows = results[42].rows ?? [];
+  const google_ads_timeseries: MarketingGoogleAdsTimeseries = {
+    spend: googleAdsDailyRows.map((r: Row) => ({
+      date: String(r.date ?? ''),
+      value: nonNegative(toNumber(r.spend)),
+    })),
+    clicks: googleAdsDailyRows.map((r: Row) => ({
+      date: String(r.date ?? ''),
+      value: nonNegative(toNumber(r.clicks)),
+    })),
+    conversions: googleAdsDailyRows.map((r: Row) => ({
+      date: String(r.date ?? ''),
+      value: nonNegative(toNumber(r.conversions)),
+    })),
+  };
+
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 42) {
+  if (opts.includeTimeseries && results.length > 43) {
     timeseries = {
-      sessions: mapTimeseries(results[42].rows),
-      submissions: mapTimeseries(results[43].rows),
-      pipeline_value_usd: mapTimeseries(results[44].rows),
-      impressions: mapTimeseries(results[45].rows),
-      clicks: mapTimeseries(results[46].rows),
+      sessions: mapTimeseries(results[43].rows),
+      submissions: mapTimeseries(results[44].rows),
+      pipeline_value_usd: mapTimeseries(results[45].rows),
+      impressions: mapTimeseries(results[46].rows),
+      clicks: mapTimeseries(results[47].rows),
     };
   }
 
@@ -1563,6 +1648,7 @@ export async function executeMarketingQueries(
     ga4_funnel,
     google_ads_overview,
     google_ads_campaigns,
+    google_ads_timeseries,
     core4_summary,
   };
 }

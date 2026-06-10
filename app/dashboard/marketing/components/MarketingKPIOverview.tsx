@@ -113,7 +113,6 @@ function KPICard({ cfg, kpis, comparisons, compareEnabled, loading, index }: {
         {cfg.subtitle}
       </div>
       {cfg.provenance && (
-        // TODO(C2b): repoint overlapping Marketing KPIs to governed sources/windows where the data architecture prompt requires it.
         <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['1'] }}>
           {cfg.provenance}
         </div>

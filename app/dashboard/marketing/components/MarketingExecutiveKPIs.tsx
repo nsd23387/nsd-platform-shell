@@ -140,7 +140,6 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
             )}
           </div>
           {card.provenance && (
-            // TODO(C2b): repoint overlapping Marketing KPIs to governed sources/windows where the data architecture prompt requires it.
             <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['2'] }}>
               {card.provenance}
             </div>
