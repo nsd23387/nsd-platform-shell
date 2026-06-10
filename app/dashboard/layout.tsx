@@ -25,7 +25,7 @@ const navItems = [
   { href: '/dashboard/sales', label: 'Sales', icon: 'trending' },
   { href: '/dashboard/marketing', label: 'Marketing', icon: 'target' },
   { href: '/dashboard/competitive', label: 'Competitive', icon: 'chart' },
-  { href: '/dashboard/seo', label: 'SEO Intelligence', icon: 'search' },
+  { href: '/dashboard/seo', label: 'SEO Command Center', icon: 'search' },
 ];
 
 function ThemeToggle() {

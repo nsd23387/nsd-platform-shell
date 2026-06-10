@@ -116,7 +116,7 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
     });
   }, []);
 
-  const currentLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.href === currentPath)?.label || 'SEO Intelligence';
+  const currentLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.href === currentPath)?.label || 'SEO Command Center';
 
   const navWidth = collapsed ? '48px' : '220px';
 
@@ -302,7 +302,7 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
                   whiteSpace: 'nowrap',
                 }}
               >
-                SEO Intelligence
+                SEO Command Center
               </h3>
               <span
                 title={pipelineHealthLabel}

@@ -29,11 +29,12 @@ function PerformanceContent() {
   const tc = useThemeColors();
   const searchParams = useSearchParams();
   const bucketParam = searchParams.get('bucket');
+  const queryParam = searchParams.get('query');
 
   const [pages, setPages] = useState<PortfolioPage[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(queryParam ?? '');
   const [activeBucket, setActiveBucket] = useState<PortfolioBucket | 'all'>(isBucket(bucketParam) ? bucketParam : 'all');
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [visible, setVisible] = useState<Record<PortfolioBucket, number>>({
@@ -41,6 +42,7 @@ function PerformanceContent() {
   });
 
   useEffect(() => { if (isBucket(bucketParam)) setActiveBucket(bucketParam); }, [bucketParam]);
+  useEffect(() => { if (queryParam != null) setSearch(queryParam); }, [queryParam]);
 
   useEffect(() => {
     setVisible({ win: PAGE_SIZE, strategic: PAGE_SIZE, fix: PAGE_SIZE, lost: PAGE_SIZE });

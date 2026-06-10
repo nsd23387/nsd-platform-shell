@@ -25,14 +25,15 @@ interface KPIConfig {
   compKey?: keyof MarketingKPIComparisons;
   format: (v: number) => string;
   subtitle: string;
+  provenance?: string;
   accentColor: string;
 }
 
 function getPipelineRow(tc: { chartColors: readonly string[] }): KPIConfig[] {
   return [
     { title: 'Pipeline Value', key: 'total_pipeline_value_usd', compKey: 'total_pipeline_value_usd', format: formatCurrency, subtitle: 'Total pipeline USD', accentColor: violet[500] },
-    { title: 'Submissions', key: 'total_submissions', compKey: 'total_submissions', format: formatNumber, subtitle: 'Form submissions', accentColor: tc.chartColors[1] },
-    { title: 'Organic Clicks', key: 'organic_clicks', compKey: 'organic_clicks', format: formatNumber, subtitle: 'Search console clicks', accentColor: tc.chartColors[2] },
+    { title: 'Submissions', key: 'total_submissions', compKey: 'total_submissions', format: formatNumber, subtitle: 'Form submissions', provenance: 'QMS/lead forms · event grain · selected Marketing window', accentColor: tc.chartColors[1] },
+    { title: 'Organic Clicks', key: 'organic_clicks', compKey: 'organic_clicks', format: formatNumber, subtitle: 'Search console clicks', provenance: 'GSC clicks · daily · selected Marketing window', accentColor: tc.chartColors[2] },
     { title: 'Impressions', key: 'impressions', compKey: 'impressions', format: formatNumber, subtitle: 'Search impressions', accentColor: indigo[500] },
   ];
 }
@@ -111,6 +112,12 @@ function KPICard({ cfg, kpis, comparisons, compareEnabled, loading, index }: {
       <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: space['1'] }}>
         {cfg.subtitle}
       </div>
+      {cfg.provenance && (
+        // TODO(C2b): repoint overlapping Marketing KPIs to governed sources/windows where the data architecture prompt requires it.
+        <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['1'] }}>
+          {cfg.provenance}
+        </div>
+      )}
       {comp && (
         <div style={{
           display: 'inline-flex',
