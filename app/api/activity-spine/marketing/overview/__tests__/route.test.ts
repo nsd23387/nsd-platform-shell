@@ -33,8 +33,8 @@ function stubEmpty() {
     }
     if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
     if (sql.includes('raw_search_console')) return Promise.resolve({ rows: [] });
-    if (sql.includes('pipeline_by_category')) return Promise.resolve({ rows: [] });
-    if (sql.includes('conversion_events')) return Promise.resolve({ rows: [] });
+    if (sql.includes('raw_qms_deals') && sql.includes('sign_type')) return Promise.resolve({ rows: [] });
+    if (sql.includes('raw_qms_deals') && sql.includes('quote_number')) return Promise.resolve({ rows: [] });
     if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
     if (sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
     if (sql.includes('MAX(')) return Promise.resolve({ rows: [{}] });
@@ -56,11 +56,11 @@ function stubWithData() {
     if (sql.includes('STDDEV') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ n: 30, mean: 5, stddev: 1, latest_val: 6 }] });
     if (sql.includes('STDDEV') && sql.includes('total_pipeline_value_usd')) return Promise.resolve({ rows: [{ n: 30, mean: 1000, stddev: 100, latest_val: 1100 }] });
 
-    if (sql.includes('metrics_search_console_query_daily')) return Promise.resolve({ rows: [
+    if (sql.includes('metrics_search_console_query_daily') && sql.includes('direction')) return Promise.resolve({ rows: [
       { query: 'neon signs custom', impressions_first_half: '100', impressions_second_half: '300', delta_pct: '2.0', direction: 'rising' },
       { query: 'led signs cheap', impressions_first_half: '500', impressions_second_half: '200', delta_pct: '-0.6', direction: 'falling' },
     ] });
-    if (sql.includes('metrics_search_console_query') && !sql.includes('_daily')) return Promise.resolve({ rows: [{ query: 'neon signs', clicks: '200', impressions: '5000', ctr: '0.04', avg_position: '5.2', submissions: '3', pipeline_value_usd: '4500' }] });
+    if (sql.includes('metrics_search_console_query_daily')) return Promise.resolve({ rows: [{ query: 'neon signs', clicks: '200', impressions: '5000', ctr: '0.04', avg_position: '5.2', submissions: '3', pipeline_value_usd: '4500' }] });
     if (sql.includes('FULL OUTER JOIN') && sql.includes('metrics_page_engagement_daily')) return Promise.resolve({ rows: [{ page_url: '/products', sessions: '800', page_views: '1200', bounce_rate: '0.35', avg_time_on_page_seconds: '45', clicks: '300', impressions: '5000', ctr: '0.06', submissions: '20', pipeline_value_usd: '30000' }] });
     if (sql.includes('dashboard_sources')) return Promise.resolve({ rows: [{ submission_source: 'Google', submissions: '50', pipeline_value_usd: '75000' }, { submission_source: 'direct', submissions: '35', pipeline_value_usd: '50000' }] });
 
@@ -73,13 +73,13 @@ function stubWithData() {
       { country: 'US', impressions: '4200', clicks: '2', ctr: '0.00048' },
       { country: 'CA', impressions: '200', clicks: '0', ctr: '0' },
     ] });
-    if (sql.includes('pipeline_by_category')) return Promise.resolve({ rows: [
-      { product_category: 'Logo/Image', submissions: '1', pipeline_value_usd: '375' },
-      { product_category: 'Text Only', submissions: '1', pipeline_value_usd: '300' },
-    ] });
-    if (sql.includes('conversion_events')) return Promise.resolve({ rows: [
+    if (sql.includes('raw_qms_deals') && sql.includes('quote_number')) return Promise.resolve({ rows: [
       { created_at: '2026-03-01T12:00:00Z', product_category: 'Logo/Image', preliminary_price_usd: '375', submission_source: 'quote.neonsignsdepot.com' },
       { created_at: '2026-02-28T10:00:00Z', product_category: 'Text Only', preliminary_price_usd: '300', submission_source: 'quote.neonsignsdepot.com' },
+    ] });
+    if (sql.includes('raw_qms_deals') && sql.includes('sign_type')) return Promise.resolve({ rows: [
+      { product_category: 'Logo/Image', submissions: '1', pipeline_value_usd: '375' },
+      { product_category: 'Text Only', submissions: '1', pipeline_value_usd: '300' },
     ] });
     if (sql.includes('dashboard_funnel_daily') && !sql.includes('SUM')) return Promise.resolve({ rows: [
       { date: '2026-03-01', page_views: '590', submissions: '1', conversion_rate: '0.0017', pipeline_value_usd: '375' },
@@ -111,7 +111,7 @@ function stubAnomalySpike() {
     if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
     if (sql.includes('STDDEV') && sql.includes('sessions')) return Promise.resolve({ rows: [{ n: 10, mean: 100, stddev: 10, latest_val: 250 }] });
     if (sql.includes('STDDEV') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ n: 10, mean: 5, stddev: 1, latest_val: 20 }] });
-    if (sql.includes('STDDEV') && sql.includes('total_pipeline_value_usd')) return Promise.resolve({ rows: [{ n: 10, mean: 1000, stddev: 100, latest_val: 5000 }] });
+    if (sql.includes('STDDEV') && sql.includes('raw_qms_deals')) return Promise.resolve({ rows: [{ n: 10, mean: 1000, stddev: 100, latest_val: 5000 }] });
     if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
     if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
     if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });

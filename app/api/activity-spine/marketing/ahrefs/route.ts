@@ -15,24 +15,44 @@ async function getKeywordGap(competitor?: string | null) {
   let competitorFilter = '';
   if (competitor) {
     params.push(competitor);
-    competitorFilter = `WHERE payload->>'competitor_domain' = $1`;
+    competitorFilter = `WHERE g.competitor_domain = $1`;
   }
 
   const { rows } = await pool.query(`
+    WITH gaps AS (
+      SELECT
+        keyword,
+        search_volume,
+        keyword_difficulty,
+        kw_cpc,
+        competitor_ranking_position,
+        competitor_page_url,
+        competitor_url,
+        regexp_replace(
+          regexp_replace(competitor_url, '^https?://', ''),
+          '/.*$',
+          ''
+        ) AS competitor_domain,
+        cluster_keyword,
+        opportunity_score
+      FROM analytics.seo_command_center_competitor_gaps(30, NULL::date, NULL::date)
+    )
     SELECT
-      payload->>'keyword' AS keyword,
-      COALESCE((payload->>'volume')::int, 0) AS search_volume,
-      COALESCE((payload->>'keyword_difficulty')::int, 0) AS keyword_difficulty,
-      COALESCE((payload->>'cpc')::numeric, 0) AS cpc,
-      COALESCE((payload->>'best_position')::int, 0) AS best_position,
-      payload->>'best_position_url' AS best_position_url,
-      payload->>'target_domain' AS target_domain,
-      payload->>'competitor_domain' AS competitor_domain,
-      payload->>'topic_cluster' AS topic_cluster,
-      COALESCE((payload->>'sum_traffic')::int, 0) AS sum_traffic
-    FROM analytics.raw_ahrefs_keyword_gap
+      g.keyword,
+      COALESCE(eqi.search_volume, g.search_volume, 0)::int AS search_volume,
+      COALESCE(eqi.keyword_difficulty, g.keyword_difficulty, 0)::int AS keyword_difficulty,
+      COALESCE(eqi.cpc, g.kw_cpc, 0)::numeric AS cpc,
+      COALESCE(g.competitor_ranking_position, 0)::int AS best_position,
+      g.competitor_page_url AS best_position_url,
+      'neonsignsdepot.com' AS target_domain,
+      g.competitor_domain,
+      g.cluster_keyword AS topic_cluster,
+      COALESCE(g.opportunity_score, 0)::int AS sum_traffic
+    FROM gaps g
+    LEFT JOIN analytics.external_query_intelligence eqi
+      ON eqi.normalized_query = lower(trim(g.keyword))
     ${competitorFilter}
-    ORDER BY COALESCE((payload->>'volume')::int, 0) DESC
+    ORDER BY COALESCE(eqi.search_volume, g.search_volume, 0) DESC, COALESCE(g.opportunity_score, 0) DESC
     LIMIT 300
   `, params);
 
@@ -51,85 +71,25 @@ async function getKeywordGap(competitor?: string | null) {
 }
 
 async function getBacklinkGap(competitor?: string | null) {
-  const params: string[] = [];
-  let competitorFilter = '';
-  if (competitor) {
-    params.push(competitor);
-    competitorFilter = `WHERE payload->>'competitor_domain' = $1`;
-  }
-
-  const { rows } = await pool.query(`
-    SELECT
-      payload->>'domain' AS referring_domain,
-      COALESCE((payload->>'domain_rating')::numeric, 0) AS domain_rating,
-      COALESCE((payload->>'dofollow_links')::int, 0) AS dofollow_links,
-      COALESCE((payload->>'links_to_target')::int, 0) AS links_to_target,
-      COALESCE((payload->>'traffic_domain')::numeric, 0) AS traffic_domain,
-      payload->>'target_domain' AS target_domain,
-      payload->>'competitor_domain' AS competitor_domain,
-      payload->>'first_seen' AS first_seen
-    FROM analytics.raw_ahrefs_backlink_gap
-    ${competitorFilter}
-    ORDER BY COALESCE((payload->>'domain_rating')::numeric, 0) DESC
-    LIMIT 300
-  `, params);
-
-  return rows.map(r => ({
-    referring_domain: r.referring_domain,
-    domain_rating: Number(r.domain_rating),
-    dofollow_links: Number(r.dofollow_links),
-    links_to_target: Number(r.links_to_target),
-    traffic_domain: Number(r.traffic_domain),
-    target_domain: r.target_domain,
-    competitor_domain: r.competitor_domain,
-    first_seen: r.first_seen,
-  }));
+  void competitor;
+  return [];
 }
 
 async function getTopPages(competitor?: string | null) {
-  const params: string[] = [];
-  let competitorFilter = '';
-  if (competitor) {
-    params.push(competitor);
-    competitorFilter = `WHERE payload->>'competitor_domain' = $1`;
-  }
-
-  const { rows } = await pool.query(`
-    SELECT
-      payload->>'url' AS url,
-      COALESCE((payload->>'sum_traffic')::int, 0) AS traffic,
-      COALESCE((payload->>'value')::numeric, 0) AS traffic_value,
-      payload->>'top_keyword' AS top_keyword,
-      COALESCE((payload->>'top_keyword_volume')::int, 0) AS top_keyword_volume,
-      COALESCE((payload->>'top_keyword_best_position')::int, 0) AS top_keyword_position,
-      COALESCE((payload->>'keywords')::int, 0) AS keywords,
-      COALESCE((payload->>'referring_domains')::int, 0) AS referring_domains,
-      payload->>'competitor_domain' AS competitor_domain,
-      payload->>'topic_cluster' AS topic_cluster
-    FROM analytics.raw_ahrefs_top_pages
-    ${competitorFilter}
-    ORDER BY COALESCE((payload->>'sum_traffic')::int, 0) DESC
-    LIMIT 200
-  `, params);
-
-  return rows.map(r => ({
-    url: r.url,
-    traffic: Number(r.traffic),
-    traffic_value: Number(r.traffic_value),
-    top_keyword: r.top_keyword,
-    top_keyword_volume: Number(r.top_keyword_volume),
-    top_keyword_position: Number(r.top_keyword_position),
-    keywords: Number(r.keywords),
-    referring_domains: Number(r.referring_domains),
-    competitor_domain: r.competitor_domain,
-    topic_cluster: r.topic_cluster,
-  }));
+  void competitor;
+  return [];
 }
 
 async function getDistinctCompetitors() {
   const { rows } = await pool.query(`
-    SELECT DISTINCT payload->>'competitor_domain' AS competitor
-    FROM analytics.raw_ahrefs_keyword_gap
+    SELECT DISTINCT
+      regexp_replace(
+        regexp_replace(competitor_url, '^https?://', ''),
+        '/.*$',
+        ''
+      ) AS competitor
+    FROM analytics.seo_command_center_competitor_gaps(30, NULL::date, NULL::date)
+    WHERE competitor_url IS NOT NULL
     ORDER BY 1
   `);
   return rows.map(r => r.competitor);
@@ -159,7 +119,19 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: `Unknown view: ${view}` }, { status: 400 });
     }
 
-    return NextResponse.json({ data: result, meta: { view, competitor } });
+    return NextResponse.json({
+      data: result,
+      meta: {
+        view,
+        competitor,
+        source_label: 'Keyword & Competitive Intelligence',
+        retired_source_label: 'Ahrefs Intelligence',
+        unavailable_metrics: [
+          { metric: 'backlink gap', reason: 'unavailable (source retired)' },
+          { metric: 'top pages', reason: 'unavailable (source retired)' },
+        ],
+      },
+    });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[ahrefs] Error:', msg);

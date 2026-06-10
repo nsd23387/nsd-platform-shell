@@ -48,7 +48,7 @@ interface TopPageRow {
   topic_cluster: string;
 }
 
-function useAhrefsData<T>(view: string, competitor?: string) {
+function useKeywordCompetitiveData<T>(view: string, competitor?: string) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +142,7 @@ function DifficultyBadge({ value }: { value: number }) {
 
 function KeywordGapPanel({ competitor }: { competitor: string }) {
   const tc = useThemeColors();
-  const { data, loading, error } = useAhrefsData<KeywordGapRow[]>('keyword-gap', competitor || undefined);
+  const { data, loading, error } = useKeywordCompetitiveData<KeywordGapRow[]>('keyword-gap', competitor || undefined);
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'search_volume', dir: 'desc' });
 
   const sorted = useMemo(() => {
@@ -224,11 +224,11 @@ function KeywordGapPanel({ competitor }: { competitor: string }) {
 
 function BacklinkGapPanel({ competitor }: { competitor: string }) {
   const tc = useThemeColors();
-  const { data, loading, error } = useAhrefsData<BacklinkGapRow[]>('backlink-gap', competitor || undefined);
+  const { data, loading, error } = useKeywordCompetitiveData<BacklinkGapRow[]>('backlink-gap', competitor || undefined);
 
   if (loading) return <LoadingState />;
   if (error) return <DashboardCard title="Error" error={error} />;
-  if (!data?.length) return <EmptyState message="No backlink gap data available." />;
+  if (!data?.length) return <EmptyState message="Backlink gap is unavailable (source retired)." />;
 
   const thStyle = (align: 'left' | 'right' = 'right'): React.CSSProperties => ({
     padding: `${space['2']} ${space['3']}`,
@@ -283,11 +283,11 @@ function BacklinkGapPanel({ competitor }: { competitor: string }) {
 
 function TopPagesPanel({ competitor }: { competitor: string }) {
   const tc = useThemeColors();
-  const { data, loading, error } = useAhrefsData<TopPageRow[]>('top-pages', competitor || undefined);
+  const { data, loading, error } = useKeywordCompetitiveData<TopPageRow[]>('top-pages', competitor || undefined);
 
   if (loading) return <LoadingState />;
   if (error) return <DashboardCard title="Error" error={error} />;
-  if (!data?.length) return <EmptyState message="No top pages data available." />;
+  if (!data?.length) return <EmptyState message="Top pages are unavailable (source retired)." />;
 
   const thStyle = (align: 'left' | 'right' = 'right'): React.CSSProperties => ({
     padding: `${space['2']} ${space['3']}`,
@@ -345,17 +345,17 @@ function TopPagesPanel({ competitor }: { competitor: string }) {
   );
 }
 
-export default function AhrefsIntelligencePage() {
+export default function KeywordCompetitiveIntelligencePage() {
   const tc = useThemeColors();
   const [competitor, setCompetitor] = useState('');
-  const { data: competitors } = useAhrefsData<string[]>('competitors');
+  const { data: competitors } = useKeywordCompetitiveData<string[]>('competitors');
 
   const exportSections = useMemo<ExportSection[]>(() => [], []);
 
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
-        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Deep Dives'}, {label:'Ahrefs Intelligence'}]} />
+        <DrilldownBreadcrumb items={[{label:'Marketing', href:'/dashboard/marketing'}, {label:'Deep Dives'}, {label:'Keyword & Competitive Intelligence'}]} />
         <div style={{ marginBottom: space['6'], display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: space['4'], flexWrap: 'wrap' }}>
           <div>
             <h1
@@ -369,18 +369,18 @@ export default function AhrefsIntelligencePage() {
               }}
               data-testid="text-page-title"
             >
-              Ahrefs Intelligence
+              Keyword & Competitive Intelligence
             </h1>
             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
-              Keyword gap analysis, backlink opportunities, and competitor top pages.
+              Keyword demand, competitive gaps, and retired-source availability.
             </p>
             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.placeholder, marginTop: space['1'] }}>
-              Target: neonsignsdepot.com. Data refreshes weekly from Ahrefs via nsd-integrations.
+              Target: neonsignsdepot.com. Keyword metrics are sourced from governed DataForSEO intelligence.
             </p>
           </div>
           <PageExportBar
-            filename="ahrefs-intelligence"
-            pdfTitle="Ahrefs Intelligence"
+            filename="keyword-competitive-intelligence"
+            pdfTitle="Keyword & Competitive Intelligence"
             sections={exportSections}
             loading={false}
           />
@@ -394,11 +394,11 @@ export default function AhrefsIntelligencePage() {
           <KeywordGapPanel competitor={competitor} />
         </DashboardSection>
 
-        <DashboardSection title="Backlink Gap" description="Referring domains that link to competitors but not to neonsignsdepot.com. Sorted by domain rating." index={1}>
+        <DashboardSection title="Backlink Gap" description="Unavailable (source retired)." index={1}>
           <BacklinkGapPanel competitor={competitor} />
         </DashboardSection>
 
-        <DashboardSection title="Top Pages" description="Top-performing competitor pages by organic traffic. Refreshes weekly." index={2}>
+        <DashboardSection title="Top Pages" description="Unavailable (source retired)." index={2}>
           <TopPagesPanel competitor={competitor} />
         </DashboardSection>
       </div>
