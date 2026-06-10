@@ -837,6 +837,13 @@ export interface SeoProgressResponse {
     avg_position: SeoProgressPositionDelta;
     pages_optimized: number;
     pages_measuring: number;
+    execution_outcomes: {
+      succeeded: number;
+      failed: number;
+      measuring: number;
+      total_attempts: number;
+      failure_rate_pct: number | null;
+    };
   };
   month: {
     organic_clicks: SeoProgressDelta;
@@ -936,6 +943,9 @@ export interface SeoCompetitorGapMeta {
   total_count: number;
   filtered_count: number;
   returned_count: number;
+  governed_competitors_count?: number;
+  raw_competitors_count?: number;
+  configured_competitors_count?: number;
   status_counts: Record<string, number>;
   limit: number | null;
   filter_note: string;
@@ -966,6 +976,9 @@ export async function getSeoCompetitorGapFeed(opts?: { type?: string; status?: s
       total_count: data.data?.length ?? 0,
       filtered_count: data.data?.length ?? 0,
       returned_count: data.data?.length ?? 0,
+      governed_competitors_count: undefined,
+      raw_competitors_count: undefined,
+      configured_competitors_count: undefined,
       status_counts: {},
       limit: data.data?.length ?? 0,
       filter_note: 'Filtered competitor gaps.',

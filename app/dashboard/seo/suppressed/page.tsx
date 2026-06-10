@@ -84,6 +84,7 @@ function SuppressedContent() {
           <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', marginBottom: space['5'] }}>
             {audit.reasons.map((r) => {
               const active = activeReason === r.reason;
+              const pct = audit.total > 0 ? Math.round((r.count / audit.total) * 1000) / 10 : 0;
               return (
                 <button
                   key={r.reason}
@@ -96,7 +97,7 @@ function SuppressedContent() {
                     color: tc.text.primary, fontFamily: fontFamily.body, fontSize: '12px',
                   }}
                 >
-                  {r.reason} <span style={{ fontFamily: monoStack, color: tc.text.muted }}>· {fmtInt(r.count)}</span>
+                  {r.reason} <span style={{ fontFamily: monoStack, color: tc.text.muted }}>· {fmtInt(r.count)} · {pct.toFixed(1)}%</span>
                 </button>
               );
             })}

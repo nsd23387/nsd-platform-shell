@@ -53,7 +53,10 @@ export async function GET(req: NextRequest) {
               target_page_url, page_url_canonical, page_is_live, page_status_class,
               regate_review_flag, needs_evidence, qa_status, outcome_verdict
        FROM analytics.v_seo_dashboard_queue
-       ORDER BY opportunity_score DESC NULLS LAST
+       ORDER BY opportunity_score DESC NULLS LAST,
+                mutation_label ASC NULLS LAST,
+                page_url_canonical ASC NULLS LAST,
+                candidate_id ASC
        LIMIT $1`,
       [limit],
     );

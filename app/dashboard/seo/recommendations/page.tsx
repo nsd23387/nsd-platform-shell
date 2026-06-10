@@ -26,7 +26,7 @@ import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { getSeoCandidateQueue, getSeoPortfolio } from '../../../../lib/seoApi';
 import type { PageDossierCandidate, PortfolioPage } from '../../../../lib/seoApi';
-import { PALETTE, monoStack, Pill, fmtInt, pathOf, mutationDisplay, proposalReview } from '../_shared';
+import { PALETTE, monoStack, Pill, fmtInt, fmtScore, pathOf, mutationDisplay, proposalReview, isSchemaMutation } from '../_shared';
 
 const PAGE_SIZE = 25;
 
@@ -75,7 +75,7 @@ function CandidateRow({
   c, tc, isAlt,
 }: { c: PageDossierCandidate; tc: ReturnType<typeof useThemeColors>; isAlt?: boolean }) {
   const m = mutationDisplay(c.mutation_type, c.primary_remedy);
-  const score = c.opportunity_score != null ? Math.round(c.opportunity_score * 100) : null;
+  const score = fmtScore(c.opportunity_score);
   return (
     <tr
       style={{ borderTop: `1px solid ${tc.border.subtle}`, background: isAlt ? tc.background.muted : 'transparent' }}
@@ -94,7 +94,7 @@ function CandidateRow({
       <td style={{ padding: '10px 12px' }}>
         <StatusCell c={c} tc={tc} />
       </td>
-      <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{score ?? '—'}</td>
+      <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{score}</td>
       <td style={{ padding: '10px 12px', textAlign: 'right' }}>
         <Link
           href={`/dashboard/seo/action/${encodeURIComponent(c.candidate_id)}`}
@@ -173,7 +173,8 @@ function RecommendationsContent() {
       });
   }, [live, typeFilter, statusFilter, search]);
 
-  // Dedup to one decision per (page, field). Representative = highest score.
+  // Dedup to one decision per (page, field). Representative = highest score,
+  // with stable type/page ordering while the score distribution is flat.
   const groups = useMemo<RecGroup[]>(() => {
     const map = new Map<string, PageDossierCandidate[]>();
     for (const c of filtered) {
@@ -183,10 +184,22 @@ function RecommendationsContent() {
     }
     const out: RecGroup[] = [];
     map.forEach((arr, key) => {
-      const sorted = [...arr].sort((a, b) => (b.opportunity_score ?? -Infinity) - (a.opportunity_score ?? -Infinity));
+      const sorted = [...arr].sort((a, b) => {
+        const scoreDelta = (b.opportunity_score ?? -Infinity) - (a.opportunity_score ?? -Infinity);
+        if (scoreDelta !== 0) return scoreDelta;
+        const typeDelta = (a.mutation_label ?? a.mutation_type ?? '').localeCompare(b.mutation_label ?? b.mutation_type ?? '');
+        if (typeDelta !== 0) return typeDelta;
+        return (a.target_page_url ?? '').localeCompare(b.target_page_url ?? '');
+      });
       out.push({ key, rep: sorted[0], alts: sorted.slice(1) });
     });
-    return out.sort((a, b) => (b.rep.opportunity_score ?? -Infinity) - (a.rep.opportunity_score ?? -Infinity));
+    return out.sort((a, b) => {
+      const scoreDelta = (b.rep.opportunity_score ?? -Infinity) - (a.rep.opportunity_score ?? -Infinity);
+      if (scoreDelta !== 0) return scoreDelta;
+      const typeDelta = (a.rep.mutation_label ?? a.rep.mutation_type ?? '').localeCompare(b.rep.mutation_label ?? b.rep.mutation_type ?? '');
+      if (typeDelta !== 0) return typeDelta;
+      return (a.rep.target_page_url ?? '').localeCompare(b.rep.target_page_url ?? '');
+    });
   }, [filtered]);
 
   // Reset to first page whenever the filtered set changes.
@@ -198,6 +211,7 @@ function RecommendationsContent() {
 
   const needsReviewCount = useMemo(() => live.filter((c) => proposalReview(c).flagged).length, [live]);
   const reReviewCount = useMemo(() => live.filter((c) => !!c.regate_review_flag).length, [live]);
+  const schemaCount = useMemo(() => live.filter((c) => isSchemaMutation(c.mutation_type)).length, [live]);
 
   function toggleExpand(key: string) {
     setExpanded((prev) => {
@@ -215,9 +229,15 @@ function RecommendationsContent() {
       <div style={{ marginBottom: space['5'] }}>
         <h1 style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>Recommendations</h1>
         <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-recommendations-subtitle">
-          One recommended decision per page field, ranked by opportunity score — competing variants are collapsed behind &ldquo;see alternatives.&rdquo; Gate-accepted, awaiting approval, on live pages only. Read-only — open a recommendation to review and approve it as a DRAFT.
+          One recommended decision per page field, ordered by type and target page while opportunity scoring is recalibrated in Batch 2. Competing text variants are collapsed behind &ldquo;see alternatives.&rdquo; Gate-accepted, awaiting approval, on live pages only.
         </p>
       </div>
+
+      {schemaCount > 0 && (
+        <div style={{ marginBottom: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.warnSoft, color: PALETTE.warn, fontFamily: fontFamily.body, fontSize: '13px', lineHeight: 1.5 }} data-testid="banner-schema-approval-paused">
+          Schema execution is temporarily paused while the write path is under repair. Schema recommendations remain visible here, but approval is disabled on the detail card until Batch 1 re-enables the lane.
+        </div>
+      )}
 
       {/* Summary tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: space['3'], marginBottom: space['5'] }}>

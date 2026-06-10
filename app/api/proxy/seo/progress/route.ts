@@ -19,7 +19,8 @@
  *     organic_impressions: { current, prior, delta_pct },
  *     avg_position: { current, prior, delta },
  *     pages_optimized: number,
- *     pages_measuring: number
+ *     pages_measuring: number,
+ *     execution_outcomes: { succeeded, failed, measuring, total_attempts, failure_rate_pct }
  *   },
  *   month: {
  *     organic_clicks: { current, prior, delta_pct },
@@ -173,18 +174,37 @@ export async function GET() {
        ) u`,
     ).catch(() => ({ rows: [{ count: '0' }] }));
 
-    const pagesMeasuring = await p.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM (
-         SELECT 1 FROM analytics.seo_execution_log WHERE measured_at_14d IS NULL AND executed_at >= NOW() - INTERVAL '14 days'
-         UNION ALL
-         SELECT 1
+    // Execution outcomes for the Results surface. Keep the split honest:
+    // succeeded/failed are executor terminal states. "Measuring" is only an
+    // explicit published-outcome row still awaiting verdict, not every success
+    // missing an outcome row.
+    const executionOutcomesWeek = await p.query<{
+      succeeded: string;
+      failed: string;
+      measuring: string;
+      total_attempts: string;
+    }>(
+      `WITH attempts AS (
+         SELECT
+           c.candidate_id,
+           c.execution_status,
+           o.decided_at
          FROM analytics.seo_execution_candidate c
          LEFT JOIN analytics.seo_published_outcome o ON o.candidate_id = c.candidate_id
-         WHERE COALESCE(c.published_at, c.execution_timestamp) >= NOW() - INTERVAL '14 days'
-           AND c.execution_status IN ('published', 'draft_applied')
-           AND o.decided_at IS NULL
-       ) u`,
-    ).catch(() => ({ rows: [{ count: '0' }] }));
+         WHERE COALESCE(c.published_at, c.execution_timestamp) >= NOW() - INTERVAL '7 days'
+           AND c.execution_status IN ('published', 'draft_applied', 'failed', 'rolled_back')
+       )
+       SELECT
+         COUNT(*) FILTER (WHERE execution_status IN ('published', 'draft_applied'))::text AS succeeded,
+         COUNT(*) FILTER (WHERE execution_status IN ('failed', 'rolled_back'))::text AS failed,
+         COUNT(*) FILTER (
+           WHERE execution_status IN ('published', 'draft_applied')
+             AND candidate_id IN (SELECT candidate_id FROM analytics.seo_published_outcome)
+             AND decided_at IS NULL
+         )::text AS measuring,
+         COUNT(*) FILTER (WHERE execution_status IN ('published', 'draft_applied', 'failed', 'rolled_back'))::text AS total_attempts
+       FROM attempts`,
+    ).catch(() => ({ rows: [{ succeeded: '0', failed: '0', measuring: '0', total_attempts: '0' }] }));
 
     // Win rate: from legacy learning_outcomes plus current candidate outcomes.
     const winRate = await p.query<{ positive: string; total: string }>(
@@ -208,6 +228,12 @@ export async function GET() {
     const winTotal = parseInt(winRate.rows[0]?.total || '0', 10);
     const winPositive = parseInt(winRate.rows[0]?.positive || '0', 10);
     const winRatePct = winTotal > 0 ? Math.round((winPositive / winTotal) * 1000) / 10 : null;
+    const outcomeRow = executionOutcomesWeek.rows[0] ?? { succeeded: '0', failed: '0', measuring: '0', total_attempts: '0' };
+    const outcomeSucceeded = parseInt(outcomeRow.succeeded || '0', 10);
+    const outcomeFailed = parseInt(outcomeRow.failed || '0', 10);
+    const outcomeMeasuring = parseInt(outcomeRow.measuring || '0', 10);
+    const outcomeTotal = parseInt(outcomeRow.total_attempts || '0', 10);
+    const failureRatePct = outcomeTotal > 0 ? Math.round((outcomeFailed / outcomeTotal) * 1000) / 10 : null;
 
     return NextResponse.json({
       today: {
@@ -236,7 +262,14 @@ export async function GET() {
         organic_impressions: { current: week.impressions, prior: weekPrior.impressions, delta_pct: deltaPct(week.impressions, weekPrior.impressions) },
         avg_position: { current: week.position, prior: weekPrior.position, delta: deltaAbs(week.position, weekPrior.position) },
         pages_optimized: parseInt(pagesOptimizedWeek.rows[0]?.count || '0', 10),
-        pages_measuring: parseInt(pagesMeasuring.rows[0]?.count || '0', 10),
+        pages_measuring: outcomeMeasuring,
+        execution_outcomes: {
+          succeeded: outcomeSucceeded,
+          failed: outcomeFailed,
+          measuring: outcomeMeasuring,
+          total_attempts: outcomeTotal,
+          failure_rate_pct: failureRatePct,
+        },
       },
       month: {
         organic_clicks: { current: month.clicks, prior: monthPrior.clicks, delta_pct: deltaPct(month.clicks, monthPrior.clicks) },

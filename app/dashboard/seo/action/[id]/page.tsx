@@ -32,7 +32,7 @@ import type { SeoCandidateDetail, PageDossier } from '../../../../../lib/seoApi'
 import {
   PALETTE, monoStack, Tc, Pill, fmtInt, fmtPos, pathOf, mutationDisplay,
   GateTransitionNote, KeywordTargetsSection, RoutedQueriesSection,
-  LaneRoutedActions, MeasurementPlan, proposalReview,
+  LaneRoutedActions, MeasurementPlan, proposalReview, isSchemaMutation,
 } from '../../_shared';
 
 function Card({ children, style, tc, 'data-testid': testId }: { children: React.ReactNode; style?: React.CSSProperties; tc: Tc; 'data-testid'?: string }) {
@@ -279,7 +279,8 @@ function ActionDetailContent() {
   const sourceNode = evidence?.source ?? null;
   const targetNode = evidence?.target ?? null;
   const signals = evidence?.signals ?? null;
-  const score = candidate?.opportunity_score != null ? Math.round(candidate.opportunity_score) : null;
+  const score = candidate?.opportunity_score != null ? candidate.opportunity_score.toFixed(1) : null;
+  const schemaApprovalPaused = isSchemaMutation(candidate?.mutation_type);
 
   // Real GSC baseline for the page being edited (the source page).
   // Position AND impressions are both the TOP-QUERY figures from the SAME
@@ -360,6 +361,7 @@ function ActionDetailContent() {
 
   async function act(kind: 'approve' | 'reject') {
     if (!candidate || !candidateMatchesRoute || busy) return;
+    if (kind === 'approve' && schemaApprovalPaused) return;
     setBusy(kind); setActionErr(null);
     try {
       if (kind === 'approve') {
@@ -414,6 +416,7 @@ function ActionDetailContent() {
                 )}
                 {score != null && <Pill tone="neutral" tc={tc}>score {score}</Pill>}
                 {candidate.gate_status && <Pill tone="good" tc={tc}>gate: {candidate.gate_status}</Pill>}
+                {schemaApprovalPaused && <Pill tone="warn" tc={tc}>schema paused</Pill>}
                 {candidate.approval_status === 'approved' && <Pill tone="good" tc={tc}>approved · active draft</Pill>}
                 {candidate.approval_status === 'rejected' && <Pill tone="bad" tc={tc}>rejected</Pill>}
               </div>
@@ -448,15 +451,22 @@ function ActionDetailContent() {
                 </button>
                 <button
                   onClick={() => act('approve')}
-                  disabled={busy !== null || done !== null}
+                  disabled={busy !== null || done !== null || schemaApprovalPaused}
                   data-testid="button-approve-queue"
-                  style={{ padding: '8px 18px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (busy || done) ? 'default' : 'pointer', opacity: (busy || done) ? 0.6 : 1 }}
+                  title={schemaApprovalPaused ? 'Schema execution temporarily paused — write path under repair.' : undefined}
+                  style={{ padding: '8px 18px', background: schemaApprovalPaused ? tc.background.muted : PALETTE.violet, color: schemaApprovalPaused ? tc.text.muted : '#fff', border: schemaApprovalPaused ? `1px solid ${tc.border.default}` : 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (busy || done || schemaApprovalPaused) ? 'default' : 'pointer', opacity: (busy || done) ? 0.6 : 1 }}
                 >
-                  {busy === 'approve' ? 'Queuing…' : 'Approve & queue (draft)'}
+                  {busy === 'approve' ? 'Queuing…' : schemaApprovalPaused ? 'Schema approval paused' : 'Approve & queue (draft)'}
                 </button>
               </div>
             )}
           </div>
+
+          {schemaApprovalPaused && candidate.approval_status === 'pending' && (
+            <div style={{ marginBottom: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.warnSoft, color: PALETTE.warn, fontFamily: fontFamily.body, fontSize: '13px', lineHeight: 1.5 }} data-testid="banner-schema-approval-paused">
+              Schema execution temporarily paused — write path under repair. This recommendation remains visible for review, but approval is disabled until Batch 1 re-enables schema writes.
+            </div>
+          )}
 
           {done && (
             <div style={{ marginBottom: space['4'], padding: space['3'], borderRadius: radius.sm, background: done === 'approved' ? PALETTE.goodSoft : PALETTE.badSoft, color: done === 'approved' ? PALETTE.good : PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="text-done">
@@ -563,9 +573,9 @@ function ActionDetailContent() {
               </div>
               <table style={{ width: '100%', fontFamily: fontFamily.body, fontSize: '13px' }}>
                 <tbody>
-                  <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top query</td><td style={{ textAlign: 'right', color: tc.text.primary }}>{baseline.topQuery || '—'}</td></tr>
-                  <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top-query position</td><td style={{ textAlign: 'right', fontFamily: monoStack }}>{fmtPos(baseline.position)}</td></tr>
-                  <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top-query impressions</td><td style={{ textAlign: 'right', fontFamily: monoStack }}>{fmtInt(baseline.impressions)}</td></tr>
+                  <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top query (full-history)</td><td style={{ textAlign: 'right', color: tc.text.primary }}>{baseline.topQuery || '—'}</td></tr>
+                  <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top-query position (full-history)</td><td style={{ textAlign: 'right', fontFamily: monoStack }}>{fmtPos(baseline.position)}</td></tr>
+                  <tr><td style={{ padding: '4px 0', color: tc.text.muted }}>Top-query impressions (full-history)</td><td style={{ textAlign: 'right', fontFamily: monoStack }}>{fmtInt(baseline.impressions)}</td></tr>
                 </tbody>
               </table>
               <div style={{ marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>Live GSC baseline for this page.</div>
