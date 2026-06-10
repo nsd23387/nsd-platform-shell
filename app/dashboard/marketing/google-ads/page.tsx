@@ -419,7 +419,7 @@ function ConversionActionsSection() {
   if (error) return <DashboardCard title="Error" error={error} />;
   if (!conversions?.length) {
     return (
-      <EmptyState message="Conversion action data is not yet available. The raw_google_ads_campaign_conversions table is pending Supabase migration." />
+      <EmptyState message="Conversion action data is not available for the selected period." />
     );
   }
 
@@ -639,7 +639,7 @@ export default function GoogleAdsWarRoomPage() {
           error={error}
         />
 
-        <DashboardSection title="Conversion Actions" description="Conversion action breakdown by type. Sourced from raw_google_ads_campaign_conversions." index={3}>
+        <DashboardSection title="Conversion Actions" description="Conversion action breakdown by type from the cleaned Google Ads campaign conversion grain." index={3}>
           <ConversionActionsSection />
         </DashboardSection>
 

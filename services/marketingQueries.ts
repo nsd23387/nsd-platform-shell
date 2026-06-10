@@ -114,20 +114,44 @@ const QMS_KPI_PIPELINE_SQL = `
   WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
 `;
 
-/**
- * LIFETIME VIEW — metrics_search_console_page has no date column.
- * This query returns lifetime totals, not period-filtered values.
- * Comparisons for organic_clicks/impressions will show delta_pct=0
- * because both current and previous periods see identical data.
- */
 const KPI_SEARCH_SQL = `
+  WITH current_window AS (
+    SELECT * FROM analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date)
+  ),
+  previous_window AS (
+    SELECT * FROM analytics.seo_command_center_gsc_window(NULL::int, $3::date, $4::date)
+  ),
+  current_agg AS (
+    SELECT
+      COALESCE(SUM(clicks), 0)      AS organic_clicks,
+      COALESCE(SUM(impressions), 0) AS impressions,
+      CASE WHEN SUM(impressions) > 0
+        THEN SUM(avg_position * impressions) / SUM(impressions)
+        ELSE 0 END                  AS avg_position
+    FROM analytics.metrics_search_console_page_daily p
+    CROSS JOIN current_window w
+    WHERE p.metric_date BETWEEN w.start_date AND w.end_date
+  ),
+  previous_agg AS (
+    SELECT
+      COALESCE(SUM(clicks), 0)      AS organic_clicks,
+      COALESCE(SUM(impressions), 0) AS impressions,
+      CASE WHEN SUM(impressions) > 0
+        THEN SUM(avg_position * impressions) / SUM(impressions)
+        ELSE 0 END                  AS avg_position
+    FROM analytics.metrics_search_console_page_daily p
+    CROSS JOIN previous_window w
+    WHERE p.metric_date BETWEEN w.start_date AND w.end_date
+  )
   SELECT
-    COALESCE(SUM(clicks), 0)      AS organic_clicks,
-    COALESCE(SUM(impressions), 0) AS impressions,
-    CASE WHEN SUM(impressions) > 0
-      THEN SUM(avg_position * impressions) / SUM(impressions)
-      ELSE 0 END                  AS avg_position
-  FROM analytics.metrics_search_console_page
+    c.organic_clicks,
+    c.impressions,
+    c.avg_position,
+    p.organic_clicks AS previous_organic_clicks,
+    p.impressions AS previous_impressions,
+    p.avg_position AS previous_avg_position
+  FROM current_agg c
+  CROSS JOIN previous_agg p
 `;
 
 // ============================================
@@ -191,7 +215,9 @@ const PAGES_SQL = `
       CASE WHEN SUM(impressions::int) > 0
         THEN SUM(clicks::int)::numeric / SUM(impressions::int)
         ELSE 0 END           AS ctr
-    FROM analytics.metrics_search_console_page
+    FROM analytics.metrics_search_console_page_daily p
+    CROSS JOIN analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date) w
+    WHERE p.metric_date BETWEEN w.start_date AND w.end_date
     GROUP BY 1
   ),
   conv_attributed AS (
@@ -270,12 +296,10 @@ const FRESHNESS_SQL = `
 // SQL — Phase B: SEO query intelligence
 // ============================================
 
-/**
- * LIFETIME VIEW — metrics_search_console_query has no date column.
- * dashboard_pages also has no date column.
- * Returns lifetime totals per query.
- */
 const SEO_QUERIES_SQL = `
+  WITH w AS (
+    SELECT * FROM analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date)
+  )
   SELECT
     q.query,
     COALESCE(SUM(q.clicks), 0)       AS clicks,
@@ -288,7 +312,9 @@ const SEO_QUERIES_SQL = `
       ELSE 0 END                     AS avg_position,
     0                                AS submissions,
     0                                AS pipeline_value_usd
-  FROM analytics.metrics_search_console_query q
+  FROM analytics.metrics_search_console_query_daily q
+  CROSS JOIN w
+  WHERE q.metric_date BETWEEN w.start_date AND w.end_date
   GROUP BY q.query
   ORDER BY SUM(q.clicks) DESC
   LIMIT 50
@@ -348,13 +374,17 @@ const TIMESERIES_PIPELINE_SQL = `
 
 // T002: SEO timeseries from metrics_search_console_daily (column is "date" not "metric_date")
 const TIMESERIES_IMPRESSIONS_SQL = `
-  WITH date_range AS (
-    SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
+  WITH w AS (
+    SELECT * FROM analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date)
+  ),
+  date_range AS (
+    SELECT d::date FROM w, generate_series(w.start_date, w.end_date, '1 day'::interval) AS d
   ),
   daily AS (
     SELECT date AS metric_date, impressions AS val
-    FROM analytics.metrics_search_console_daily
-    WHERE date BETWEEN $1 AND $2
+    FROM analytics.metrics_search_console_daily m
+    CROSS JOIN w
+    WHERE m.date BETWEEN w.start_date AND w.end_date
   )
   SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
   FROM date_range dr
@@ -363,13 +393,17 @@ const TIMESERIES_IMPRESSIONS_SQL = `
 `;
 
 const TIMESERIES_CLICKS_SQL = `
-  WITH date_range AS (
-    SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
+  WITH w AS (
+    SELECT * FROM analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date)
+  ),
+  date_range AS (
+    SELECT d::date FROM w, generate_series(w.start_date, w.end_date, '1 day'::interval) AS d
   ),
   daily AS (
     SELECT date AS metric_date, clicks AS val
-    FROM analytics.metrics_search_console_daily
-    WHERE date BETWEEN $1 AND $2
+    FROM analytics.metrics_search_console_daily m
+    CROSS JOIN w
+    WHERE m.date BETWEEN w.start_date AND w.end_date
   )
   SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
   FROM date_range dr
@@ -667,58 +701,54 @@ const GA4_FUNNEL_SQL = `
 `;
 
 // ============================================
-// T011: Google Ads overview from raw_google_ads
+// T011: Google Ads overview from cleaned Google Ads campaign grain
 // ============================================
 
 const GOOGLE_ADS_OVERVIEW_SQL = `
   SELECT
-    COALESCE(SUM((payload->>'cost')::numeric), 0) AS spend,
-    COALESCE(SUM((payload->>'impressions')::int), 0) AS impressions,
-    COALESCE(SUM((payload->>'clicks')::int), 0) AS clicks,
-    COALESCE(SUM((payload->>'conversions')::numeric), 0) AS conversions,
-    CASE WHEN COALESCE(SUM((payload->>'clicks')::int), 0) > 0
-      THEN COALESCE(SUM((payload->>'cost')::numeric), 0) / SUM((payload->>'clicks')::int)
+    COALESCE(SUM(cost), 0) AS spend,
+    COALESCE(SUM(impressions), 0) AS impressions,
+    COALESCE(SUM(clicks), 0) AS clicks,
+    COALESCE(SUM(conversions), 0) AS conversions,
+    CASE WHEN COALESCE(SUM(clicks), 0) > 0
+      THEN COALESCE(SUM(cost), 0) / SUM(clicks)
       ELSE 0 END AS cpc,
-    CASE WHEN COALESCE(SUM((payload->>'impressions')::int), 0) > 0
-      THEN COALESCE(SUM((payload->>'clicks')::int), 0)::numeric / SUM((payload->>'impressions')::int)
+    CASE WHEN COALESCE(SUM(impressions), 0) > 0
+      THEN COALESCE(SUM(clicks), 0)::numeric / SUM(impressions)
       ELSE 0 END AS ctr,
-    CASE WHEN COALESCE(SUM((payload->>'cost')::numeric), 0) > 0
-      THEN COALESCE(SUM((payload->>'conversion_value')::numeric), 0) / SUM((payload->>'cost')::numeric)
+    CASE WHEN COALESCE(SUM(cost), 0) > 0
+      THEN COALESCE(SUM(conversion_value), 0) / SUM(cost)
       ELSE 0 END AS roas
-  FROM analytics.raw_google_ads
-  WHERE source_system = 'google-ads-bq'
-    AND event_name = 'campaign_performance'
-    AND occurred_at::date BETWEEN $1 AND $2
+  FROM analytics.metrics_google_ads_campaign_daily
+  WHERE metric_date BETWEEN $1::date AND $2::date
 `;
 
 // ============================================
-// T012: Google Ads campaigns from raw_google_ads
+// T012: Google Ads campaigns from cleaned Google Ads campaign grain
 // ============================================
 
 const GOOGLE_ADS_CAMPAIGNS_SQL = `
   SELECT
-    payload->>'campaign_name' AS campaign_name,
-    payload->>'campaign_id' AS campaign_id,
-    SUM((payload->>'cost')::numeric) AS spend,
-    SUM((payload->>'impressions')::int) AS impressions,
-    SUM((payload->>'clicks')::int) AS clicks,
-    SUM((payload->>'conversions')::numeric) AS conversions,
-    CASE WHEN SUM((payload->>'clicks')::int) > 0
-      THEN SUM((payload->>'cost')::numeric) / SUM((payload->>'clicks')::int)
+    campaign_name,
+    campaign_id,
+    SUM(cost) AS spend,
+    SUM(impressions) AS impressions,
+    SUM(clicks) AS clicks,
+    SUM(conversions) AS conversions,
+    CASE WHEN SUM(clicks) > 0
+      THEN SUM(cost) / SUM(clicks)
       ELSE 0 END AS cpc,
-    CASE WHEN SUM((payload->>'impressions')::int) > 0
-      THEN SUM((payload->>'clicks')::int)::numeric / SUM((payload->>'impressions')::int)
+    CASE WHEN SUM(impressions) > 0
+      THEN SUM(clicks)::numeric / SUM(impressions)
       ELSE 0 END AS ctr,
-    CASE WHEN SUM((payload->>'cost')::numeric) > 0
-      THEN SUM((payload->>'conversion_value')::numeric) / SUM((payload->>'cost')::numeric)
+    CASE WHEN SUM(cost) > 0
+      THEN SUM(conversion_value) / SUM(cost)
       ELSE 0 END AS roas,
-    MAX(COALESCE((payload->>'daily_budget')::numeric, 0)) AS daily_budget
-  FROM analytics.raw_google_ads
-  WHERE source_system = 'google-ads-bq'
-    AND event_name = 'campaign_performance'
-    AND occurred_at::date BETWEEN $1 AND $2
-  GROUP BY payload->>'campaign_name', payload->>'campaign_id'
-  ORDER BY SUM((payload->>'cost')::numeric) DESC
+    MAX(COALESCE(daily_budget, 0)) AS daily_budget
+  FROM analytics.metrics_google_ads_campaign_daily
+  WHERE metric_date BETWEEN $1::date AND $2::date
+  GROUP BY campaign_name, campaign_id
+  ORDER BY SUM(cost) DESC
 `;
 
 // ============================================
@@ -746,10 +776,15 @@ const WARM_OUTREACH_SESSIONS_SQL = `
 `;
 
 const POST_FREE_CONTENT_SQL = `
+  WITH w AS (
+    SELECT * FROM analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date)
+  )
   SELECT
     COALESCE(SUM(clicks), 0) AS clicks,
     COALESCE(SUM(impressions), 0) AS impressions
-  FROM analytics.metrics_search_console_page
+  FROM analytics.metrics_search_console_page_daily p
+  CROSS JOIN w
+  WHERE p.metric_date BETWEEN w.start_date AND w.end_date
 `;
 
 const POST_FREE_CONTENT_SESSIONS_SQL = `
@@ -779,15 +814,13 @@ const POST_FREE_CONTENT_CONVERSIONS_SQL = `
 
 const RUN_PAID_ADS_SQL = `
   SELECT
-    COALESCE(SUM((payload->>'cost')::numeric), 0) AS spend,
-    COALESCE(SUM((payload->>'impressions')::int), 0) AS impressions,
-    COALESCE(SUM((payload->>'clicks')::int), 0) AS clicks,
-    COALESCE(SUM((payload->>'conversions')::numeric), 0) AS conversions,
-    COALESCE(SUM((payload->>'conversion_value')::numeric), 0) AS pipeline_value_usd
-  FROM analytics.raw_google_ads
-  WHERE source_system = 'google-ads-bq'
-    AND event_name = 'campaign_performance'
-    AND occurred_at::date BETWEEN $1 AND $2
+    COALESCE(SUM(cost), 0) AS spend,
+    COALESCE(SUM(impressions), 0) AS impressions,
+    COALESCE(SUM(clicks), 0) AS clicks,
+    COALESCE(SUM(conversions), 0) AS conversions,
+    COALESCE(SUM(conversion_value), 0) AS pipeline_value_usd
+  FROM analytics.metrics_google_ads_campaign_daily
+  WHERE metric_date BETWEEN $1::date AND $2::date
 `;
 
 const RUN_PAID_ADS_SESSIONS_SQL = `
@@ -962,7 +995,7 @@ function buildFilterFragment(
   if (filters.campaign) {
     if (tableType === 'google_ads') {
       idx++;
-      clauses.push(`payload->>'campaign_name' ILIKE $${idx}`);
+      clauses.push(`campaign_name ILIKE $${idx}`);
       params.push(`%${filters.campaign}%`);
     }
   }
@@ -1096,13 +1129,13 @@ export async function executeMarketingQueries(
   const queries: Promise<{ rows: Row[] }>[] = [
     /* 0  */ db.query(fEngSql, curEngP),
     /* 1  */ db.query(fConvSql, curConvP),
-    /* 2  */ db.query(KPI_SEARCH_SQL),
+    /* 2  */ db.query(KPI_SEARCH_SQL, [...curParams, ...prevParams]),
     /* 3  */ db.query(PAGES_SQL, curParams),
     /* 4  */ db.query(SOURCES_SQL),
     /* 5  */ db.query(FRESHNESS_SQL),
     /* 6  */ db.query(fEngSql, prevEngP),
     /* 7  */ db.query(fConvSql, prevConvP),
-    /* 8  */ db.query(SEO_QUERIES_SQL),
+    /* 8  */ db.query(SEO_QUERIES_SQL, curParams),
     /* 9  */ db.query(fAnomSessSql, curEngP),
     /* 10 */ db.query(fAnomSubSql, curConvP),
     /* 11 */ db.query(fAnomPipeSql, curParams),
@@ -1124,7 +1157,7 @@ export async function executeMarketingQueries(
     /* 27 */ db.query(WARM_OUTREACH_SQL, curParams),
     /* 28 */ db.query(fWarmSessSql, curGa4P),
     /* 29 */ db.query(fWarmSessSql, prevGa4P),
-    /* 30 */ db.query(POST_FREE_CONTENT_SQL),
+    /* 30 */ db.query(POST_FREE_CONTENT_SQL, curParams),
     /* 31 */ db.query(fPfcSessSql, curGa4P),
     /* 32 */ db.query(fPfcSessSql, prevGa4P),
     /* 33 */ db.query(fPfcConvSql, curWebP),
@@ -1151,6 +1184,11 @@ export async function executeMarketingQueries(
   const results = await Promise.all(queries);
 
   const searchRow = results[2].rows[0] ?? {};
+  const prevSearchRow = {
+    organic_clicks: searchRow.previous_organic_clicks,
+    impressions: searchRow.previous_impressions,
+    avg_position: searchRow.previous_avg_position,
+  };
   const funnelFallback = results[12].rows[0] ?? {};
   const prevFunnelFallback = results[13].rows[0] ?? {};
 
@@ -1164,7 +1202,7 @@ export async function executeMarketingQueries(
   const prevKpis = buildKPIs(
     results[6].rows[0] ?? {},
     results[7].rows[0] ?? {},
-    searchRow,
+    prevSearchRow,
     prevFunnelFallback,
   );
 
