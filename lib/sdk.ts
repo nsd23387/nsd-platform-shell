@@ -50,6 +50,7 @@ const ODS_API_URL =
   process.env.NEXT_PUBLIC_ODS_API_URL ||
   '/functions/v1/ods-api';
 const ACTIVITY_SPINE_BASE_URL = process.env.NEXT_PUBLIC_ACTIVITY_SPINE_URL || '/api/activity-spine';
+const SDK_FETCH_TIMEOUT_MS = 8000;
 
 interface SDKConfig {
   odsApiUrl: string;
@@ -232,6 +233,30 @@ function buildHeaders(): HeadersInit {
   return headers;
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), SDK_FETCH_TIMEOUT_MS);
+
+  if (init.signal) {
+    if (init.signal.aborted) controller.abort();
+    else init.signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new ActivitySpineError(`Activity Spine request timed out after ${SDK_FETCH_TIMEOUT_MS}ms`, 408);
+    }
+    throw err;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+}
+
 /**
  * Generic fetch wrapper with error handling
  * All Activity Spine calls go through this - ensures read-only compliance
@@ -260,7 +285,7 @@ async function fetchFromActivitySpine<T>(
     });
   }
 
-  const response = await fetch(url.toString(), {
+  const response = await fetchWithTimeout(url.toString(), {
     method: 'GET', // READ-ONLY: Only GET requests allowed
     headers: buildHeaders(),
   });
@@ -460,7 +485,7 @@ export async function getSourceToPaidFunnel(
 ): Promise<AttributionResponse<SourceFunnelRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'source-funnel' } };
   const sp = new URLSearchParams({ view: 'source-funnel', ...params });
-  const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
+  const res = await fetchWithTimeout(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
     method: 'GET',
     headers: buildHeaders(),
   });
@@ -478,7 +503,7 @@ export async function getChannelRevenueDaily(
 ): Promise<AttributionResponse<ChannelRevenueRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'channel-revenue' } };
   const sp = new URLSearchParams({ view: 'channel-revenue', ...params });
-  const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
+  const res = await fetchWithTimeout(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
     method: 'GET',
     headers: buildHeaders(),
   });
@@ -496,7 +521,7 @@ export async function getGoogleAdsQuotePerformance(
 ): Promise<AttributionResponse<GoogleAdsPerformanceRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'google-ads-performance' } };
   const sp = new URLSearchParams({ view: 'google-ads-performance', ...params });
-  const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
+  const res = await fetchWithTimeout(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
     method: 'GET',
     headers: buildHeaders(),
   });
@@ -510,7 +535,7 @@ export async function getGoogleAdsQuotePerformance(
  */
 export async function getGoogleAdsAttributionQuality(): Promise<AttributionResponse<AttributionQualityRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'google-ads-quality' } };
-  const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?view=google-ads-quality`, {
+  const res = await fetchWithTimeout(`${sdkConfig.activitySpineUrl}/marketing/attribution?view=google-ads-quality`, {
     method: 'GET',
     headers: buildHeaders(),
   });
@@ -528,7 +553,7 @@ export async function getSeoPageQuotePerformance(
 ): Promise<AttributionResponse<SeoPagePerformanceRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'page-performance' } };
   const sp = new URLSearchParams({ view: 'page-performance', ...params });
-  const res = await fetch(`${sdkConfig.activitySpineUrl}/seo/attribution?${sp}`, {
+  const res = await fetchWithTimeout(`${sdkConfig.activitySpineUrl}/seo/attribution?${sp}`, {
     method: 'GET',
     headers: buildHeaders(),
   });
@@ -542,7 +567,7 @@ export async function getSeoPageQuotePerformance(
  */
 export async function getSeoClusterQuotePerformance(): Promise<AttributionResponse<SeoClusterPerformanceRow>> {
   if (isApiDisabled) return { data: [], meta: { view: 'cluster-performance' } };
-  const res = await fetch(`${sdkConfig.activitySpineUrl}/seo/attribution?view=cluster-performance`, {
+  const res = await fetchWithTimeout(`${sdkConfig.activitySpineUrl}/seo/attribution?view=cluster-performance`, {
     method: 'GET',
     headers: buildHeaders(),
   });
@@ -576,7 +601,7 @@ export async function getAttributionReviewSnapshot(
   const sp = new URLSearchParams({ view: 'review-snapshot' });
   if (params.start_date) sp.set('start_date', params.start_date);
   if (params.end_date) sp.set('end_date', params.end_date);
-  const res = await fetch(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
+  const res = await fetchWithTimeout(`${sdkConfig.activitySpineUrl}/marketing/attribution?${sp}`, {
     method: 'GET',
     headers: buildHeaders(),
   });

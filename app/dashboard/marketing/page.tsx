@@ -24,6 +24,7 @@ import { indigo, violet, magenta } from '../../../design/tokens/colors';
 import { MarketingContext } from './lib/MarketingContext';
 
 const EMPTY_GA4_FUNNEL = { view_item: 0, add_to_cart: 0, begin_checkout: 0, purchase: 0, form_start: 0, form_submit: 0 };
+const PANEL_FETCH_TIMEOUT_MS = 8000;
 
 function formatCurrency(v: number): string {
   return v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(0)}`;
@@ -67,12 +68,19 @@ function generateNarrative(
 function ColdOutreachEngineCard() {
   const [outreach, setOutreach] = useState<{ emailsSent: number; replyRate: number; leadsPushed: number } | null>(null);
   useEffect(() => {
-    fetch('/api/proxy/cold-outreach-summary?window=30d')
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), PANEL_FETCH_TIMEOUT_MS);
+
+    fetch('/api/proxy/cold-outreach-summary?window=30d', { signal: controller.signal })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d) setOutreach({ emailsSent: d.emailsSent ?? 0, replyRate: d.replyRate ?? 0, leadsPushed: d.leadsPushed ?? 0 });
       })
       .catch(() => {});
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []);
 
   return (

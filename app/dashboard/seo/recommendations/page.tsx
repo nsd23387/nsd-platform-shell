@@ -123,11 +123,33 @@ function RecommendationsContent() {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true); setError(null);
-    Promise.all([getSeoCandidateQueue(), getSeoPortfolio()])
-      .then(([q, p]) => { if (alive) { setCandidates(q.candidates); setPortfolio(p); } })
-      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Failed to load recommendations'); })
-      .finally(() => { if (alive) setLoading(false); });
+    setLoading(true);
+    setError(null);
+
+    Promise.allSettled([getSeoCandidateQueue(), getSeoPortfolio()])
+      .then(([queueResult, portfolioResult]) => {
+        if (!alive) return;
+
+        const errors: string[] = [];
+        if (queueResult.status === 'fulfilled') {
+          setCandidates(queueResult.value.candidates);
+        } else {
+          setCandidates([]);
+          errors.push(queueResult.reason instanceof Error ? queueResult.reason.message : 'Failed to load recommendations');
+        }
+
+        if (portfolioResult.status === 'fulfilled') {
+          setPortfolio(portfolioResult.value);
+        } else {
+          setPortfolio([]);
+          errors.push(portfolioResult.reason instanceof Error ? portfolioResult.reason.message : 'Failed to load live page portfolio');
+        }
+
+        setError(errors.length > 0 ? errors.join(' ') : null);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
     return () => { alive = false; };
   }, []);
 
@@ -287,13 +309,13 @@ function RecommendationsContent() {
 
       {loading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading recommendations…</div>}
       {error && <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
-      {!loading && !error && groups.length === 0 && (
+      {!loading && groups.length === 0 && (
         <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-recommendations">
-          No gate-accepted recommendations awaiting approval on live pages match the current filters.
+          {error ? 'Recommendations could not fully load. Check the error above, then retry the page.' : 'No gate-accepted recommendations awaiting approval on live pages match the current filters.'}
         </div>
       )}
 
-      {!loading && !error && groups.length > 0 && (
+      {!loading && groups.length > 0 && (
         <>
           <div style={{ border: `1px solid ${tc.border.default}`, borderRadius: radius.md, overflow: 'hidden', background: tc.background.surface }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: fontFamily.body, fontSize: '13px' }}>
