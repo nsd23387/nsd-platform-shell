@@ -75,7 +75,8 @@ export function MarketingGoogleAdsOverviewPanel({ overview, loading, error }: Pr
         <KPICard label="Conversions" value={formatNumber(overview.conversions)} testId="gads-conversions" />
         <KPICard label="CPC" value={formatCurrency(overview.cpc)} testId="gads-cpc" />
         <KPICard label="CTR" value={formatPercent(overview.ctr)} testId="gads-ctr" />
-        <KPICard label="ROAS" value={overview.roas.toFixed(2) + 'x'} testId="gads-roas" provenance="Google Ads spend + quote-attributed revenue · selected Marketing window" />
+        {/* D-13: revenue side only counts exact campaign-ID joins (~10% of paid quotes) */}
+        <KPICard label="ID-confirmed ROAS" value={overview.roas.toFixed(2) + 'x'} testId="gads-roas" provenance="Counts only quotes attributed at exact campaign-ID precision (~10% of paid quotes). See Attribution Intelligence for the full-funnel view." />
       </div>
     </DashboardSection>
   );

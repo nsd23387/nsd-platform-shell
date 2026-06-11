@@ -37,21 +37,28 @@ async function getPagePerformance(sp: URLSearchParams) {
   const page = Math.max(Number(sp.get('page') ?? 0), 0);
   const offset = page * limit;
 
+  // NOTE: seo.page_quote_performance no longer carries topic_cluster (the
+  // governed rebuild dropped it from the view). Cluster membership lives in
+  // analytics.page_topic_cluster_attribution (page_url is unique there), the
+  // same mapping seo.cluster_quote_performance is built from, so we LEFT JOIN
+  // it back on raw_page_url to keep the Cluster column populated.
   const { rows } = await pool.query(
     `SELECT
-       canonical_page_url,
-       raw_page_url,
-       page_title,
-       page_type,
-       topic_cluster,
-       search_console_clicks,
-       search_console_impressions,
-       avg_position,
-       submitted_quotes,
-       paid_quotes,
-       paid_revenue_cents
-     FROM seo.page_quote_performance
-     ORDER BY COALESCE(paid_revenue_cents, 0) DESC NULLS LAST
+       pqp.canonical_page_url,
+       pqp.raw_page_url,
+       pqp.page_title,
+       pqp.page_type,
+       ptca.topic_cluster,
+       pqp.search_console_clicks,
+       pqp.search_console_impressions,
+       pqp.avg_position,
+       pqp.submitted_quotes,
+       pqp.paid_quotes,
+       pqp.paid_revenue_cents
+     FROM seo.page_quote_performance pqp
+     LEFT JOIN analytics.page_topic_cluster_attribution ptca
+       ON ptca.page_url = pqp.raw_page_url
+     ORDER BY COALESCE(pqp.paid_revenue_cents, 0) DESC NULLS LAST
      LIMIT $1 OFFSET $2`,
     [limit, offset]
   );

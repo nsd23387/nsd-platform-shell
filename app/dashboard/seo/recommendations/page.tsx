@@ -26,7 +26,7 @@ import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { getSeoCandidateQueue, getSeoPortfolio } from '../../../../lib/seoApi';
 import type { PageDossierCandidate, PortfolioPage } from '../../../../lib/seoApi';
-import { PALETTE, monoStack, Pill, fmtInt, fmtScore, pathOf, mutationDisplay, proposalReview, isSchemaMutation } from '../_shared';
+import { PALETTE, monoStack, Pill, fmtInt, fmtScore, pathOf, mutationDisplay, proposalReview, isSchemaMutation, candidateHeadline } from '../_shared';
 
 const PAGE_SIZE = 25;
 
@@ -83,7 +83,7 @@ function CandidateRow({
     >
       <td style={{ padding: isAlt ? '8px 12px 8px 28px' : '10px 12px', color: isAlt ? tc.text.secondary : tc.text.primary, fontWeight: isAlt ? fontWeight.normal : fontWeight.medium }}>
         {isAlt && <span style={{ color: tc.text.muted, marginRight: 6 }}>↳</span>}
-        {c.mutation_label ?? m.verb(c.proposed_value)}
+        {candidateHeadline(c)}
       </td>
       <td style={{ padding: '10px 12px' }}>
         <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>

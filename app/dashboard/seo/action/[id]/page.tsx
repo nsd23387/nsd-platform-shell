@@ -33,6 +33,7 @@ import {
   PALETTE, monoStack, Tc, Pill, fmtInt, fmtPos, pathOf, mutationDisplay,
   GateTransitionNote, KeywordTargetsSection, RoutedQueriesSection,
   LaneRoutedActions, MeasurementPlan, proposalReview, isSchemaMutation,
+  isTextMutation, candidateHeadline, SNAPSHOT_PENDING_MSG,
 } from '../../_shared';
 
 function Card({ children, style, tc, 'data-testid': testId }: { children: React.ReactNode; style?: React.CSSProperties; tc: Tc; 'data-testid'?: string }) {
@@ -359,9 +360,54 @@ function ActionDetailContent() {
     [candidate, dossier],
   );
 
+  // C-2 (empty WHY): a deterministic rationale assembled ONLY from already-
+  // fetched real fields (top query, its position & impressions, DataForSEO
+  // monthly volume, the field type, the current value). It renders only when
+  // the stored rationale is missing or circular filler (e.g. "Recommendation
+  // for Food & Beverage"); a substantive stored rationale always wins.
+  const isGenericRationale = (s: string | null | undefined): boolean => {
+    const t = (s ?? '').trim();
+    return t.length < 40 || /^Recommendation for /i.test(t);
+  };
+  const storedWhy = candidate?.why ?? evidence?.why ?? null;
+  const whySubstantive = !isGenericRationale(storedWhy) ? storedWhy : null;
+  const summarySubstantive = !isGenericRationale(candidate?.evidence_summary) ? (candidate?.evidence_summary ?? null) : null;
+  const useGeneratedWhy = !whySubstantive && !summarySubstantive;
+  const generatedWhy = useMemo(() => {
+    if (!candidate) return null;
+    const q = baseline.topQuery?.trim();
+    if (!q) return null;
+    const primary = dossier?.dossier?.keyword_targets?.primary;
+    // Only attach monthly volume when it belongs to the SAME query we cite.
+    const vol = primary?.keyword && primary.keyword.trim().toLowerCase() === q.toLowerCase() ? primary.volume : null;
+    const bits: string[] = [];
+    if (baseline.impressions != null) bits.push(`${fmtInt(baseline.impressions)} impressions in window`);
+    if (vol != null) bits.push(`~${fmtInt(vol)}/mo searches`);
+    const evidenceStr = bits.length ? ` (${bits.join(', ')})` : '';
+    const lead = baseline.position != null
+      ? `This page ranks ${fmtPos(baseline.position)} for “${q}”${evidenceStr}`
+      : `This page shows demand for “${q}”${evidenceStr} without a measured position yet`;
+    const field = md.tag.toLowerCase();
+    if (isTextMutation(candidate.mutation_type)) {
+      const beforeTargets = beforeValue ? beforeValue.toLowerCase().includes(q.toLowerCase()) : null;
+      if (beforeTargets === false) {
+        return `${lead} and the current ${field} doesn’t target it. Aligning the ${field} is a low-effort position lever.`;
+      }
+      return `${lead}. Updating the ${field} to target it more directly is a low-effort position lever.`;
+    }
+    return `${lead}. The proposed ${field} change targets that real, measured demand.`;
+  }, [candidate, baseline, dossier, md.tag, beforeValue]);
+
+  // C-1 (approve-blind guard): when the BEFORE value is missing — no
+  // generation-time snapshot AND no live dossier state — the reviewer cannot
+  // compare before → after, so Approve is blocked. `beforeValue` is exactly the
+  // field the BEFORE panel renders from (snapshot ?? dossier state); internal
+  // links are additive and keep their own honest anchor-context fallback.
+  const beforeMissing = !!candidate && !isInternalLink && !beforeValue;
+
   async function act(kind: 'approve' | 'reject') {
     if (!candidate || !candidateMatchesRoute || busy) return;
-    if (kind === 'approve' && schemaApprovalPaused) return;
+    if (kind === 'approve' && (schemaApprovalPaused || beforeMissing)) return;
     setBusy(kind); setActionErr(null);
     try {
       if (kind === 'approve') {
@@ -417,11 +463,14 @@ function ActionDetailContent() {
                 {score != null && <Pill tone="neutral" tc={tc}>score {score}</Pill>}
                 {candidate.gate_status && <Pill tone="good" tc={tc}>gate: {candidate.gate_status}</Pill>}
                 {schemaApprovalPaused && <Pill tone="warn" tc={tc}>schema paused</Pill>}
+                {beforeMissing && candidate.approval_status === 'pending' && (
+                  <span title={SNAPSHOT_PENDING_MSG} data-testid="pill-snapshot-pending"><Pill tone="warn" tc={tc}>snapshot pending</Pill></span>
+                )}
                 {candidate.approval_status === 'approved' && <Pill tone="good" tc={tc}>approved · active draft</Pill>}
                 {candidate.approval_status === 'rejected' && <Pill tone="bad" tc={tc}>rejected</Pill>}
               </div>
               <h1 style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>
-                {candidate.mutation_label ?? md.verb(candidate.proposed_value)}
+                {candidateHeadline(candidate)}
               </h1>
               <div style={{ fontFamily: monoStack, fontSize: '13px', color: tc.text.muted, marginTop: '4px', wordBreak: 'break-all' }}>
                 {candidate.page_url_canonical ?? (candidate.target_page_url ? pathOf(candidate.target_page_url) : '—')}
@@ -451,12 +500,14 @@ function ActionDetailContent() {
                 </button>
                 <button
                   onClick={() => act('approve')}
-                  disabled={busy !== null || done !== null || schemaApprovalPaused}
+                  disabled={busy !== null || done !== null || schemaApprovalPaused || beforeMissing}
                   data-testid="button-approve-queue"
-                  title={schemaApprovalPaused ? 'Schema execution temporarily paused — write path under repair.' : undefined}
-                  style={{ padding: '8px 18px', background: schemaApprovalPaused ? tc.background.muted : PALETTE.violet, color: schemaApprovalPaused ? tc.text.muted : '#fff', border: schemaApprovalPaused ? `1px solid ${tc.border.default}` : 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (busy || done || schemaApprovalPaused) ? 'default' : 'pointer', opacity: (busy || done) ? 0.6 : 1 }}
+                  title={schemaApprovalPaused
+                    ? 'Schema execution temporarily paused — write path under repair.'
+                    : beforeMissing ? SNAPSHOT_PENDING_MSG : undefined}
+                  style={{ padding: '8px 18px', background: (schemaApprovalPaused || beforeMissing) ? tc.background.muted : PALETTE.violet, color: (schemaApprovalPaused || beforeMissing) ? tc.text.muted : '#fff', border: (schemaApprovalPaused || beforeMissing) ? `1px solid ${tc.border.default}` : 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (busy || done || schemaApprovalPaused || beforeMissing) ? 'default' : 'pointer', opacity: (busy || done) ? 0.6 : 1 }}
                 >
-                  {busy === 'approve' ? 'Queuing…' : schemaApprovalPaused ? 'Schema approval paused' : 'Approve & queue (draft)'}
+                  {busy === 'approve' ? 'Queuing…' : schemaApprovalPaused ? 'Schema approval paused' : beforeMissing ? 'Snapshot pending' : 'Approve & queue (draft)'}
                 </button>
               </div>
             )}
@@ -512,8 +563,16 @@ function ActionDetailContent() {
           <Card tc={tc} style={{ marginBottom: space['4'] }}>
             <Label tc={tc}>Why we&apos;re recommending this</Label>
             <ul style={{ margin: 0, paddingLeft: 20, fontFamily: fontFamily.body, fontSize: '14px', lineHeight: 1.7, color: tc.text.primary }}>
-              {(candidate.why ?? evidence?.why) && <li data-testid="text-why">{candidate.why ?? evidence?.why}</li>}
-              {candidate.evidence_summary && candidate.evidence_summary !== (candidate.why ?? evidence?.why) && <li>{candidate.evidence_summary}</li>}
+              {whySubstantive && <li data-testid="text-why">{whySubstantive}</li>}
+              {summarySubstantive && summarySubstantive !== whySubstantive && <li>{summarySubstantive}</li>}
+              {/* C-2: stored rationale missing/generic → deterministic sentence
+                  built from the real GSC/DataForSEO fields already on screen. */}
+              {useGeneratedWhy && generatedWhy && <li data-testid="text-why-generated">{generatedWhy}</li>}
+              {useGeneratedWhy && (storedWhy || candidate.evidence_summary) && (
+                <li style={{ color: tc.text.muted, fontSize: '12px' }} data-testid="text-why-stored-generic">
+                  Engine note: &ldquo;{storedWhy ?? candidate.evidence_summary}&rdquo;
+                </li>
+              )}
               {isInternalLink && sourceNode?.entity && targetNode?.entity && (
                 <li>
                   Source page <strong>{sourceNode.entity}</strong>{sourceNode.intent ? ` (${sourceNode.intent})` : ''} is topically related to <strong>{targetNode.entity}</strong>{targetNode.intent ? ` (${targetNode.intent})` : ''} — an internal link passes relevance &amp; equity between them.
@@ -526,7 +585,7 @@ function ActionDetailContent() {
                   {Array.isArray(signals.shared_attributes) && signals.shared_attributes.length > 0 && <> · shared attributes: {signals.shared_attributes.join(', ')}</>}
                 </li>
               )}
-              {!candidate.why && !evidence?.why && !candidate.evidence_summary && !sourceNode?.entity && (
+              {!whySubstantive && !summarySubstantive && !(useGeneratedWhy && generatedWhy) && !storedWhy && !candidate.evidence_summary && !sourceNode?.entity && (
                 <li style={{ color: tc.text.muted }}>No structured rationale recorded for this candidate beyond the gate decision.</li>
               )}
             </ul>
@@ -563,6 +622,11 @@ function ActionDetailContent() {
                 ) : (
                   <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, lineHeight: 1.6 }} data-testid="text-before-uncaptured">
                     Current value not yet captured for this candidate. The generation run snapshots the live {md.tag.toLowerCase()} so this will fill in for new candidates.
+                    {candidate.approval_status === 'pending' && (
+                      <span style={{ display: 'block', marginTop: '6px', color: PALETTE.warn, fontWeight: fontWeight.medium }} data-testid="text-before-uncaptured-block">
+                        {SNAPSHOT_PENDING_MSG}
+                      </span>
+                    )}
                   </div>
                 )}
                 {!isInternalLink && beforeValue && beforeIsLive && (

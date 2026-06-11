@@ -47,14 +47,19 @@ function stubWithData() {
   mockQuery.mockImplementation((sql: string, params?: unknown[]) => {
     if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
     if (sql.includes('MAX(') && sql.includes('engagement_last_date')) return Promise.resolve({ rows: [{ engagement_last_date: '2026-02-28', search_console_last_date: '2026-02-27', conversion_last_date: '2026-02-28' }] });
+    // D-8: windowed funnel joins GA4 page views with the quote spine
+    if (sql.includes('dashboard_funnel_daily') && sql.includes('quote_facts_unified')) return Promise.resolve({ rows: [
+      { date: '2026-03-01', page_views: '590', submissions: '1', conversion_rate: '0.0017', pipeline_value_usd: '375' },
+      { date: '2026-02-28', page_views: '80', submissions: '1', conversion_rate: '0.0125', pipeline_value_usd: '300' },
+    ] });
     if (sql.includes('generate_series') && sql.includes('sessions')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '100' }, { date: '2026-02-27', value: '90' }] });
-    if (sql.includes('generate_series') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '5' }] });
-    if (sql.includes('generate_series') && sql.includes('total_pipeline_value_usd')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '1000' }] });
+    if (sql.includes('generate_series') && sql.includes('submitted_value_cents')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '1000' }] });
+    if (sql.includes('generate_series') && sql.includes('quote_facts_unified')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '5' }] });
     if (sql.includes('generate_series') && sql.includes('impressions')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '4000' }] });
     if (sql.includes('generate_series') && sql.includes('clicks')) return Promise.resolve({ rows: [{ date: '2026-02-28', value: '50' }] });
     if (sql.includes('STDDEV') && sql.includes('sessions')) return Promise.resolve({ rows: [{ n: 30, mean: 100, stddev: 10, latest_val: 130 }] });
-    if (sql.includes('STDDEV') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ n: 30, mean: 5, stddev: 1, latest_val: 6 }] });
-    if (sql.includes('STDDEV') && sql.includes('total_pipeline_value_usd')) return Promise.resolve({ rows: [{ n: 30, mean: 1000, stddev: 100, latest_val: 1100 }] });
+    if (sql.includes('STDDEV') && sql.includes('submitted_value_cents')) return Promise.resolve({ rows: [{ n: 30, mean: 1000, stddev: 100, latest_val: 1100 }] });
+    if (sql.includes('STDDEV') && sql.includes('quote_facts_unified')) return Promise.resolve({ rows: [{ n: 30, mean: 5, stddev: 1, latest_val: 6 }] });
 
     if (sql.includes('metrics_search_console_query_daily') && sql.includes('direction')) return Promise.resolve({ rows: [
       { query: 'neon signs custom', impressions_first_half: '100', impressions_second_half: '300', delta_pct: '2.0', direction: 'rising' },
@@ -62,7 +67,7 @@ function stubWithData() {
     ] });
     if (sql.includes('metrics_search_console_query_daily')) return Promise.resolve({ rows: [{ query: 'neon signs', clicks: '200', impressions: '5000', ctr: '0.04', avg_position: '5.2', submissions: '3', pipeline_value_usd: '4500' }] });
     if (sql.includes('FULL OUTER JOIN') && sql.includes('metrics_page_engagement_daily')) return Promise.resolve({ rows: [{ page_url: '/products', sessions: '800', page_views: '1200', bounce_rate: '0.35', avg_time_on_page_seconds: '45', clicks: '300', impressions: '5000', ctr: '0.06', submissions: '20', pipeline_value_usd: '30000' }] });
-    if (sql.includes('dashboard_sources')) return Promise.resolve({ rows: [{ submission_source: 'Google', submissions: '50', pipeline_value_usd: '75000' }, { submission_source: 'direct', submissions: '35', pipeline_value_usd: '50000' }] });
+    if (sql.includes('source_group')) return Promise.resolve({ rows: [{ submission_source: 'Google', submissions: '50', pipeline_value_usd: '75000' }, { submission_source: 'direct', submissions: '35', pipeline_value_usd: '50000' }] });
 
     if (sql.includes('raw_search_console') && sql.includes('device')) return Promise.resolve({ rows: [
       { device: 'DESKTOP', impressions: '3170', clicks: '1', ctr: '0.00032' },
@@ -77,7 +82,7 @@ function stubWithData() {
       { created_at: '2026-03-01T12:00:00Z', product_category: 'Logo/Image', preliminary_price_usd: '375', submission_source: 'quote.neonsignsdepot.com' },
       { created_at: '2026-02-28T10:00:00Z', product_category: 'Text Only', preliminary_price_usd: '300', submission_source: 'quote.neonsignsdepot.com' },
     ] });
-    if (sql.includes('quote_dashboard_deals') && sql.includes('sign_type')) return Promise.resolve({ rows: [
+    if (sql.includes('quote_segment')) return Promise.resolve({ rows: [
       { product_category: 'Logo/Image', submissions: '1', pipeline_value_usd: '375' },
       { product_category: 'Text Only', submissions: '1', pipeline_value_usd: '300' },
     ] });
@@ -92,6 +97,14 @@ function stubWithData() {
     ] });
 
     const isCurrentPeriod = Array.isArray(params) && typeof params[0] === 'string' && params[0] >= '2026-02';
+
+    // D-8: governed quote spine KPI (submissions + pipeline value)
+    if (sql.includes('quote_facts_unified') && sql.includes('AS pipeline_value_usd') && sql.includes('AS submissions')) {
+      return Promise.resolve({ rows: [{ submissions: isCurrentPeriod ? '85' : '70', pipeline_value_usd: isCurrentPeriod ? '125000' : '100000' }] });
+    }
+    if (sql.includes('quote_facts_unified') && sql.includes('AS quotes')) {
+      return Promise.resolve({ rows: [{ quotes: '10', pipeline_value_usd: '5000' }] });
+    }
 
     if (sql.includes('metrics_page_engagement_daily')) {
       return Promise.resolve({ rows: [{ sessions: isCurrentPeriod ? '1200' : '1000', page_views: isCurrentPeriod ? '3400' : '3000', bounce_rate: '0.45', avg_time_on_page_seconds: '62.5' }] });
@@ -110,8 +123,8 @@ function stubAnomalySpike() {
   mockQuery.mockImplementation((sql: string) => {
     if (sql.includes('raw_ga4_events') && sql.includes('session_summary')) return Promise.resolve({ rows: [] });
     if (sql.includes('STDDEV') && sql.includes('sessions')) return Promise.resolve({ rows: [{ n: 10, mean: 100, stddev: 10, latest_val: 250 }] });
-    if (sql.includes('STDDEV') && sql.includes('total_submissions')) return Promise.resolve({ rows: [{ n: 10, mean: 5, stddev: 1, latest_val: 20 }] });
-    if (sql.includes('STDDEV') && sql.includes('quote_dashboard_deals')) return Promise.resolve({ rows: [{ n: 10, mean: 1000, stddev: 100, latest_val: 5000 }] });
+    if (sql.includes('STDDEV') && sql.includes('submitted_value_cents')) return Promise.resolve({ rows: [{ n: 10, mean: 1000, stddev: 100, latest_val: 5000 }] });
+    if (sql.includes('STDDEV') && sql.includes('quote_facts_unified')) return Promise.resolve({ rows: [{ n: 10, mean: 5, stddev: 1, latest_val: 20 }] });
     if (sql.includes('FULL OUTER JOIN') || sql.includes('dashboard_sources') || sql.includes('metrics_search_console_query')) return Promise.resolve({ rows: [] });
     if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('v_seo_system_health')) return Promise.resolve({ rows: [] });
     if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });
@@ -450,7 +463,7 @@ describe('Phase E: source taxonomy', () => {
 
   it('maps unknown source to other', async () => {
     mockQuery.mockImplementation((sql: string) => {
-      if (sql.includes('dashboard_sources')) return Promise.resolve({ rows: [{ submission_source: 'random_site', submissions: '1', pipeline_value_usd: '100' }] });
+      if (sql.includes('source_group')) return Promise.resolve({ rows: [{ submission_source: 'random_site', submissions: '1', pipeline_value_usd: '100' }] });
       if (sql.includes('FULL OUTER JOIN') || sql.includes('metrics_search_console_query') || sql.includes('generate_series')) return Promise.resolve({ rows: [] });
       if (sql.includes('raw_search_console') || sql.includes('pipeline_by_category') || sql.includes('conversion_events') || sql.includes('ingestion_runs')) return Promise.resolve({ rows: [] });
       if (sql.includes('dashboard_funnel_daily')) return Promise.resolve({ rows: [{}] });

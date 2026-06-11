@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { MarketingKPIs, MarketingKPIComparisons, MarketingGoogleAdsOverview, MarketingTimeseries } from '../../../../types/activity-spine';
+import type { MarketingKPIs, MarketingKPIComparisons, MarketingGoogleAdsOverview, MarketingTimeseries, MarketingDataFreshness } from '../../../../types/activity-spine';
 import { SkeletonCard } from '../../../../components/dashboard';
 import { Sparkline } from '../../../../components/dashboard/charts/Sparkline';
 import { formatCurrency, formatNumber, formatPercent, safeDivideUI } from '../lib/format';
@@ -16,6 +16,7 @@ interface Props {
   googleAdsOverview?: MarketingGoogleAdsOverview;
   loading: boolean;
   timeseries?: MarketingTimeseries;
+  freshness?: MarketingDataFreshness;
 }
 
 interface KPICard {
@@ -46,7 +47,7 @@ function DeltaBadge({ delta, tc }: { delta: number | null; tc: ReturnType<typeof
   );
 }
 
-export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, loading, timeseries }: Props) {
+export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, loading, timeseries, freshness }: Props) {
   const tc = useThemeColors();
 
   if (loading || !kpis) {
@@ -60,12 +61,16 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
   const conversionRate = safeDivideUI(kpis.total_submissions, kpis.sessions);
   const avgDealSize = safeDivideUI(kpis.total_pipeline_value_usd, kpis.total_submissions);
 
+  const qmsAsOf = freshness?.qms_last_date ? ` · as of ${String(freshness.qms_last_date).slice(0, 10)}` : '';
+  const ga4AsOf = freshness?.engagement_last_date ? ` · as of ${String(freshness.engagement_last_date).slice(0, 10)}` : '';
+
   const cards: KPICard[] = [
     {
       label: 'Pipeline Value',
       value: formatCurrency(kpis.total_pipeline_value_usd),
       delta: comparisons?.total_pipeline_value_usd.delta_pct ?? null,
       testId: 'exec-kpi-pipeline',
+      provenance: `QMS quote spine · submitted value · selected window${qmsAsOf}`,
       sparkData: timeseries?.pipeline_value_usd?.map(d => d.value),
       sparkColor: magenta[500],
     },
@@ -74,7 +79,7 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
       value: formatNumber(kpis.sessions),
       delta: comparisons?.sessions.delta_pct ?? null,
       testId: 'exec-kpi-sessions',
-      provenance: 'GA4 sessions · daily · selected Marketing window',
+      provenance: `GA4 sessions · daily · selected window${ga4AsOf}`,
       sparkData: timeseries?.sessions?.map(d => d.value),
       sparkColor: indigo[600],
     },
@@ -83,12 +88,14 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
       value: formatPercent(conversionRate),
       delta: null,
       testId: 'exec-kpi-conversion-rate',
+      provenance: 'QMS spine submissions ÷ GA4 sessions · selected window',
     },
     {
       label: 'Avg Deal Size',
       value: formatCurrency(avgDealSize),
       delta: null,
       testId: 'exec-kpi-avg-deal',
+      provenance: `QMS quote spine · submitted value ÷ submissions · selected window${qmsAsOf}`,
     },
   ];
 
@@ -103,11 +110,13 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
         provenance: 'Google Ads · campaign grain · selected Marketing window',
       },
       {
-        label: 'ROAS',
+        // D-13: this route only joins quotes attributed at exact campaign-ID
+        // precision (~10% of paid quotes) — label it as such.
+        label: 'ID-confirmed ROAS',
         value: googleAdsOverview.roas.toFixed(2) + 'x',
         delta: null,
         testId: 'exec-kpi-roas',
-        provenance: 'Google Ads spend + attributed conversion value · selected Marketing window',
+        provenance: 'Counts only quotes attributed at exact campaign-ID precision (~10% of paid quotes). See Attribution Intelligence for the full-funnel view.',
       },
     );
   }

@@ -188,9 +188,20 @@ const DISCOUNT_USAGE_SQL = `
 
 const CLICK_TO_QUOTE_SQL = `
   WITH
-    organic_clicks AS (
-      SELECT COALESCE(SUM(clicks), 0) AS total_clicks
+    -- analytics.seo_command_center_gsc_window is a window RESOLVER: it returns
+    -- (start_date, end_date, available_start, available_end, range_days), not
+    -- GSC rows. Clicks come from the governed site-level daily view,
+    -- analytics.metrics_search_console_daily, bounded by the resolved window
+    -- (same pattern as services/marketingQueries.ts KPI_SEARCH_SQL).
+    gsc_window AS (
+      SELECT start_date, end_date
       FROM analytics.seo_command_center_gsc_window(NULL::int, $1::date, $2::date)
+    ),
+    organic_clicks AS (
+      SELECT COALESCE(SUM(d.clicks), 0) AS total_clicks
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN gsc_window w
+      WHERE d.date BETWEEN w.start_date AND w.end_date
     ),
     paid_clicks AS (
       SELECT COALESCE(SUM(clicks), 0) AS total_clicks

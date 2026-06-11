@@ -86,6 +86,36 @@ export default function SocialDashboardPage() {
 
   return (
     <div style={{ padding: space['6'], maxWidth: '1200px' }}>
+      {/* DEMO-DATA BANNER (D-9): everything below is a hardcoded fixture served
+          by /api/proxy/social-metrics (_source: 'mock') — it is NOT wired to the
+          live social pipeline. The fixture is kept to show the intended design,
+          but it must never read as live data. */}
+      {data?._source !== 'live' && (
+        <div
+          data-testid="banner-social-demo-data"
+          style={{
+            display: 'flex',
+            gap: space['3'],
+            alignItems: 'flex-start',
+            padding: space['4'],
+            marginBottom: space['5'],
+            backgroundColor: '#fef3c7',
+            border: '1px solid #f59e0b',
+            borderRadius: radius.lg,
+            fontFamily: fontFamily.body,
+            fontSize: fontSize.sm,
+            color: '#92400e',
+            lineHeight: 1.55,
+          }}
+        >
+          <span style={{ fontSize: '18px', lineHeight: 1 }} aria-hidden>⚠</span>
+          <div>
+            <strong>Demo data</strong> — this page is not wired to the live social pipeline yet.
+            Every post, score, and chart below is a hardcoded fixture. Real posts live in{' '}
+            <code style={{ fontFamily: 'monospace' }}>gold_posts</code> (6 unpublished drafts as of 2026-06-11).
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div style={{
         display: 'flex',

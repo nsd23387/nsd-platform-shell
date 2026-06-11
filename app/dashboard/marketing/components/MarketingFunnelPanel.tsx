@@ -16,6 +16,10 @@ interface Props {
   error: string | null;
 }
 
+// C-7 / D-8: submissions + pipeline stages read the governed quote spine; the
+// page-views stage stays on GA4. One screen, one set of pipeline numbers.
+const FUNNEL_CAPTION = 'Page views: GA4 · daily. Submissions + pipeline: QMS quote spine · submitted value · selected window.';
+
 interface Stage {
   label: string;
   value: number;
@@ -29,7 +33,7 @@ export function MarketingFunnelPanel({ funnel, loading, error }: Props) {
 
   if (loading) {
     return (
-      <DashboardSection title="Conversion Funnel" description="Page views through submissions to pipeline value.">
+      <DashboardSection title="Conversion Funnel" description={FUNNEL_CAPTION}>
         <SkeletonCard height={160} />
       </DashboardSection>
     );
@@ -37,7 +41,7 @@ export function MarketingFunnelPanel({ funnel, loading, error }: Props) {
   if (error) return null;
   if (funnel.length === 0) {
     return (
-      <DashboardSection title="Conversion Funnel" description="Page views through submissions to pipeline value.">
+      <DashboardSection title="Conversion Funnel" description={FUNNEL_CAPTION}>
         <EmptyStateCard message="No funnel data available." />
       </DashboardSection>
     );
@@ -48,15 +52,15 @@ export function MarketingFunnelPanel({ funnel, loading, error }: Props) {
   const totalPipeline = funnel.reduce((s, f) => s + f.pipeline_value_usd, 0);
 
   const stages: Stage[] = [
-    { label: 'Page Views', value: totalViews, format: formatNumber, color: violet[500], gradient: `linear-gradient(135deg, ${violet[400]}, ${violet[600]})` },
-    { label: 'Submissions', value: totalSubs, format: formatNumber, color: indigo[500], gradient: `linear-gradient(135deg, ${indigo[400]}, ${indigo[600]})` },
-    { label: 'Pipeline Value', value: totalPipeline, format: formatCurrency, color: tc.chartColors[2], gradient: `linear-gradient(135deg, #38bdf8, #0284c7)` },
+    { label: 'Page Views (GA4)', value: totalViews, format: formatNumber, color: violet[500], gradient: `linear-gradient(135deg, ${violet[400]}, ${violet[600]})` },
+    { label: 'Submissions (QMS spine)', value: totalSubs, format: formatNumber, color: indigo[500], gradient: `linear-gradient(135deg, ${indigo[400]}, ${indigo[600]})` },
+    { label: 'Pipeline Value (QMS spine)', value: totalPipeline, format: formatCurrency, color: tc.chartColors[2], gradient: `linear-gradient(135deg, #38bdf8, #0284c7)` },
   ];
 
   const maxVal = Math.max(...stages.map((s) => s.value), 1);
 
   return (
-    <DashboardSection title="Conversion Funnel" description="Page views through submissions to pipeline value.">
+    <DashboardSection title="Conversion Funnel" description={FUNNEL_CAPTION}>
       <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['6'] }} data-testid="panel-funnel">
         <div style={{ display: 'flex', flexDirection: 'column', gap: space['4'] }}>
           {stages.map((stage, i) => {

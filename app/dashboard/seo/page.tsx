@@ -42,7 +42,29 @@ import type {
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
   fmtInt, fmtPos, fmtScore, pathOf, PageDossierDrawer, mutationDisplay, sectionLabelStyle, proposalReview,
+  candidateHeadline, beforeSnapshotMissing, SNAPSHOT_PENDING_MSG,
 } from './_shared';
+
+// -----------------------------------------------------------------------------
+// D-1: Diagnose-a-URL input normalization. The dossier API only resolves
+// absolute apex-host URLs (https://neonsignsdepot.com/...), but the input
+// invites "a page URL or path". Normalize bare paths, scheme-less inputs,
+// www-host and bare-domain forms to the canonical absolute URL — preserving the
+// path (and trailing slash) exactly. Unrelated absolute URLs pass through.
+const SITE_ORIGIN = 'https://neonsignsdepot.com';
+
+function normalizeDossierUrl(raw: string): string {
+  const v = raw.trim();
+  if (!v) return v;
+  // Bare path: "/collections/coffee-shop-signs/"
+  if (v.startsWith('/')) return `${SITE_ORIGIN}${v}`;
+  // Own domain in any form: with/without scheme, with/without www.
+  const own = v.match(/^(?:https?:\/\/)?(?:www\.)?neonsignsdepot\.com(\/.*)?$/i);
+  if (own) return `${SITE_ORIGIN}${own[1] ?? '/'}`;
+  // No scheme and not our domain — treat as a path without the leading slash.
+  if (!/^https?:\/\//i.test(v)) return `${SITE_ORIGIN}/${v}`;
+  return v;
+}
 
 // -----------------------------------------------------------------------------
 // Section header
@@ -817,6 +839,8 @@ function DetectionRow({
   // Honest impact: the target page's real GSC demand, not a modelled lift.
   const impr = page?.top_q_impr ?? page?.gsc_impressions ?? null;
   const pos = page?.top_q_pos ?? page?.gsc_best_position ?? null;
+  // C-1: no before-snapshot in the queue row → approving here would be blind.
+  const snapshotPending = beforeSnapshotMissing(c);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 160px 90px 220px', gap: space['4'], alignItems: 'center', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }} data-testid={`row-detection-${c.candidate_id}`}>
@@ -827,11 +851,16 @@ function DetectionRow({
             <>
               <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>
               <span style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>
-                {c.mutation_label ?? m.verb(c.proposed_value)}
+                {candidateHeadline(c)}
               </span>
               {c.regate_review_flag && (
                 <span title="Re-surfaced for human re-review after a prior decision">
                   <Pill tone="warn" tc={tc}>re-review</Pill>
+                </span>
+              )}
+              {snapshotPending && (
+                <span title={SNAPSHOT_PENDING_MSG} data-testid={`detection-snapshot-pending-${c.candidate_id}`}>
+                  <Pill tone="warn" tc={tc}>snapshot pending</Pill>
                 </span>
               )}
               {(() => { const review = proposalReview(c); return review.flagged ? (
@@ -866,16 +895,18 @@ function DetectionRow({
       </div>
       <div style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
         <button
-          onClick={async () => { setBusy(true); try { await onApprove(c); } finally { setBusy(false); } }}
-          disabled={busy}
+          onClick={async () => { if (snapshotPending) return; setBusy(true); try { await onApprove(c); } finally { setBusy(false); } }}
+          disabled={busy || snapshotPending}
           data-testid={`button-approve-detection-${c.candidate_id}`}
-          style={{ padding: '6px 12px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
+          title={snapshotPending ? SNAPSHOT_PENDING_MSG : 'Creates a draft — nothing publishes from here.'}
+          style={{ padding: '6px 12px', background: snapshotPending ? tc.background.muted : PALETTE.violet, color: snapshotPending ? tc.text.muted : '#fff', border: snapshotPending ? `1px solid ${tc.border.default}` : 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, cursor: (busy || snapshotPending) ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
         >
           {busy ? '…' : 'Approve'}
         </button>
         <Link
           href={`/dashboard/seo/action/${encodeURIComponent(c.candidate_id)}`}
           data-testid={`link-details-${c.candidate_id}`}
+          title="Open the full action card — before/after diff, evidence, and lifecycle."
           style={{ padding: '6px 12px', background: tc.background.surface, color: tc.text.primary, border: `1px solid ${tc.border.default}`, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '12px', textDecoration: 'none' }}
         >
           Details
@@ -883,6 +914,7 @@ function DetectionRow({
         <button
           onClick={() => onDefer(c.candidate_id)}
           data-testid={`button-defer-${c.candidate_id}`}
+          title="Hides this recommendation from your view for this session only — nothing is rejected or changed, and it returns on reload."
           style={{ padding: '6px 8px', background: 'transparent', color: tc.text.muted, border: 'none', fontFamily: fontFamily.body, fontSize: '12px', cursor: 'pointer' }}
         >
           Defer
@@ -1104,7 +1136,7 @@ function CommandCenterContent() {
 
   useEffect(() => {
     const url = new URLSearchParams(window.location.search).get('url');
-    if (url) setSelectedUrl(url);
+    if (url) setSelectedUrl(normalizeDossierUrl(url));
   }, []);
   const seoWindow = useMemo(() => selectedWindow(range, customDays, customStart, customEnd), [range, customDays, customStart, customEnd]);
   const handleTrendData = useCallback((d: SeoTimeseriesResponse | null) => setTrendData(d), []);
@@ -1245,6 +1277,10 @@ function CommandCenterContent() {
     setCandidates((prev) => (prev ?? []).filter((x) => x.candidate_id !== c.candidate_id));
   }
 
+  // Defer semantics (C-5): session-local hide ONLY. The id goes into a client-
+  // side Set that filters the visible list — there is NO API write, no status
+  // change, and the candidate reappears on reload. The button microcopy must
+  // stay truthful to this.
   function deferOne(id: string) {
     setDeferred((prev) => new Set(prev).add(id));
   }
@@ -1258,7 +1294,9 @@ function CommandCenterContent() {
     // Governance (D7): candidates flagged "needs review" (placeholder/scaffold
     // proposals) are NOT pre-selected — a human must deliberately opt them in
     // after authoring/checking. They still appear in the list, just unchecked.
-    setReviewSelected(new Set(targets.filter((c) => !proposalReview(c).flagged).map((c) => c.candidate_id)));
+    // C-1: candidates with no before-snapshot cannot be approved at all (their
+    // checkbox is disabled below), so they are excluded from pre-selection too.
+    setReviewSelected(new Set(targets.filter((c) => !proposalReview(c).flagged && !beforeSnapshotMissing(c)).map((c) => c.candidate_id)));
     setReviewOpen(true);
   }
 
@@ -1272,7 +1310,9 @@ function CommandCenterContent() {
 
   async function confirmReview() {
     if (bulkBusy) return;
-    const targets = detections.filter((c) => reviewSelected.has(c.candidate_id));
+    // C-1 defense-in-depth: never bulk-approve a candidate whose before-snapshot
+    // is missing, even if a stale selection slipped through.
+    const targets = detections.filter((c) => reviewSelected.has(c.candidate_id) && !beforeSnapshotMissing(c));
     if (targets.length === 0) { setReviewOpen(false); return; }
     setBulkBusy(true); setActionMsg(null);
     const ids = new Set(targets.map((c) => c.candidate_id));
@@ -1297,9 +1337,24 @@ function CommandCenterContent() {
     () => detections.slice(0, TOP_N),
     [detections],
   );
+  // D-2 honesty: the queue endpoint's summary counts ONLY the active (on-page)
+  // lane — paused lanes (schema) still exist as canonical queue rows in this
+  // same response's `candidates` array (and on the Recommendations tab). Derive
+  // the gap from data we already hold; never present the lane count as the
+  // whole queue, and never invent a number when the full count isn't available.
+  const activeLaneProposals = queueSummary?.total_proposals ?? detections.length;
+  const canonicalQueueRows = candidates?.length ?? 0;
+  const pausedLaneExtra = Math.max(0, canonicalQueueRows - activeLaneProposals);
   const summaryTiles = [
-    { label: 'Decisions', value: queueSummary?.decisions ?? detections.length, help: 'Guarded recommendations awaiting approval', metricKey: 'awaiting_approval' },
-    { label: 'Total proposals', value: queueSummary?.total_proposals ?? detections.length, help: 'Canonical queue rows', metricKey: 'total_proposals' },
+    { label: 'Active lane decisions', value: queueSummary?.decisions ?? detections.length, help: 'On-page lane awaiting approval (paused lanes not counted)', metricKey: 'awaiting_approval' },
+    {
+      label: 'Active lane proposals',
+      value: activeLaneProposals,
+      help: pausedLaneExtra > 0
+        ? `On-page lane only (schema lane paused) — ${fmtInt(pausedLaneExtra)} more queue row${pausedLaneExtra === 1 ? '' : 's'} on the Recommendations tab`
+        : 'On-page lane only — currently the full canonical queue',
+      metricKey: 'total_proposals',
+    },
     { label: 'Re-review flagged', value: queueSummary?.re_review_flagged ?? 0, help: 'Needs another gate review' },
     { label: 'Needs review', value: queueSummary?.needs_review ?? 0, help: 'Evidence or QA attention needed' },
   ];
@@ -1361,13 +1416,13 @@ function CommandCenterContent() {
           <input
             value={diagnoseUrl}
             onChange={(e) => setDiagnoseUrl(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && diagnoseUrl.trim()) setSelectedUrl(diagnoseUrl.trim()); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && diagnoseUrl.trim()) setSelectedUrl(normalizeDossierUrl(diagnoseUrl)); }}
             placeholder="Paste a page URL or path to open its dossier…"
             data-testid="input-diagnose-url"
             style={{ flex: '1 1 320px', padding: '8px 12px', borderRadius: radius.sm, border: `1px solid ${tc.border.default}`, background: tc.background.surface, color: tc.text.primary, fontFamily: fontFamily.body, fontSize: '13px' }}
           />
           <button
-            onClick={() => { if (diagnoseUrl.trim()) setSelectedUrl(diagnoseUrl.trim()); }}
+            onClick={() => { if (diagnoseUrl.trim()) setSelectedUrl(normalizeDossierUrl(diagnoseUrl)); }}
             disabled={!diagnoseUrl.trim()}
             data-testid="button-diagnose-go"
             style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: diagnoseUrl.trim() ? 'pointer' : 'default', opacity: diagnoseUrl.trim() ? 1 : 0.6 }}
@@ -1399,32 +1454,43 @@ function CommandCenterContent() {
                 const checked = reviewSelected.has(c.candidate_id);
                 const m = mutationDisplay(c.mutation_type, c.primary_remedy);
                 const review = proposalReview(c);
+                const snapshotPending = beforeSnapshotMissing(c);
                 return (
                   <label
                     key={c.candidate_id}
                     data-testid={`review-row-${c.candidate_id}`}
-                    style={{ display: 'flex', gap: space['3'], alignItems: 'flex-start', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}`, cursor: 'pointer' }}
+                    style={{ display: 'flex', gap: space['3'], alignItems: 'flex-start', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}`, cursor: snapshotPending ? 'default' : 'pointer' }}
                   >
                     <input
                       type="checkbox"
-                      checked={checked}
-                      onChange={() => { toggleReview(c.candidate_id); }}
+                      checked={checked && !snapshotPending}
+                      disabled={snapshotPending}
+                      onChange={() => { if (!snapshotPending) toggleReview(c.candidate_id); }}
                       data-testid={`review-check-${c.candidate_id}`}
+                      title={snapshotPending ? SNAPSHOT_PENDING_MSG : undefined}
                       style={{ marginTop: '3px', flexShrink: 0 }}
                     />
                     <span style={{ minWidth: 0 }}>
                       <span style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap', marginBottom: '2px' }}>
                         <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>
-                        <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{c.mutation_label ?? m.verb(c.proposed_value)}</span>
+                        <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{candidateHeadline(c)}</span>
                         {c.regate_review_flag && <Pill tone="warn" tc={tc}>re-review</Pill>}
                         {review.flagged && (
                           <span title={review.reasons.join(' ')} data-testid={`review-needs-review-${c.candidate_id}`}><Pill tone="warn" tc={tc}>needs review</Pill></span>
+                        )}
+                        {snapshotPending && (
+                          <span title={SNAPSHOT_PENDING_MSG} data-testid={`review-snapshot-pending-${c.candidate_id}`}><Pill tone="warn" tc={tc}>snapshot pending</Pill></span>
                         )}
                       </span>
                       <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, wordBreak: 'break-all' }}>{c.target_page_url ? pathOf(c.target_page_url) : '—'}</span>
                       {review.flagged && (
                         <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.warn, marginTop: '2px' }}>
                           Not auto-approvable — {review.reasons[0]}
+                        </span>
+                      )}
+                      {snapshotPending && (
+                        <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.warn, marginTop: '2px' }}>
+                          {SNAPSHOT_PENDING_MSG}
                         </span>
                       )}
                     </span>

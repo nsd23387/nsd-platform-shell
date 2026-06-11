@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import type { MarketingKPIs, MarketingKPIComparisons } from '../../../../types/activity-spine';
+import type { MarketingKPIs, MarketingKPIComparisons, MarketingDataFreshness } from '../../../../types/activity-spine';
 import { DashboardGrid, DashboardSection } from '../../../../components/dashboard';
 import { SkeletonCard } from '../../../../components/dashboard';
 import { formatCurrency, formatNumber, formatPercent, formatDuration, safeNumber } from '../lib/format';
@@ -17,6 +17,7 @@ interface Props {
   loading: boolean;
   error: string | null;
   onRetry: () => void;
+  freshness?: MarketingDataFreshness;
 }
 
 interface KPIConfig {
@@ -29,21 +30,28 @@ interface KPIConfig {
   accentColor: string;
 }
 
-function getPipelineRow(tc: { chartColors: readonly string[] }): KPIConfig[] {
+function asOf(date: string | null | undefined): string {
+  return date ? ` · as of ${String(date).slice(0, 10)}` : '';
+}
+
+function getPipelineRow(tc: { chartColors: readonly string[] }, freshness?: MarketingDataFreshness): KPIConfig[] {
+  const qmsAsOf = asOf(freshness?.qms_last_date);
+  const gscAsOf = asOf(freshness?.search_console_last_date);
   return [
-    { title: 'Pipeline Value', key: 'total_pipeline_value_usd', compKey: 'total_pipeline_value_usd', format: formatCurrency, subtitle: 'Total pipeline USD', accentColor: violet[500] },
-    { title: 'Submissions', key: 'total_submissions', compKey: 'total_submissions', format: formatNumber, subtitle: 'Form submissions', provenance: 'QMS/lead forms · event grain · selected Marketing window', accentColor: tc.chartColors[1] },
-    { title: 'Organic Clicks', key: 'organic_clicks', compKey: 'organic_clicks', format: formatNumber, subtitle: 'Search console clicks', provenance: 'GSC clicks · daily · selected Marketing window', accentColor: tc.chartColors[2] },
-    { title: 'Impressions', key: 'impressions', compKey: 'impressions', format: formatNumber, subtitle: 'Search impressions', accentColor: indigo[500] },
+    { title: 'Pipeline Value', key: 'total_pipeline_value_usd', compKey: 'total_pipeline_value_usd', format: formatCurrency, subtitle: 'Submitted quote value', provenance: `QMS quote spine · submitted value · selected window${qmsAsOf}`, accentColor: violet[500] },
+    { title: 'Submissions', key: 'total_submissions', compKey: 'total_submissions', format: formatNumber, subtitle: 'Submitted quotes', provenance: `QMS quote spine · submitted quotes · selected window${qmsAsOf}`, accentColor: tc.chartColors[1] },
+    { title: 'Organic Clicks', key: 'organic_clicks', compKey: 'organic_clicks', format: formatNumber, subtitle: 'Search console clicks', provenance: `GSC clicks · daily · selected window${gscAsOf}`, accentColor: tc.chartColors[2] },
+    { title: 'Impressions', key: 'impressions', compKey: 'impressions', format: formatNumber, subtitle: 'Search impressions', provenance: `GSC impressions · daily · selected window${gscAsOf}`, accentColor: indigo[500] },
   ];
 }
 
-function getEngagementRow(tc: { chartColors: readonly string[] }): KPIConfig[] {
+function getEngagementRow(tc: { chartColors: readonly string[] }, freshness?: MarketingDataFreshness): KPIConfig[] {
+  const ga4AsOf = asOf(freshness?.engagement_last_date);
   return [
-    { title: 'Sessions', key: 'sessions', compKey: 'sessions', format: formatNumber, subtitle: 'Total sessions', accentColor: violet[400] },
-    { title: 'Page Views', key: 'page_views', compKey: 'page_views', format: formatNumber, subtitle: 'Total page views', accentColor: indigo[400] },
-    { title: 'Bounce Rate', key: 'bounce_rate', format: formatPercent, subtitle: 'Single-page sessions', accentColor: tc.chartColors[3] },
-    { title: 'Avg Time on Page', key: 'avg_time_on_page_seconds', format: formatDuration, subtitle: 'Weighted average', accentColor: tc.chartColors[4] },
+    { title: 'Sessions', key: 'sessions', compKey: 'sessions', format: formatNumber, subtitle: 'Total sessions', provenance: `GA4 sessions · daily · selected window${ga4AsOf}`, accentColor: violet[400] },
+    { title: 'Page Views', key: 'page_views', compKey: 'page_views', format: formatNumber, subtitle: 'Total page views', provenance: `GA4 page views · daily · selected window${ga4AsOf}`, accentColor: indigo[400] },
+    { title: 'Bounce Rate', key: 'bounce_rate', format: formatPercent, subtitle: 'Single-page sessions', provenance: `GA4 engagement · session-weighted · selected window${ga4AsOf}`, accentColor: tc.chartColors[3] },
+    { title: 'Avg Time on Page', key: 'avg_time_on_page_seconds', format: formatDuration, subtitle: 'Weighted average', provenance: `GA4 engagement · session-weighted · selected window${ga4AsOf}`, accentColor: tc.chartColors[4] },
   ];
 }
 
@@ -162,11 +170,11 @@ function renderRow(row: KPIConfig[], props: Props) {
 
 export function MarketingKPIOverview(props: Props) {
   const tc = useThemeColors();
-  const pipelineRow = getPipelineRow(tc);
-  const engagementRow = getEngagementRow(tc);
+  const pipelineRow = getPipelineRow(tc, props.freshness);
+  const engagementRow = getEngagementRow(tc, props.freshness);
   return (
     <>
-      <DashboardSection title="Pipeline" description="Submission volume and pipeline value for selected period.">
+      <DashboardSection title="Pipeline" description="QMS quote spine · submitted value · selected window.">
         {renderRow(pipelineRow, props)}
       </DashboardSection>
       <DashboardSection title="Engagement" description="Site-wide session and engagement metrics for selected period.">

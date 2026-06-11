@@ -46,9 +46,14 @@ function generateNarrative(
     comparisonMode === 'wow' ? 'last week' :
     comparisonMode === 'mom' ? 'last month' : 'previous period';
 
-  const pipelineDelta = comparisons.pipeline_value_usd_delta ?? 0;
-  const sessionsDelta = comparisons.sessions_delta ?? 0;
-  const direction = pipelineDelta >= 0 ? 'up' : 'down';
+  // D-14: compute from the exact same series as the Pipeline Value KPI card
+  // (comparisons.total_pipeline_value_usd.delta_pct, a ratio — same field the
+  // card's delta badge renders). Previously read a nonexistent
+  // `pipeline_value_usd_delta` key, which always rendered "up 0.0%".
+  const pipelineDeltaPct = comparisons.total_pipeline_value_usd?.delta_pct;
+  const sessionsDeltaPct = comparisons.sessions?.delta_pct;
+  if (pipelineDeltaPct == null) return null;
+  const direction = pipelineDeltaPct >= 0 ? 'up' : 'down';
 
   let topChannel = '';
   if (channelPerformance?.length > 0) {
@@ -57,9 +62,9 @@ function generateNarrative(
   }
 
   const parts: string[] = [];
-  parts.push(`Pipeline is ${direction} ${Math.abs(pipelineDelta).toFixed(1)}% vs. ${periodLabel}.`);
-  if (sessionsDelta !== 0) {
-    parts.push(`Sessions ${sessionsDelta >= 0 ? 'grew' : 'declined'} ${Math.abs(sessionsDelta).toFixed(1)}%${topChannel ? `, led by ${topChannel}` : ''}.`);
+  parts.push(`Pipeline is ${direction} ${Math.abs(pipelineDeltaPct * 100).toFixed(1)}% vs. ${periodLabel}.`);
+  if (sessionsDeltaPct != null && sessionsDeltaPct !== 0) {
+    parts.push(`Sessions ${sessionsDeltaPct >= 0 ? 'grew' : 'declined'} ${Math.abs(sessionsDeltaPct * 100).toFixed(1)}%${topChannel ? `, led by ${topChannel}` : ''}.`);
   }
 
   return parts.join(' ');
@@ -299,6 +304,7 @@ export default function MarketingExecutiveOverview() {
           googleAdsOverview={data?.google_ads_overview}
           loading={loading}
           timeseries={data?.timeseries}
+          freshness={data?.meta?.data_freshness}
         />
 
         <MarketingAttributionReviewPanel />
@@ -317,6 +323,9 @@ export default function MarketingExecutiveOverview() {
             >
               Core 4 Growth Engines
             </h2>
+            <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginTop: `-${space['3']}`, marginBottom: space['4'] }}>
+              Quotes/pipeline: QMS quote spine · submitted value · selected window. Sessions: GA4. Cold outreach: Sales Engine · last 30d.
+            </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: space['4'] }}>
               <Link href={ENGINE_COLORS.warm_outreach.href} style={{ textDecoration: 'none' }}>
                 <EngineCard
@@ -351,7 +360,7 @@ export default function MarketingExecutiveOverview() {
                   accentColor={ENGINE_COLORS.run_paid_ads.accent}
                   metrics={[
                     { label: 'Spend', value: formatCurrency(core4.run_paid_ads?.current?.spend ?? 0) },
-                    { label: 'ROAS', value: `${(core4.run_paid_ads?.current?.roas ?? 0).toFixed(1)}x` },
+                    { label: 'ID-confirmed ROAS', value: `${(core4.run_paid_ads?.current?.roas ?? 0).toFixed(1)}x` },
                     { label: 'Pipeline', value: formatCurrency(core4.run_paid_ads?.current?.pipeline_value_usd ?? 0) },
                   ]}
                   deltaPercent={core4.run_paid_ads?.deltas?.sessions_pct}

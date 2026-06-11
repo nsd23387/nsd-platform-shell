@@ -355,7 +355,8 @@ export default function KeywordCompetitiveIntelligencePage() {
               Keyword demand, competitive gaps, and retired-source availability.
             </p>
             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.placeholder, marginTop: space['1'] }}>
-              Target: neonsignsdepot.com. Keyword metrics are sourced from governed DataForSEO intelligence.
+              Target: neonsignsdepot.com. Keyword metrics are sourced from governed DataForSEO intelligence,
+              filtered to the 5-domain neon competitor allow-list (branded, low-intent, and sub-4-character queries excluded).
             </p>
           </div>
           <PageExportBar
@@ -370,7 +371,7 @@ export default function KeywordCompetitiveIntelligencePage() {
           <CompetitorFilter competitors={competitors ?? []} value={competitor} onChange={setCompetitor} />
         </div>
 
-        <DashboardSection title="Keyword Gap" description="Keywords where competitors rank but neonsignsdepot.com does not (or ranks lower). Identify content and paid search opportunities." index={0}>
+        <DashboardSection title="Keyword Gap" description="Keywords where governed neon competitors rank but neonsignsdepot.com does not (or ranks lower). Governed DataForSEO intelligence · 5-competitor allow-list · branded/low-intent queries excluded." index={0}>
           <KeywordGapPanel competitor={competitor} />
         </DashboardSection>
 

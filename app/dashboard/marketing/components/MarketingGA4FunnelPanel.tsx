@@ -42,16 +42,23 @@ export function MarketingGA4FunnelPanel({ funnel, loading, error }: Props) {
   }
   if (error) return null;
 
-  const total = Object.values(funnel).reduce((s, v) => s + v, 0);
-  if (total === 0) {
+  // D-15: hide the funnel when the data is the empty fallback, when stages are
+  // non-monotonic (a later stage exceeds an earlier one — ecommerce events
+  // aren't flowing coherently), or when zeros dominate. Rendering those values
+  // as a funnel with "100% drop-off" labels is nonsense.
+  const stageValues = STAGES.map((s) => funnel[s.key] ?? 0);
+  const total = stageValues.reduce((s, v) => s + v, 0);
+  const nonMonotonic = stageValues.some((v, i) => i > 0 && v > stageValues[i - 1]);
+  const zeroDominated = stageValues.filter((v) => v === 0).length >= Math.ceil(STAGES.length / 2);
+  if (total === 0 || nonMonotonic || zeroDominated) {
     return (
       <DashboardSection title="GA4 Event Funnel" description="Ecommerce and form submission funnel from Google Analytics.">
-        <EmptyStateCard message="No GA4 funnel events in this period." />
+        <EmptyStateCard message="GA4 event funnel unavailable — ecommerce events aren't flowing yet. See Conversion Funnel above for the spine-based view." />
       </DashboardSection>
     );
   }
 
-  const maxVal = Math.max(...STAGES.map((s) => funnel[s.key]), 1);
+  const maxVal = Math.max(...stageValues, 1);
 
   return (
     <DashboardSection title="GA4 Event Funnel" description="Ecommerce and form submission funnel from Google Analytics.">

@@ -22,7 +22,7 @@ export function MarketingPipelineCategoryPanel({ categories, loading, error }: P
 
   if (loading) {
     return (
-      <DashboardSection title="Pipeline by Category" description="Pipeline value and submissions by product type.">
+      <DashboardSection title="Pipeline by Segment" description="QMS quote spine · submitted value by quote segment · selected window. (Sign-type category is not on the governed spine.)">
         <DashboardGrid columns={{ sm: 1, md: 2, lg: 2 }}>
           <SkeletonCard height={220} />
           <SkeletonCard height={220} />
@@ -34,8 +34,8 @@ export function MarketingPipelineCategoryPanel({ categories, loading, error }: P
 
   if (categories.length === 0) {
     return (
-      <DashboardSection title="Pipeline by Category" description="Pipeline value and submissions by product type.">
-        <EmptyStateCard message="No product category data available." />
+      <DashboardSection title="Pipeline by Segment" description="QMS quote spine · submitted value by quote segment · selected window. (Sign-type category is not on the governed spine.)">
+        <EmptyStateCard message="No quote spine submissions in the selected window." />
       </DashboardSection>
     );
   }
@@ -56,7 +56,7 @@ export function MarketingPipelineCategoryPanel({ categories, loading, error }: P
     }));
 
   return (
-    <DashboardSection title="Pipeline by Category" description="Pipeline value and submissions by product type.">
+    <DashboardSection title="Pipeline by Segment" description="QMS quote spine · submitted value by quote segment · selected window. (Sign-type category is not on the governed spine.)">
       <DashboardGrid columns={{ sm: 1, md: 2, lg: 2 }}>
         <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="chart-pipeline-category">
           <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['2'] }}>

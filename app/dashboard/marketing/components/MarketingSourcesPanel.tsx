@@ -21,7 +21,7 @@ export function MarketingSourcesPanel({ sources, loading, error }: Props) {
 
   if (loading) {
     return (
-      <DashboardSection title="Sources" description="Submission sources ranked by pipeline value.">
+      <DashboardSection title="Sources" description="QMS quote spine · submitted value by source group · selected window.">
         <DashboardGrid columns={{ sm: 1, md: 2, lg: 2 }}>
           <SkeletonCard height={250} />
           <SkeletonCard height={250} />
@@ -44,7 +44,7 @@ export function MarketingSourcesPanel({ sources, loading, error }: Props) {
 
   if (entries.length === 0) {
     return (
-      <DashboardSection title="Sources" description="Submission sources ranked by pipeline value.">
+      <DashboardSection title="Sources" description="QMS quote spine · submitted value by source group · selected window.">
         <EmptyStateCard message="No source data available for this period." />
       </DashboardSection>
     );
@@ -54,7 +54,7 @@ export function MarketingSourcesPanel({ sources, loading, error }: Props) {
   const submissionData = entries.map(([name, d], i) => ({ name, value: d.submissions, color: tc.chartColors[i % tc.chartColors.length] }));
 
   return (
-    <DashboardSection title="Sources" description="Submission sources ranked by pipeline value.">
+    <DashboardSection title="Sources" description="QMS quote spine · submitted value by source group · selected window.">
       <DashboardGrid columns={{ sm: 1, md: 2, lg: 2 }}>
         <div style={{ backgroundColor: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.xl, padding: space['5'] }} data-testid="chart-pipeline-by-source">
           <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.medium, color: tc.text.primary, marginBottom: space['3'] }}>

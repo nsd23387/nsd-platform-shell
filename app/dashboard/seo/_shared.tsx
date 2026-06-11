@@ -223,6 +223,46 @@ export function isSchemaMutation(mutationType: string | null | undefined): boole
   return t.includes('schema') || t.includes('structured_data') || t.includes('offer');
 }
 
+// D-5: when `mutation_label` is present it is used for BOTH the type pill and
+// the headline, so cards read "H1 heading H1 heading". This returns a headline
+// that never duplicates the pill text: it falls back to the verb phrase, then
+// the proposed value, then the target path — all real candidate fields.
+export function candidateHeadline(c: {
+  mutation_type?: string | null;
+  mutation_label?: string | null;
+  primary_remedy?: string | null;
+  proposed_value?: string | null;
+  target_page_url?: string | null;
+}): string {
+  const m = mutationDisplay(c.mutation_type, c.primary_remedy);
+  const pill = (c.mutation_label ?? m.tag).trim();
+  const title = (c.mutation_label ?? m.verb(c.proposed_value)).trim();
+  if (title.toLowerCase() !== pill.toLowerCase()) return title;
+  const verb = m.verb(c.proposed_value).trim();
+  if (verb.toLowerCase() !== pill.toLowerCase()) return verb;
+  if (c.proposed_value && c.proposed_value.trim()) return c.proposed_value.trim();
+  if (c.target_page_url) return pathOf(c.target_page_url);
+  return title;
+}
+
+// C-1 (approve-blind guard): a candidate whose generation-time before-snapshot
+// (current_value_snapshot) is missing cannot be honestly compared before →
+// after from queue data alone. Internal-link insertions are additive — their
+// "before" is legitimately the unlinked page — so they are not gated here.
+// The Action Card detail screen additionally falls back to the live dossier
+// state (seo_page_dossier.state) before blocking.
+export function beforeSnapshotMissing(c: {
+  mutation_type?: string | null;
+  current_value_snapshot?: string | null;
+}): boolean {
+  const t = (c.mutation_type ?? '').toLowerCase();
+  if (t.includes('internal_link')) return false;
+  return !(c.current_value_snapshot ?? '').trim();
+}
+
+export const SNAPSHOT_PENDING_MSG =
+  'Snapshot pending — the live value hasn’t been captured yet. Approving is blocked until you can compare before → after.';
+
 // -----------------------------------------------------------------------------
 // Proposal review guard (governance, UI-only).
 // Some engine candidates surface a scaffold/placeholder proposed_value (e.g.
@@ -996,7 +1036,21 @@ export function PageDossierDrawer({
         )}
         {error && (
           <div style={{ marginTop: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>
-            {error}
+            {/\b404\b/.test(error) ? (
+              // D-1: a 404 here means the URL isn't in the engine's page
+              // inventory — surface that plainly instead of the raw API error.
+              <>
+                <div data-testid="text-dossier-not-found" style={{ lineHeight: 1.55 }}>
+                  This page isn&apos;t in the engine&apos;s inventory yet. Collections pages and some new pages may not be indexed — check Page Inventory coverage.
+                </div>
+                <details style={{ marginTop: space['2'] }}>
+                  <summary style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.85 }}>Technical detail</summary>
+                  <div style={{ fontFamily: monoStack, fontSize: '11px', marginTop: '4px', wordBreak: 'break-all' }} data-testid="text-dossier-error-detail">{error}</div>
+                </details>
+              </>
+            ) : (
+              error
+            )}
           </div>
         )}
 

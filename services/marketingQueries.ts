@@ -55,6 +55,11 @@ const SOURCE_TAXONOMY: Record<string, string> = {
   email: 'email',
   newsletter: 'email',
   referral: 'referral',
+  // marketing.quote_facts_unified source_group values (D-8 spine repoint)
+  google_ads: 'paid',
+  web_form: 'web form',
+  organic: 'organic',
+  unknown: 'other',
   'quote.neonsignsdepot.com': 'Quote Form',
   'neonsignsdepot.com': 'Website',
   'www.neonsignsdepot.com': 'Website',
@@ -104,15 +109,19 @@ const KPI_CONVERSION_SQL = `
   WHERE metric_date BETWEEN $1 AND $2
 `;
 
-const QMS_KPI_PIPELINE_SQL = `
+/**
+ * D-8 GROUND TRUTH — governed quote spine.
+ * Pipeline value = SUM(submitted_value_cents)/100 over submitted_at window, excluding test quotes.
+ * Submissions = COUNT over the same window. This is the single source for every
+ * pipeline/submission figure on Exec Overview + Operator Hub.
+ */
+const SPINE_KPI_SQL = `
   SELECT
-    COALESCE(SUM(total_price_cents), 0) AS pipeline_cents,
-    COUNT(*) FILTER (WHERE quote_active AND quote_activity NOT IN ('Quote Paid', 'Not Interested')) AS active_deals,
-    COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid') AS won_deals,
-    COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) AS won_cents,
-    COUNT(*) AS total_deals
-  FROM marketing.quote_dashboard_deals
-  WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
+    COUNT(*) AS submissions,
+    COALESCE(SUM(submitted_value_cents), 0) / 100.0 AS pipeline_value_usd
+  FROM marketing.quote_facts_unified
+  WHERE NOT is_test
+    AND submitted_at >= $1::date AND submitted_at < ($2::date + INTERVAL '1 day')
 `;
 
 const KPI_SEARCH_SQL = `
@@ -269,16 +278,20 @@ const PAGES_SQL = `
 // ============================================
 
 /**
- * LIFETIME VIEW — dashboard_sources has no date column.
- * Returns lifetime submission/pipeline totals by source.
+ * D-8: sources read the governed quote spine grouped by source_group, windowed to
+ * the selected period (was analytics.dashboard_sources, a lifetime view with no
+ * date column that could not reconcile with the windowed KPI pipeline number).
  */
 const SOURCES_SQL = `
   SELECT
-    submission_source,
-    COALESCE(submissions, 0)        AS submissions,
-    COALESCE(pipeline_value_usd, 0) AS pipeline_value_usd
-  FROM analytics.dashboard_sources
-  ORDER BY COALESCE(pipeline_value_usd, 0) DESC
+    COALESCE(NULLIF(source_group, ''), 'unknown') AS submission_source,
+    COUNT(*) AS submissions,
+    COALESCE(SUM(submitted_value_cents), 0) / 100.0 AS pipeline_value_usd
+  FROM marketing.quote_facts_unified
+  WHERE NOT is_test
+    AND submitted_at >= $1::date AND submitted_at < ($2::date + INTERVAL '1 day')
+  GROUP BY COALESCE(NULLIF(source_group, ''), 'unknown')
+  ORDER BY pipeline_value_usd DESC
 `;
 
 // ============================================
@@ -290,7 +303,7 @@ const FRESHNESS_SQL = `
     (SELECT MAX(metric_date)::text     FROM analytics.metrics_page_engagement_daily) AS engagement_last_date,
     (SELECT MAX(metric_date)::text     FROM analytics.metrics_search_console_page_daily) AS search_console_last_date,
     (SELECT MAX(metric_date)::text FROM analytics.conversion_metrics_daily)      AS conversion_last_date,
-    (SELECT MAX(updated_at)::text FROM marketing.quote_dashboard_deals) AS qms_last_date
+    (SELECT MAX(submitted_at)::date::text FROM marketing.quote_facts_unified WHERE NOT is_test) AS qms_last_date
 `;
 
 // ============================================
@@ -341,15 +354,17 @@ const TIMESERIES_SESSIONS_SQL = `
   ORDER BY dr.d ASC
 `;
 
+// D-8: submissions timeseries reads the governed quote spine (was conversion_metrics_daily).
 const TIMESERIES_SUBMISSIONS_SQL = `
   WITH date_range AS (
     SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
   ),
   daily AS (
-    SELECT metric_date, SUM(total_submissions) AS val
-    FROM analytics.conversion_metrics_daily
-    WHERE metric_date BETWEEN $1 AND $2
-    GROUP BY metric_date
+    SELECT submitted_at::date AS metric_date, COUNT(*) AS val
+    FROM marketing.quote_facts_unified
+    WHERE NOT is_test
+      AND submitted_at >= $1::date AND submitted_at < ($2::date + INTERVAL '1 day')
+    GROUP BY submitted_at::date
   )
   SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
   FROM date_range dr
@@ -357,15 +372,17 @@ const TIMESERIES_SUBMISSIONS_SQL = `
   ORDER BY dr.d ASC
 `;
 
+// D-8: pipeline timeseries reads the governed quote spine (was quote_dashboard_deals).
 const TIMESERIES_PIPELINE_SQL = `
   WITH date_range AS (
     SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
   ),
   daily AS (
-    SELECT created_at::date AS metric_date, SUM(total_price_cents) / 100.0 AS val
-    FROM marketing.quote_dashboard_deals
-    WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
-    GROUP BY created_at::date
+    SELECT submitted_at::date AS metric_date, COALESCE(SUM(submitted_value_cents), 0) / 100.0 AS val
+    FROM marketing.quote_facts_unified
+    WHERE NOT is_test
+      AND submitted_at >= $1::date AND submitted_at < ($2::date + INTERVAL '1 day')
+    GROUP BY submitted_at::date
   )
   SELECT dr.d::text AS date, COALESCE(dy.val, 0) AS value
   FROM date_range dr
@@ -431,12 +448,14 @@ const ANOMALY_SESSIONS_SQL = `
   FROM daily
 `;
 
+// D-8: anomaly stats read the governed quote spine, matching the KPI series.
 const ANOMALY_SUBMISSIONS_SQL = `
   WITH daily AS (
-    SELECT metric_date, SUM(total_submissions) AS val
-    FROM analytics.conversion_metrics_daily
-    WHERE metric_date BETWEEN $1 AND $2
-    GROUP BY metric_date
+    SELECT submitted_at::date AS metric_date, COUNT(*) AS val
+    FROM marketing.quote_facts_unified
+    WHERE NOT is_test
+      AND submitted_at >= $1::date AND submitted_at < ($2::date + INTERVAL '1 day')
+    GROUP BY submitted_at::date
   )
   SELECT
     COUNT(*)::int AS n,
@@ -448,10 +467,11 @@ const ANOMALY_SUBMISSIONS_SQL = `
 
 const ANOMALY_PIPELINE_SQL = `
   WITH daily AS (
-    SELECT created_at::date AS metric_date, SUM(total_price_cents) / 100.0 AS val
-    FROM marketing.quote_dashboard_deals
-    WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
-    GROUP BY created_at::date
+    SELECT submitted_at::date AS metric_date, COALESCE(SUM(submitted_value_cents), 0) / 100.0 AS val
+    FROM marketing.quote_facts_unified
+    WHERE NOT is_test
+      AND submitted_at >= $1::date AND submitted_at < ($2::date + INTERVAL '1 day')
+    GROUP BY submitted_at::date
   )
   SELECT
     COUNT(*)::int AS n,
@@ -537,14 +557,18 @@ const COUNTRY_BREAKDOWN_SC_SQL = `
 // T004: Pipeline by product category
 // ============================================
 
+// D-8: aggregates the governed quote spine by quote segment (sign type is not on the
+// spine). Windowed to the selected period; was an all-time quote_active sum that
+// could not reconcile with the KPI pipeline number.
 const PIPELINE_CATEGORY_SQL = `
   SELECT
-    COALESCE(NULLIF(sign_type, ''), 'Unknown') AS product_category,
+    INITCAP(COALESCE(NULLIF(quote_segment, ''), 'Unknown')) AS product_category,
     COUNT(*) AS submissions,
-    COALESCE(SUM(total_price_cents), 0) / 100.0 AS pipeline_value_usd
-  FROM marketing.quote_dashboard_deals
-  WHERE quote_active
-  GROUP BY COALESCE(NULLIF(sign_type, ''), 'Unknown')
+    COALESCE(SUM(submitted_value_cents), 0) / 100.0 AS pipeline_value_usd
+  FROM marketing.quote_facts_unified
+  WHERE NOT is_test
+    AND submitted_at >= $1::date AND submitted_at < ($2::date + INTERVAL '1 day')
+  GROUP BY INITCAP(COALESCE(NULLIF(quote_segment, ''), 'Unknown'))
   ORDER BY pipeline_value_usd DESC
 `;
 
@@ -635,16 +659,42 @@ const SEO_MOVERS_SQL = `
 // T007: Funnel from dashboard_funnel_daily
 // ============================================
 
+// D-8: page views stay on the GA4-derived funnel surface, but submissions and
+// pipeline value come from the governed quote spine so the funnel agrees with the
+// Pipeline Value KPI on the same screen. Windowed to the selected period (was an
+// unwindowed LIMIT 30 over dashboard_funnel_daily).
 const FUNNEL_SQL = `
+  WITH date_range AS (
+    SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
+  ),
+  pv AS (
+    SELECT event_date::date AS d, SUM(COALESCE(page_views, 0)) AS page_views
+    FROM analytics.dashboard_funnel_daily
+    WHERE event_date BETWEEN $1 AND $2
+    GROUP BY event_date::date
+  ),
+  spine AS (
+    SELECT
+      submitted_at::date AS d,
+      COUNT(*) AS submissions,
+      COALESCE(SUM(submitted_value_cents), 0) / 100.0 AS pipeline_value_usd
+    FROM marketing.quote_facts_unified
+    WHERE NOT is_test
+      AND submitted_at >= $1::date AND submitted_at < ($2::date + INTERVAL '1 day')
+    GROUP BY submitted_at::date
+  )
   SELECT
-    event_date::text AS date,
-    COALESCE(page_views, 0) AS page_views,
-    COALESCE(submissions, 0) AS submissions,
-    COALESCE(conversion_rate, 0) AS conversion_rate,
-    COALESCE(pipeline_value_usd, 0) AS pipeline_value_usd
-  FROM analytics.dashboard_funnel_daily
-  ORDER BY event_date DESC
-  LIMIT 30
+    dr.d::text AS date,
+    COALESCE(pv.page_views, 0) AS page_views,
+    COALESCE(spine.submissions, 0) AS submissions,
+    CASE WHEN COALESCE(pv.page_views, 0) > 0
+      THEN COALESCE(spine.submissions, 0)::numeric / pv.page_views
+      ELSE 0 END AS conversion_rate,
+    COALESCE(spine.pipeline_value_usd, 0) AS pipeline_value_usd
+  FROM date_range dr
+  LEFT JOIN pv ON pv.d = dr.d
+  LEFT JOIN spine ON spine.d = dr.d
+  ORDER BY dr.d DESC
 `;
 
 // ============================================
@@ -803,14 +853,17 @@ const GOOGLE_ADS_DAILY_SQL = `
 // T015: Core 4 Engine Aggregate Queries
 // ============================================
 
+// D-8: warm outreach reads the governed quote spine, restricted to non-paid,
+// non-organic source groups (direct / web form / email / referral). Previously this
+// counted EVERY QMS deal as warm-outreach pipeline, double-counting paid quotes.
 const WARM_OUTREACH_SQL = `
   SELECT
     COUNT(*) AS quotes,
-    COALESCE(SUM(total_price_cents), 0) / 100.0 AS pipeline_value_usd,
-    COUNT(*) FILTER (WHERE quote_activity = 'Quote Paid') AS won_deals,
-    COALESCE(SUM(total_price_cents) FILTER (WHERE quote_activity = 'Quote Paid'), 0) / 100.0 AS won_revenue_usd
-  FROM marketing.quote_dashboard_deals
-  WHERE created_at >= $1::date AND created_at < ($2::date + INTERVAL '1 day')
+    COALESCE(SUM(submitted_value_cents), 0) / 100.0 AS pipeline_value_usd
+  FROM marketing.quote_facts_unified
+  WHERE NOT is_test
+    AND COALESCE(source_group, 'unknown') IN ('direct', 'web_form', 'email', 'referral')
+    AND submitted_at >= $1::date AND submitted_at < ($2::date + INTERVAL '1 day')
 `;
 
 const WARM_OUTREACH_SESSIONS_SQL = `
@@ -1192,7 +1245,7 @@ export async function executeMarketingQueries(
     /* 1  */ db.query(fConvSql, curConvP),
     /* 2  */ db.query(KPI_SEARCH_SQL, [...curParams, ...prevParams]),
     /* 3  */ db.query(PAGES_SQL, curParams),
-    /* 4  */ db.query(SOURCES_SQL),
+    /* 4  */ db.query(SOURCES_SQL, curParams),
     /* 5  */ db.query(FRESHNESS_SQL),
     /* 6  */ db.query(fEngSql, prevEngP),
     /* 7  */ db.query(fConvSql, prevConvP),
@@ -1206,10 +1259,10 @@ export async function executeMarketingQueries(
     /* 15 */ db.query(fCntGa4Sql, curGa4P),
     /* 16 */ db.query(fDevScSql, curScP),
     /* 17 */ db.query(fCntScSql, curScP),
-    /* 18 */ db.query(PIPELINE_CATEGORY_SQL),
+    /* 18 */ db.query(PIPELINE_CATEGORY_SQL, curParams),
     /* 19 */ db.query(RECENT_CONVERSIONS_SQL),
     /* 20 */ db.query(SEO_MOVERS_SQL, curParams),
-    /* 21 */ db.query(FUNNEL_SQL),
+    /* 21 */ db.query(FUNNEL_SQL, curParams),
     /* 22 */ db.query(PIPELINE_HEALTH_SQL),
     /* 23 */ db.query(fChanPerfSql, curGa4P),
     /* 24 */ db.query(fGa4FunnelSql, curGa4P),
@@ -1228,8 +1281,8 @@ export async function executeMarketingQueries(
     /* 37 */ db.query(fPaidSessSql, curGa4P),
     /* 38 */ db.query(fPaidSessSql, prevGa4P),
     /* 39 */ db.query(WARM_OUTREACH_SQL, prevParams),
-    /* 40 */ db.query(QMS_KPI_PIPELINE_SQL, curParams),
-    /* 41 */ db.query(QMS_KPI_PIPELINE_SQL, prevParams),
+    /* 40 */ db.query(SPINE_KPI_SQL, curParams),
+    /* 41 */ db.query(SPINE_KPI_SQL, prevParams),
     /* 42 */ db.query(GOOGLE_ADS_DAILY_SQL, curParams),
   ];
 
@@ -1268,13 +1321,24 @@ export async function executeMarketingQueries(
     prevFunnelFallback,
   );
 
-  const qmsKpiCur = results[40].rows[0] ?? {};
-  const qmsKpiPrev = results[41].rows[0] ?? {};
-  const qmsPipelineCur = nonNegative(toNumber(qmsKpiCur.pipeline_cents)) / 100;
-  const qmsPipelinePrev = nonNegative(toNumber(qmsKpiPrev.pipeline_cents)) / 100;
+  // D-8: pipeline value + submissions come from the governed quote spine
+  // (marketing.quote_facts_unified, submitted_at window, excl. test quotes) —
+  // unconditionally, so every card on the screen ties to the same number.
+  const spineKpiCur = results[40].rows[0] ?? {};
+  const spineKpiPrev = results[41].rows[0] ?? {};
 
-  kpis.total_pipeline_value_usd = qmsPipelineCur > 0 ? qmsPipelineCur : kpis.total_pipeline_value_usd;
-  prevKpis.total_pipeline_value_usd = qmsPipelinePrev > 0 ? qmsPipelinePrev : prevKpis.total_pipeline_value_usd;
+  kpis.total_pipeline_value_usd = nonNegative(toNumber(spineKpiCur.pipeline_value_usd));
+  kpis.total_submissions = nonNegative(toNumber(spineKpiCur.submissions));
+  prevKpis.total_pipeline_value_usd = nonNegative(toNumber(spineKpiPrev.pipeline_value_usd));
+  prevKpis.total_submissions = nonNegative(toNumber(spineKpiPrev.submissions));
+
+  // Recompute derived ratios against the spine-backed numbers.
+  for (const k of [kpis, prevKpis]) {
+    k.revenue_per_session = safeDivide(k.total_pipeline_value_usd, k.sessions);
+    k.revenue_per_click = safeDivide(k.total_pipeline_value_usd, k.organic_clicks);
+    k.submissions_per_session = safeDivide(k.total_submissions, k.sessions);
+    k.submissions_per_click = safeDivide(k.total_submissions, k.organic_clicks);
+  }
 
   const comparisons: MarketingKPIComparisons = {
     sessions: buildComparison(kpis.sessions, prevKpis.sessions),

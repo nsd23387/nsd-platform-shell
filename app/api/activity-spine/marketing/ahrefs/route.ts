@@ -10,13 +10,56 @@ const pool = new Pool({
   max: 5,
 });
 
+// ============================================================================
+// D-12: governance filters — identical to /api/proxy/seo/competitor-gaps (the
+// SEO dashboard's governed surface). The raw gaps table contains 10 configured
+// competitors including marketplaces/printers (amazon, etsy, vistaprint) whose
+// branded navigational queries are junk for a neon brand. Only the 5 genuine
+// neon competitors are actionable intel.
+// ============================================================================
+
+const ALLOWED_COMPETITORS = [
+  'everythingneon.com',
+  'luckyneon.com',
+  'crazyneon.com',
+  'kingsofneon.com',
+  'neonmfg.com',
+];
+
+// Branded keyword patterns to exclude — competitor brand searches that NSD will
+// never rank for and shouldn't target.
+const BRANDED_KEYWORD_PATTERNS = [
+  'amazon%', 'etsy%', 'esty%', 'ebay%',
+  'vistaprint%', 'vista print%', 'vista',
+  'prime video%', 'prime%', 'print',
+  'business cards', 'business card',
+  'custom stickers',
+  '% phone number%', '% jobs%', '% music%', '% login%', '% coupon%',
+];
+
+function buildGovernanceClauses(params: unknown[]): string {
+  const competitorClauses: string[] = [];
+  for (const domain of ALLOWED_COMPETITORS) {
+    params.push(`%${domain}%`);
+    competitorClauses.push(`g.competitor_url ILIKE $${params.length}`);
+  }
+  let clause = ` AND (${competitorClauses.join(' OR ')})`;
+  for (const pattern of BRANDED_KEYWORD_PATTERNS) {
+    params.push(pattern);
+    clause += ` AND COALESCE(LOWER(g.keyword), '') NOT ILIKE $${params.length}`;
+  }
+  clause += ` AND LENGTH(COALESCE(g.keyword, '')) >= 4`;
+  return clause;
+}
+
 async function getKeywordGap(competitor?: string | null) {
-  const params: string[] = [];
+  const params: unknown[] = [];
   let competitorFilter = '';
   if (competitor) {
     params.push(competitor);
-    competitorFilter = `WHERE g.competitor_domain = $1`;
+    competitorFilter = ` AND g.competitor_domain = $${params.length}`;
   }
+  const governance = buildGovernanceClauses(params);
 
   const { rows } = await pool.query(`
     WITH gaps AS (
@@ -51,8 +94,8 @@ async function getKeywordGap(competitor?: string | null) {
     FROM gaps g
     LEFT JOIN analytics.external_query_intelligence eqi
       ON eqi.normalized_query = lower(trim(g.keyword))
-    ${competitorFilter}
-    ORDER BY COALESCE(eqi.search_volume, g.search_volume, 0) DESC, COALESCE(g.opportunity_score, 0) DESC
+    WHERE 1=1${competitorFilter}${governance}
+    ORDER BY COALESCE(g.opportunity_score, 0) DESC, COALESCE(eqi.search_volume, g.search_volume, 0) DESC
     LIMIT 300
   `, params);
 
@@ -81,6 +124,13 @@ async function getTopPages(competitor?: string | null) {
 }
 
 async function getDistinctCompetitors() {
+  // D-12: only the governed competitor allow-list is offered as a filter.
+  const params: unknown[] = [];
+  const competitorClauses: string[] = [];
+  for (const domain of ALLOWED_COMPETITORS) {
+    params.push(`%${domain}%`);
+    competitorClauses.push(`competitor_url ILIKE $${params.length}`);
+  }
   const { rows } = await pool.query(`
     SELECT DISTINCT
       regexp_replace(
@@ -90,8 +140,9 @@ async function getDistinctCompetitors() {
       ) AS competitor
     FROM analytics.seo_command_center_competitor_gaps(30, NULL::date, NULL::date)
     WHERE competitor_url IS NOT NULL
+      AND (${competitorClauses.join(' OR ')})
     ORDER BY 1
-  `);
+  `, params);
   return rows.map(r => r.competitor);
 }
 
@@ -126,6 +177,8 @@ export async function GET(req: NextRequest) {
         competitor,
         source_label: 'Keyword & Competitive Intelligence',
         retired_source_label: 'Ahrefs Intelligence',
+        governed_competitors_count: ALLOWED_COMPETITORS.length,
+        filter_note: 'Filtered to the governed competitor allow-list, excluding competitor-branded/low-intent queries and keywords under 4 characters.',
         unavailable_metrics: [
           { metric: 'backlink gap', reason: 'unavailable (source retired)' },
           { metric: 'top pages', reason: 'unavailable (source retired)' },

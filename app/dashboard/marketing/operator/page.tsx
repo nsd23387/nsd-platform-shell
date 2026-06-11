@@ -173,6 +173,7 @@ export default function OperatorHubPage() {
           loading={loading}
           error={error}
           onRetry={refetch}
+          freshness={data?.meta?.data_freshness}
         />
 
         <MarketingFunnelPanel

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useContext, useMemo } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
@@ -30,9 +30,14 @@ function fmtPct(n: number | undefined) {
 
 const COLUMNS = ['Engine', 'Sessions', 'Clicks', 'Quotes', 'Quote Rate', 'Pipeline', 'Spend', 'CAC/CPA', 'ROAS/MER'];
 
+const NA = '—';
+// D-17: cells with no governed source render an em dash, never a fabricated zero.
+const NA_TOOLTIP = 'No governed source wired for this metric';
+
 interface EngineRow {
   name: string;
   href: string;
+  subLabel?: string;
   sessions: string;
   clicks: string;
   quotes: string;
@@ -43,44 +48,87 @@ interface EngineRow {
   roas: string;
 }
 
+interface ColdOutreachSummary {
+  emailsSent: number;
+  replyRate: number;
+  leadsPushed: number;
+}
+
+const EMPTY_ROWS: EngineRow[] = [
+  { name: 'Warm Outreach', href: '/dashboard/marketing/warm-outreach', sessions: NA, clicks: NA, quotes: NA, quoteRate: NA, pipeline: NA, spend: NA, cac: NA, roas: NA },
+  { name: 'Cold Outreach', href: '/dashboard/marketing/cold-outreach', sessions: NA, clicks: NA, quotes: NA, quoteRate: NA, pipeline: NA, spend: NA, cac: NA, roas: NA },
+  { name: 'SEO Summary', href: '/dashboard/marketing/seo', sessions: NA, clicks: NA, quotes: NA, quoteRate: NA, pipeline: NA, spend: NA, cac: NA, roas: NA },
+  { name: 'Paid Summary', href: '/dashboard/marketing/paid-ads', sessions: NA, clicks: NA, quotes: NA, quoteRate: NA, pipeline: NA, spend: NA, cac: NA, roas: NA },
+];
+
 export default function Core4OverviewPage() {
   const tc = useThemeColors();
   const { data, loading } = useContext(MarketingContext);
 
+  // D-17: the overview API has no cold-outreach source (it returned hardcoded
+  // zeros). Pull the same Sales Engine summary the Cold Outreach page uses.
+  const [coldSummary, setColdSummary] = useState<ColdOutreachSummary | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/proxy/cold-outreach-summary?window=30d', { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && d._source === 'live') {
+          setColdSummary({ emailsSent: d.emailsSent ?? 0, replyRate: d.replyRate ?? 0, leadsPushed: d.leadsPushed ?? 0 });
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+
   const engines: EngineRow[] = useMemo(() => {
     const core4 = data?.core4_summary;
+
+    const coldSubLabel = coldSummary
+      ? `Sales Engine · last 30d: ${coldSummary.emailsSent.toLocaleString()} emails sent · ${(coldSummary.replyRate * 100).toFixed(1)}% reply · ${coldSummary.leadsPushed.toLocaleString()} leads pushed`
+      : 'No governed session/quote source wired — engine metrics live on the Cold Outreach page';
+
     if (!core4) {
-      return [
-        { name: 'Warm Outreach', href: '/dashboard/marketing/warm-outreach', sessions: '—', clicks: '—', quotes: '—', quoteRate: '—', pipeline: '—', spend: '$0', cac: '—', roas: '—' },
-        { name: 'Cold Outreach', href: '/dashboard/marketing/cold-outreach', sessions: '—', clicks: '—', quotes: '—', quoteRate: '—', pipeline: '—', spend: '$0', cac: '—', roas: '—' },
-        { name: 'SEO Summary', href: '/dashboard/marketing/seo', sessions: '—', clicks: '—', quotes: '—', quoteRate: '—', pipeline: '—', spend: '$0', cac: '—', roas: '—' },
-        { name: 'Paid Summary', href: '/dashboard/marketing/paid-ads', sessions: '—', clicks: '—', quotes: '—', quoteRate: '—', pipeline: '—', spend: '—', cac: '—', roas: '—' },
-      ];
+      return EMPTY_ROWS.map((row) => (row.name === 'Cold Outreach' ? { ...row, subLabel: coldSubLabel } : row));
     }
 
     const map: { key: keyof typeof core4; name: string; href: string }[] = [
       { key: 'warm_outreach', name: 'Warm Outreach', href: '/dashboard/marketing/warm-outreach' },
-      { key: 'cold_outreach', name: 'Cold Outreach', href: '/dashboard/marketing/cold-outreach' },
       { key: 'post_free_content', name: 'SEO Summary', href: '/dashboard/marketing/seo' },
       { key: 'run_paid_ads', name: 'Paid Summary', href: '/dashboard/marketing/paid-ads' },
     ];
 
-    return map.map(({ key, name, href }) => {
+    const rows = map.map(({ key, name, href }) => {
       const c = core4[key]?.current;
+      const hasSpend = (c?.spend ?? 0) > 0;
       return {
         name,
         href,
         sessions: fmt(c?.sessions),
         clicks: fmt(c?.clicks),
         quotes: fmt(c?.quotes),
-        quoteRate: fmtPct(c?.quote_rate),
+        quoteRate: c != null ? fmtPct(c.quote_rate * 100) : NA,
         pipeline: fmtCurrency(c?.pipeline_value_usd),
         spend: fmtCurrency(c?.spend),
-        cac: fmtCurrency(c?.cac),
-        roas: fmt(c?.roas),
+        // D-17: CAC/ROAS only exist where spend exists. $0-spend engines get an
+        // em dash, not a fabricated 0.
+        cac: hasSpend && c ? fmtCurrency(c.cac) : NA,
+        roas: hasSpend && c ? `${fmt(c.roas)}x` : NA,
       };
     });
-  }, [data]);
+
+    // Cold outreach: the overview API has no governed source for this engine
+    // (sessions/quotes/pipeline were hardcoded zeros) — render em dashes plus
+    // the live Sales Engine summary as a sub-label.
+    const coldRow: EngineRow = {
+      name: 'Cold Outreach',
+      href: '/dashboard/marketing/cold-outreach',
+      subLabel: coldSubLabel,
+      sessions: NA, clicks: NA, quotes: NA, quoteRate: NA, pipeline: NA, spend: NA, cac: NA, roas: NA,
+    };
+
+    return [rows[0], coldRow, rows[1], rows[2]];
+  }, [data, coldSummary]);
 
   const exportSections: ExportSection[] = useMemo(() => {
     return [
@@ -142,7 +190,10 @@ export default function Core4OverviewPage() {
             Core 4 Overview
           </h1>
           <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
-            Compare all four growth engines side-by-side, ranked by ROI.
+            Compare all four growth engines side-by-side.
+          </p>
+          <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.placeholder, marginTop: space['1'] }}>
+            Quotes/pipeline: QMS quote spine · submitted value · selected window. Sessions: GA4. Spend: Google Ads. &ldquo;{NA}&rdquo; = no governed source wired.
           </p>
           <div style={{ marginTop: space['3'] }}>
             <PageExportBar
@@ -181,15 +232,19 @@ export default function Core4OverviewPage() {
                     style={{ cursor: 'pointer' }}
                     data-testid={`row-engine-${engine.name.toLowerCase().replace(/\s+/g, '-')}`}
                   >
-                    <td style={{ ...tdStyle, fontWeight: fontWeight.medium, color: tc.text.primary }}>{engine.name}</td>
-                    <td style={tdStyle}>{engine.sessions}</td>
-                    <td style={tdStyle}>{engine.clicks}</td>
-                    <td style={tdStyle}>{engine.quotes}</td>
-                    <td style={tdStyle}>{engine.quoteRate}</td>
-                    <td style={tdStyle}>{engine.pipeline}</td>
-                    <td style={tdStyle}>{engine.spend}</td>
-                    <td style={tdStyle}>{engine.cac}</td>
-                    <td style={tdStyle}>{engine.roas}</td>
+                    <td style={{ ...tdStyle, fontWeight: fontWeight.medium, color: tc.text.primary, whiteSpace: 'normal' }}>
+                      {engine.name}
+                      {engine.subLabel && (
+                        <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, fontWeight: fontWeight.normal, color: tc.text.muted, marginTop: space['0.5'], maxWidth: 320 }}>
+                          {engine.subLabel}
+                        </div>
+                      )}
+                    </td>
+                    {([engine.sessions, engine.clicks, engine.quotes, engine.quoteRate, engine.pipeline, engine.spend, engine.cac, engine.roas]).map((value, i) => (
+                      <td key={COLUMNS[i + 1]} style={tdStyle} title={value === NA ? NA_TOOLTIP : undefined}>
+                        {value}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
