@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration: 20260610000001_c2b_cross_surface_metric_contracts.sql
+-- Migration: 20260610230000_c2b_cross_surface_metric_contracts.sql
 -- C2b cross-surface Marketing / SEO Command Center metric contracts
 -- ============================================================================
 --
@@ -27,10 +27,22 @@ INSERT INTO analytics.seo_dashboard_metric_contract (
     'cross_surface_organic_clicks_7d',
     'cross_surface_marketing',
     'Organic clicks',
-    $$SELECT COALESCE(SUM(clicks), 0)::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 6, CURRENT_DATE)$$,
-    $$SELECT COALESCE(SUM(clicks), 0)::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 6, CURRENT_DATE)$$,
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(sum(d.clicks), 0)::numeric
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 6 AND b.end_date$$,
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(sum(d.clicks), 0)::numeric
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 6 AND b.end_date$$,
     'site-level GSC',
     'windowed',
     'google_search_console',
@@ -45,10 +57,22 @@ INSERT INTO analytics.seo_dashboard_metric_contract (
     'cross_surface_organic_clicks_30d',
     'cross_surface_marketing',
     'Organic clicks',
-    $$SELECT COALESCE(SUM(clicks), 0)::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 29, CURRENT_DATE)$$,
-    $$SELECT COALESCE(SUM(clicks), 0)::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 29, CURRENT_DATE)$$,
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(sum(d.clicks), 0)::numeric
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 29 AND b.end_date$$,
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(sum(d.clicks), 0)::numeric
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 29 AND b.end_date$$,
     'site-level GSC',
     'windowed',
     'google_search_console',
@@ -63,10 +87,22 @@ INSERT INTO analytics.seo_dashboard_metric_contract (
     'cross_surface_organic_impressions_7d',
     'cross_surface_marketing',
     'Organic impressions',
-    $$SELECT COALESCE(SUM(impressions), 0)::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 6, CURRENT_DATE)$$,
-    $$SELECT COALESCE(SUM(impressions), 0)::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 6, CURRENT_DATE)$$,
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(sum(d.impressions), 0)::numeric
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 6 AND b.end_date$$,
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(sum(d.impressions), 0)::numeric
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 6 AND b.end_date$$,
     'site-level GSC',
     'windowed',
     'google_search_console',
@@ -81,10 +117,22 @@ INSERT INTO analytics.seo_dashboard_metric_contract (
     'cross_surface_organic_impressions_30d',
     'cross_surface_marketing',
     'Organic impressions',
-    $$SELECT COALESCE(SUM(impressions), 0)::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 29, CURRENT_DATE)$$,
-    $$SELECT COALESCE(SUM(impressions), 0)::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 29, CURRENT_DATE)$$,
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(sum(d.impressions), 0)::numeric
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 29 AND b.end_date$$,
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(sum(d.impressions), 0)::numeric
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 29 AND b.end_date$$,
     'site-level GSC',
     'windowed',
     'google_search_console',
@@ -99,16 +147,28 @@ INSERT INTO analytics.seo_dashboard_metric_contract (
     'cross_surface_avg_position_7d',
     'cross_surface_marketing',
     'Average position',
-    $$SELECT COALESCE(
-        SUM(avg_position::numeric * impressions::numeric) / NULLIF(SUM(impressions), 0),
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(
+        sum(d.avg_position::numeric * d.impressions::numeric) / NULLIF(sum(d.impressions), 0),
         0
       )::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 6, CURRENT_DATE)$$,
-    $$SELECT COALESCE(
-        SUM(avg_position::numeric * impressions::numeric) / NULLIF(SUM(impressions), 0),
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 6 AND b.end_date$$,
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(
+        sum(d.avg_position::numeric * d.impressions::numeric) / NULLIF(sum(d.impressions), 0),
         0
       )::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 6, CURRENT_DATE)$$,
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 6 AND b.end_date$$,
     'site-level GSC',
     'windowed',
     'google_search_console',
@@ -123,16 +183,28 @@ INSERT INTO analytics.seo_dashboard_metric_contract (
     'cross_surface_avg_position_30d',
     'cross_surface_marketing',
     'Average position',
-    $$SELECT COALESCE(
-        SUM(avg_position::numeric * impressions::numeric) / NULLIF(SUM(impressions), 0),
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(
+        sum(d.avg_position::numeric * d.impressions::numeric) / NULLIF(sum(d.impressions), 0),
         0
       )::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 29, CURRENT_DATE)$$,
-    $$SELECT COALESCE(
-        SUM(avg_position::numeric * impressions::numeric) / NULLIF(SUM(impressions), 0),
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 29 AND b.end_date$$,
+    $$WITH b AS (
+        SELECT max(date)::date AS end_date
+        FROM analytics.metrics_search_console_daily
+      )
+      SELECT COALESCE(
+        sum(d.avg_position::numeric * d.impressions::numeric) / NULLIF(sum(d.impressions), 0),
         0
       )::numeric
-      FROM analytics.seo_command_center_gsc_window(NULL::int, CURRENT_DATE - 29, CURRENT_DATE)$$,
+      FROM analytics.metrics_search_console_daily d
+      CROSS JOIN b
+      WHERE d.date BETWEEN b.end_date - 29 AND b.end_date$$,
     'site-level GSC',
     'windowed',
     'google_search_console',
