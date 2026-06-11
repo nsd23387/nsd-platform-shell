@@ -60,6 +60,11 @@ function makeMockPool(queryResults: Record<string, unknown[]> = {}) {
   return { pool, mockDbClient, queryLog };
 }
 
+// Strict-null-safe access to the args array (2nd element) of a recorded mock call.
+function callArgs(call: unknown[] | undefined): unknown[] {
+  return (call?.[1] as unknown[] | undefined) ?? [];
+}
+
 function makeGA4Row(
   dims: string[],
   metrics: string[],
@@ -106,7 +111,7 @@ describe('GA4 Sync Service', () => {
         (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('metrics_page_engagement_daily'),
       );
       expect(insertCall).toBeDefined();
-      const values = insertCall![1];
+      const values = callArgs(insertCall);
       expect(values[0]).toBe('2026-03-01');
       expect(values[1]).toBe('/custom-neon-signs/');
       expect(values[2]).toBe(150);
@@ -136,7 +141,7 @@ describe('GA4 Sync Service', () => {
       const insertCall = mockDbClient.query.mock.calls.find(
         (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('metrics_page_engagement_daily'),
       );
-      expect(insertCall![1][1]).toBe('/custom-neon-signs/');
+      expect(callArgs(insertCall)[1]).toBe('/custom-neon-signs/');
     });
 
     it('should handle empty GA4 response gracefully', async () => {
@@ -178,7 +183,7 @@ describe('GA4 Sync Service', () => {
       const insertCall = mockDbClient.query.mock.calls.find(
         (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('metrics_page_engagement_daily'),
       );
-      expect(insertCall![1][0]).toBe('2026-02-15');
+      expect(callArgs(insertCall)[0]).toBe('2026-02-15');
     });
 
     it('should calculate scroll depth as (scrolledUsers / sessions) * 100', async () => {
@@ -196,7 +201,7 @@ describe('GA4 Sync Service', () => {
       const insertCall = mockDbClient.query.mock.calls.find(
         (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('metrics_page_engagement_daily'),
       );
-      expect(insertCall![1][6]).toBeCloseTo(60, 0);
+      expect(callArgs(insertCall)[6]).toBeCloseTo(60, 0);
     });
   });
 
@@ -225,11 +230,11 @@ describe('GA4 Sync Service', () => {
         (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('raw_ga4_events') && (c[0] as string).includes('INSERT'),
       );
       expect(insertCall).toBeDefined();
-      const values = insertCall![1];
+      const values = callArgs(insertCall);
       expect(values[0]).toBe('ga4-api');
       expect(values[1]).toBe('purchase');
       expect(values[2]).toBe('2026-03-01T00:00:00Z');
-      const payload = JSON.parse(values[3]);
+      const payload = JSON.parse(values[3] as string);
       expect(payload.page_path).toBe('/checkout/');
       expect(payload.device_category).toBe('desktop');
       expect(payload.country).toBe('United States');
@@ -290,14 +295,14 @@ describe('GA4 Sync Service', () => {
       );
       expect(insertCalls).toHaveLength(2);
 
-      const firstPayload = JSON.parse(insertCalls[0][1][3]);
+      const firstPayload = JSON.parse(callArgs(insertCalls[0])[3] as string);
       expect(firstPayload.device_category).toBe('desktop');
       expect(firstPayload.country).toBe('United States');
       expect(firstPayload.sessions).toBe(500);
       expect(firstPayload.page_views).toBe(1200);
 
-      expect(insertCalls[0][1][1]).toBe('session_summary');
-      expect(insertCalls[0][1][0]).toBe('ga4-api');
+      expect(callArgs(insertCalls[0])[1]).toBe('session_summary');
+      expect(callArgs(insertCalls[0])[0]).toBe('ga4-api');
     });
 
     it('should handle empty device/country response', async () => {
@@ -337,15 +342,15 @@ describe('GA4 Sync Service', () => {
       );
       expect(insertCalls).toHaveLength(2);
 
-      const firstPayload = JSON.parse(insertCalls[0][1][3]);
+      const firstPayload = JSON.parse(callArgs(insertCalls[0])[3] as string);
       expect(firstPayload.channel).toBe('Organic Search');
       expect(firstPayload.sessions).toBe(1500);
       expect(firstPayload.page_views).toBe(3200);
       expect(firstPayload.conversions).toBe(8);
       expect(firstPayload.revenue).toBe(150.50);
 
-      expect(insertCalls[0][1][1]).toBe('channel_session_summary');
-      expect(insertCalls[0][1][0]).toBe('ga4-api');
+      expect(callArgs(insertCalls[0])[1]).toBe('channel_session_summary');
+      expect(callArgs(insertCalls[0])[0]).toBe('ga4-api');
     });
 
     it('should handle empty channel response', async () => {
