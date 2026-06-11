@@ -10,6 +10,7 @@ import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design
 import { space, radius } from '../../../../design/tokens/spacing';
 import { DrilldownBreadcrumb } from '../components/adminto/DrilldownBreadcrumb';
 import type { ExportSection } from '../../../../lib/exportUtils';
+import { fmtDataForSeoCpc, fmtDataForSeoDifficulty, fmtDataForSeoVolume } from '../../../../lib/dataforseoFormat';
 
 interface KeywordGapRow {
   keyword: string;
@@ -119,27 +120,6 @@ function CompetitorFilter({ competitors, value, onChange }: { competitors: strin
   );
 }
 
-function DifficultyBadge({ value }: { value: number }) {
-  const tc = useThemeColors();
-  let color = '#22c55e';
-  if (value > 60) color = '#ef4444';
-  else if (value > 30) color = '#f59e0b';
-  return (
-    <span style={{
-      display: 'inline-block',
-      padding: `${space['0.5']} ${space['2']}`,
-      borderRadius: radius.sm,
-      backgroundColor: tc.background.muted,
-      fontFamily: fontFamily.body,
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.medium,
-      color,
-    }}>
-      {value}
-    </span>
-  );
-}
-
 function KeywordGapPanel({ competitor }: { competitor: string }) {
   const tc = useThemeColors();
   const { data, loading, error } = useKeywordCompetitiveData<KeywordGapRow[]>('keyword-gap', competitor || undefined);
@@ -208,9 +188,9 @@ function KeywordGapPanel({ competitor }: { competitor: string }) {
           {sorted.map((r, i) => (
             <tr key={`${r.keyword}-${r.competitor_domain}-${i}`}>
               <td style={tdStyle('left')}>{r.keyword}</td>
-              <td style={tdStyle()}>{r.search_volume.toLocaleString()}</td>
-              <td style={tdStyle()}><DifficultyBadge value={r.keyword_difficulty} /></td>
-              <td style={tdStyle()}>${r.cpc.toFixed(2)}</td>
+              <td style={tdStyle()}>{fmtDataForSeoVolume(r.search_volume)}</td>
+              <td style={tdStyle()}>{fmtDataForSeoDifficulty(r.keyword_difficulty)}</td>
+              <td style={tdStyle()}>{fmtDataForSeoCpc(r.cpc)}</td>
               <td style={tdStyle()}>{r.best_position > 0 ? `#${r.best_position}` : '--'}</td>
               <td style={tdStyle('left')}>{r.competitor_domain}</td>
               <td style={tdStyle('left')}>{r.topic_cluster || '--'}</td>

@@ -20,6 +20,7 @@ import { violet } from '../../../design/tokens/colors';
 import {
   getSeoPageDossier, approveEngineCandidate, rejectEngineCandidate, getSeoOffpageBriefs,
 } from '../../../lib/seoApi';
+import { fmtDataForSeoCpc, fmtDataForSeoDifficulty, fmtDataForSeoVolume } from '../../../lib/dataforseoFormat';
 import type {
   PortfolioPage, PortfolioBucket, PageDossier, PageDossierCandidate,
   PageDossierMeta, PageDossierKeywordTarget, PageGateTransition, SeoOffpageBrief,
@@ -550,9 +551,9 @@ function KeywordTargetRow({ k, tc, primary }: { k: PageDossierKeywordTarget; tc:
       <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
         <span>pos <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(k.position)}</span></span>
         <span>impr <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(k.impressions)}</span></span>
-        <span>vol <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(k.volume)}</span></span>
-        <span>KD <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{k.kd == null ? '—' : k.kd.toFixed(0)}</span></span>
-        <span>cpc <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtMoney(k.cpc)}</span></span>
+        <span>vol <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoVolume(k.volume)}</span></span>
+        <span>KD <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoDifficulty(k.kd)}</span></span>
+        <span>cpc <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoCpc(k.cpc)}</span></span>
         <span>confidence <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPct01(k.confidence)}</span></span>
       </div>
     </div>
@@ -746,8 +747,8 @@ export function OffpageBriefSection({ url, tc, window }: { url: string; tc: Tc; 
           <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
             <span>pos <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(b.current_position)}</span></span>
             <span>impr <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(b.impressions)}</span></span>
-            <span>vol <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(b.search_volume)}</span></span>
-            <span>KD <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{b.keyword_difficulty == null ? '—' : b.keyword_difficulty.toFixed(0)}</span></span>
+            <span>vol <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoVolume(b.search_volume)}</span></span>
+            <span>KD <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoDifficulty(b.keyword_difficulty)}</span></span>
           </div>
           {b.reason && (
             <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: space['2'] }}>{b.reason}</div>
@@ -1060,13 +1061,13 @@ export function PageDossierDrawer({
                             style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}
                             title={referenceSourceLabel(q.reference_metrics_source, q.reference_metrics_observed_at)}
                           >
-                            {fmtInt(q.kw_volume)}
+                            {fmtDataForSeoVolume(q.kw_volume)}
                           </td>
                           <td
                             style={{ padding: '8px 10px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}
                             title={referenceSourceLabel(q.reference_metrics_source, q.reference_metrics_observed_at)}
                           >
-                            {q.kw_difficulty == null ? '—' : q.kw_difficulty.toFixed(0)}
+                            {fmtDataForSeoDifficulty(q.kw_difficulty)}
                           </td>
                           <td style={{ padding: '8px 10px' }}>
                             {q.is_discard
@@ -1131,9 +1132,9 @@ export function PageCard({ p, tc, onOpen }: { p: PortfolioPage; tc: Tc; onOpen: 
       <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
         {p.has_dataforseo ? (
           <>
-            <span title={referenceSourceLabel(p.reference_metrics_source, p.reference_metrics_observed_at)}>vol ref <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(p.kw_volume)}</span></span>
-            <span title={referenceSourceLabel(p.reference_metrics_source, p.reference_metrics_observed_at)}>KD ref <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{p.kw_difficulty == null ? '—' : p.kw_difficulty.toFixed(0)}</span></span>
-            <span title={referenceSourceLabel(p.reference_metrics_source, p.reference_metrics_observed_at)}>cpc ref <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtMoney(p.kw_cpc)}</span></span>
+            <span title={referenceSourceLabel(p.reference_metrics_source, p.reference_metrics_observed_at)}>vol ref <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtDataForSeoVolume(p.kw_volume)}</span></span>
+            <span title={referenceSourceLabel(p.reference_metrics_source, p.reference_metrics_observed_at)}>KD ref <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtDataForSeoDifficulty(p.kw_difficulty)}</span></span>
+            <span title={referenceSourceLabel(p.reference_metrics_source, p.reference_metrics_observed_at)}>cpc ref <span style={{ fontFamily: monoStack, color: tc.text.secondary }}>{fmtDataForSeoCpc(p.kw_cpc)}</span></span>
             {p.is_competitor_only && <Pill tone="bad" tc={tc}>competitor-only</Pill>}
           </>
         ) : (

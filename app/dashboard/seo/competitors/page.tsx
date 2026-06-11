@@ -14,6 +14,7 @@ import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { getSeoCompetitorGapFeed } from '../../../../lib/seoApi';
 import type { SeoCompetitorGap, SeoCompetitorGapMeta } from '../../../../lib/seoApi';
+import { fmtDataForSeoDifficulty, fmtDataForSeoVolume } from '../../../../lib/dataforseoFormat';
 import { PALETTE, monoStack, Pill, fmtInt } from '../_shared';
 
 function hostOf(url: string): string {
@@ -143,8 +144,8 @@ function CompetitorsContent() {
                   </td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{g.competitor_ranking_position ?? '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.muted }}>{g.our_ranking_position ?? 'unranked'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtInt(g.search_volume)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.muted }}>{g.keyword_difficulty ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>{fmtDataForSeoVolume(g.search_volume)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.muted }}>{fmtDataForSeoDifficulty(g.keyword_difficulty)}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{g.opportunity_score == null ? '—' : g.opportunity_score.toFixed(0)}</td>
                 </tr>
               ))}
