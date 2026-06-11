@@ -1516,6 +1516,10 @@ export interface SeoStrategyRecommendation {
   intent: string | null;
   entity: string | null;
   rationale: string;
+  coverage_page: string | null;
+  coverage_score: number | null;
+  coverage_method: string | null;
+  why: string | null;
   confidence: number | null;
   conversion_priority: number | null;
   evidence: Record<string, unknown>;
