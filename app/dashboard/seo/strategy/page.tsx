@@ -40,6 +40,45 @@ function formatPercent(value: number | null): string {
   return `${scaled.toFixed(scaled >= 10 ? 0 : 1)}%`;
 }
 
+function CoverageBlock({ rec }: { rec: SeoStrategyRecommendation }) {
+  const tc = useThemeColors();
+  const page = rec.coverage_page ?? rec.target_url;
+  const hasCoverage = Boolean(page || rec.coverage_score != null || rec.coverage_method);
+
+  return (
+    <div style={{ border: `1px solid ${tc.border.subtle}`, borderRadius: radius.md, padding: space['3'], background: tc.background.muted }}>
+      <div style={{ color: tc.text.muted, fontSize: '12px', marginBottom: space['2'] }}>Coverage</div>
+      {!hasCoverage ? (
+        <div style={{ color: tc.text.primary, fontWeight: fontWeight.medium }}>No existing coverage — new page</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: space['3'] }}>
+          <div>
+            <div style={{ color: tc.text.muted, fontSize: '12px' }}>Coverage page</div>
+            {page ? (
+              <Link
+                href={`/dashboard/seo/performance?url=${encodeURIComponent(page)}`}
+                style={{ display: 'inline-block', marginTop: 3, color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none', wordBreak: 'break-word' }}
+              >
+                {pathOf(page)}
+              </Link>
+            ) : (
+              <div style={{ marginTop: 3, color: tc.text.primary }}>—</div>
+            )}
+          </div>
+          <div>
+            <div style={{ color: tc.text.muted, fontSize: '12px' }}>Coverage score</div>
+            <div style={{ marginTop: 3, color: tc.text.primary, fontWeight: fontWeight.medium }}>{formatPercent(rec.coverage_score)}</div>
+          </div>
+          <div>
+            <div style={{ color: tc.text.muted, fontSize: '12px' }}>Coverage method</div>
+            <div style={{ marginTop: 3, color: tc.text.primary, fontWeight: fontWeight.medium }}>{label(rec.coverage_method)}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function summarizeValue(value: unknown): string {
   if (value == null) return '—';
   if (typeof value === 'string') return value;
@@ -173,6 +212,11 @@ function StrategyCard({ rec }: { rec: SeoStrategyRecommendation }) {
             <p style={{ margin: 0, color: tc.text.primary, lineHeight: 1.55, fontSize: '14px' }}>
               {rec.rationale}
             </p>
+            {rec.why && (
+              <p style={{ margin: `${space['2']} 0 0`, color: tc.text.secondary, lineHeight: 1.5, fontSize: '13px' }}>
+                <span style={{ fontWeight: fontWeight.medium, color: tc.text.primary }}>Why:</span> {rec.why}
+              </p>
+            )}
           </div>
           <div style={{ textAlign: 'right', minWidth: 94 }}>
             <div style={{ color: tc.text.muted, fontSize: '12px' }}>Confidence</div>
@@ -182,6 +226,8 @@ function StrategyCard({ rec }: { rec: SeoStrategyRecommendation }) {
           </div>
         </div>
       </div>
+
+      <CoverageBlock rec={rec} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: space['3'] }}>
         <div>

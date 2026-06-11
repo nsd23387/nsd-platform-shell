@@ -39,6 +39,10 @@ const STRATEGY_ROWS: SeoStrategyRecommendation[] = [
     intent: 'commercial investigation',
     entity: 'commercial neon signs',
     rationale: 'No distinct commercial neon signs page exists for the demand cluster.',
+    coverage_page: null,
+    coverage_score: null,
+    coverage_method: null,
+    why: 'No existing NSD page covers this cluster cleanly.',
     confidence: 0.84,
     conversion_priority: 78,
     evidence: {
@@ -61,6 +65,10 @@ const STRATEGY_ROWS: SeoStrategyRecommendation[] = [
     intent: 'thin child collection cleanup',
     entity: 'animal neon signs',
     rationale: 'Thin child collections overlap the parent and dilute demand.',
+    coverage_page: 'https://www.neonsignsdepot.com/collections/animals/',
+    coverage_score: 0.91,
+    coverage_method: 'query_page_routing_intended',
+    why: 'The parent page already captures the strongest route.',
     confidence: 0.72,
     conversion_priority: 62,
     evidence: { observation: 'Several child collections are thin.' },
@@ -79,6 +87,10 @@ const STRATEGY_ROWS: SeoStrategyRecommendation[] = [
     intent: 'orphan cleanup',
     entity: 'obsolete collection',
     rationale: 'The page is orphaned and does not map to a current NSD offering.',
+    coverage_page: 'https://www.neonsignsdepot.com/collections/obsolete/',
+    coverage_score: 0.41,
+    coverage_method: 'inventory_text_match',
+    why: 'Coverage is weak and demand no longer maps to a current offer.',
     confidence: 0.66,
     conversion_priority: 18,
     evidence: { failure_check: 'Retired URL still receives qualified demand.' },
@@ -136,6 +148,21 @@ describe('SEO Strategy surface', () => {
     const create = await screen.findByTestId('strategy-card-strategy-create');
 
     expect(within(create).getByText('/commercial-neon-signs/')).toBeInTheDocument();
+    expect(within(create).getByText('No existing coverage — new page')).toBeInTheDocument();
     expect(within(create).queryByText('New page / no current target')).not.toBeInTheDocument();
+  });
+
+  it('renders coverage evidence and why for existing-page recommendations', async () => {
+    render(<StrategyPage />);
+
+    const consolidate = await screen.findByTestId('strategy-card-strategy-consolidate');
+    const coverageLinks = within(consolidate).getAllByRole('link', { name: '/collections/animals/' });
+
+    expect(within(consolidate).getByText('Coverage')).toBeInTheDocument();
+    expect(coverageLinks).toHaveLength(2);
+    expect(coverageLinks[1]).toHaveAttribute('href', '/dashboard/seo/performance?url=https%3A%2F%2Fwww.neonsignsdepot.com%2Fcollections%2Fanimals%2F');
+    expect(within(consolidate).getByText('91%')).toBeInTheDocument();
+    expect(within(consolidate).getByText('query page routing intended')).toBeInTheDocument();
+    expect(within(consolidate).getByText(/The parent page already captures the strongest route/)).toBeInTheDocument();
   });
 });
