@@ -31,6 +31,7 @@ import {
   getCompetitiveVelocitySummary, getCompetitiveChanges, getSeoShipped,
   getSeoOffpageBriefs, getSeoSuppressed, getSeoSystemHealth, getSeoOverviewKpis,
 } from '../../../lib/seoApi';
+import { fmtDataForSeoDifficulty, fmtDataForSeoVolume } from '../../../lib/dataforseoFormat';
 import type {
   PortfolioPage, PortfolioBucket, PageDossierCandidate,
   SeoTimeseriesResponse, GscPipelineHealth, SeoCompetitorGap,
@@ -949,13 +950,13 @@ function OffpageBriefsSection({ tc, window }: { tc: Tc; window: SeoWindowRequest
                     style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}
                     title={referenceSourceLabel(b.reference_metrics_source, b.reference_metrics_observed_at)}
                   >
-                    {fmtInt(b.search_volume)}
+                    {fmtDataForSeoVolume(b.search_volume)}
                   </td>
                   <td
                     style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}
                     title={referenceSourceLabel(b.reference_metrics_source, b.reference_metrics_observed_at)}
                   >
-                    {b.keyword_difficulty == null ? '—' : b.keyword_difficulty.toFixed(0)}
+                    {fmtDataForSeoDifficulty(b.keyword_difficulty)}
                   </td>
                   <td style={{ padding: '10px 16px', color: tc.text.muted, fontSize: '12px', maxWidth: 320 }}>{b.reason || '—'}</td>
                 </tr>
@@ -1640,7 +1641,7 @@ function CommandCenterContent() {
                           style={{ padding: '10px 8px', textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}
                           title={referenceSourceLabel(g.reference_metrics_source, g.reference_metrics_observed_at)}
                         >
-                          {fmtInt(g.search_volume)}
+                          {fmtDataForSeoVolume(g.search_volume)}
                         </td>
                         <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: monoStack, color: tc.text.primary }}>{g.opportunity_score == null ? '—' : g.opportunity_score.toFixed(0)}</td>
                       </tr>
