@@ -9,6 +9,7 @@ out/
 dist/
 build/
 *.tsbuildinfo
+graphify-out/
 
 # Environment files
 .env
