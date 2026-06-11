@@ -1497,3 +1497,36 @@ export async function getSeoAuthorityOpportunities(): Promise<SeoAuthorityOpport
   const data = await seoFetch<{ data: SeoAuthorityOpportunity[] }>('/api/proxy/seo/authority');
   return data.data ?? [];
 }
+
+// =============================================================================
+// Strategy recommendations — analytics.v_seo_portfolio_recommendation_ranked
+// Read-only. This is the governed demand Strategist backlog, separate from the
+// execution queue and any approve/reject candidate mutation path.
+// =============================================================================
+
+export type SeoStrategyRecommendationType = 'PRIORITIZE' | 'CREATE' | 'PIVOT' | 'CONSOLIDATE' | 'RETIRE' | string;
+
+export interface SeoStrategyRecommendation {
+  recommendation_id: string;
+  portfolio_rank: number | null;
+  source_key?: string | null;
+  rec_type: SeoStrategyRecommendationType;
+  target_url: string | null;
+  proposed_slug: string | null;
+  intent: string | null;
+  entity: string | null;
+  rationale: string;
+  confidence: number | null;
+  conversion_priority: number | null;
+  evidence: Record<string, unknown>;
+  source_signals: Record<string, unknown>;
+  status: string;
+  depends_on_rework: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export async function getSeoStrategyRecommendations(): Promise<SeoStrategyRecommendation[]> {
+  const data = await seoFetch<{ data: SeoStrategyRecommendation[] }>('/api/proxy/seo/strategy');
+  return data.data ?? [];
+}

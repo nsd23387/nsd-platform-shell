@@ -34,6 +34,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/seo', label: 'Command Center', icon: 'review' },
       { href: '/dashboard/seo/recommendations', label: 'Recommendations', icon: 'target' },
+      { href: '/dashboard/seo/strategy', label: 'Strategy', icon: 'chart' },
       { href: '/dashboard/seo/performance', label: 'Performance', icon: 'search' },
       { href: '/dashboard/seo/competitors', label: 'Competitors', icon: 'chart' },
       { href: '/dashboard/seo/authority', label: 'Authority', icon: 'target' },
