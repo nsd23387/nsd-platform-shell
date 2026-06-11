@@ -1460,3 +1460,40 @@ export async function getSeoOffpageBriefs(url?: string, window?: SeoWindowReques
   const data = await seoFetch<{ data: SeoOffpageBrief[] }>(`/api/proxy/seo/offpage${qs ? `?${qs}` : ''}`);
   return data.data ?? [];
 }
+
+// =============================================================================
+// Authority opportunities (Lane 3) — analytics.v_seo_offpage_authority_queue
+// Read-only, PII-safe queue. Contact emails/messages remain service-role only
+// and are intentionally absent from this dashboard contract.
+// =============================================================================
+
+export interface SeoAuthorityOpportunity {
+  id: string;
+  opportunity_type: string;
+  prospect_domain: string;
+  prospect_url: string | null;
+  prospect_domain_rating: number | null;
+  our_target_url: string;
+  proposed_anchor: string | null;
+  discovered_via: string | null;
+  relevance_score: number | null;
+  opportunity_score: number | null;
+  score_drivers: Record<string, unknown> | null;
+  segment: string | null;
+  gate_status: string | null;
+  gate_reasons: unknown;
+  confidence_tier: 'high' | 'medium' | 'low' | string | null;
+  status: string | null;
+  suppression_reason: string | null;
+  routed_at: string | null;
+  consumed_by: string | null;
+  dismissed_reason: string | null;
+  contact_count: number;
+  conversation_count: number;
+  last_conversation_at: string | null;
+}
+
+export async function getSeoAuthorityOpportunities(): Promise<SeoAuthorityOpportunity[]> {
+  const data = await seoFetch<{ data: SeoAuthorityOpportunity[] }>('/api/proxy/seo/authority');
+  return data.data ?? [];
+}
