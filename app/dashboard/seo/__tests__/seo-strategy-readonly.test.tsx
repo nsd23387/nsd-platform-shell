@@ -100,6 +100,77 @@ const STRATEGY_ROWS: SeoStrategyRecommendation[] = [
     created_at: '2026-06-11T00:00:00Z',
     updated_at: '2026-06-11T00:00:00Z',
   },
+  {
+    recommendation_id: 'strategy-consolidate-missing-coverage',
+    portfolio_rank: 4,
+    rec_type: 'CONSOLIDATE',
+    target_url: 'https://www.neonsignsdepot.com/collections/custom/',
+    proposed_slug: null,
+    intent: 'canonical consolidation',
+    entity: 'custom neon signs',
+    rationale: 'Multiple overlapping collections should consolidate to the canonical custom page.',
+    coverage_page: null,
+    coverage_score: null,
+    coverage_method: null,
+    why: null,
+    confidence: 0.7,
+    conversion_priority: 58,
+    evidence: {
+      competing_pages: [
+        'https://www.neonsignsdepot.com/collections/custom/',
+        'https://www.neonsignsdepot.com/collections/custom-signs/',
+      ],
+    },
+    source_signals: { signal_type: 'cannibalization' },
+    status: 'open',
+    depends_on_rework: false,
+    created_at: '2026-06-11T00:00:00Z',
+    updated_at: '2026-06-11T00:00:00Z',
+  },
+  {
+    recommendation_id: 'strategy-pivot-missing-coverage',
+    portfolio_rank: 5,
+    rec_type: 'PIVOT',
+    target_url: 'https://www.neonsignsdepot.com/pages/business-neon-signs/',
+    proposed_slug: null,
+    intent: 'route demand to stronger page',
+    entity: 'business neon signs',
+    rationale: 'The intended business page should own this query family.',
+    coverage_page: null,
+    coverage_score: null,
+    coverage_method: null,
+    why: null,
+    confidence: 0.77,
+    conversion_priority: 69,
+    evidence: { actual_page_url: 'https://www.neonsignsdepot.com/collections/open-signs/' },
+    source_signals: { signal_type: 'query_routing' },
+    status: 'open',
+    depends_on_rework: false,
+    created_at: '2026-06-11T00:00:00Z',
+    updated_at: '2026-06-11T00:00:00Z',
+  },
+  {
+    recommendation_id: 'strategy-prioritize-missing-coverage',
+    portfolio_rank: 6,
+    rec_type: 'PRIORITIZE',
+    target_url: 'https://www.neonsignsdepot.com/pages/for-businesses/',
+    proposed_slug: null,
+    intent: 'portfolio prioritization',
+    entity: 'SEO page universe',
+    rationale: 'This is the highest-priority portfolio page for the current demand mix.',
+    coverage_page: null,
+    coverage_score: null,
+    coverage_method: null,
+    why: null,
+    confidence: 0.82,
+    conversion_priority: 82,
+    evidence: {},
+    source_signals: { top_target_url: 'https://www.neonsignsdepot.com/pages/for-businesses/' },
+    status: 'open',
+    depends_on_rework: false,
+    created_at: '2026-06-11T00:00:00Z',
+    updated_at: '2026-06-11T00:00:00Z',
+  },
 ];
 
 beforeEach(() => {
@@ -148,7 +219,7 @@ describe('SEO Strategy surface', () => {
     const create = await screen.findByTestId('strategy-card-strategy-create');
 
     expect(within(create).getByText('/commercial-neon-signs/')).toBeInTheDocument();
-    expect(within(create).getByText('No existing coverage — new page')).toBeInTheDocument();
+    expect(within(create).getByText('New page - no existing coverage')).toBeInTheDocument();
     expect(within(create).queryByText('New page / no current target')).not.toBeInTheDocument();
   });
 
@@ -164,5 +235,26 @@ describe('SEO Strategy surface', () => {
     expect(within(consolidate).getByText('91%')).toBeInTheDocument();
     expect(within(consolidate).getByText('query page routing intended')).toBeInTheDocument();
     expect(within(consolidate).getByText(/The parent page already captures the strongest route/)).toBeInTheDocument();
+  });
+
+  it('renders type-specific context and rationale-backed why when coverage evidence is absent', async () => {
+    render(<StrategyPage />);
+
+    const consolidate = await screen.findByTestId('strategy-card-strategy-consolidate-missing-coverage');
+    const pivot = await screen.findByTestId('strategy-card-strategy-pivot-missing-coverage');
+    const prioritize = await screen.findByTestId('strategy-card-strategy-prioritize-missing-coverage');
+
+    expect(within(consolidate).getByText('Competing pages')).toBeInTheDocument();
+    expect(within(consolidate).getAllByText(/custom-signs/).length).toBeGreaterThanOrEqual(1);
+    expect(within(consolidate).getAllByText(/Multiple overlapping collections should consolidate/).length).toBeGreaterThanOrEqual(1);
+
+    expect(within(pivot).getByText('Routing context')).toBeInTheDocument();
+    expect(within(pivot).getByText(/intended: \/pages\/business-neon-signs\//)).toBeInTheDocument();
+    expect(within(pivot).getByText(/actual: \/collections\/open-signs\//)).toBeInTheDocument();
+    expect(within(pivot).getAllByText(/The intended business page should own this query family/).length).toBeGreaterThanOrEqual(1);
+
+    expect(within(prioritize).getByText('Priority page')).toBeInTheDocument();
+    expect(within(prioritize).getAllByText('/pages/for-businesses/').length).toBeGreaterThanOrEqual(1);
+    expect(within(prioritize).getAllByText(/highest-priority portfolio page/).length).toBeGreaterThanOrEqual(1);
   });
 });

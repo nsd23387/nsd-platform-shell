@@ -73,7 +73,7 @@ export async function GET() {
         coverage_page: firstString(r.coverage_page, evidence.coverage_page, arbitration.coverage_page),
         coverage_score: firstNumber(r.coverage_score, evidence.coverage_score, arbitration.coverage_score),
         coverage_method: firstString(r.coverage_method, evidence.coverage_method, arbitration.coverage_method),
-        why: firstString(r.why, evidence.why, arbitration.why),
+        why: firstString(evidence.why, arbitration.why, r.why, r.rationale),
         conversion_priority: r.conversion_priority != null ? Number(r.conversion_priority) : null,
         confidence: r.confidence != null ? Number(r.confidence) : null,
         status: r.status,
