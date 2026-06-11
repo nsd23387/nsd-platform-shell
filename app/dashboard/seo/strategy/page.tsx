@@ -40,16 +40,83 @@ function formatPercent(value: number | null): string {
   return `${scaled.toFixed(scaled >= 10 ? 0 : 1)}%`;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function firstText(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim() !== '') return value;
+  }
+  return null;
+}
+
+function summarizeContext(value: unknown): string | null {
+  const summary = summarizeValue(value);
+  return summary === '—' ? null : summary;
+}
+
+function missingCoverageContext(rec: SeoStrategyRecommendation): { label: string; value: string } {
+  const evidence = asRecord(rec.evidence);
+  const signals = asRecord(rec.source_signals);
+  switch (rec.rec_type) {
+    case 'CREATE':
+      return { label: 'Coverage context', value: 'New page - no existing coverage' };
+    case 'CONSOLIDATE':
+      return {
+        label: 'Competing pages',
+        value: summarizeContext(evidence.competing_pages)
+          ?? summarizeContext(signals.competing_pages)
+          ?? summarizeContext(evidence.competitors)
+          ?? 'Competing pages not provided',
+      };
+    case 'PIVOT': {
+      const intended = firstText(evidence.intended_page_url, signals.intended_page_url, rec.target_url);
+      const actual = firstText(evidence.actual_page_url, evidence.current_page_url, signals.actual_page_url, signals.current_page_url);
+      return {
+        label: 'Routing context',
+        value: [
+          intended ? `intended: ${pathOf(intended)}` : null,
+          actual ? `actual: ${pathOf(actual)}` : null,
+        ].filter(Boolean).join(' · ') || 'Intended vs actual page not provided',
+      };
+    }
+    case 'PRIORITIZE':
+      return {
+        label: 'Priority page',
+        value: pathOf(firstText(rec.target_url, signals.top_target_url, evidence.top_target_url, signals.page_url) ?? '') || 'Priority page not provided',
+      };
+    case 'RETIRE':
+      return {
+        label: 'Retirement candidate',
+        value: pathOf(firstText(rec.target_url, signals.page_url, evidence.page_url) ?? '') || 'Retirement page not provided',
+      };
+    default:
+      return {
+        label: 'Strategy context',
+        value: firstText(rec.target_url, rec.proposed_slug, rec.entity) ?? 'Strategy context not provided',
+      };
+  }
+}
+
 function CoverageBlock({ rec }: { rec: SeoStrategyRecommendation }) {
   const tc = useThemeColors();
-  const page = rec.coverage_page ?? rec.target_url;
+  const page = rec.coverage_page;
   const hasCoverage = Boolean(page || rec.coverage_score != null || rec.coverage_method);
+  const fallback = missingCoverageContext(rec);
 
   return (
     <div style={{ border: `1px solid ${tc.border.subtle}`, borderRadius: radius.md, padding: space['3'], background: tc.background.muted }}>
       <div style={{ color: tc.text.muted, fontSize: '12px', marginBottom: space['2'] }}>Coverage</div>
       {!hasCoverage ? (
-        <div style={{ color: tc.text.primary, fontWeight: fontWeight.medium }}>No existing coverage — new page</div>
+        <div>
+          <div style={{ color: tc.text.muted, fontSize: '12px' }}>{fallback.label}</div>
+          <div style={{ marginTop: 3, color: tc.text.primary, fontWeight: fontWeight.medium, wordBreak: 'break-word' }}>
+            {fallback.value}
+          </div>
+        </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: space['3'] }}>
           <div>
@@ -146,6 +213,7 @@ function StrategyCard({ rec }: { rec: SeoStrategyRecommendation }) {
   const planningOnly = type === 'CONSOLIDATE' || type === 'RETIRE';
   const targetPath = rec.target_url ? pathOf(rec.target_url) : null;
   const destinationLabel = targetPath ?? rec.proposed_slug ?? null;
+  const why = rec.why ?? rec.rationale;
 
   return (
     <article
@@ -212,9 +280,9 @@ function StrategyCard({ rec }: { rec: SeoStrategyRecommendation }) {
             <p style={{ margin: 0, color: tc.text.primary, lineHeight: 1.55, fontSize: '14px' }}>
               {rec.rationale}
             </p>
-            {rec.why && (
+            {why && (
               <p style={{ margin: `${space['2']} 0 0`, color: tc.text.secondary, lineHeight: 1.5, fontSize: '13px' }}>
-                <span style={{ fontWeight: fontWeight.medium, color: tc.text.primary }}>Why:</span> {rec.why}
+                <span style={{ fontWeight: fontWeight.medium, color: tc.text.primary }}>Why:</span> {why}
               </p>
             )}
           </div>
