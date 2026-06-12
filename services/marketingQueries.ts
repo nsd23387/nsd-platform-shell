@@ -658,23 +658,33 @@ const SEO_MOVERS_SQL = `
     WHERE d.metric_date > m.mid AND d.metric_date <= m.max_date
     GROUP BY query
   ),
+  window_clicks AS (
+    SELECT query, SUM(clicks) AS clicks
+    FROM analytics.metrics_search_console_query_daily d, date_bounds b
+    WHERE d.metric_date >= b.min_date AND d.metric_date <= b.max_date
+    GROUP BY query
+  ),
   combined AS (
     SELECT
       COALESCE(f.query, s.query) AS query,
       COALESCE(f.impressions, 0) AS impressions_first_half,
       COALESCE(s.impressions, 0) AS impressions_second_half,
+      COALESCE(c.clicks, 0) AS window_clicks,
       CASE WHEN COALESCE(f.impressions, 0) > 0
         THEN (COALESCE(s.impressions, 0) - f.impressions)::float / f.impressions
         ELSE CASE WHEN COALESCE(s.impressions, 0) > 0 THEN 1.0 ELSE 0 END
       END AS delta_pct
     FROM first_half f
     FULL OUTER JOIN second_half s ON f.query = s.query
+    LEFT JOIN window_clicks c ON c.query = COALESCE(f.query, s.query)
   )
   /* D-19: the GSC raw feed contains synthetic long-tail strings from the
    * engine's own LLM lexicon (confirmed present in analytics.keyword_cluster_members)
-   * whose 1-2 "impressions" come from automated rank checks, not users.
-   * Requiring >= 3 impressions in the PRIOR window keeps movers to queries
-   * with repeated, real GSC demand. Panel is labeled "GSC queries only".
+   * whose sporadic impressions come from automated rank checks, not users.
+   * Verified 2026-06-12: a >=3 prior-window floor alone still passed them
+   * (3-4 first-half impressions, 0 clicks ever). Movers therefore require
+   * EITHER at least one real click in the window OR >= 10 prior-window
+   * impressions — rank-check artifacts have neither. Labeled "GSC queries only".
    */
   (
     SELECT query, impressions_first_half, impressions_second_half, delta_pct, 'rising' AS direction
@@ -682,6 +692,7 @@ const SEO_MOVERS_SQL = `
     WHERE delta_pct > 0
       AND impressions_first_half >= 3
       AND (impressions_first_half + impressions_second_half) >= 5
+      AND (window_clicks > 0 OR impressions_first_half >= 10)
     ORDER BY delta_pct DESC
     LIMIT 5
   )
@@ -692,6 +703,7 @@ const SEO_MOVERS_SQL = `
     WHERE delta_pct < 0
       AND impressions_first_half >= 3
       AND (impressions_first_half + impressions_second_half) >= 5
+      AND (window_clicks > 0 OR impressions_first_half >= 10)
     ORDER BY delta_pct ASC
     LIMIT 5
   )
