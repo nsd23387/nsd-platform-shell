@@ -17,6 +17,13 @@ import { radius, space } from '../../../../design/tokens/spacing';
 import { getSeoStrategyRecommendations } from '../../../../lib/seoApi';
 import type { SeoStrategyRecommendation } from '../../../../lib/seoApi';
 import { PALETTE, Pill, fmtInt, fmtScore, pathOf, type ToneKey } from '../_shared';
+import { Term } from '../../../../design/components/Term';
+
+// C-3: truthful scale note for the Strategist's ranking number. The quality
+// gate (phase4_demand_strategist_quality migration) enforces 0–100; the
+// portfolio rank shown on each card is ordered by this value DESC.
+const CONVERSION_PRIORITY_TOOLTIP =
+  'Strategist conversion priority, 0–100 scale (higher = ranked sooner). Written by the Demand Strategist when it creates the recommendation; the portfolio rank on this card is ordered by it. A planning-priority ranking — a different scale from the execution queue’s opportunity score, and not a predicted lift.';
 
 function label(value: string | null | undefined): string {
   if (!value) return '—';
@@ -299,8 +306,8 @@ function StrategyCard({ rec }: { rec: SeoStrategyRecommendation }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: space['3'] }}>
         <div>
-          <div style={{ color: tc.text.muted, fontSize: '12px' }}>Conversion priority</div>
-          <div style={{ marginTop: 3, fontSize: '18px', fontWeight: fontWeight.semibold }}>{fmtScore(rec.conversion_priority)}</div>
+          <div style={{ color: tc.text.muted, fontSize: '12px' }}><Term def={CONVERSION_PRIORITY_TOOLTIP}>Conversion priority</Term></div>
+          <div style={{ marginTop: 3, fontSize: '18px', fontWeight: fontWeight.semibold }} title={CONVERSION_PRIORITY_TOOLTIP}>{fmtScore(rec.conversion_priority)}</div>
         </div>
         <div>
           <div style={{ color: tc.text.muted, fontSize: '12px' }}>Actionability</div>
@@ -411,7 +418,7 @@ function StrategyContent() {
       <section style={{ display: 'grid', gap: space['3'] }}>
         {rows.length === 0 ? (
           <div style={{ padding: space['6'], border: `1px solid ${tc.border.default}`, borderRadius: radius.md, background: tc.background.surface, color: tc.text.muted, textAlign: 'center' }}>
-            No Strategy recommendations are currently open.
+            No Strategy recommendations are currently open. The Demand Strategist writes these on its scheduled runs — if you expected open recommendations, check the Strategist job schedule before reading this as &ldquo;nothing to plan&rdquo;.
           </div>
         ) : (
           rows.map((rec) => <StrategyCard key={rec.recommendation_id} rec={rec} />)

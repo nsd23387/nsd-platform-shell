@@ -8,6 +8,8 @@
 
 import type { Pool } from 'pg';
 import { toNumber, safeDivide, clamp, nonNegative } from '../lib/aggregation';
+import { normalizeToPath } from '../lib/normalize-landing-page';
+import { NO_LANDING_PAGE_SENTINEL } from '../types/activity-spine';
 import type {
   MarketingKPIs,
   MarketingKPIComparison,
@@ -231,18 +233,48 @@ const PAGES_SQL = `
     GROUP BY 1
   ),
   conv_attributed AS (
+    /* D-18: entry-page attribution, windowed to the selected period.
+     *
+     * landing_page arrives in several shapes:
+     *   - a marketing-site path ("/for-businesses/")            -> use as-is
+     *   - a quote-app URL with ?origin_page=%2Fcustom-designs%2F -> decode origin_page
+     *   - a bare quote-app / dev-host URL (no origin_page)       -> NO entry page known
+     *   - empty (fallback page_url is the quote app itself)      -> NO entry page known
+     *
+     * Conversions with no recoverable entry page are grouped under a single
+     * honest sentinel bucket instead of masquerading as "/" (the old query
+     * produced three separate "/" lookalike rows: "/",
+     * "https://quote.neonsignsdepot.com/", and a replit dev URL).
+     */
     SELECT
-      RTRIM(split_part(
-        COALESCE(
-          NULLIF(event_data->>'landing_page', ''),
-          regexp_replace(page_url, '^https?://[^/]*', '')
-        ),
-        '?', 1), '/') || '/' AS canon_path,
+      CASE WHEN conv_norm.entry_raw IS NULL THEN '(no landing page recorded)'
+           ELSE RTRIM(split_part(conv_norm.entry_raw, '?', 1), '/') || '/' END AS canon_path,
       COUNT(*)  AS submissions,
       COALESCE(SUM((event_data->>'preliminary_price')::numeric) / 100.0, 0)
                 AS pipeline_value_usd
-    FROM analytics.raw_web_events
-    WHERE event_type = 'conversion'
+    FROM (
+      SELECT
+        event_data,
+        COALESCE(
+          NULLIF(replace(replace(
+            (regexp_match(event_data->>'landing_page', '[?&]origin_page=([^&]*)'))[1],
+            '%2F', '/'), '%2f', '/'), ''),
+          CASE
+            WHEN COALESCE(NULLIF(event_data->>'landing_page', ''), page_url)
+                 ~* '^https?://(www\\.)?neonsignsdepot\\.com(/|$)'
+              THEN regexp_replace(
+                COALESCE(NULLIF(event_data->>'landing_page', ''), page_url),
+                '^https?://[^/]*', '')
+            WHEN COALESCE(NULLIF(event_data->>'landing_page', ''), page_url)
+                 ~* '^https?://'
+              THEN NULL
+            ELSE NULLIF(event_data->>'landing_page', '')
+          END
+        ) AS entry_raw
+      FROM analytics.raw_web_events
+      WHERE event_type = 'conversion'
+        AND occurred_at >= $1::date AND occurred_at < ($2::date + INTERVAL '1 day')
+    ) conv_norm
     GROUP BY 1
   )
   SELECT
@@ -638,10 +670,18 @@ const SEO_MOVERS_SQL = `
     FROM first_half f
     FULL OUTER JOIN second_half s ON f.query = s.query
   )
+  /* D-19: the GSC raw feed contains synthetic long-tail strings from the
+   * engine's own LLM lexicon (confirmed present in analytics.keyword_cluster_members)
+   * whose 1-2 "impressions" come from automated rank checks, not users.
+   * Requiring >= 3 impressions in the PRIOR window keeps movers to queries
+   * with repeated, real GSC demand. Panel is labeled "GSC queries only".
+   */
   (
     SELECT query, impressions_first_half, impressions_second_half, delta_pct, 'rising' AS direction
     FROM combined
-    WHERE delta_pct > 0 AND (impressions_first_half + impressions_second_half) >= 5
+    WHERE delta_pct > 0
+      AND impressions_first_half >= 3
+      AND (impressions_first_half + impressions_second_half) >= 5
     ORDER BY delta_pct DESC
     LIMIT 5
   )
@@ -649,7 +689,9 @@ const SEO_MOVERS_SQL = `
   (
     SELECT query, impressions_first_half, impressions_second_half, delta_pct, 'falling' AS direction
     FROM combined
-    WHERE delta_pct < 0 AND (impressions_first_half + impressions_second_half) >= 5
+    WHERE delta_pct < 0
+      AND impressions_first_half >= 3
+      AND (impressions_first_half + impressions_second_half) >= 5
     ORDER BY delta_pct ASC
     LIMIT 5
   )
@@ -825,6 +867,21 @@ const GOOGLE_ADS_CAMPAIGNS_SQL = `
   ORDER BY SUM(ads.cost) DESC
 `;
 
+/**
+ * Broader-tier paid revenue from the governed quote spine: every quote whose
+ * source_group resolved to google_ads (gclid/gbraid/utm — lower-confidence
+ * matches included), windowed on submitted_at. Numerator for the
+ * "incl. lower-confidence matches" ROAS line that accompanies the headline
+ * ID-confirmed ROAS (which only counts exact campaign-ID joins).
+ */
+const SPINE_PAID_REVENUE_SQL = `
+  SELECT COALESCE(SUM(submitted_value_cents), 0) / 100.0 AS paid_revenue_usd
+  FROM marketing.quote_facts_unified
+  WHERE NOT is_test
+    AND source_group = 'google_ads'
+    AND submitted_at >= $1::date AND submitted_at < ($2::date + INTERVAL '1 day')
+`;
+
 const GOOGLE_ADS_DAILY_SQL = `
   WITH date_range AS (
     SELECT d::date FROM generate_series($1::date, $2::date, '1 day'::interval) AS d
@@ -993,6 +1050,45 @@ function buildComparison(current: number, previous: number): MarketingKPICompari
     previous,
     delta_pct: safeDivide(current - previous, previous),
   };
+}
+
+/**
+ * D-18: collapse page rows to one per canonical path using the shared
+ * lib/normalize-landing-page rules (host stripped, query stripped, trailing
+ * slash enforced, consecutive slashes collapsed). The SQL CTEs already
+ * normalize, but each upstream surface (GA4 engagement, GSC, conversions,
+ * raw page views) normalizes independently — this guarantees residual
+ * variants ("/page" vs "/page/", "//page/") merge into a single row.
+ * The no-landing-page sentinel bucket is preserved verbatim.
+ */
+function canonicalizePages(rows: MarketingPage[]): MarketingPage[] {
+  const merged = new Map<string, MarketingPage>();
+  for (const r of rows) {
+    const key = r.page_url === NO_LANDING_PAGE_SENTINEL
+      ? NO_LANDING_PAGE_SENTINEL
+      : normalizeToPath(r.page_url);
+    const prev = merged.get(key);
+    if (!prev) {
+      merged.set(key, { ...r, page_url: key });
+      continue;
+    }
+    const sessions = prev.sessions + r.sessions;
+    // Session-weighted averages for rate metrics.
+    prev.bounce_rate = sessions > 0
+      ? (prev.bounce_rate * prev.sessions + r.bounce_rate * r.sessions) / sessions
+      : 0;
+    prev.avg_time_on_page_seconds = sessions > 0
+      ? (prev.avg_time_on_page_seconds * prev.sessions + r.avg_time_on_page_seconds * r.sessions) / sessions
+      : 0;
+    prev.sessions = sessions;
+    prev.page_views += r.page_views;
+    prev.clicks += r.clicks;
+    prev.impressions += r.impressions;
+    prev.ctr = safeDivide(prev.clicks, prev.impressions);
+    prev.submissions += r.submissions;
+    prev.pipeline_value_usd += r.pipeline_value_usd;
+  }
+  return Array.from(merged.values());
 }
 
 function buildCore4EngineMetrics(engine: Core4Engine, data: { sessions: number; clicks: number; quotes: number; pipeline_value_usd: number; spend: number }): Core4EngineMetrics {
@@ -1284,15 +1380,16 @@ export async function executeMarketingQueries(
     /* 40 */ db.query(SPINE_KPI_SQL, curParams),
     /* 41 */ db.query(SPINE_KPI_SQL, prevParams),
     /* 42 */ db.query(GOOGLE_ADS_DAILY_SQL, curParams),
+    /* 43 */ db.query(SPINE_PAID_REVENUE_SQL, curParams),
   ];
 
   if (opts.includeTimeseries) {
     queries.push(
-      /* 43 */ db.query(fTsSessSql, curEngP),
-      /* 44 */ db.query(fTsSubSql, curConvP),
-      /* 45 */ db.query(fTsPipeSql, curParams),
-      /* 46 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
-      /* 47 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
+      /* 44 */ db.query(fTsSessSql, curEngP),
+      /* 45 */ db.query(fTsSubSql, curConvP),
+      /* 46 */ db.query(fTsPipeSql, curParams),
+      /* 47 */ db.query(TIMESERIES_IMPRESSIONS_SQL, curParams),
+      /* 48 */ db.query(TIMESERIES_CLICKS_SQL, curParams),
     );
   }
 
@@ -1349,20 +1446,22 @@ export async function executeMarketingQueries(
     impressions: buildComparison(kpis.impressions, prevKpis.impressions),
   };
 
-  const pages: MarketingPage[] = (results[3].rows ?? [])
-    .filter((r: Row) => r.page_url != null)
-    .map((r: Row) => ({
-      page_url: String(r.page_url),
-      sessions: nonNegative(toNumber(r.sessions)),
-      page_views: nonNegative(toNumber(r.page_views)),
-      bounce_rate: clamp(toNumber(r.bounce_rate), 0, 1),
-      avg_time_on_page_seconds: nonNegative(toNumber(r.avg_time_on_page_seconds)),
-      clicks: nonNegative(toNumber(r.clicks)),
-      impressions: nonNegative(toNumber(r.impressions)),
-      ctr: clamp(toNumber(r.ctr), 0, 1),
-      submissions: nonNegative(toNumber(r.submissions)),
-      pipeline_value_usd: nonNegative(toNumber(r.pipeline_value_usd)),
-    }));
+  const pages: MarketingPage[] = canonicalizePages(
+    (results[3].rows ?? [])
+      .filter((r: Row) => r.page_url != null)
+      .map((r: Row) => ({
+        page_url: String(r.page_url),
+        sessions: nonNegative(toNumber(r.sessions)),
+        page_views: nonNegative(toNumber(r.page_views)),
+        bounce_rate: clamp(toNumber(r.bounce_rate), 0, 1),
+        avg_time_on_page_seconds: nonNegative(toNumber(r.avg_time_on_page_seconds)),
+        clicks: nonNegative(toNumber(r.clicks)),
+        impressions: nonNegative(toNumber(r.impressions)),
+        ctr: clamp(toNumber(r.ctr), 0, 1),
+        submissions: nonNegative(toNumber(r.submissions)),
+        pipeline_value_usd: nonNegative(toNumber(r.pipeline_value_usd)),
+      })),
+  );
 
   const sources: MarketingSource[] = (results[4].rows ?? [])
     .filter((r: Row) => r.submission_source != null)
@@ -1569,14 +1668,20 @@ export async function executeMarketingQueries(
 
   // T011/T012: Google Ads overview + campaigns
   const adsOverviewRow = results[25].rows[0] ?? {};
+  // Broader-tier paid revenue from the quote spine (source_group = google_ads,
+  // lower-confidence matches included) vs window ad spend.
+  const spinePaidRevenue = nonNegative(toNumber((results[43].rows[0] ?? {}).paid_revenue_usd));
+  const adsSpend = nonNegative(toNumber(adsOverviewRow.spend));
   const google_ads_overview: MarketingGoogleAdsOverview = {
-    spend: nonNegative(toNumber(adsOverviewRow.spend)),
+    spend: adsSpend,
     impressions: nonNegative(toNumber(adsOverviewRow.impressions)),
     clicks: nonNegative(toNumber(adsOverviewRow.clicks)),
     conversions: nonNegative(toNumber(adsOverviewRow.conversions)),
     cpc: nonNegative(toNumber(adsOverviewRow.cpc)),
     ctr: clamp(toNumber(adsOverviewRow.ctr), 0, 1),
     roas: nonNegative(toNumber(adsOverviewRow.roas)),
+    spine_paid_revenue_usd: spinePaidRevenue,
+    broad_roas: safeDivide(spinePaidRevenue, adsSpend),
   };
 
   const google_ads_campaigns: MarketingGoogleAdsCampaign[] = (results[26].rows ?? [])
@@ -1611,13 +1716,13 @@ export async function executeMarketingQueries(
   };
 
   let timeseries: MarketingTimeseries | undefined;
-  if (opts.includeTimeseries && results.length > 43) {
+  if (opts.includeTimeseries && results.length > 44) {
     timeseries = {
-      sessions: mapTimeseries(results[43].rows),
-      submissions: mapTimeseries(results[44].rows),
-      pipeline_value_usd: mapTimeseries(results[45].rows),
-      impressions: mapTimeseries(results[46].rows),
-      clicks: mapTimeseries(results[47].rows),
+      sessions: mapTimeseries(results[44].rows),
+      submissions: mapTimeseries(results[45].rows),
+      pipeline_value_usd: mapTimeseries(results[46].rows),
+      impressions: mapTimeseries(results[47].rows),
+      clicks: mapTimeseries(results[48].rows),
     };
   }
 

@@ -19,9 +19,12 @@ interface KPICardProps {
   value: string;
   testId: string;
   provenance?: string;
+  /** Secondary line rendered under the value (e.g. broader-tier ROAS). */
+  secondary?: string;
+  secondaryTooltip?: string;
 }
 
-function KPICard({ label, value, testId, provenance }: KPICardProps) {
+function KPICard({ label, value, testId, provenance, secondary, secondaryTooltip }: KPICardProps) {
   const tc = useThemeColors();
   return (
     <div
@@ -41,6 +44,15 @@ function KPICard({ label, value, testId, provenance }: KPICardProps) {
       <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
         {value}
       </div>
+      {secondary && (
+        <div
+          title={secondaryTooltip}
+          style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, marginTop: space['1'], cursor: secondaryTooltip ? 'help' : undefined }}
+          data-testid={`${testId}-secondary`}
+        >
+          {secondary}
+        </div>
+      )}
       {provenance && (
         <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['1'] }}>
           {provenance}
@@ -76,7 +88,16 @@ export function MarketingGoogleAdsOverviewPanel({ overview, loading, error }: Pr
         <KPICard label="CPC" value={formatCurrency(overview.cpc)} testId="gads-cpc" />
         <KPICard label="CTR" value={formatPercent(overview.ctr)} testId="gads-ctr" />
         {/* D-13: revenue side only counts exact campaign-ID joins (~10% of paid quotes) */}
-        <KPICard label="ID-confirmed ROAS" value={overview.roas.toFixed(2) + 'x'} testId="gads-roas" provenance="Counts only quotes attributed at exact campaign-ID precision (~10% of paid quotes). See Attribution Intelligence for the full-funnel view." />
+        <KPICard
+          label="ID-confirmed ROAS"
+          value={overview.roas.toFixed(2) + 'x'}
+          testId="gads-roas"
+          provenance="Counts only quotes attributed at exact campaign-ID precision (~10% of paid quotes). See Attribution Intelligence for the full-funnel view."
+          secondary={overview.broad_roas != null && overview.broad_roas > 0
+            ? `incl. lower-confidence matches: ${overview.broad_roas.toFixed(2)}x`
+            : undefined}
+          secondaryTooltip="Quote-spine paid revenue (all quotes whose source resolved to Google Ads via gclid/gbraid/UTM, including matches below campaign-ID precision) divided by ad spend for the selected window."
+        />
       </div>
     </DashboardSection>
   );

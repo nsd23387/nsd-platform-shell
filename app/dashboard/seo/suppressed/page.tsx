@@ -15,6 +15,7 @@ import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { getSeoSuppressed } from '../../../../lib/seoApi';
 import type { SuppressedAudit } from '../../../../lib/seoApi';
+import { Term } from '../../../../design/components/Term';
 
 const monoStack = '"JetBrains Mono", "SF Mono", Menlo, Consolas, monospace';
 const BAD = '#991b1b', BAD_SOFT = '#fee2e2';
@@ -116,8 +117,8 @@ function SuppressedContent() {
                 <tr style={{ background: tc.background.muted, color: tc.text.muted }}>
                   <th style={{ textAlign: 'left', padding: '8px 10px' }}>Target URL</th>
                   <th style={{ textAlign: 'left', padding: '8px 10px' }}>Mutation</th>
-                  <th style={{ textAlign: 'left', padding: '8px 10px' }}>Gate reasons</th>
-                  <th style={{ textAlign: 'right', padding: '8px 10px' }}>Relevance</th>
+                  <th style={{ textAlign: 'left', padding: '8px 10px' }}><Term k="gate">Gate reasons</Term></th>
+                  <th style={{ textAlign: 'right', padding: '8px 10px' }}><Term def="Relevance score, 0–1 (shown to 3 decimals): the engine's embedding-based similarity between the source and target of the proposed mutation. The gate withholds candidates below its relevance threshold.">Relevance</Term></th>
                   <th style={{ textAlign: 'left', padding: '8px 10px' }}>Generator</th>
                 </tr>
               </thead>

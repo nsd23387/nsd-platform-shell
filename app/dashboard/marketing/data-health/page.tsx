@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied, DashboardCard } from '../../../../components/dashboard';
 import { PageExportBar } from '../../../../components/dashboard/PageExportBar';
-import { DashboardSection } from '../../../../components/dashboard/DashboardSection';
 import { MarketingPipelineHealthPanel } from '../components/MarketingPipelineHealthPanel';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontSize, fontWeight, lineHeight } from '../../../../design/tokens/typography';
@@ -23,12 +22,14 @@ export default function DataHealthPage() {
     const sections: ExportSection[] = [];
 
     if (data.pipeline_health?.length) {
+      // D-20: these are integrity-check rows (source = check title, last_success
+      // = last check run, status bucket) — label the export accordingly.
       sections.push({
         type: 'table',
-        title: 'Pipeline Health',
+        title: 'Engine Integrity Checks',
         columns: [
-          { key: 'metric', label: 'Metric' },
-          { key: 'value', label: 'Value' },
+          { key: 'source', label: 'Check' },
+          { key: 'last_success', label: 'Last Check Run' },
           { key: 'status', label: 'Status' },
         ],
         rows: data.pipeline_health.map(r => ({ ...r })),
@@ -58,7 +59,7 @@ export default function DataHealthPage() {
               Attribution & Data Health
             </h1>
             <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.base, color: tc.text.muted }}>
-              Data completeness, ingestion freshness, and attribution quality.
+              Business-rule integrity checks on the SEO/marketing data loop, plus the genuine source-freshness checks.
             </p>
           </div>
           <PageExportBar
@@ -73,13 +74,14 @@ export default function DataHealthPage() {
           <DashboardCard title="Error" error={error} />
         )}
 
-        <DashboardSection title="Pipeline Health" description="Ingestion freshness, attribution coverage, and data quality signals." index={0}>
-          <MarketingPipelineHealthPanel
-            health={data?.pipeline_health ?? []}
-            loading={loading}
-            error={error}
-          />
-        </DashboardSection>
+        {/* D-20: these rows are business-rule integrity checks from
+            analytics.v_seo_system_health, not ingestion telemetry — the panel
+            renders its own "Engine Integrity Checks" section (no double wrap). */}
+        <MarketingPipelineHealthPanel
+          health={data?.pipeline_health ?? []}
+          loading={loading}
+          error={error}
+        />
       </div>
     </DashboardGuard>
   );

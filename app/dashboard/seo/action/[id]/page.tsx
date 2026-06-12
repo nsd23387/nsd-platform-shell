@@ -33,8 +33,9 @@ import {
   PALETTE, monoStack, Tc, Pill, fmtInt, fmtPos, pathOf, mutationDisplay,
   GateTransitionNote, KeywordTargetsSection, RoutedQueriesSection,
   LaneRoutedActions, MeasurementPlan, proposalReview, isSchemaMutation,
-  isTextMutation, candidateHeadline, SNAPSHOT_PENDING_MSG,
+  isTextMutation, candidateHeadline, SNAPSHOT_PENDING_MSG, QUEUE_SCORE_TOOLTIP,
 } from '../../_shared';
+import { TERM_DEFS } from '../../../../../design/components/Term';
 
 function Card({ children, style, tc, 'data-testid': testId }: { children: React.ReactNode; style?: React.CSSProperties; tc: Tc; 'data-testid'?: string }) {
   return (
@@ -460,8 +461,16 @@ function ActionDetailContent() {
                     <Pill tone="info" tc={tc}>confidence: {candidate.confidence_tier}</Pill>
                   </span>
                 )}
-                {score != null && <Pill tone="neutral" tc={tc}>score {score}</Pill>}
-                {candidate.gate_status && <Pill tone="good" tc={tc}>gate: {candidate.gate_status}</Pill>}
+                {score != null && (
+                  <span title={QUEUE_SCORE_TOOLTIP} style={{ cursor: 'help' }}>
+                    <Pill tone="neutral" tc={tc}>score {score}</Pill>
+                  </span>
+                )}
+                {candidate.gate_status && (
+                  <span title={TERM_DEFS.gate} style={{ cursor: 'help' }}>
+                    <Pill tone="good" tc={tc}>gate: {candidate.gate_status}</Pill>
+                  </span>
+                )}
                 {schemaApprovalPaused && <Pill tone="warn" tc={tc}>schema paused</Pill>}
                 {beforeMissing && candidate.approval_status === 'pending' && (
                   <span title={SNAPSHOT_PENDING_MSG} data-testid="pill-snapshot-pending"><Pill tone="warn" tc={tc}>snapshot pending</Pill></span>

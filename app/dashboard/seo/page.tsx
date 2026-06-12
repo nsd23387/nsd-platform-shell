@@ -43,7 +43,11 @@ import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
   fmtInt, fmtPos, fmtScore, pathOf, PageDossierDrawer, mutationDisplay, sectionLabelStyle, proposalReview,
   candidateHeadline, beforeSnapshotMissing, SNAPSHOT_PENDING_MSG,
+  QUEUE_SCORE_TOOLTIP, COMPETITOR_GAP_SCORE_TOOLTIP,
 } from './_shared';
+import { SystemHealthPanel } from './components/SystemHealthPanel';
+import { Term, TERM_DEFS } from '../../../design/components/Term';
+import { OperatorRibbon } from '../../../design/components/OperatorRibbon';
 
 // -----------------------------------------------------------------------------
 // D-1: Diagnose-a-URL input normalization. The dossier API only resolves
@@ -332,6 +336,12 @@ function CompetitorVelocityCard({ tc }: { tc: Tc }) {
               {stat('refreshed this week', fmtInt(summary.this_week_changed))}
               {stat('last crawl', summary.last_crawl_date ? timeAgo(summary.last_crawl_date) : 'never')}
             </div>
+            {/* C-8: a never-run crawler means these zeros are absence of measurement, not absence of competitor activity. */}
+            {!summary.last_crawl_date && (
+              <div style={{ marginTop: space['4'], padding: space['3'], borderRadius: radius.sm, background: PALETTE.warnSoft, color: PALETTE.warn, fontFamily: fontFamily.body, fontSize: '12px', lineHeight: 1.5 }} data-testid="velocity-never-crawled">
+                The competitive crawler has never recorded a run — check the crawl job schedule before trusting these zeros.
+              </div>
+            )}
             {perCompetitor.length === 0 ? (
               <div style={{ marginTop: space['4'], paddingTop: space['4'], borderTop: `1px solid ${tc.border.subtle}`, fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }} data-testid="velocity-empty">
                 No competitor page changes detected yet{summary.last_crawl_date ? '' : ' — first crawl pending'}.
@@ -653,173 +663,9 @@ function FreshnessCard({ tc, contract }: { tc: Tc; contract?: SeoDashboardMetric
   );
 }
 
-function formatHealthTime(iso: string | null): string {
-  if (!iso) return 'not run yet';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 'not run yet';
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
-
-function healthTone(row: SeoSystemHealthRow): ToneKey {
-  if (row.health_group === 'red' || row.status === 'fail') return 'bad';
-  if (row.health_group === 'amber' || row.status === 'warn') return 'warn';
-  return 'good';
-}
-
-function sampleString(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : null;
-}
-
-function sampleUrl(row: Record<string, unknown>): string | null {
-  return sampleString(row.target_page_url)
-    ?? sampleString(row.page_url)
-    ?? sampleString(row.url)
-    ?? sampleString(row.target_url)
-    ?? sampleString(row.source_page)
-    ?? null;
-}
-
-function healthSampleLabel(row: Record<string, unknown>): string {
-  const url = sampleUrl(row);
-  const field = sampleString(row.target_field);
-  const candidate = sampleString(row.candidate_id);
-  const signal = sampleString(row.source_name) ?? sampleString(row.metric_key);
-  if (url) return field ? `${pathOf(url)} · ${field}` : pathOf(url);
-  if (candidate) return `candidate ${candidate.slice(0, 8)}`;
-  return signal ?? 'sample item';
-}
-
-function SystemHealthPanel({
-  tc,
-  rows,
-  error,
-  onOpenDossier,
-}: {
-  tc: Tc;
-  rows: SeoSystemHealthRow[] | null;
-  error: string | null;
-  onOpenDossier: (url: string) => void;
-}) {
-  const grouped = useMemo(() => {
-    const base: Record<'red' | 'amber' | 'green', SeoSystemHealthRow[]> = { red: [], amber: [], green: [] };
-    (rows ?? []).forEach((row) => {
-      if (row.health_group === 'red') base.red.push(row);
-      else if (row.health_group === 'amber') base.amber.push(row);
-      else base.green.push(row);
-    });
-    return base;
-  }, [rows]);
-  const red = grouped.red.length;
-  const amber = grouped.amber.length;
-  const visibleRows = rows
-    ? [...grouped.red, ...grouped.amber, ...grouped.green.slice(0, Math.max(0, 6 - red - amber))]
-    : [];
-
-  return (
-    <Card tc={tc} style={{ padding: 0, marginBottom: space['6'] }}>
-      <div style={{ padding: space['5'], borderBottom: `1px solid ${tc.border.subtle}`, display: 'flex', justifyContent: 'space-between', gap: space['4'], flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div>
-          <div style={sectionLabelStyle(tc)}>System Health</div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '3px' }}>
-            Integrity failures become tracked business actions here, with self-heal attempts logged when available.
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Pill tone={red ? 'bad' : 'good'} tc={tc}>{red} red</Pill>
-          <Pill tone={amber ? 'warn' : 'good'} tc={tc}>{amber} amber</Pill>
-          <Pill tone="good" tc={tc}>{grouped.green.length} green</Pill>
-        </div>
-      </div>
-
-      {error && (
-        <div style={{ padding: space['5'], color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="error-system-health">
-          System health unavailable.
-        </div>
-      )}
-      {!error && !rows && (
-        <div style={{ padding: space['5'], color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>
-          Loading system health…
-        </div>
-      )}
-      {!error && rows && rows.length === 0 && (
-        <div style={{ padding: space['5'], color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>
-          No integrity checks are cataloged yet.
-        </div>
-      )}
-      {!error && visibleRows.length > 0 && (
-        <div style={{ padding: `0 ${space['5']}` }}>
-          {visibleRows.map((row) => {
-            const tone = healthTone(row);
-            const samples = Array.isArray(row.sample) ? row.sample.slice(0, 2) : [];
-            return (
-              <div key={row.check_name} style={{ padding: `${space['4']} 0`, borderBottom: `1px solid ${tc.border.subtle}` }} data-testid={`system-health-${row.check_name}`}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: space['3'], alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <div style={{ minWidth: 0, flex: '1 1 360px' }}>
-                    <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap' }}>
-                      <Pill tone={tone} tc={tc}>{row.status}</Pill>
-                      <span style={{ fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>{row.human_title}</span>
-                      <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>{row.category}</span>
-                    </div>
-                    <div style={{ marginTop: '6px', fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, lineHeight: 1.5 }}>
-                      {row.what_it_means} {row.why_it_matters}
-                    </div>
-                    <div style={{ marginTop: '8px', fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.primary, lineHeight: 1.5 }}>
-                      <strong style={{ fontWeight: fontWeight.semibold }}>Fix:</strong> {row.remediation}
-                    </div>
-                    {row.last_remediation_at && (
-                      <div style={{ marginTop: '6px', fontFamily: fontFamily.body, fontSize: '12px', color: row.last_remediation_result === 'failed' ? PALETTE.bad : tc.text.muted }}>
-                        Last self-heal: {row.last_remediation_result ?? 'recorded'} · {formatHealthTime(row.last_remediation_at)}
-                        {row.last_remediation_notes ? ` · ${row.last_remediation_notes}` : ''}
-                      </div>
-                    )}
-                    {samples.length > 0 && (
-                      <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', marginTop: '10px' }}>
-                        {samples.map((sample, idx) => {
-                          const url = sampleUrl(sample);
-                          return (
-                            <button
-                              key={`${row.check_name}-${idx}`}
-                              onClick={() => { if (url) onOpenDossier(url); }}
-                              disabled={!url}
-                              style={{ border: `1px solid ${tc.border.default}`, background: tc.background.surface, borderRadius: radius.sm, padding: '5px 8px', color: url ? PALETTE.violet : tc.text.muted, fontFamily: monoStack, fontSize: '11px', cursor: url ? 'pointer' : 'default', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                              title={url ?? healthSampleLabel(sample)}
-                            >
-                              {healthSampleLabel(sample)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ textAlign: 'right', minWidth: 120 }}>
-                    <div style={{ fontFamily: monoStack, fontSize: '24px', color: tone === 'bad' ? PALETTE.bad : tone === 'warn' ? PALETTE.warn : PALETTE.good }}>
-                      {fmtInt(row.count)}
-                    </div>
-                    <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>
-                      affected · {formatHealthTime(row.run_at)}
-                    </div>
-                    <div style={{ marginTop: '5px' }}>
-                      <Pill tone={row.auto_remediated ? 'violet' : 'neutral'} tc={tc}>
-                        {row.auto_remediated ? 'self-heal' : row.owner}
-                      </Pill>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          {rows && rows.length > visibleRows.length && (
-            <div style={{ padding: `${space['3']} 0 ${space['4']}`, fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-              {rows.length - visibleRows.length} green check{rows.length - visibleRows.length === 1 ? '' : 's'} hidden to keep the command center focused.
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
+// SystemHealthPanel was extracted to ./components/SystemHealthPanel (D-20) so
+// the same truthful integrity-check rendering is reused on Marketing › Data
+// Health. The Command Center imports it above.
 
 // =============================================================================
 // "Do this next" — ranked detections from the engine candidate queue
@@ -886,7 +732,15 @@ function DetectionRow({
           {impr == null ? '—' : `${fmtInt(impr)} impr`}
         </div>
         <div style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>
-          {pos == null ? 'pos —' : `pos ${fmtPos(pos)}`} {score !== '—' && `· score ${score}`}
+          <span title={TERM_DEFS.pos}>{pos == null ? 'pos —' : `pos ${fmtPos(pos)}`}</span>
+          {score !== '—' && (
+            <span
+              title={QUEUE_SCORE_TOOLTIP}
+              style={{ cursor: 'help', textDecoration: 'underline dotted', textUnderlineOffset: '2px' }}
+            >
+              {' '}· score {score}
+            </span>
+          )}
         </div>
       </div>
       <div>
@@ -946,7 +800,7 @@ function OffpageBriefsSection({ tc, window }: { tc: Tc; window: SeoWindowRequest
       <SectionTitle
         tc={tc}
         sub="Authority-bound pages where on-page is adequate — earn links / digital PR to break into the top 10"
-        right={<Pill tone="neutral" tc={tc}>Lane 3 · advisory</Pill>}
+        right={<span title={TERM_DEFS.lane} style={{ cursor: 'help' }}><Pill tone="neutral" tc={tc}>Lane 3 · advisory</Pill></span>}
       >
         Off-page authority briefs
       </SectionTitle>
@@ -964,10 +818,10 @@ function OffpageBriefsSection({ tc, window }: { tc: Tc; window: SeoWindowRequest
               <tr style={{ background: tc.background.muted, color: tc.text.muted, textAlign: 'left' }}>
                 <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Page</th>
                 <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Target keyword</th>
-                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Pos</th>
-                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Impr</th>
-                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Vol ref</th>
-                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>KD ref</th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}><Term k="pos">Pos</Term></th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}><Term k="impr">Impr</Term></th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}><Term def={`${TERM_DEFS.vol} ${TERM_DEFS.ref}`}>Vol ref</Term></th>
+                <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}><Term def={`${TERM_DEFS.kd} ${TERM_DEFS.ref}`}>KD ref</Term></th>
                 <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Why</th>
               </tr>
             </thead>
@@ -1042,7 +896,7 @@ function SuppressedSection({ tc }: { tc: Tc }) {
         sub="Candidates the engine withheld at the gate — grouped by reason, for transparency"
         right={audit ? <Pill tone="neutral" tc={tc}>{audit.total} suppressed</Pill> : undefined}
       >
-        Suppressed by the gate
+        Suppressed by the <Term k="gate">gate</Term>
       </SectionTitle>
       <Card tc={tc} style={{ padding: 0 }}>
         {!audit && !error && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading suppressed audit…</div>}
@@ -1361,6 +1215,11 @@ function CommandCenterContent() {
 
   return (
     <div style={{ padding: space['6'], maxWidth: 1200, margin: '0 auto' }}>
+      {/* C-9: operator ribbon — where to act first on this page */}
+      <OperatorRibbon testId="operator-ribbon-seo">
+        review the Do This Next queue below, open Details on anything you&apos;d ship, Approve queues a draft — everything else on this page is context.
+      </OperatorRibbon>
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: space['6'], gap: space['4'], flexWrap: 'wrap' }}>
         <div>
@@ -1572,8 +1431,8 @@ function CommandCenterContent() {
       {/* DO THIS NEXT */}
       <SectionTitle
         tc={tc}
-        sub="Guarded engine recommendations, ordered by queue type and target page while opportunity scoring is recalibrated"
-        right={<Pill tone="neutral" tc={tc}>Lane 1 · draft-only approvals</Pill>}
+        sub={`Guarded engine recommendations, ordered by queue type and target page while opportunity scoring is recalibrated. ${TERM_DEFS.lane}`}
+        right={<span title={TERM_DEFS.lane} style={{ cursor: 'help' }}><Pill tone="neutral" tc={tc}>Lane 1 · draft-only approvals</Pill></span>}
       >
         Do this next
       </SectionTitle>
@@ -1587,7 +1446,8 @@ function CommandCenterContent() {
           )}
           {!queueLoading && !queueError && detections.length === 0 && (
             <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-detections">
-              No guarded recommendations awaiting approval.
+              No guarded recommendations awaiting approval. If you expected work here, check &ldquo;Suppressed by the gate&rdquo; below — the engine may be withholding candidates — or the{' '}
+              <Link href="/dashboard/seo/recommendations" style={{ color: PALETTE.violet, textDecoration: 'none' }}>Recommendations tab</Link> for paused-lane queue rows.
             </div>
           )}
           {!queueLoading && !queueError && liveDetections.length > 0 && (
@@ -1676,10 +1536,10 @@ function CommandCenterContent() {
                     <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Keyword</th>
                     <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Competitor</th>
                     <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase' }}>Dispatch decision</th>
-                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Their pos</th>
-                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Your pos</th>
-                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Volume ref</th>
-                    <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}>Score</th>
+                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}><Term k="pos">Their pos</Term></th>
+                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}><Term k="pos">Your pos</Term></th>
+                    <th style={{ padding: '10px 8px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}><Term def={`${TERM_DEFS.vol} ${TERM_DEFS.ref}`}>Volume ref</Term></th>
+                    <th style={{ padding: '10px 16px', fontSize: '11px', fontWeight: fontWeight.semibold, textTransform: 'uppercase', textAlign: 'right' }}><Term def={COMPETITOR_GAP_SCORE_TOOLTIP}>Score</Term></th>
                   </tr>
                 </thead>
                 <tbody>

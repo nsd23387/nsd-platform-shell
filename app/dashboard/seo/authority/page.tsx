@@ -17,7 +17,8 @@ import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
 import { radius, space } from '../../../../design/tokens/spacing';
 import { getSeoAuthorityOpportunities } from '../../../../lib/seoApi';
 import type { SeoAuthorityOpportunity } from '../../../../lib/seoApi';
-import { PALETTE, Pill, fmtInt, pathOf } from '../_shared';
+import { PALETTE, Pill, fmtInt, pathOf, AUTHORITY_SCORE_TOOLTIP } from '../_shared';
+import { Term, TERM_DEFS } from '../../../../design/components/Term';
 
 function score(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return '—';
@@ -77,7 +78,7 @@ function AuthorityContent() {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: space['4'], flexWrap: 'wrap' }}>
           <div>
             <p style={{ margin: 0, color: tc.text.muted, fontSize: '12px', textTransform: 'uppercase', letterSpacing: 0 }}>
-              Lane 3
+              <Term k="lane">Lane 3</Term>
             </p>
             <h1 style={{ margin: `${space['1']} 0 0`, fontSize: '28px', lineHeight: 1.15, fontWeight: fontWeight.semibold }}>
               Authority
@@ -118,8 +119,15 @@ function AuthorityContent() {
         </div>
 
         {rows.length === 0 ? (
-          <div style={{ padding: space['6'], color: tc.text.muted, textAlign: 'center' }}>
-            No authority opportunities are currently queued.
+          <div style={{ padding: space['6'], color: tc.text.muted, textAlign: 'center' }} data-testid="empty-authority-queue">
+            <div>No authority opportunities are currently queued.</div>
+            {/* C-8: dead-end rescue — the advisory Lane 3 briefs live on the Command Center even when this scored queue is empty. */}
+            <div style={{ marginTop: space['2'] }}>
+              Advisory authority briefs (not yet scored into this queue) are on the{' '}
+              <Link href="/dashboard/seo" style={{ color: PALETTE.violet, fontWeight: fontWeight.medium, textDecoration: 'none' }} data-testid="link-authority-command-center">
+                Command Center →
+              </Link>
+            </div>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -130,7 +138,7 @@ function AuthorityContent() {
                   <th style={{ padding: '10px 12px' }}>Prospect</th>
                   <th style={{ padding: '10px 12px' }}>Target</th>
                   <th style={{ padding: '10px 12px' }}>Anchor</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Score</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}><Term def={AUTHORITY_SCORE_TOOLTIP}>Score</Term></th>
                   <th style={{ padding: '10px 12px' }}>Confidence</th>
                   <th style={{ padding: '10px 12px' }}>Status</th>
                   <th style={{ padding: '10px 12px' }} />
@@ -148,7 +156,9 @@ function AuthorityContent() {
                     </td>
                     <td style={{ padding: '12px', minWidth: 190 }}>
                       <div style={{ fontWeight: fontWeight.medium }}>{r.prospect_domain}</div>
-                      <div style={{ marginTop: 4, color: tc.text.muted }}>DR {score(r.prospect_domain_rating)}</div>
+                      <div style={{ marginTop: 4, color: tc.text.muted }}>
+                        <Term def="DR = domain rating — a third-party 0–100 estimate of the prospect domain's link authority, stored with the opportunity (higher = a link from them carries more weight).">DR</Term>{' '}{score(r.prospect_domain_rating)}
+                      </div>
                     </td>
                     <td style={{ padding: '12px', minWidth: 220, wordBreak: 'break-word' }}>
                       {pathOf(r.our_target_url)}

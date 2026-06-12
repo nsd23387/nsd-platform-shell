@@ -26,7 +26,8 @@ import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import { getSeoCandidateQueue, getSeoPortfolio } from '../../../../lib/seoApi';
 import type { PageDossierCandidate, PortfolioPage } from '../../../../lib/seoApi';
-import { PALETTE, monoStack, Pill, fmtInt, fmtScore, pathOf, mutationDisplay, proposalReview, isSchemaMutation, candidateHeadline } from '../_shared';
+import { PALETTE, monoStack, Pill, fmtInt, fmtScore, pathOf, mutationDisplay, proposalReview, isSchemaMutation, candidateHeadline, QUEUE_SCORE_TOOLTIP } from '../_shared';
+import { Term } from '../../../../design/components/Term';
 
 const PAGE_SIZE = 25;
 
@@ -325,7 +326,7 @@ function RecommendationsContent() {
                   <th style={th}>Type</th>
                   <th style={th}>Target page</th>
                   <th style={th}>Status</th>
-                  <th style={thR}>Score</th>
+                  <th style={thR}><Term def={QUEUE_SCORE_TOOLTIP}>Score</Term></th>
                   <th style={thR}>Details</th>
                 </tr>
               </thead>

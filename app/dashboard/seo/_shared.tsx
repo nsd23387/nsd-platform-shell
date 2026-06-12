@@ -21,6 +21,7 @@ import {
   getSeoPageDossier, approveEngineCandidate, rejectEngineCandidate, getSeoOffpageBriefs,
 } from '../../../lib/seoApi';
 import { fmtDataForSeoCpc, fmtDataForSeoDifficulty, fmtDataForSeoVolume } from '../../../lib/dataforseoFormat';
+import { Term, TERM_DEFS, LANE_EXPLAINER } from '../../../design/components/Term';
 import type {
   PortfolioPage, PortfolioBucket, PageDossier, PageDossierCandidate,
   PageDossierMeta, PageDossierKeywordTarget, PageGateTransition, SeoOffpageBrief,
@@ -264,6 +265,32 @@ export const SNAPSHOT_PENDING_MSG =
   'Snapshot pending — the live value hasn’t been captured yet. Approving is blocked until you can compare before → after.';
 
 // -----------------------------------------------------------------------------
+// C-3: score-scale tooltips. Each text describes the REAL formula that produces
+// the number (read from the engine's scoring functions), states its scale, and
+// is explicit that these are demand-based rankings — never predicted lift.
+// Three different scores appear across the SEO surfaces; each gets its own
+// tooltip so the scales are never conflated.
+// -----------------------------------------------------------------------------
+
+// analytics.seo_candidate_signal_score (engine_batch2_signal_score_v1), shown
+// ×100 by the queue view: raw 0.05–0.99 → displayed 5–99.
+export const QUEUE_SCORE_TOOLTIP =
+  'Opportunity score, 0–100 scale (higher = do sooner). Engine blend: demand 35% (log-scaled GSC impressions + DataForSEO search volume) + position headroom 25% (further from the top 3 = more upside) + paid-quote revenue 30% + quote submissions 10%, weighted by segment (B2B-first) and by mutation type (title/meta highest, alt-text lowest). It ranks effort, it does not predict lift.';
+
+// analytics.seo_page_dossier.ranked_actions[].score — a 0–1 log-impressions
+// demand score × an action-type multiplier; the UI shows it ×100.
+export const ENGINE_PLAN_SCORE_TOOLTIP =
+  'Engine-plan score, 0–100 scale: the page’s real GSC impressions, log-scaled, multiplied by an action-type weight (title 1.0 · meta 0.9 · H1 0.8 · schema 0.5 · off-page links 1.0). A pure demand ranking of the engine’s informational plan — a DIFFERENT scale from the queue opportunity score, and not a predicted lift.';
+
+// analytics.seo_competitor_gap_priority_score — already 0–100 in the data.
+export const COMPETITOR_GAP_SCORE_TOOLTIP =
+  'Competitor-gap priority score, 0–100 scale (higher = more attractive gap): DataForSEO search volume 45% + position gap vs the competitor 25% + how strongly the competitor ranks 20% + ease (100 − keyword difficulty) 10%, × segment weight (B2B 1.25 / D2C 0.70). Gaps scoring below 20 are auto-dismissed.';
+
+// nsd-integrations seoOffpageAuthorityJob.scoreProspect — 0–100 in the data.
+export const AUTHORITY_SCORE_TOOLTIP =
+  'Authority opportunity score, 0–100 scale (higher = better link prospect): target-page blend (demand 35% + position headroom 25% + revenue proxy 30% + quote-page fit 10%) × segment weight, then blended with prospect relevance (0.55 + 0.45 × relevance). The gate rejects below 15. Ranks outreach attractiveness — not a predicted ranking gain.';
+
+// -----------------------------------------------------------------------------
 // Proposal review guard (governance, UI-only).
 // Some engine candidates surface a scaffold/placeholder proposed_value (e.g.
 // "Set H1 to <primary keyword>") or a title/meta that doesn't actually mention
@@ -475,7 +502,10 @@ export function CandidateCard({
           <Pill tone="violet" tc={tc}>{c.mutation_label || c.primary_remedy || c.mutation_type || 'remedy'}</Pill>
           {c.confidence_tier && <Pill tone="info" tc={tc}>{c.confidence_tier}</Pill>}
           {c.opportunity_score != null && (
-            <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>
+            <span
+              title={QUEUE_SCORE_TOOLTIP}
+              style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, cursor: 'help', textDecoration: 'underline dotted', textUnderlineOffset: '2px' }}
+            >
               score {fmtScore(c.opportunity_score)}
             </span>
           )}
@@ -589,11 +619,11 @@ function KeywordTargetRow({ k, tc, primary }: { k: PageDossierKeywordTarget; tc:
         </span>
       </div>
       <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-        <span>pos <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(k.position)}</span></span>
-        <span>impr <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(k.impressions)}</span></span>
-        <span>vol <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoVolume(k.volume)}</span></span>
-        <span>KD <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoDifficulty(k.kd)}</span></span>
-        <span>cpc <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoCpc(k.cpc)}</span></span>
+        <span><Term k="pos">pos</Term> <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(k.position)}</span></span>
+        <span><Term k="impr">impr</Term> <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(k.impressions)}</span></span>
+        <span><Term k="vol">vol</Term> <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoVolume(k.volume)}</span></span>
+        <span><Term k="kd">KD</Term> <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoDifficulty(k.kd)}</span></span>
+        <span><Term k="cpc">cpc</Term> <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoCpc(k.cpc)}</span></span>
         <span>confidence <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPct01(k.confidence)}</span></span>
       </div>
     </div>
@@ -785,10 +815,10 @@ export function OffpageBriefSection({ url, tc, window }: { url: string; tc: Tc; 
             Earn links / digital PR — &ldquo;{b.target_keyword || 'target keyword'}&rdquo;
           </div>
           <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-            <span>pos <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(b.current_position)}</span></span>
-            <span>impr <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(b.impressions)}</span></span>
-            <span>vol <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoVolume(b.search_volume)}</span></span>
-            <span>KD <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoDifficulty(b.keyword_difficulty)}</span></span>
+            <span><Term k="pos">pos</Term> <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(b.current_position)}</span></span>
+            <span><Term k="impr">impr</Term> <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(b.impressions)}</span></span>
+            <span><Term k="vol">vol</Term> <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoVolume(b.search_volume)}</span></span>
+            <span><Term k="kd">KD</Term> <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtDataForSeoDifficulty(b.keyword_difficulty)}</span></span>
           </div>
           {b.reason && (
             <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: space['2'] }}>{b.reason}</div>
@@ -813,8 +843,15 @@ function RankedActionPlanRow({ a, tc }: { a: PageDossierRankedAction; tc: Tc }) 
           {a.status && <Pill tone="info" tc={tc}>{a.status.replace(/_/g, ' ')}</Pill>}
         </span>
         <span style={{ display: 'flex', gap: space['3'], fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>
-          {a.impact != null && <span>{fmtInt(a.impact)} impr</span>}
-          {a.score != null && <span>score {Math.round(a.score * 100)}</span>}
+          {a.impact != null && <span title={TERM_DEFS.impr}>{fmtInt(a.impact)} impr</span>}
+          {a.score != null && (
+            <span
+              title={ENGINE_PLAN_SCORE_TOOLTIP}
+              style={{ cursor: 'help', textDecoration: 'underline dotted', textUnderlineOffset: '2px' }}
+            >
+              score {Math.round(a.score * 100)}
+            </span>
+          )}
           <span>{executorLabel(a.executor)}</span>
         </span>
       </div>
@@ -843,6 +880,10 @@ export function LaneRoutedActions({
 
   return (
     <div data-testid="section-lane-routed-actions">
+      {/* C-4: one-line lane explainer so "Lane 1/2/3" is never unexplained */}
+      <div style={{ marginTop: space['4'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }} data-testid="text-lane-explainer">
+        {LANE_EXPLAINER}
+      </div>
       {/* Lane 1 — engine candidates (live approve/reject) + engine plan */}
       <div style={{ marginTop: space['6'] }}>
         <div style={sectionLabelStyle(tc)}>Lane 1 · Engine actions (gate-accepted)</div>
@@ -1098,10 +1139,10 @@ export function PageDossierDrawer({
                     <thead>
                       <tr style={{ background: tc.background.muted, color: tc.text.muted }}>
                         <th style={{ textAlign: 'left', padding: '8px 10px' }}>Query</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>Impr.</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>Pos.</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>Vol. ref</th>
-                        <th style={{ textAlign: 'right', padding: '8px 10px' }}>KD ref</th>
+                        <th style={{ textAlign: 'right', padding: '8px 10px' }}><Term k="impr">Impr.</Term></th>
+                        <th style={{ textAlign: 'right', padding: '8px 10px' }}><Term k="pos">Pos.</Term></th>
+                        <th style={{ textAlign: 'right', padding: '8px 10px' }}><Term def={`${TERM_DEFS.vol} ${TERM_DEFS.ref}`}>Vol. ref</Term></th>
+                        <th style={{ textAlign: 'right', padding: '8px 10px' }}><Term def={`${TERM_DEFS.kd} ${TERM_DEFS.ref}`}>KD ref</Term></th>
                         <th style={{ textAlign: 'left', padding: '8px 10px' }}>Read</th>
                       </tr>
                     </thead>
@@ -1179,8 +1220,8 @@ export function PageCard({ p, tc, onOpen }: { p: PortfolioPage; tc: Tc; onOpen: 
         {cardRead(p)}
       </div>
       <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['3'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
-        <span><span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(p.top_q_impr ?? p.gsc_impressions)}</span> impr. (30d)</span>
-        <span>pos <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(p.top_q_pos ?? p.gsc_best_position)}</span> (30d)</span>
+        <span><span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtInt(p.top_q_impr ?? p.gsc_impressions)}</span> <Term k="impr">impr.</Term> (30d)</span>
+        <span><Term k="pos">pos</Term> <span style={{ color: tc.text.secondary, fontFamily: monoStack }}>{fmtPos(p.top_q_pos ?? p.gsc_best_position)}</span> (30d)</span>
         {(p.top_query || p.gsc_top_query) && <span>top query (30d): “{p.top_query || p.gsc_top_query}”</span>}
       </div>
       <div style={{ display: 'flex', gap: space['4'], flexWrap: 'wrap', marginTop: space['2'], fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>

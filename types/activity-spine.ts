@@ -158,6 +158,14 @@ export interface MarketingKPIs {
   submissions_per_click: number;
 }
 
+/**
+ * D-18: sentinel bucket for quote submissions whose session recorded no
+ * recoverable entry page. Emitted by the pages query in
+ * services/marketingQueries.ts and rendered specially by
+ * MarketingSeoRevenuePanel — never run through path normalization.
+ */
+export const NO_LANDING_PAGE_SENTINEL = '(no landing page recorded)';
+
 export interface MarketingPage {
   page_url: string;
   sessions: number;
@@ -306,7 +314,12 @@ export interface MarketingGoogleAdsOverview {
   conversions: number;
   cpc: number;
   ctr: number;
+  /** Headline ROAS: only quotes attributed at exact campaign-ID precision. */
   roas: number;
+  /** Spine paid revenue: quote_facts_unified where source_group='google_ads' (incl. lower-confidence matches). */
+  spine_paid_revenue_usd?: number;
+  /** spine_paid_revenue_usd / spend — the broader-tier secondary ROAS line. */
+  broad_roas?: number;
 }
 
 export interface MarketingGoogleAdsCampaign {

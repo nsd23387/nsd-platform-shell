@@ -1062,7 +1062,10 @@ describe('T009: SEO Revenue Attribution — path-based join', () => {
     expect(capturedPagesSql).toContain('metrics_search_console_page');
   });
 
-  it('conv_attributed CTE uses COALESCE(landing_page, path-from-page_url)', async () => {
+  // D-18: conversions are attributed to the decoded origin_page entry path;
+  // quote-app/dev-host URLs with no origin_page collapse into a single
+  // sentinel bucket instead of masquerading as "/", and the CTE is windowed.
+  it('conv_attributed CTE decodes origin_page, buckets unknown entries, and windows on occurred_at', async () => {
     let capturedPagesSql = '';
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes('FULL OUTER JOIN') && sql.includes('metrics_page_engagement_daily')) {
@@ -1082,9 +1085,14 @@ describe('T009: SEO Revenue Attribution — path-based join', () => {
     const convMatch = capturedPagesSql.match(/conv_attributed AS \(([\s\S]*?)\n  \)/);
     expect(convMatch).not.toBeNull();
     const convBody = convMatch![1];
-    expect(convBody).toContain("COALESCE");
+    expect(convBody).toContain('COALESCE');
     expect(convBody).toContain("NULLIF(event_data->>'landing_page', '')");
-    expect(convBody).toContain("regexp_replace(page_url, '^https?://[^/]*', '')");
+    // origin_page query param is decoded back into the entry path
+    expect(convBody).toContain("origin_page=([^&]*)");
+    // conversions with no recoverable entry page go to the sentinel bucket
+    expect(convBody).toContain('(no landing page recorded)');
     expect(convBody).toContain("event_type = 'conversion'");
+    // windowed to the selected period, not all-time
+    expect(convBody).toContain('occurred_at >= $1::date');
   });
 });

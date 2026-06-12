@@ -147,6 +147,23 @@ function MoversCard({ movers, direction }: { movers: MarketingSEOQueryMover[]; d
         <h4 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: tc.text.primary }}>
           {isRising ? 'Rising' : 'Falling'} Queries
         </h4>
+        {/* D-19: movers are restricted to queries with repeated, real GSC demand
+            (>= 3 impressions in the prior comparison window), filtering out
+            synthetic lexicon strings whose only "impressions" are rank checks. */}
+        <span
+          title="Restricted to Search Console queries with at least 3 impressions in the prior comparison window. Filters out synthetic engine-lexicon strings whose only impressions come from automated rank checks."
+          style={{
+            marginLeft: 'auto',
+            fontFamily: fontFamily.body,
+            fontSize: fontSize.xs,
+            color: tc.text.muted,
+            whiteSpace: 'nowrap',
+            cursor: 'help',
+          }}
+          data-testid={`label-movers-gsc-only-${direction}`}
+        >
+          GSC queries only
+        </span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: space['1'] }}>
         {filtered.map((m, idx) => (

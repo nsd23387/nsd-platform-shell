@@ -15,7 +15,8 @@ import { space, radius } from '../../../../design/tokens/spacing';
 import { getSeoCompetitorGapFeed } from '../../../../lib/seoApi';
 import type { SeoCompetitorGap, SeoCompetitorGapMeta } from '../../../../lib/seoApi';
 import { fmtDataForSeoDifficulty, fmtDataForSeoVolume } from '../../../../lib/dataforseoFormat';
-import { PALETTE, monoStack, Pill, fmtInt } from '../_shared';
+import { PALETTE, monoStack, Pill, fmtInt, COMPETITOR_GAP_SCORE_TOOLTIP } from '../_shared';
+import { Term } from '../../../../design/components/Term';
 
 function hostOf(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
@@ -122,11 +123,11 @@ function CompetitorsContent() {
               <tr style={{ background: tc.background.muted }}>
                 <th style={th}>Keyword / gap</th>
                 <th style={th}>Competitor</th>
-                <th style={thR}>Their pos</th>
-                <th style={thR}>Your pos</th>
-                <th style={thR}>Volume</th>
-                <th style={thR}>Difficulty</th>
-                <th style={thR}>Score</th>
+                <th style={thR}><Term k="pos">Their pos</Term></th>
+                <th style={thR}><Term k="pos">Your pos</Term></th>
+                <th style={thR}><Term k="vol">Volume</Term></th>
+                <th style={thR}><Term k="kd">Difficulty</Term></th>
+                <th style={thR}><Term def={COMPETITOR_GAP_SCORE_TOOLTIP}>Score</Term></th>
               </tr>
             </thead>
             <tbody>

@@ -27,6 +27,9 @@ interface KPICard {
   provenance?: string;
   sparkData?: number[];
   sparkColor?: string;
+  /** Secondary line rendered under the value (e.g. broader-tier ROAS). */
+  secondary?: string;
+  secondaryTooltip?: string;
 }
 
 function DeltaBadge({ delta, tc }: { delta: number | null; tc: ReturnType<typeof useThemeColors> }) {
@@ -117,6 +120,11 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
         delta: null,
         testId: 'exec-kpi-roas',
         provenance: 'Counts only quotes attributed at exact campaign-ID precision (~10% of paid quotes). See Attribution Intelligence for the full-funnel view.',
+        // Broader tier: spine paid revenue (source_group=google_ads) / window spend.
+        secondary: googleAdsOverview.broad_roas != null && googleAdsOverview.broad_roas > 0
+          ? `incl. lower-confidence matches: ${googleAdsOverview.broad_roas.toFixed(2)}x`
+          : undefined,
+        secondaryTooltip: 'Quote-spine paid revenue (all quotes whose source resolved to Google Ads via gclid/gbraid/UTM, including matches below campaign-ID precision) divided by ad spend for the selected window.',
       },
     );
   }
@@ -148,6 +156,15 @@ export function MarketingExecutiveKPIs({ kpis, comparisons, googleAdsOverview, l
               <Sparkline data={card.sparkData} color={card.sparkColor} width={80} height={32} />
             )}
           </div>
+          {card.secondary && (
+            <div
+              title={card.secondaryTooltip}
+              style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.secondary, marginTop: space['1'], cursor: card.secondaryTooltip ? 'help' : undefined }}
+              data-testid={`${card.testId}-secondary`}
+            >
+              {card.secondary}
+            </div>
+          )}
           {card.provenance && (
             <div style={{ fontFamily: fontFamily.body, fontSize: fontSize.xs, color: tc.text.muted, marginTop: space['2'] }}>
               {card.provenance}

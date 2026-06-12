@@ -4,6 +4,7 @@ import React, { useContext, useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { DashboardGuard } from '../../../hooks/useRBAC';
 import { DashboardCard, AccessDenied, MarketingPerformanceScore } from '../../../components/dashboard';
+import { OperatorRibbon } from '../../../design/components/OperatorRibbon';
 import { PageExportBar } from '../../../components/dashboard/PageExportBar';
 import type { ExportSection } from '../../../lib/exportUtils';
 import { MarketingKPIOverview } from './components/MarketingKPIOverview';
@@ -235,6 +236,11 @@ export default function MarketingExecutiveOverview() {
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
+        {/* C-9: operator ribbon — where to act first on this dashboard */}
+        <OperatorRibbon testId="operator-ribbon-marketing">
+          Quote Pipeline is the money truth; this overview reads the same governed quote spine; Operator Hub is today&apos;s watchlist.
+        </OperatorRibbon>
+
         <div style={{ marginBottom: space['6'] }}>
           <h1
             style={{

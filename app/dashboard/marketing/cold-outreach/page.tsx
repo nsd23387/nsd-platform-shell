@@ -29,10 +29,33 @@ interface OutreachSummary {
   replyRate: number;
   positiveReplyRate: number;
   openRate: number;
+  /** Latest write into the ODS snapshot store backing this summary (ISO). */
+  asOf?: string | null;
   _source: 'live' | 'default';
+  _sourceName?: string;
 }
 
 type TimeWindow = '7d' | '14d' | '30d' | '90d';
+
+/** D-16: snapshots older than this are flagged as stale. */
+const STALE_THRESHOLD_MS = 48 * 60 * 60 * 1000;
+
+function parseAsOf(asOf: string | null | undefined): Date | null {
+  if (!asOf) return null;
+  const d = new Date(asOf);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatAsOf(d: Date): string {
+  return d.toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  });
+}
+
+function staleDays(d: Date): number {
+  return Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60 * 1000));
+}
 
 // ─── KPI Card ───────────────────────────────────────────────────────────────
 
@@ -158,6 +181,10 @@ export default function ColdOutreachPage() {
   const isLive = data?._source === 'live';
   const hasData = data !== null && data.emailsSent > 0;
 
+  // D-16: freshness of the ODS snapshot store backing this summary.
+  const asOfDate = parseAsOf(data?.asOf);
+  const isStale = asOfDate !== null && Date.now() - asOfDate.getTime() > STALE_THRESHOLD_MS;
+
   return (
     <DashboardGuard dashboard="marketing" fallback={<AccessDenied />}>
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `${space['6']} ${space['4']}` }}>
@@ -208,24 +235,64 @@ export default function ColdOutreachPage() {
           </div>
         </div>
 
-        {/* Connection status */}
+        {/* Connection status + provenance (D-16): this summary is served from
+            ODS campaign metric snapshots written by scheduled syncs, not a
+            live Smartlead read — name the source and show how fresh it is. */}
         {!loading && (
           <div
+            data-testid="banner-outreach-provenance"
             style={{
               marginBottom: space['4'],
               padding: `${space['2']} ${space['3']}`,
               borderRadius: radius.md,
-              backgroundColor: isLive ? '#ECFDF5' : '#FEF3C7',
+              backgroundColor: isLive && !isStale ? '#ECFDF5' : '#FEF3C7',
               fontSize: fontSize.sm,
               fontFamily: fontFamily.body,
-              color: isLive ? '#065F46' : '#92400E',
+              color: isLive && !isStale ? '#065F46' : '#92400E',
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: space['2'],
+            }}
+          >
+            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: isLive && !isStale ? '#10B981' : '#F59E0B', flexShrink: 0 }} />
+            {!isLive ? (
+              'Sales Engine unavailable — showing defaults'
+            ) : (
+              <>
+                <span>
+                  Connected to Sales Engine — data from ODS campaign snapshots (synced periodically, not a live Smartlead feed)
+                </span>
+                <span data-testid="text-outreach-as-of" style={{ opacity: 0.85 }}>
+                  {asOfDate
+                    ? `· snapshots as of ${formatAsOf(asOfDate)}`
+                    : '· last snapshot time unavailable'}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Staleness warning (D-16): snapshots older than 48h */}
+        {!loading && isLive && isStale && asOfDate && (
+          <div
+            data-testid="banner-outreach-stale"
+            style={{
+              marginBottom: space['4'],
+              padding: `${space['2']} ${space['3']}`,
+              borderRadius: radius.md,
+              backgroundColor: '#FEF2F2',
+              border: '1px solid #FECACA',
+              fontSize: fontSize.sm,
+              fontFamily: fontFamily.body,
+              color: '#991B1B',
               display: 'flex',
               alignItems: 'center',
               gap: space['2'],
             }}
           >
-            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: isLive ? '#10B981' : '#F59E0B' }} />
-            {isLive ? 'Connected to Sales Engine — showing live data' : 'Sales Engine unavailable — showing defaults'}
+            <Icon name="warning" size={14} color="#991B1B" />
+            Snapshot data is {staleDays(asOfDate)} day{staleDays(asOfDate) === 1 ? '' : 's'} old (last sync {formatAsOf(asOfDate)}). Metrics below may not reflect current campaign activity.
           </div>
         )}
 
