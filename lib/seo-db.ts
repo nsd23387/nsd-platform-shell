@@ -210,6 +210,10 @@ export async function rejectExecutionCandidate(candidateId: string, reviewNotes?
     `UPDATE analytics.seo_execution_candidate
      SET approval_status = 'rejected',
          execution_status = 'rejected',
+         -- Deactivate on reject: the seo_execution_candidate_active_viable_chk constraint
+         -- forbids an is_active=true row in a rejected state, so a rejected candidate must
+         -- be deactivated in the same write or the UPDATE fails with a 500.
+         is_active = false,
          reviewer_id = 'operator',
          reviewed_at = NOW(),
          review_notes = $2
@@ -415,6 +419,7 @@ export async function rejectByOpportunityId(opportunityId: string, reviewNotes?:
         `UPDATE analytics.seo_execution_candidate
          SET approval_status = 'rejected',
              execution_status = 'rejected',
+             is_active = false, -- required by seo_execution_candidate_active_viable_chk
              reviewer_id = 'operator',
              reviewed_at = NOW(),
              review_notes = $2
@@ -443,6 +448,7 @@ export async function rejectByOpportunityId(opportunityId: string, reviewNotes?:
         `UPDATE analytics.seo_execution_candidate
          SET approval_status = 'rejected',
              execution_status = 'rejected',
+             is_active = false, -- required by seo_execution_candidate_active_viable_chk
              reviewer_id = 'operator',
              reviewed_at = NOW(),
              review_notes = $2
