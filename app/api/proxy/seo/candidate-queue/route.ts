@@ -58,8 +58,8 @@ export async function GET(req: NextRequest) {
          FROM analytics.v_seo_dashboard_queue q
        )
        SELECT q.candidate_id, q.opportunity_id, q.mutation_type, q.mutation_label, q.primary_remedy,
-              proposed_value, current_value_snapshot, evidence_summary, why, gate_reasons,
-              opportunity_score::numeric AS opportunity_score, opportunity_urgency,
+              q.proposed_value, q.current_value_snapshot, q.evidence_summary, q.why, q.gate_reasons,
+              q.opportunity_score::numeric AS opportunity_score, q.opportunity_urgency,
               COALESCE((copy_score.score->>'quality')::numeric, legacy_quality.quality_self_score) AS quality_self_score,
               (copy_score.score->>'quality')::numeric AS copy_quality_score,
               (copy_score.score->>'floor')::numeric AS copy_quality_floor,
@@ -84,9 +84,9 @@ export async function GET(req: NextRequest) {
                   OR COALESCE((copy_score.score->>'passes_floor')::boolean, false)
                 )
               ) AS safe_to_bulk_approve,
-              confidence_tier, source_confidence, gate_status, approval_status, execution_status,
-              target_page_url, page_url_canonical, page_is_live, page_status_class,
-              regate_review_flag, needs_evidence, qa_status, outcome_verdict,
+              q.confidence_tier, q.source_confidence, q.gate_status, q.approval_status, q.execution_status,
+              q.target_page_url, q.page_url_canonical, q.page_is_live, q.page_status_class,
+              q.regate_review_flag, q.needs_evidence, q.qa_status, q.outcome_verdict,
               COALESCE(pp.auto_publish, false) AS auto_publish
        FROM queue q
        LEFT JOIN analytics.seo_mutation_publish_policy pp
@@ -119,10 +119,10 @@ export async function GET(req: NextRequest) {
        ) legacy_quality ON true
        LEFT JOIN analytics.seo_copy_regen_queue regen
          ON regen.candidate_id = q.candidate_id
-       ORDER BY opportunity_score DESC NULLS LAST,
-                mutation_label ASC NULLS LAST,
-                page_url_canonical ASC NULLS LAST,
-                candidate_id ASC
+       ORDER BY q.opportunity_score DESC NULLS LAST,
+                q.mutation_label ASC NULLS LAST,
+                q.page_url_canonical ASC NULLS LAST,
+                q.candidate_id ASC
        LIMIT $1`,
       [limit],
     );
@@ -167,6 +167,14 @@ export async function GET(req: NextRequest) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[seo/candidate-queue] GET error:', msg);
-    return NextResponse.json({ error: 'Failed to load candidate queue' }, { status: 500 });
+    return NextResponse.json({
+      data: {
+        candidates: [],
+        returned: 0,
+        summary: null,
+        error: 'Failed to load candidate queue',
+        detail: msg,
+      },
+    });
   }
 }
