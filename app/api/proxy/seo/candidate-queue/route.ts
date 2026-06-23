@@ -49,6 +49,13 @@ export async function GET(req: NextRequest) {
       `SELECT q.candidate_id, q.opportunity_id, q.mutation_type, q.mutation_label, q.primary_remedy,
               proposed_value, current_value_snapshot, evidence_summary, why, gate_reasons,
               opportunity_score::numeric AS opportunity_score, opportunity_urgency,
+              COALESCE(
+                CASE WHEN q.evidence->>'quality_self_score' ~ '^-?[0-9]+(\\.[0-9]+)?$'
+                     THEN (q.evidence->>'quality_self_score')::numeric END,
+                CASE WHEN q.evidence->>'recommendation_quality_score' ~ '^-?[0-9]+(\\.[0-9]+)?$'
+                     THEN (q.evidence->>'recommendation_quality_score')::numeric END,
+                q.opportunity_score::numeric
+              ) AS quality_self_score,
               confidence_tier, source_confidence, gate_status, approval_status, execution_status,
               target_page_url, page_url_canonical, page_is_live, page_status_class,
               regate_review_flag, needs_evidence, qa_status, outcome_verdict,
@@ -76,6 +83,7 @@ export async function GET(req: NextRequest) {
       why: r.why,
       gate_reasons: Array.isArray(r.gate_reasons) ? r.gate_reasons : [],
       opportunity_score: r.opportunity_score != null ? Number(r.opportunity_score) : null,
+      quality_self_score: r.quality_self_score != null ? Number(r.quality_self_score) : null,
       opportunity_urgency: r.opportunity_urgency,
       confidence_tier: r.confidence_tier,
       source_confidence: r.source_confidence,

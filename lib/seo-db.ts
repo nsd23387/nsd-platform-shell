@@ -204,6 +204,110 @@ export async function approveExecutionCandidate(candidateId: string, reviewNotes
   if (upd.rowCount === 0) throw new Error('Execution candidate not found or already reviewed');
 }
 
+export interface BulkApprovalResult {
+  candidate_id: string;
+  status: 'approved' | 'skipped' | 'error';
+  reason?: string;
+  auto_publish?: boolean;
+}
+
+export async function bulkApproveExecutionCandidates(
+  candidateIds: string[],
+  opts: { reviewNotes?: string; qualityFloor?: number } = {},
+): Promise<BulkApprovalResult[]> {
+  const ids = Array.from(new Set(candidateIds.filter(Boolean)));
+  if (ids.length === 0) return [];
+
+  const p = getPool();
+  const qualityFloor = Number.isFinite(opts.qualityFloor) ? Number(opts.qualityFloor) : 70;
+  const results: BulkApprovalResult[] = [];
+
+  for (const candidateId of ids) {
+    try {
+      const { rows } = await p.query(
+        `SELECT c.candidate_id::text,
+                c.approval_status,
+                c.execution_status,
+                c.gate_status,
+                c.is_active,
+                c.proposed_value,
+                c.current_value_snapshot,
+                c.opportunity_score::numeric AS opportunity_score,
+                c.evidence,
+                COALESCE(pp.auto_publish, false) AS auto_publish,
+                COALESCE(
+                  CASE WHEN c.evidence->>'quality_self_score' ~ '^-?[0-9]+(\\.[0-9]+)?$'
+                       THEN (c.evidence->>'quality_self_score')::numeric END,
+                  CASE WHEN c.evidence->>'recommendation_quality_score' ~ '^-?[0-9]+(\\.[0-9]+)?$'
+                       THEN (c.evidence->>'recommendation_quality_score')::numeric END,
+                  c.opportunity_score::numeric
+                ) AS quality_self_score
+         FROM analytics.seo_execution_candidate c
+         LEFT JOIN analytics.seo_mutation_publish_policy pp
+           ON pp.mutation_type = c.mutation_type
+         WHERE c.candidate_id = $1::uuid
+         LIMIT 1`,
+        [candidateId],
+      );
+
+      const row = rows[0];
+      if (!row) {
+        results.push({ candidate_id: candidateId, status: 'skipped', reason: 'not_found' });
+        continue;
+      }
+
+      const autoPublish = row.auto_publish === true;
+      const proposed = typeof row.proposed_value === 'string' ? row.proposed_value.trim() : '';
+      const quality = row.quality_self_score == null ? null : Number(row.quality_self_score);
+      const guards: string[] = [];
+
+      if (row.approval_status === 'approved') guards.push('already_approved');
+      else if (row.approval_status !== 'pending' || row.execution_status !== 'proposed') guards.push('not_pending_proposed');
+      if (row.gate_status !== 'accepted') guards.push('gate_not_accepted');
+      if (row.is_active !== true) guards.push('inactive_candidate');
+      if (row.current_value_snapshot == null) guards.push('snapshot_missing');
+      if (!proposed || proposed === '__llm_pending__') guards.push('sentinel_or_empty_proposed_value');
+      if (quality == null || quality < qualityFloor) guards.push('below_quality_floor');
+
+      if (guards.length > 0) {
+        results.push({
+          candidate_id: candidateId,
+          status: 'skipped',
+          reason: guards.join(','),
+          auto_publish: autoPublish,
+        });
+        continue;
+      }
+
+      const upd = await p.query(
+        `UPDATE analytics.seo_execution_candidate
+         SET approval_status = 'approved',
+             execution_status = 'approved',
+             reviewer_id = 'operator',
+             reviewed_at = NOW(),
+             review_notes = $2
+         WHERE candidate_id = $1::uuid
+           AND execution_status = 'proposed'
+           AND approval_status = 'pending'
+           AND gate_status = 'accepted'
+           AND is_active = true`,
+        [candidateId, opts.reviewNotes || `bulk approve; quality_floor=${qualityFloor}`],
+      );
+
+      results.push({
+        candidate_id: candidateId,
+        status: upd.rowCount === 1 ? 'approved' : 'skipped',
+        reason: upd.rowCount === 1 ? undefined : 'update_race_or_already_reviewed',
+        auto_publish: autoPublish,
+      });
+    } catch (err: any) {
+      results.push({ candidate_id: candidateId, status: 'error', reason: err.message || String(err) });
+    }
+  }
+
+  return results;
+}
+
 export async function rejectExecutionCandidate(candidateId: string, reviewNotes?: string) {
   const p = getPool();
   const upd = await p.query(
