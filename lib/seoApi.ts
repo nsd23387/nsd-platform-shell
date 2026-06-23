@@ -1347,6 +1347,14 @@ export interface SeoNorthStar {
   clicks_prev28d: number;
   impr_28d: number;
   impr_prev28d: number;
+  // Command Center aliases (populated by /api/proxy/seo/north-star)
+  total_clicks_28d: number;
+  clicks_delta_pct: number;
+  pct_page_one: number;
+  pct_page_one_delta: number;
+  improving_pages: number;
+  declining_pages: number;
+  data_freshness_at: string;
 }
 
 export interface SeoNorthStarMoneyPage {
@@ -1713,22 +1721,22 @@ export async function getSeoStrategyRecommendations(): Promise<SeoStrategyRecomm
   return data.data ?? [];
 }
 
-// ── Page Enhancement model ────────────────────────────────────────
-export type LifecycleState =
-  | 'evaluating'
-  | 'performer'
-  | 'probation'
-  | 'watch'
-  | 'winner'
-  | 'retired'
-  | 'inconclusive';
+// ── Command Center & enhancement-queue additions (from main redesign) ─────────
+
+export type LifecycleState = 'evaluating' | 'performer' | 'probation' | 'watch' | 'winner' | 'retired' | 'inconclusive';
+
+export interface SeoPipelineCounts {
+  review: number;
+  evaluation: number;
+  resolved: number;
+}
 
 export interface SeoFieldMember {
   candidate_id: string;
-  mutation_type: string; // h1 | meta_description | title | alt_text
+  mutation_type: string;
   current_value_snapshot: string | null;
   proposed_value: string;
-  quality_self_score: number; // 0–1
+  quality_self_score: number;
   publish_live: boolean;
   guard_reason?: string;
 }
@@ -1745,24 +1753,8 @@ export interface SeoPageEnhancement {
   has_qa_warnings: boolean;
   created_at: string;
   evaluation_start_at?: string;
-  lifecycle_policy_first_days: number; // 30
-  lifecycle_policy_final_days: number; // 60
-}
-
-export interface SeoNorthStar {
-  total_clicks_28d: number;
-  clicks_delta_pct: number;
-  pct_page_one: number;
-  pct_page_one_delta: number;
-  improving_pages: number;
-  declining_pages: number;
-  data_freshness_at: string;
-}
-
-export interface SeoPipelineCounts {
-  review: number;
-  evaluation: number;
-  resolved: number;
+  lifecycle_policy_first_days: number;
+  lifecycle_policy_final_days: number;
 }
 
 export interface SeoEvaluationRow {
