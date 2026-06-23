@@ -36,16 +36,18 @@ export async function GET(req: NextRequest) {
 
   try {
     const { rows } = await pool.query(
-      `SELECT candidate_id, opportunity_id, mutation_type, mutation_label, primary_remedy,
+      `SELECT q.candidate_id, q.opportunity_id, q.mutation_type, q.mutation_label, q.primary_remedy,
               proposed_value, current_value_snapshot, evidence_summary, why, gate_reasons,
               gate_status, opportunity_score::numeric AS opportunity_score, opportunity_urgency,
               confidence_tier, source_confidence, approval_status, execution_status,
               target_page_url, page_url_canonical, page_is_live, page_status_class,
               needs_evidence, qa_status, evidence, published_at, outcome_verdict,
               outcome_live_confirmed_at, outcome_live_drift_at, outcome_leading_metric,
-              outcome_decided_at
-       FROM analytics.v_seo_dashboard_queue
-       WHERE candidate_id = $1
+              outcome_decided_at, COALESCE(pp.auto_publish, false) AS auto_publish
+       FROM analytics.v_seo_dashboard_queue q
+       LEFT JOIN analytics.seo_mutation_publish_policy pp
+         ON pp.mutation_type = q.mutation_type
+       WHERE q.candidate_id = $1
        LIMIT 1`,
       [id],
     );
@@ -94,6 +96,7 @@ export async function GET(req: NextRequest) {
       outcome_live_drift_at: r.outcome_live_drift_at,
       outcome_leading_metric: r.outcome_leading_metric,
       outcome_decided_at: r.outcome_decided_at,
+      auto_publish: r.auto_publish === true,
     };
 
     return NextResponse.json({ data: candidate });

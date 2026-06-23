@@ -709,6 +709,7 @@ function DetectionRow({
                   <Pill tone="warn" tc={tc}>snapshot pending</Pill>
                 </span>
               )}
+              <Pill tone={c.auto_publish ? 'good' : 'neutral'} tc={tc}>{c.auto_publish ? 'Publishes on approve' : 'Draft on approve'}</Pill>
               {(() => { const review = proposalReview(c); return review.flagged ? (
                 <span title={`Not auto-approvable — ${review.reasons.join(' ')}`} data-testid={`detection-needs-review-${c.candidate_id}`}>
                   <Pill tone="warn" tc={tc}>needs review</Pill>
@@ -1179,7 +1180,13 @@ function CommandCenterContent() {
     })));
     const ok = results.filter((r) => r.status === 'fulfilled').length;
     const failed = results.length - ok;
-    setActionMsg(`Queued ${ok} recommendation${ok === 1 ? '' : 's'} as DRAFT${failed ? ` · ${failed} failed (still pending)` : ''}.`);
+    const livePublishes = targets.filter((c) => c.auto_publish).length;
+    const drafts = targets.length - livePublishes;
+    const parts = [
+      livePublishes ? `${livePublishes} approved for live publish` : null,
+      drafts ? `${drafts} queued as draft` : null,
+    ].filter(Boolean);
+    setActionMsg(`${ok} recommendation${ok === 1 ? '' : 's'} approved${parts.length ? ` (${parts.join(', ')})` : ''}${failed ? ` · ${failed} failed (still pending)` : ''}.`);
     setBulkBusy(false);
     setReviewOpen(false);
     if (failed) loadQueue();
@@ -1200,13 +1207,13 @@ function CommandCenterContent() {
   const canonicalQueueRows = candidates?.length ?? 0;
   const pausedLaneExtra = Math.max(0, canonicalQueueRows - activeLaneProposals);
   const summaryTiles = [
-    { label: 'Active lane decisions', value: queueSummary?.decisions ?? detections.length, help: 'On-page lane awaiting approval (paused lanes not counted)', metricKey: 'awaiting_approval' },
+    { label: 'Ready to review', value: queueSummary?.decisions ?? detections.length, help: 'Recommendations awaiting approval', metricKey: 'awaiting_approval' },
     {
-      label: 'Active lane proposals',
+      label: 'Recommendations surfaced',
       value: activeLaneProposals,
       help: pausedLaneExtra > 0
-        ? `On-page lane only (schema lane paused) — ${fmtInt(pausedLaneExtra)} more queue row${pausedLaneExtra === 1 ? '' : 's'} on the Recommendations tab`
-        : 'On-page lane only — currently the full canonical queue',
+        ? `${fmtInt(pausedLaneExtra)} additional paused recommendation${pausedLaneExtra === 1 ? '' : 's'} available on the Recommendations tab`
+        : 'Current review queue',
       metricKey: 'total_proposals',
     },
     { label: 'Re-review flagged', value: queueSummary?.re_review_flagged ?? 0, help: 'Needs another gate review' },
@@ -1217,7 +1224,7 @@ function CommandCenterContent() {
     <div style={{ padding: space['6'], maxWidth: 1200, margin: '0 auto' }}>
       {/* C-9: operator ribbon — where to act first on this page */}
       <OperatorRibbon testId="operator-ribbon-seo">
-        review the Do This Next queue below, open Details on anything you&apos;d ship, Approve queues a draft — everything else on this page is context.
+        review the Do This Next queue below, open Details on anything you&apos;d ship, and check the publish-policy tag before approving — everything else on this page is context.
       </OperatorRibbon>
 
       {/* Header */}
@@ -1225,8 +1232,10 @@ function CommandCenterContent() {
         <div>
           <h1 style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>SEO Command Center</h1>
           <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-subtitle">
-            {queueLoading ? 'Loading governed recommendations…'
-              : `${detections.length} guarded recommendation${detections.length === 1 ? '' : 's'} awaiting approval (${liveDetections.length} live-page, ${redirectDetections.length} lost/non-live).`}
+            {queueLoading ? 'Loading recommendations…'
+              : redirectDetections.length === 0
+                ? `${detections.length} recommendation${detections.length === 1 ? '' : 's'} ready to review — all on live pages.`
+                : `${detections.length} recommendation${detections.length === 1 ? '' : 's'} ready to review — ${liveDetections.length} on live pages, ${redirectDetections.length} need routing review.`}
           </p>
           <Link
             href="/dashboard/marketing/seo"
@@ -1292,8 +1301,8 @@ function CommandCenterContent() {
       )}
 
       {/* Approve-top-N review-then-confirm. Governance: bulk approve is never a
-          one-click act — the user reviews each candidate and may deselect any
-          before anything is queued as DRAFT. */}
+          one-click act — the user reviews each candidate, its publish policy,
+          and may deselect any candidate before approval. */}
       {reviewOpen && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: space['6'], overflowY: 'auto' }}
@@ -1304,9 +1313,9 @@ function CommandCenterContent() {
             onClick={(e) => e.stopPropagation()}
             style={{ width: '100%', maxWidth: 640, background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, padding: space['5'], marginTop: '48px' }}
           >
-            <div style={sectionLabelStyle(tc)}>Review before queuing as DRAFT</div>
+            <div style={sectionLabelStyle(tc)}>Review before approval</div>
             <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginBottom: space['4'] }}>
-              Deselect anything you don&apos;t want to approve. Selected items are queued as DRAFT for human governance — nothing is published.
+              Deselect anything you don&apos;t want to approve. Items marked &ldquo;Publishes on approve&rdquo; go live through the executor; items marked &ldquo;Draft on approve&rdquo; queue a WordPress draft.
             </div>
             <div style={{ borderTop: `1px solid ${tc.border.subtle}`, marginBottom: space['4'] }}>
               {reviewTargets.map((c) => {
@@ -1332,6 +1341,7 @@ function CommandCenterContent() {
                     <span style={{ minWidth: 0 }}>
                       <span style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap', marginBottom: '2px' }}>
                         <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>
+                        <Pill tone={c.auto_publish ? 'good' : 'neutral'} tc={tc}>{c.auto_publish ? 'Publishes on approve' : 'Draft on approve'}</Pill>
                         <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{candidateHeadline(c)}</span>
                         {c.regate_review_flag && <Pill tone="warn" tc={tc}>re-review</Pill>}
                         {review.flagged && (
@@ -1446,8 +1456,8 @@ function CommandCenterContent() {
           )}
           {!queueLoading && !queueError && detections.length === 0 && (
             <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-detections">
-              No guarded recommendations awaiting approval. If you expected work here, check &ldquo;Suppressed by the gate&rdquo; below — the engine may be withholding candidates — or the{' '}
-              <Link href="/dashboard/seo/recommendations" style={{ color: PALETTE.violet, textDecoration: 'none' }}>Recommendations tab</Link> for paused-lane queue rows.
+              No recommendations ready to review. If you expected work here, check &ldquo;Suppressed by the gate&rdquo; below or the{' '}
+              <Link href="/dashboard/seo/recommendations" style={{ color: PALETTE.violet, textDecoration: 'none' }}>Recommendations tab</Link>.
             </div>
           )}
           {!queueLoading && !queueError && liveDetections.length > 0 && (

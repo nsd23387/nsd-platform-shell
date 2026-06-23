@@ -1097,6 +1097,7 @@ export interface PageDossierCandidate {
   needs_evidence?: boolean | null;
   qa_status?: string | null;
   outcome_verdict?: string | null;
+  auto_publish?: boolean | null;
   // Engine re-gate signal: the candidate was re-surfaced for human re-review
   // after a prior decision (e.g. demand shifted). Honest passthrough — null
   // when the column is absent. lane/executor describe which of the three lanes
@@ -1296,6 +1297,7 @@ export interface SeoCandidateDetail extends PageDossierCandidate {
   outcome_live_drift_at?: string | null;
   outcome_leading_metric?: string | null;
   outcome_decided_at?: string | null;
+  auto_publish?: boolean | null;
 }
 
 export async function getSeoCandidate(id: string): Promise<SeoCandidateDetail> {
