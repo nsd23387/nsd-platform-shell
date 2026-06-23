@@ -36,38 +36,41 @@ export async function GET(req: NextRequest) {
     if (wantsPending) {
       const result = await pool.query(
         `SELECT
-           candidate_id::text AS id,
-           candidate_id,
-           opportunity_id,
-           target_page_url AS target_url,
-           page_url_canonical,
-           page_is_live,
-           page_status_class,
-           mutation_type,
-           mutation_label,
-           target_field,
-           current_value_snapshot AS current_value,
-           proposed_value,
-           why AS proposed_reason,
-           evidence_summary,
-           evidence,
-           opportunity_score::numeric AS agent_review_score,
-           opportunity_urgency,
-           confidence_tier,
-           source_confidence,
-           approval_status AS status,
-           approval_status,
-           execution_status,
-           gate_status,
-           regate_review_flag,
-           needs_evidence,
-           qa_status,
-           outcome_verdict AS outcome_label,
-           created_at,
-           published_at,
-           'seo_dashboard_queue' AS source
-         FROM analytics.v_seo_dashboard_queue
-         ORDER BY opportunity_score DESC NULLS LAST
+           q.candidate_id::text AS id,
+           q.candidate_id,
+           q.opportunity_id,
+           q.target_page_url AS target_url,
+           q.page_url_canonical,
+           q.page_is_live,
+           q.page_status_class,
+           q.mutation_type,
+           q.mutation_label,
+           q.target_field,
+           q.current_value_snapshot AS current_value,
+           q.proposed_value,
+           q.why AS proposed_reason,
+           q.evidence_summary,
+           q.evidence,
+           q.opportunity_score::numeric AS agent_review_score,
+           q.opportunity_urgency,
+           q.confidence_tier,
+           q.source_confidence,
+           q.approval_status AS status,
+           q.approval_status,
+           q.execution_status,
+           q.gate_status,
+           q.regate_review_flag,
+           q.needs_evidence,
+           q.qa_status,
+           q.outcome_verdict AS outcome_label,
+           q.created_at,
+           q.published_at,
+           'seo_dashboard_queue' AS source,
+           COALESCE(pp.auto_publish, false) AS auto_publish
+         FROM analytics.v_seo_dashboard_queue q
+         LEFT JOIN analytics.seo_mutation_publish_policy pp
+           ON pp.mutation_type = q.mutation_type
+         ORDER BY q.opportunity_score DESC NULLS LAST
          LIMIT $1`,
         [limit],
       );
@@ -111,8 +114,11 @@ export async function GET(req: NextRequest) {
              c.created_at,
              COALESCE(o.published_at, c.published_at, c.execution_timestamp) AS published_at,
              COALESCE(o.published_at, c.published_at, c.execution_timestamp) AS executed_at,
-             'seo_execution_candidate' AS source
+             'seo_execution_candidate' AS source,
+             COALESCE(pp.auto_publish, false) AS auto_publish
            FROM analytics.seo_execution_candidate c
+           LEFT JOIN analytics.seo_mutation_publish_policy pp
+             ON pp.mutation_type = c.mutation_type
            LEFT JOIN analytics.seo_page_inventory i
              ON analytics.seo_norm_url(i.url) = analytics.seo_norm_url(c.target_page_url)
            LEFT JOIN analytics.seo_published_outcome o

@@ -4,8 +4,9 @@
 // SEO Command Center — Screen 2 (Action Card / recommendation detail)
 // Governance lock: read-first. The ONLY writes are approve/reject of THIS
 // engine candidate, routed through approveEngineCandidate / rejectEngineCandidate
-// -> /api/proxy/seo/recommendations. Approve creates a DRAFT only; nothing
-// executes from this screen.
+// -> /api/proxy/seo/recommendations. This screen only records approval; the
+// executor follows analytics.seo_mutation_publish_policy for draft vs live
+// publish behavior.
 //
 // Data truthfulness: the WHY bullets, before/after state, and baselines are all
 // live reads (candidate.evidence jsonb + the target page's GSC dossier). We do
@@ -161,16 +162,23 @@ function gateResultLabel(g: string | null | undefined): { text: string; tone: 'g
 }
 
 // -----------------------------------------------------------------------------
-// Execution lifecycle (Part C). Display-only. This screen creates a DRAFT
-// approval and nothing else; the stages below are the engine/executor's real
-// states (analytics.seo_execution_candidate.execution_status). Rollback is
-// surfaced as status, never wired as a write from this read-only shell.
+// Execution lifecycle (Part C). Display-only. This screen records approval;
+// the engine/executor then follows the candidate's mutation publish policy.
+// Rollback is surfaced as status, never wired as a write from this read-only
+// shell.
 // -----------------------------------------------------------------------------
-const LIFECYCLE_STAGES: { key: string; label: string; desc: string }[] = [
+const DRAFT_LIFECYCLE_STAGES: { key: string; label: string; desc: string }[] = [
   { key: 'proposed', label: 'Proposed', desc: 'Engine generated this and the gate accepted it. Awaiting your review.' },
   { key: 'approved', label: 'Approved · draft queued', desc: 'You approve here — recorded as a DRAFT only. Nothing publishes from this screen.' },
   { key: 'draft_applied', label: 'Draft applied in WordPress', desc: 'The engine writes the change as a WordPress / Rank Math draft. Still not live.' },
   { key: 'published', label: 'Published', desc: 'A person reviews and publishes the draft in WordPress, then it is measured against the live GSC baseline.' },
+];
+
+const LIVE_PUBLISH_LIFECYCLE_STAGES: { key: string; label: string; desc: string }[] = [
+  { key: 'proposed', label: 'Proposed', desc: 'Engine generated this and the gate accepted it. Awaiting your review.' },
+  { key: 'approved', label: 'Approved · publishes live', desc: 'Your approval queues the executor to publish this change to the live page.' },
+  { key: 'draft_applied', label: 'Live page updated', desc: 'The executor applies the change, purges cache, and verifies the live page.' },
+  { key: 'published', label: 'Measured', desc: 'Outcomes are measured against the live GSC baseline. Rollback remains available.' },
 ];
 
 function stageIndexOf(status: string | null | undefined): number {
@@ -196,6 +204,8 @@ function ApprovalLifecycle({ candidate, tc }: { candidate: SeoCandidateDetail; t
   const current = stageIndexOf(status);
   const rolledBack = (status || '').toLowerCase() === 'rolled_back';
   const failed = (status || '').toLowerCase() === 'failed';
+  const autoPublishes = candidate.auto_publish === true;
+  const stages = autoPublishes ? LIVE_PUBLISH_LIFECYCLE_STAGES : DRAFT_LIFECYCLE_STAGES;
   const stamps: Record<number, string | null> = {
     1: fmtTs(candidate.approval_timestamp),
     3: fmtTs(candidate.execution_timestamp),
@@ -204,10 +214,18 @@ function ApprovalLifecycle({ candidate, tc }: { candidate: SeoCandidateDetail; t
     <Card tc={tc} style={{ marginBottom: space['4'] }} data-testid="panel-approval-lifecycle">
       <Label tc={tc}>What happens after you approve</Label>
       <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.secondary, lineHeight: 1.6, margin: `0 0 ${space['4']} 0` }} data-testid="text-approval-explainer">
-        <strong>Approve &amp; queue (draft)</strong> records your approval only — this screen creates a <strong>DRAFT</strong> and never publishes. Downstream the engine writes the change as a WordPress / Rank&nbsp;Math <strong>draft</strong>, a person reviews and <strong>publishes it in WordPress</strong>, and outcomes are then measured against the live GSC baseline. Rollback stays available if it regresses.
+        {autoPublishes ? (
+          <>
+            <strong>Approve &amp; publish</strong> publishes this change to the live page and purges the cache. The before-value is snapshotted, so you can roll it back. No separate WordPress step.
+          </>
+        ) : (
+          <>
+            <strong>Approve &amp; queue draft</strong> records your approval only — this creates a <strong>DRAFT</strong> and does not publish. Downstream the engine writes the change as a WordPress / Rank&nbsp;Math <strong>draft</strong>, a person reviews and <strong>publishes it in WordPress</strong>, and outcomes are then measured against the live GSC baseline. Rollback stays available if it regresses.
+          </>
+        )}
       </p>
       <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: space['2'] }}>
-        {LIFECYCLE_STAGES.map((stage, idx) => {
+        {stages.map((stage, idx) => {
           const reached = idx <= current && !failed;
           const isCurrent = idx === current && !rolledBack && !failed;
           const dot = isCurrent ? PALETTE.violet : reached ? PALETTE.good : tc.border.default;
@@ -283,6 +301,10 @@ function ActionDetailContent() {
   const signals = evidence?.signals ?? null;
   const score = candidate?.opportunity_score != null ? candidate.opportunity_score.toFixed(1) : null;
   const schemaApprovalPaused = isSchemaMutation(candidate?.mutation_type);
+  const autoPublishes = candidate?.auto_publish === true;
+  const approveLabel = autoPublishes ? 'Approve & publish' : 'Approve & queue draft';
+  const approvingLabel = autoPublishes ? 'Publishing…' : 'Queuing…';
+  const publishPolicyLabel = autoPublishes ? 'Publishes on approve' : 'Draft on approve';
 
   // Real GSC baseline for the page being edited (the source page).
   // Position AND impressions are both the TOP-QUERY figures from the SAME
@@ -472,10 +494,11 @@ function ActionDetailContent() {
                   </span>
                 )}
                 {schemaApprovalPaused && <Pill tone="warn" tc={tc}>schema paused</Pill>}
+                <Pill tone={autoPublishes ? 'good' : 'neutral'} tc={tc}>{publishPolicyLabel}</Pill>
                 {beforeMissing && candidate.approval_status === 'pending' && (
                   <span title={SNAPSHOT_PENDING_MSG} data-testid="pill-snapshot-pending"><Pill tone="warn" tc={tc}>snapshot pending</Pill></span>
                 )}
-                {candidate.approval_status === 'approved' && <Pill tone="good" tc={tc}>approved · active draft</Pill>}
+                {candidate.approval_status === 'approved' && <Pill tone="good" tc={tc}>{autoPublishes ? 'approved · publishes live' : 'approved · draft queued'}</Pill>}
                 {candidate.approval_status === 'rejected' && <Pill tone="bad" tc={tc}>rejected</Pill>}
               </div>
               <h1 style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>
@@ -494,7 +517,9 @@ function ActionDetailContent() {
                 style={{ padding: '8px 14px', maxWidth: 340, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', lineHeight: 1.5, background: candidate.approval_status === 'approved' ? PALETTE.goodSoft : PALETTE.badSoft, color: candidate.approval_status === 'approved' ? PALETTE.good : PALETTE.bad }}
               >
                 {candidate.approval_status === 'approved'
-                  ? 'Approved — the active proposal for this field (recorded as a draft). No further action here.'
+                  ? autoPublishes
+                    ? 'Approved — this proposal publishes live through the executor policy. No further action here.'
+                    : 'Approved — the active proposal for this field is queued as a draft. No further action here.'
                   : 'Rejected — not queued. No further action here.'}
               </div>
             ) : (
@@ -516,7 +541,7 @@ function ActionDetailContent() {
                     : beforeMissing ? SNAPSHOT_PENDING_MSG : undefined}
                   style={{ padding: '8px 18px', background: (schemaApprovalPaused || beforeMissing) ? tc.background.muted : PALETTE.violet, color: (schemaApprovalPaused || beforeMissing) ? tc.text.muted : '#fff', border: (schemaApprovalPaused || beforeMissing) ? `1px solid ${tc.border.default}` : 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (busy || done || schemaApprovalPaused || beforeMissing) ? 'default' : 'pointer', opacity: (busy || done) ? 0.6 : 1 }}
                 >
-                  {busy === 'approve' ? 'Queuing…' : schemaApprovalPaused ? 'Schema approval paused' : beforeMissing ? 'Snapshot pending' : 'Approve & queue (draft)'}
+                  {busy === 'approve' ? approvingLabel : schemaApprovalPaused ? 'Schema approval paused' : beforeMissing ? 'Snapshot pending' : approveLabel}
                 </button>
               </div>
             )}
@@ -530,7 +555,7 @@ function ActionDetailContent() {
 
           {done && (
             <div style={{ marginBottom: space['4'], padding: space['3'], borderRadius: radius.sm, background: done === 'approved' ? PALETTE.goodSoft : PALETTE.badSoft, color: done === 'approved' ? PALETTE.good : PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="text-done">
-              {done === 'approved' ? 'Queued as DRAFT. Returning to Command Center…' : 'Rejected. Returning to Command Center…'}
+              {done === 'approved' ? (autoPublishes ? 'Approved for live publish. Returning to Command Center…' : 'Queued as draft. Returning to Command Center…') : 'Rejected. Returning to Command Center…'}
             </div>
           )}
           {actionErr && (
@@ -541,7 +566,7 @@ function ActionDetailContent() {
             <div style={{ marginBottom: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.warnSoft, color: PALETTE.warn, fontFamily: fontFamily.body, fontSize: '13px', border: `1px solid ${PALETTE.warn}33` }} data-testid="banner-needs-review">
               <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', marginBottom: space['1'] }}>
                 <Pill tone="warn" tc={tc}>needs review</Pill>
-                <strong>Not auto-approvable — review before queuing.</strong>
+                <strong>Needs a deliberate review before approval.</strong>
               </div>
               <ul style={{ margin: `${space['1']} 0 0`, paddingLeft: 20, lineHeight: 1.6 }}>
                 {review.reasons.map((r, i) => <li key={i} data-testid={`needs-review-reason-${i}`}>{r}</li>)}
@@ -556,6 +581,7 @@ function ActionDetailContent() {
               {candidate.gate_status && <Pill tone="good" tc={tc}>Gate: {candidate.gate_status}</Pill>}
               {candidate.approval_status && <Pill tone={candidate.approval_status === 'pending' ? 'warn' : candidate.approval_status === 'approved' ? 'good' : 'bad'} tc={tc}>Approval: {candidate.approval_status}</Pill>}
               {candidate.execution_status && <Pill tone="info" tc={tc}>Execution: {candidate.execution_status}</Pill>}
+              <Pill tone={autoPublishes ? 'good' : 'neutral'} tc={tc}>{publishPolicyLabel}</Pill>
               {candidate.qa_status && <Pill tone={candidate.qa_status === 'pass' ? 'good' : candidate.qa_status === 'warn' ? 'warn' : 'bad'} tc={tc}>QA: {candidate.qa_status}</Pill>}
               <Pill tone={candidate.page_is_live ? 'good' : 'bad'} tc={tc}>{candidate.page_is_live ? 'Live page' : 'Lost/non-live page'}</Pill>
               {candidate.outcome_verdict && <Pill tone="violet" tc={tc}>Outcome: {candidate.outcome_verdict}</Pill>}
@@ -721,7 +747,7 @@ function ActionDetailContent() {
             <Card tc={tc} style={{ marginBottom: space['4'] }}>
               <MeasurementPlan dossier={dossier} tc={tc} />
               <div style={{ display: 'flex', gap: space['4'], marginTop: space['3'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, flexWrap: 'wrap' }}>
-                <span>🔁 {isInternalLink ? 'Internal-link changes are fully reversible in <1 min.' : 'This change is draft-only until executed downstream and is reversible.'}</span>
+                <span>🔁 {isInternalLink ? 'Internal-link changes are fully reversible in <1 min.' : autoPublishes ? 'This change publishes on approval and remains reversible.' : 'This change is draft-only until executed downstream and is reversible.'}</span>
                 <span>ℹ️ Clicks baseline sums the page&apos;s top GSC queries (demand table), not every long-tail query.</span>
               </div>
             </Card>
@@ -760,7 +786,7 @@ function ActionDetailContent() {
                 ) : (
                   <li>This change modifies on-page {md.tag.toLowerCase()} — review the proposed value against the live page before approving.</li>
                 )}
-                <li>Fully reversible; approving creates a DRAFT that still requires execution downstream.</li>
+                <li>{autoPublishes ? 'Fully reversible; approving publishes live through the governed executor policy.' : 'Fully reversible; approving queues a draft that still requires execution downstream.'}</li>
                 {candidate.gate_reasons.length > 0 && (
                   <li>Gate notes: {candidate.gate_reasons.join('; ')}</li>
                 )}

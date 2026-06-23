@@ -46,13 +46,16 @@ export async function GET(req: NextRequest) {
       : DEFAULT_LIMIT;
 
     const { rows } = await pool.query(
-      `SELECT candidate_id, opportunity_id, mutation_type, mutation_label, primary_remedy,
+      `SELECT q.candidate_id, q.opportunity_id, q.mutation_type, q.mutation_label, q.primary_remedy,
               proposed_value, current_value_snapshot, evidence_summary, why, gate_reasons,
               opportunity_score::numeric AS opportunity_score, opportunity_urgency,
               confidence_tier, source_confidence, gate_status, approval_status, execution_status,
               target_page_url, page_url_canonical, page_is_live, page_status_class,
-              regate_review_flag, needs_evidence, qa_status, outcome_verdict
-       FROM analytics.v_seo_dashboard_queue
+              regate_review_flag, needs_evidence, qa_status, outcome_verdict,
+              COALESCE(pp.auto_publish, false) AS auto_publish
+       FROM analytics.v_seo_dashboard_queue q
+       LEFT JOIN analytics.seo_mutation_publish_policy pp
+         ON pp.mutation_type = q.mutation_type
        ORDER BY opportunity_score DESC NULLS LAST,
                 mutation_label ASC NULLS LAST,
                 page_url_canonical ASC NULLS LAST,
@@ -87,6 +90,7 @@ export async function GET(req: NextRequest) {
       needs_evidence: r.needs_evidence === true,
       qa_status: r.qa_status,
       outcome_verdict: r.outcome_verdict,
+      auto_publish: r.auto_publish === true,
     }));
 
     const summary = await pool.query(`SELECT * FROM analytics.v_seo_dashboard_summary`);
