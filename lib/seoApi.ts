@@ -1712,3 +1712,116 @@ export async function getSeoStrategyRecommendations(): Promise<SeoStrategyRecomm
   const data = await seoFetch<{ data: SeoStrategyRecommendation[] }>('/api/proxy/seo/strategy');
   return data.data ?? [];
 }
+
+// ── Page Enhancement model ────────────────────────────────────────
+export type LifecycleState =
+  | 'evaluating'
+  | 'performer'
+  | 'probation'
+  | 'watch'
+  | 'winner'
+  | 'retired'
+  | 'inconclusive';
+
+export interface SeoFieldMember {
+  candidate_id: string;
+  mutation_type: string; // h1 | meta_description | title | alt_text
+  current_value_snapshot: string | null;
+  proposed_value: string;
+  quality_self_score: number; // 0–1
+  publish_live: boolean;
+  guard_reason?: string;
+}
+
+export interface SeoPageEnhancement {
+  enhancement_id: string;
+  canonical_url: string;
+  version: number;
+  lifecycle_state: LifecycleState;
+  change_count: number;
+  member_candidate_ids: string[];
+  fields: SeoFieldMember[];
+  has_live_members: boolean;
+  has_qa_warnings: boolean;
+  created_at: string;
+  evaluation_start_at?: string;
+  lifecycle_policy_first_days: number; // 30
+  lifecycle_policy_final_days: number; // 60
+}
+
+export interface SeoNorthStar {
+  total_clicks_28d: number;
+  clicks_delta_pct: number;
+  pct_page_one: number;
+  pct_page_one_delta: number;
+  improving_pages: number;
+  declining_pages: number;
+  data_freshness_at: string;
+}
+
+export interface SeoPipelineCounts {
+  review: number;
+  evaluation: number;
+  resolved: number;
+}
+
+export interface SeoEvaluationRow {
+  enhancement_id: string;
+  canonical_url: string;
+  version: number;
+  lifecycle_state: LifecycleState;
+  evaluation_start_at: string;
+  first_verdict_days: number;
+  final_verdict_days: number;
+  rank_delta?: number;
+  click_delta_pct?: number;
+}
+
+export interface SeoResultRow {
+  enhancement_id: string;
+  canonical_url: string;
+  version: number;
+  verdict: 'winner' | 'retired' | 'inconclusive';
+  rank_delta?: number;
+  click_delta_pct?: number;
+  verdict_at: string;
+}
+
+export async function getSeoNorthStar(): Promise<{ north_star: SeoNorthStar; pipeline: SeoPipelineCounts }> {
+  const data = await seoFetch<{ data: { north_star: SeoNorthStar; pipeline: SeoPipelineCounts } }>('/api/proxy/seo/north-star');
+  return data.data;
+}
+
+export async function getSeoEnhancementQueue(): Promise<SeoPageEnhancement[]> {
+  const data = await seoFetch<{ data: SeoPageEnhancement[] }>('/api/proxy/seo/enhancement-queue');
+  return data.data ?? [];
+}
+
+export async function getSeoEnhancement(id: string): Promise<SeoPageEnhancement> {
+  const data = await seoFetch<{ data: SeoPageEnhancement }>(`/api/proxy/seo/enhancement-queue?id=${encodeURIComponent(id)}`);
+  return data.data;
+}
+
+export async function releasePageEnhancement(enhancementId: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/enhancement-queue', {
+    method: 'POST',
+    body: JSON.stringify({ enhancement_id: enhancementId, action: 'release' }),
+  });
+}
+
+export async function rejectPageEnhancement(enhancementId: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/enhancement-queue', {
+    method: 'POST',
+    body: JSON.stringify({ enhancement_id: enhancementId, action: 'reject' }),
+  });
+}
+
+export async function getSeoEvaluation(): Promise<SeoEvaluationRow[]> {
+  const data = await seoFetch<{ data: SeoEvaluationRow[] }>('/api/proxy/seo/evaluation');
+  return data.data ?? [];
+}
+
+export async function getSeoResults(): Promise<SeoResultRow[]> {
+  const data = await seoFetch<{ data: SeoResultRow[] }>('/api/proxy/seo/results-v2');
+  return data.data ?? [];
+}
