@@ -29,14 +29,6 @@ import { PALETTE, monoStack, Pill, fmtInt, fmtScore, pathOf, mutationDisplay, pr
 import { Term } from '../../../../design/components/Term';
 
 const PAGE_SIZE = 25;
-const QUALITY_FLOOR = 70;
-const FAST_LANE_TYPES = new Set([
-  'meta_description_update',
-  'title_tag_refinement',
-  'image_alt_text_update',
-  'image_alt_update',
-  'alt_text_update',
-]);
 
 // Text fields have a single slot per page, so competing proposals are variants of
 // the SAME decision and should be deduped. Structural mutations are distinct per
@@ -85,31 +77,8 @@ function valuePreview(value: string | null | undefined): string {
   return v.length > 110 ? `${v.slice(0, 107)}...` : v;
 }
 
-function isHighConfidence(c: PageDossierCandidate): boolean {
-  return [c.confidence_tier, c.source_confidence].some((v) => String(v ?? '').toLowerCase() === 'high');
-}
-
-function hasSnapshot(c: PageDossierCandidate): boolean {
-  return c.current_value_snapshot != null;
-}
-
-function hasUsableProposedValue(c: PageDossierCandidate): boolean {
-  const proposed = (c.proposed_value ?? '').trim();
-  return Boolean(proposed) && proposed !== '__llm_pending__';
-}
-
 function isFastLaneCandidate(c: PageDossierCandidate): boolean {
-  return c.auto_publish === true
-    && FAST_LANE_TYPES.has((c.mutation_type ?? '').toLowerCase())
-    && isHighConfidence(c)
-    && (c.quality_self_score ?? c.opportunity_score ?? 0) >= QUALITY_FLOOR
-    && c.gate_status === 'accepted'
-    && c.approval_status === 'pending'
-    && c.execution_status === 'proposed'
-    && hasSnapshot(c)
-    && hasUsableProposedValue(c)
-    && !c.regate_review_flag
-    && !proposalReview(c).flagged;
+  return c.safe_to_bulk_approve === true;
 }
 
 function CandidateRow({
@@ -428,8 +397,7 @@ function RecommendationsContent() {
     try {
       const result = await bulkApproveEngineCandidates({
         candidate_ids: selectedCandidates.map((c) => c.candidate_id),
-        quality_floor: QUALITY_FLOOR,
-        review_notes: `bulk approval from recommendations queue; quality_floor=${QUALITY_FLOOR}`,
+        review_notes: 'bulk approval from recommendations queue; canonical_copy_quality_gate=pass',
       });
       setActionMsg(`Bulk approve complete: ${result.summary.approved} approved, ${result.summary.skipped} skipped, ${result.summary.errors} errored.`);
       setSelectedIds(new Set());
@@ -465,7 +433,7 @@ function RecommendationsContent() {
       <div style={{ marginBottom: space['5'] }}>
         <h1 style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>Recommendations</h1>
         <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-recommendations-subtitle">
-          One recommended decision per page field, ordered by type and target page while opportunity scoring is recalibrated in Batch 2. Competing text variants are collapsed behind &ldquo;see alternatives.&rdquo; Gate-accepted, awaiting approval, on live pages only.
+          One recommended decision per page field, ordered by type and target page while opportunity scoring is recalibrated in Batch 2. Competing text variants are collapsed behind &ldquo;see alternatives.&rdquo; Gate-accepted, awaiting approval, on live pages only; bulk approval uses the canonical copy-quality floor and open regeneration queue as its guard.
         </p>
       </div>
 
