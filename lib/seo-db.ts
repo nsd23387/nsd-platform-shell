@@ -209,6 +209,8 @@ export interface BulkApprovalResult {
   status: 'approved' | 'skipped' | 'error';
   reason?: string;
   auto_publish?: boolean;
+  copy_quality_score?: number | null;
+  copy_quality_floor?: number | null;
 }
 
 export async function bulkApproveExecutionCandidates(
@@ -219,13 +221,25 @@ export async function bulkApproveExecutionCandidates(
   if (ids.length === 0) return [];
 
   const p = getPool();
-  const qualityFloor = Number.isFinite(opts.qualityFloor) ? Number(opts.qualityFloor) : 70;
   const results: BulkApprovalResult[] = [];
 
   for (const candidateId of ids) {
     try {
       const { rows } = await p.query(
-        `SELECT c.candidate_id::text,
+        `WITH candidate AS (
+           SELECT c.*,
+                  CASE c.mutation_type
+                    WHEN 'h1_tag_refinement' THEN 'h1'
+                    WHEN 'meta_description_update' THEN 'meta_description'
+                    WHEN 'title_tag_refinement' THEN 'title'
+                    WHEN 'image_alt_text_improvement' THEN 'alt'
+                    ELSE NULL
+                  END AS copy_quality_field
+           FROM analytics.seo_execution_candidate c
+           WHERE c.candidate_id = $1::uuid
+           LIMIT 1
+         )
+         SELECT c.candidate_id::text,
                 c.approval_status,
                 c.execution_status,
                 c.gate_status,
@@ -233,20 +247,43 @@ export async function bulkApproveExecutionCandidates(
                 c.proposed_value,
                 c.current_value_snapshot,
                 c.opportunity_score::numeric AS opportunity_score,
+                c.needs_evidence,
+                c.regate_review_flag,
                 c.evidence,
                 COALESCE(pp.auto_publish, false) AS auto_publish,
-                COALESCE(
-                  CASE WHEN c.evidence->>'quality_self_score' ~ '^-?[0-9]+(\\.[0-9]+)?$'
-                       THEN (c.evidence->>'quality_self_score')::numeric END,
-                  CASE WHEN c.evidence->>'recommendation_quality_score' ~ '^-?[0-9]+(\\.[0-9]+)?$'
-                       THEN (c.evidence->>'recommendation_quality_score')::numeric END,
-                  c.opportunity_score::numeric
-                ) AS quality_self_score
-         FROM analytics.seo_execution_candidate c
+                c.copy_quality_field,
+                q.qa_status,
+                (copy_score.score->>'quality')::numeric AS copy_quality_score,
+                (copy_score.score->>'floor')::numeric AS copy_quality_floor,
+                CASE
+                  WHEN c.copy_quality_field IS NULL THEN true
+                  ELSE COALESCE((copy_score.score->>'passes_floor')::boolean, false)
+                END AS copy_quality_passes_floor,
+                regen.status AS copy_regen_status
+         FROM candidate c
          LEFT JOIN analytics.seo_mutation_publish_policy pp
            ON pp.mutation_type = c.mutation_type
-         WHERE c.candidate_id = $1::uuid
-         LIMIT 1`,
+         LEFT JOIN analytics.v_seo_dashboard_queue q
+           ON q.candidate_id = c.candidate_id
+         LEFT JOIN LATERAL (
+           SELECT a.normalized_keyword
+           FROM analytics.seo_page_keyword_assignment a
+           WHERE analytics.seo_norm_url(a.intended_page_url) = analytics.seo_norm_url(c.target_page_url)
+           ORDER BY (a.status = 'active') DESC NULLS LAST,
+                    a.routing_confidence DESC NULLS LAST
+           LIMIT 1
+         ) kw ON c.copy_quality_field IS NOT NULL
+         LEFT JOIN LATERAL (
+           SELECT analytics.seo_copy_quality_score(
+             c.copy_quality_field,
+             c.proposed_value,
+             kw.normalized_keyword,
+             NULL,
+             NULL
+           ) AS score
+         ) copy_score ON c.copy_quality_field IS NOT NULL
+         LEFT JOIN analytics.seo_copy_regen_queue regen
+           ON regen.candidate_id = c.candidate_id`,
         [candidateId],
       );
 
@@ -258,7 +295,9 @@ export async function bulkApproveExecutionCandidates(
 
       const autoPublish = row.auto_publish === true;
       const proposed = typeof row.proposed_value === 'string' ? row.proposed_value.trim() : '';
-      const quality = row.quality_self_score == null ? null : Number(row.quality_self_score);
+      const copyQualityScore = row.copy_quality_score == null ? null : Number(row.copy_quality_score);
+      const copyQualityFloor = row.copy_quality_floor == null ? null : Number(row.copy_quality_floor);
+      const copyGateRequired = row.copy_quality_field != null;
       const guards: string[] = [];
 
       if (row.approval_status === 'approved') guards.push('already_approved');
@@ -267,7 +306,17 @@ export async function bulkApproveExecutionCandidates(
       if (row.is_active !== true) guards.push('inactive_candidate');
       if (row.current_value_snapshot == null) guards.push('snapshot_missing');
       if (!proposed || proposed === '__llm_pending__') guards.push('sentinel_or_empty_proposed_value');
-      if (quality == null || quality < qualityFloor) guards.push('below_quality_floor');
+      if (row.needs_evidence === true) guards.push('needs_evidence');
+      if (row.regate_review_flag === true) guards.push('needs_rereview');
+      if (['warn', 'block'].includes(String(row.qa_status || '').toLowerCase())) guards.push(`qa_${String(row.qa_status).toLowerCase()}`);
+      if (['pending', 'regenerating', 'escalated'].includes(String(row.copy_regen_status || '').toLowerCase())) {
+        guards.push(`copy_regen_${String(row.copy_regen_status).toLowerCase()}`);
+      }
+      if (copyGateRequired && row.copy_quality_passes_floor !== true) {
+        guards.push(copyQualityScore == null || copyQualityFloor == null
+          ? 'copy_quality_unscored'
+          : `below_copy_quality_floor:${copyQualityScore}/${copyQualityFloor}`);
+      }
 
       if (guards.length > 0) {
         results.push({
@@ -275,6 +324,8 @@ export async function bulkApproveExecutionCandidates(
           status: 'skipped',
           reason: guards.join(','),
           auto_publish: autoPublish,
+          copy_quality_score: copyQualityScore,
+          copy_quality_floor: copyQualityFloor,
         });
         continue;
       }
@@ -291,7 +342,7 @@ export async function bulkApproveExecutionCandidates(
            AND approval_status = 'pending'
            AND gate_status = 'accepted'
            AND is_active = true`,
-        [candidateId, opts.reviewNotes || `bulk approve; quality_floor=${qualityFloor}`],
+        [candidateId, opts.reviewNotes || 'bulk approve; canonical_copy_quality_gate=pass'],
       );
 
       results.push({
@@ -299,6 +350,8 @@ export async function bulkApproveExecutionCandidates(
         status: upd.rowCount === 1 ? 'approved' : 'skipped',
         reason: upd.rowCount === 1 ? undefined : 'update_race_or_already_reviewed',
         auto_publish: autoPublish,
+        copy_quality_score: copyQualityScore,
+        copy_quality_floor: copyQualityFloor,
       });
     } catch (err: any) {
       results.push({ candidate_id: candidateId, status: 'error', reason: err.message || String(err) });

@@ -589,6 +589,8 @@ export interface BulkApproveEngineResult {
   status: 'approved' | 'skipped' | 'error';
   reason?: string;
   auto_publish?: boolean;
+  copy_quality_score?: number | null;
+  copy_quality_floor?: number | null;
 }
 
 export async function bulkApproveEngineCandidates(opts: {
@@ -1110,6 +1112,11 @@ export interface PageDossierCandidate {
   gate_status?: string | null;
   opportunity_score: number | null;
   quality_self_score?: number | null;
+  copy_quality_score?: number | null;
+  copy_quality_floor?: number | null;
+  copy_quality_passes_floor?: boolean | null;
+  copy_regen_status?: string | null;
+  safe_to_bulk_approve?: boolean | null;
   opportunity_urgency: string | null;
   confidence_tier: string | null;
   source_confidence: string | null;
