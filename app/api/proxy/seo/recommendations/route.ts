@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   getRecommendations,
   approveExecutionCandidate,
+  bulkApproveExecutionCandidates,
   rejectExecutionCandidate,
   approveByOpportunityId,
   rejectByOpportunityId,
@@ -39,7 +40,18 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
-  const { id, action, candidate_id, opportunity_id, review_notes, target, proposed_value, target_page_url } = body || {};
+  const {
+    id,
+    action,
+    candidate_id,
+    candidate_ids,
+    opportunity_id,
+    review_notes,
+    target,
+    proposed_value,
+    target_page_url,
+    quality_floor,
+  } = body || {};
 
   console.log(`[seo/recommendations] POST received | action=${action} target=${target} candidate_id=${candidate_id || 'none'} opportunity_id=${opportunity_id || 'none'} id=${id || 'none'}`);
 
@@ -56,6 +68,31 @@ export async function POST(req: NextRequest) {
       const approvalMode = candidate_id ? 'candidate' : 'opportunity';
       const identifier = candidate_id || opportunity_id;
       console.log(`[seo/recommendations] Engine ${action} | mode=${approvalMode} | id=${identifier}`);
+
+      if (action === 'bulk_approve') {
+        const ids = Array.isArray(candidate_ids) ? candidate_ids.filter((v: unknown) => typeof v === 'string') : [];
+        if (ids.length === 0) {
+          return NextResponse.json({
+            error: 'candidate_ids required for bulk approval',
+            action, target, mode: 'engine',
+          }, { status: 400 });
+        }
+        const results = await bulkApproveExecutionCandidates(ids, {
+          reviewNotes: typeof review_notes === 'string' ? review_notes : undefined,
+          qualityFloor: typeof quality_floor === 'number' ? quality_floor : undefined,
+        });
+        const approved = results.filter((r) => r.status === 'approved').length;
+        const skipped = results.filter((r) => r.status === 'skipped').length;
+        const errors = results.filter((r) => r.status === 'error').length;
+        console.log(`[seo/recommendations] Bulk approved ${approved}/${ids.length}; skipped=${skipped}; errors=${errors}`);
+        return NextResponse.json({
+          success: errors === 0,
+          action,
+          target: 'engine',
+          results,
+          summary: { requested: ids.length, approved, skipped, errors },
+        });
+      }
 
       if (action === 'approve') {
         if (candidate_id) {

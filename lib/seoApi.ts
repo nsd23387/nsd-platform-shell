@@ -584,6 +584,30 @@ export async function approveEngineCandidate(opts: {
   });
 }
 
+export interface BulkApproveEngineResult {
+  candidate_id: string;
+  status: 'approved' | 'skipped' | 'error';
+  reason?: string;
+  auto_publish?: boolean;
+}
+
+export async function bulkApproveEngineCandidates(opts: {
+  candidate_ids: string[];
+  review_notes?: string;
+  quality_floor?: number;
+}): Promise<{ results: BulkApproveEngineResult[]; summary: { requested: number; approved: number; skipped: number; errors: number } }> {
+  return seoFetch('/api/proxy/seo/recommendations', {
+    method: 'POST',
+    body: JSON.stringify({
+      target: 'engine',
+      action: 'bulk_approve',
+      candidate_ids: opts.candidate_ids,
+      review_notes: opts.review_notes,
+      quality_floor: opts.quality_floor,
+    }),
+  });
+}
+
 export async function rejectEngineCandidate(opts: {
   candidate_id?: string;
   opportunity_id?: string;
@@ -1085,6 +1109,7 @@ export interface PageDossierCandidate {
   gate_reasons: string[];
   gate_status?: string | null;
   opportunity_score: number | null;
+  quality_self_score?: number | null;
   opportunity_urgency: string | null;
   confidence_tier: string | null;
   source_confidence: string | null;
