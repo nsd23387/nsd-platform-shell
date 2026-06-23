@@ -30,14 +30,16 @@ import {
   approveEngineCandidate, rejectEngineCandidate,
   getCompetitiveVelocitySummary, getCompetitiveChanges, getSeoShipped,
   getSeoOffpageBriefs, getSeoSuppressed, getSeoSystemHealth, getSeoOverviewKpis,
+  getSeoPageEnhancements,
 } from '../../../lib/seoApi';
 import { fmtDataForSeoDifficulty, fmtDataForSeoVolume } from '../../../lib/dataforseoFormat';
 import type {
   PortfolioPage, PortfolioBucket, PageDossierCandidate,
   SeoTimeseriesResponse, GscPipelineHealth, SeoCompetitorGap,
   SeoTimeseriesPoint, CompetitiveVelocitySummary, CompetitivePageChange,
-  SeoShippedAction, SeoCandidateQueue, SeoOffpageBrief, SuppressedAudit,
+  SeoShippedAction, SeoOffpageBrief, SuppressedAudit,
   SeoCompetitorGapMeta, SeoWindowRequest, SeoSystemHealthRow, SeoDashboardMetricContract,
+  SeoPageEnhancementsResponse, SeoPageEnhancementLifecycle,
 } from '../../../lib/seoApi';
 import {
   PALETTE, monoStack, Tc, ToneKey, Pill, toneStyle, BUCKETS, bucketTone,
@@ -273,6 +275,143 @@ function ShippedCard({ tc }: { tc: Tc }) {
             </div>
           ))}
         </div>
+      )}
+    </Card>
+  );
+}
+
+function LifecycleIcon({ status }: { status: string | null | undefined }) {
+  const s = String(status ?? 'new').toLowerCase();
+  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  if (s === 'winner') return <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M8 21h8" /><path {...common} d="M12 17v4" /><path {...common} d="M7 4h10v5a5 5 0 0 1-10 0V4Z" /><path {...common} d="M5 5H3v2a4 4 0 0 0 4 4" /><path {...common} d="M19 5h2v2a4 4 0 0 1-4 4" /></svg>;
+  if (s === 'retired') return <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M5 7h14" /><path {...common} d="M10 11v6" /><path {...common} d="M14 11v6" /><path {...common} d="M7 7l1 14h8l1-14" /><path {...common} d="M9 7V4h6v3" /></svg>;
+  if (s === 'probation') return <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4Z" /><path {...common} d="M12 8v5" /><path {...common} d="M12 17h.01" /></svg>;
+  if (s === 'watch') return <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" /><circle {...common} cx="12" cy="12" r="3" /></svg>;
+  if (s === 'performer') return <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M4 17l5-5 4 4 7-9" /><path {...common} d="M15 7h5v5" /></svg>;
+  return <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path {...common} d="M12 5v14" /><path {...common} d="M5 12h14" /></svg>;
+}
+
+function lifecycleTone(status: string | null | undefined): ToneKey {
+  switch (String(status ?? '').toLowerCase()) {
+    case 'winner': return 'good';
+    case 'retired': return 'bad';
+    case 'probation': return 'warn';
+    case 'watch': return 'info';
+    case 'performer': return 'violet';
+    case 'evaluating': return 'neutral';
+    default: return 'neutral';
+  }
+}
+
+function LifecyclePill({ status, tc }: { status: string | null | undefined; tc: Tc }) {
+  const s = String(status ?? 'new').replace(/_/g, ' ');
+  const tone = lifecycleTone(status);
+  const style = toneStyle(tone, tc);
+  return (
+    <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', padding: '2px 8px', borderRadius: 999, fontSize: '11px', fontWeight: fontWeight.medium, background: style.bg, color: style.fg, fontFamily: fontFamily.body, whiteSpace: 'nowrap' }}>
+      <LifecycleIcon status={status} />
+      {s}
+    </span>
+  );
+}
+
+function PackagePipelineCard({
+  data,
+  loading,
+  error,
+  tc,
+}: {
+  data: SeoPageEnhancementsResponse | null;
+  loading: boolean;
+  error: string | null;
+  tc: Tc;
+}) {
+  const counts = data?.counts ?? { review: 0, evaluating: 0, resolved: 0 };
+  const evaluating = (data?.lifecycle ?? []).filter((row) => ['evaluating', 'performer', 'probation', 'watch'].includes(String(row.status))).slice(0, 4);
+  const stage = (label: string, value: number, help: string, tone: ToneKey) => (
+    <div style={{ flex: '1 1 170px', border: `1px solid ${tc.border.subtle}`, borderRadius: radius.sm, padding: space['3'], background: tc.background.surface }}>
+      <Pill tone={tone} tc={tc}>{label}</Pill>
+      <div style={{ fontFamily: monoStack, fontSize: '30px', color: tc.text.primary, lineHeight: 1.1, marginTop: '8px' }}>{loading ? '—' : fmtInt(value)}</div>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '4px' }}>{help}</div>
+    </div>
+  );
+  return (
+    <Card tc={tc} style={{ padding: space['4'] }}>
+      <SectionTitle tc={tc} sub="One page package per decision; shipped pages wait for the 30/60-day read.">
+        Pipeline
+      </SectionTitle>
+      {error && <div style={{ color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '12px', marginBottom: space['3'] }}>{error}</div>}
+      <div style={{ display: 'flex', gap: space['3'], flexWrap: 'wrap' }}>
+        {stage('Review', counts.review, 'pages waiting for a human decision', 'violet')}
+        {stage('In evaluation', counts.evaluating, 'pages inside the 30/60-day window', 'info')}
+        {stage('Resolved', counts.resolved, 'winners, retired, or inconclusive', 'good')}
+      </div>
+      {evaluating.length > 0 && (
+        <div style={{ marginTop: space['3'], display: 'grid', gap: space['2'] }}>
+          {evaluating.map((row) => {
+            const day = row.day ?? 0;
+            const first = data?.policy.first_verdict_days ?? 30;
+            const final = data?.policy.final_days ?? 60;
+            return (
+              <div key={row.enhancement_id} style={{ display: 'flex', justifyContent: 'space-between', gap: space['3'], alignItems: 'center', fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.secondary, borderTop: `1px solid ${tc.border.subtle}`, paddingTop: space['2'] }}>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: monoStack }}>{pathOf(row.rep_url || row.canonical_url)}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: space['2'], flexShrink: 0 }}>
+                  <LifecyclePill status={row.status} tc={tc} />
+                  <span>day {fmtInt(day)} of {day < first ? first : final}</span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <Link href="/dashboard/seo/recommendations" style={{ display: 'inline-flex', marginTop: space['3'], color: PALETTE.violet, textDecoration: 'none', fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium }}>
+        Review pages →
+      </Link>
+    </Card>
+  );
+}
+
+function NorthStarCard({ data, tc }: { data: SeoPageEnhancementsResponse | null; tc: Tc }) {
+  const ns = data?.north_star ?? null;
+  const clickDelta = ns ? ns.clicks_28d - ns.clicks_prev28d : null;
+  return (
+    <Card tc={tc} style={{ padding: space['4'] }}>
+      <SectionTitle tc={tc} sub="The scorecard says whether shipped work is moving the site.">
+        North Star
+      </SectionTitle>
+      {!ns ? (
+        <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>North-star scorecard unavailable.</div>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: space['3'] }}>
+            <div>
+              <div style={{ fontFamily: monoStack, fontSize: '30px', color: tc.text.primary }}>{ns.pct_page1 == null ? '—' : `${ns.pct_page1.toFixed(1)}%`}</div>
+              <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>page 1</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: monoStack, fontSize: '30px', color: tc.text.primary }}>{fmtInt(ns.clicks_28d)}</div>
+              <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>clicks, 28d {clickDelta == null ? '' : `(${clickDelta >= 0 ? '+' : ''}${fmtInt(clickDelta)})`}</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: monoStack, fontSize: '30px', color: PALETTE.good }}>{fmtInt(ns.improving)}</div>
+              <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>improving</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: monoStack, fontSize: '30px', color: PALETTE.bad }}>{fmtInt(ns.declining)}</div>
+              <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted }}>declining</div>
+            </div>
+          </div>
+          {data?.money_pages && data.money_pages.length > 0 && (
+            <div style={{ marginTop: space['3'], display: 'grid', gap: '6px' }}>
+              {data.money_pages.slice(0, 3).map((p) => (
+                <div key={p.canonical_url} style={{ display: 'flex', justifyContent: 'space-between', gap: space['2'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.secondary, borderTop: `1px solid ${tc.border.subtle}`, paddingTop: '6px' }}>
+                  <span style={{ fontFamily: monoStack, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pathOf(p.canonical_url)}</span>
+                  <span style={{ flexShrink: 0 }}>{fmtInt(p.impr_28d)} impr · pos {p.pos_28d == null ? '—' : p.pos_28d.toFixed(1)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </Card>
   );
@@ -962,23 +1101,23 @@ function CommandCenterContent() {
   const tc = useThemeColors();
 
   const [candidates, setCandidates] = useState<PageDossierCandidate[] | null>(null);
-  const [queueSummary, setQueueSummary] = useState<SeoCandidateQueue['summary'] | null>(null);
+  const [pageEnhancements, setPageEnhancements] = useState<SeoPageEnhancementsResponse | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioPage[] | null>(null);
   const [gaps, setGaps] = useState<SeoCompetitorGap[] | null>(null);
   const [gapMeta, setGapMeta] = useState<SeoCompetitorGapMeta | null>(null);
   const [systemHealth, setSystemHealth] = useState<SeoSystemHealthRow[] | null>(null);
   const [queueLoading, setQueueLoading] = useState(true);
+  const [enhancementsLoading, setEnhancementsLoading] = useState(true);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [gapsLoading, setGapsLoading] = useState(true);
   const [queueError, setQueueError] = useState<string | null>(null);
+  const [enhancementsError, setEnhancementsError] = useState<string | null>(null);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
   const [gapsError, setGapsError] = useState<string | null>(null);
   const [systemHealthError, setSystemHealthError] = useState<string | null>(null);
   const [deferred, setDeferred] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const [reviewSelected, setReviewSelected] = useState<Set<string>>(new Set());
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
   const [diagnoseUrl, setDiagnoseUrl] = useState('');
@@ -1004,12 +1143,10 @@ function CommandCenterContent() {
       .then((q) => {
         if (!alive) return;
         setCandidates(q.candidates ?? []);
-        setQueueSummary(q.summary ?? null);
       })
       .catch((e) => {
         if (!alive) return;
         setCandidates([]);
-        setQueueSummary(null);
         setQueueError(e instanceof Error ? e.message : 'Failed to load recommendations');
       })
       .finally(() => {
@@ -1019,6 +1156,21 @@ function CommandCenterContent() {
   }, []);
 
   useEffect(() => loadQueue(), [loadQueue]);
+
+  useEffect(() => {
+    let alive = true;
+    setEnhancementsLoading(true);
+    setEnhancementsError(null);
+    getSeoPageEnhancements()
+      .then((data) => { if (alive) setPageEnhancements(data); })
+      .catch((e) => {
+        if (!alive) return;
+        setPageEnhancements(null);
+        setEnhancementsError(e instanceof Error ? e.message : 'Failed to load page packages');
+      })
+      .finally(() => { if (alive) setEnhancementsLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -1140,91 +1292,13 @@ function CommandCenterContent() {
     setDeferred((prev) => new Set(prev).add(id));
   }
 
-  // Open the review-then-confirm panel for the top N detections. Nothing is
-  // approved until the user confirms — and they may deselect any candidate
-  // first (governance: bulk approve must remain a deliberate, reviewable act).
-  function openReview(n: number) {
-    const targets = detections.slice(0, n);
-    if (targets.length === 0) return;
-    // Governance (D7): candidates flagged "needs review" (placeholder/scaffold
-    // proposals) are NOT pre-selected — a human must deliberately opt them in
-    // after authoring/checking. They still appear in the list, just unchecked.
-    // C-1: candidates with no before-snapshot cannot be approved at all (their
-    // checkbox is disabled below), so they are excluded from pre-selection too.
-    setReviewSelected(new Set(targets.filter((c) => !proposalReview(c).flagged && !beforeSnapshotMissing(c)).map((c) => c.candidate_id)));
-    setReviewOpen(true);
-  }
-
-  function toggleReview(id: string) {
-    setReviewSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  async function confirmReview() {
-    if (bulkBusy) return;
-    // C-1 defense-in-depth: never bulk-approve a candidate whose before-snapshot
-    // is missing, even if a stale selection slipped through.
-    const targets = detections.filter((c) => reviewSelected.has(c.candidate_id) && !beforeSnapshotMissing(c));
-    if (targets.length === 0) { setReviewOpen(false); return; }
-    setBulkBusy(true); setActionMsg(null);
-    const ids = new Set(targets.map((c) => c.candidate_id));
-    setCandidates((prev) => (prev ?? []).filter((c) => !ids.has(c.candidate_id)));
-    const results = await Promise.allSettled(targets.map((c) => approveEngineCandidate({
-      candidate_id: c.candidate_id,
-      opportunity_id: c.opportunity_id ?? undefined,
-      proposed_value: c.proposed_value ?? undefined,
-      target_page_url: c.target_page_url ?? undefined,
-    })));
-    const ok = results.filter((r) => r.status === 'fulfilled').length;
-    const failed = results.length - ok;
-    const livePublishes = targets.filter((c) => c.auto_publish).length;
-    const drafts = targets.length - livePublishes;
-    const parts = [
-      livePublishes ? `${livePublishes} approved for live publish` : null,
-      drafts ? `${drafts} queued as draft` : null,
-    ].filter(Boolean);
-    setActionMsg(`${ok} recommendation${ok === 1 ? '' : 's'} approved${parts.length ? ` (${parts.join(', ')})` : ''}${failed ? ` · ${failed} failed (still pending)` : ''}.`);
-    setBulkBusy(false);
-    setReviewOpen(false);
-    if (failed) loadQueue();
-  }
-
-  const TOP_N = 5;
-  const topCount = Math.min(TOP_N, detections.length);
-  const reviewTargets = useMemo(
-    () => detections.slice(0, TOP_N),
-    [detections],
-  );
-  // D-2 honesty: the queue endpoint's summary counts ONLY the active (on-page)
-  // lane — paused lanes (schema) still exist as canonical queue rows in this
-  // same response's `candidates` array (and on the Recommendations tab). Derive
-  // the gap from data we already hold; never present the lane count as the
-  // whole queue, and never invent a number when the full count isn't available.
-  const activeLaneProposals = queueSummary?.total_proposals ?? detections.length;
-  const canonicalQueueRows = candidates?.length ?? 0;
-  const pausedLaneExtra = Math.max(0, canonicalQueueRows - activeLaneProposals);
-  const summaryTiles = [
-    { label: 'Ready to review', value: queueSummary?.decisions ?? detections.length, help: 'Recommendations awaiting approval', metricKey: 'awaiting_approval' },
-    {
-      label: 'Recommendations surfaced',
-      value: activeLaneProposals,
-      help: pausedLaneExtra > 0
-        ? `${fmtInt(pausedLaneExtra)} additional paused recommendation${pausedLaneExtra === 1 ? '' : 's'} available on the Recommendations tab`
-        : 'Current review queue',
-      metricKey: 'total_proposals',
-    },
-    { label: 'Re-review flagged', value: queueSummary?.re_review_flagged ?? 0, help: 'Needs another gate review' },
-    { label: 'Needs review', value: queueSummary?.needs_review ?? 0, help: 'Evidence or QA attention needed' },
-  ];
+  const packageCounts = pageEnhancements?.counts ?? { review: 0, evaluating: 0, resolved: 0 };
 
   return (
     <div style={{ padding: space['6'], maxWidth: 1200, margin: '0 auto' }}>
       {/* C-9: operator ribbon — where to act first on this page */}
       <OperatorRibbon testId="operator-ribbon-seo">
-        review the Do This Next queue below, open Details on anything you&apos;d ship, and check the publish-policy tag before approving — everything else on this page is context.
+        review page packages first, then watch the 30/60-day evaluation clock — everything else is context.
       </OperatorRibbon>
 
       {/* Header */}
@@ -1232,10 +1306,8 @@ function CommandCenterContent() {
         <div>
           <h1 style={{ fontFamily: fontFamily.display, fontSize: '28px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>SEO Command Center</h1>
           <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-subtitle">
-            {queueLoading ? 'Loading recommendations…'
-              : redirectDetections.length === 0
-                ? `${detections.length} recommendation${detections.length === 1 ? '' : 's'} ready to review — all on live pages.`
-                : `${detections.length} recommendation${detections.length === 1 ? '' : 's'} ready to review — ${liveDetections.length} on live pages, ${redirectDetections.length} need routing review.`}
+            {enhancementsLoading ? 'Loading page packages…'
+              : `${fmtInt(packageCounts.review)} page${packageCounts.review === 1 ? '' : 's'} to review, ${fmtInt(packageCounts.evaluating)} in evaluation, ${fmtInt(packageCounts.resolved)} resolved.`}
           </p>
           <Link
             href="/dashboard/marketing/seo"
@@ -1267,12 +1339,12 @@ function CommandCenterContent() {
               Diagnose a URL…
             </button>
             <button
-              onClick={() => openReview(TOP_N)}
-              disabled={bulkBusy || topCount === 0}
+              onClick={() => window.location.assign('/dashboard/seo/recommendations')}
+              disabled={bulkBusy || packageCounts.review === 0}
               data-testid="button-approve-top"
-              style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (bulkBusy || topCount === 0) ? 'default' : 'pointer', opacity: (bulkBusy || topCount === 0) ? 0.6 : 1 }}
+              style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (bulkBusy || packageCounts.review === 0) ? 'default' : 'pointer', opacity: (bulkBusy || packageCounts.review === 0) ? 0.6 : 1 }}
             >
-              {`Review top ${topCount}…`}
+              Review pages…
             </button>
           </div>
         </div>
@@ -1300,95 +1372,6 @@ function CommandCenterContent() {
         </div>
       )}
 
-      {/* Approve-top-N review-then-confirm. Governance: bulk approve is never a
-          one-click act — the user reviews each candidate, its publish policy,
-          and may deselect any candidate before approval. */}
-      {reviewOpen && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: space['6'], overflowY: 'auto' }}
-          onClick={() => { if (!bulkBusy) setReviewOpen(false); }}
-          data-testid="overlay-review"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: 640, background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.md, padding: space['5'], marginTop: '48px' }}
-          >
-            <div style={sectionLabelStyle(tc)}>Review before approval</div>
-            <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginBottom: space['4'] }}>
-              Deselect anything you don&apos;t want to approve. Items marked &ldquo;Publishes on approve&rdquo; go live through the executor; items marked &ldquo;Draft on approve&rdquo; queue a WordPress draft.
-            </div>
-            <div style={{ borderTop: `1px solid ${tc.border.subtle}`, marginBottom: space['4'] }}>
-              {reviewTargets.map((c) => {
-                const checked = reviewSelected.has(c.candidate_id);
-                const m = mutationDisplay(c.mutation_type, c.primary_remedy);
-                const review = proposalReview(c);
-                const snapshotPending = beforeSnapshotMissing(c);
-                return (
-                  <label
-                    key={c.candidate_id}
-                    data-testid={`review-row-${c.candidate_id}`}
-                    style={{ display: 'flex', gap: space['3'], alignItems: 'flex-start', padding: `${space['3']} 0`, borderBottom: `1px solid ${tc.border.subtle}`, cursor: snapshotPending ? 'default' : 'pointer' }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked && !snapshotPending}
-                      disabled={snapshotPending}
-                      onChange={() => { if (!snapshotPending) toggleReview(c.candidate_id); }}
-                      data-testid={`review-check-${c.candidate_id}`}
-                      title={snapshotPending ? SNAPSHOT_PENDING_MSG : undefined}
-                      style={{ marginTop: '3px', flexShrink: 0 }}
-                    />
-                    <span style={{ minWidth: 0 }}>
-                      <span style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap', marginBottom: '2px' }}>
-                        <Pill tone="violet" tc={tc}>{c.mutation_label ?? m.tag}</Pill>
-                        <Pill tone={c.auto_publish ? 'good' : 'neutral'} tc={tc}>{c.auto_publish ? 'Publishes on approve' : 'Draft on approve'}</Pill>
-                        <span style={{ fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, color: tc.text.primary }}>{candidateHeadline(c)}</span>
-                        {c.regate_review_flag && <Pill tone="warn" tc={tc}>re-review</Pill>}
-                        {review.flagged && (
-                          <span title={review.reasons.join(' ')} data-testid={`review-needs-review-${c.candidate_id}`}><Pill tone="warn" tc={tc}>needs review</Pill></span>
-                        )}
-                        {snapshotPending && (
-                          <span title={SNAPSHOT_PENDING_MSG} data-testid={`review-snapshot-pending-${c.candidate_id}`}><Pill tone="warn" tc={tc}>snapshot pending</Pill></span>
-                        )}
-                      </span>
-                      <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, wordBreak: 'break-all' }}>{c.target_page_url ? pathOf(c.target_page_url) : '—'}</span>
-                      {review.flagged && (
-                        <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.warn, marginTop: '2px' }}>
-                          Not auto-approvable — {review.reasons[0]}
-                        </span>
-                      )}
-                      {snapshotPending && (
-                        <span style={{ display: 'block', fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.warn, marginTop: '2px' }}>
-                          {SNAPSHOT_PENDING_MSG}
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-            <div style={{ display: 'flex', gap: space['2'], justifyContent: 'flex-end', alignItems: 'center' }}>
-              <button
-                onClick={() => setReviewOpen(false)}
-                disabled={bulkBusy}
-                data-testid="button-review-cancel"
-                style={{ padding: '8px 14px', background: tc.background.surface, border: `1px solid ${tc.border.default}`, borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.primary, cursor: bulkBusy ? 'default' : 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmReview}
-                disabled={bulkBusy || reviewSelected.size === 0}
-                data-testid="button-review-confirm"
-                style={{ padding: '8px 14px', background: PALETTE.violet, color: '#fff', border: 'none', borderRadius: radius.sm, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: (bulkBusy || reviewSelected.size === 0) ? 'default' : 'pointer', opacity: (bulkBusy || reviewSelected.size === 0) ? 0.6 : 1 }}
-              >
-                {bulkBusy ? 'Queuing…' : `Queue ${reviewSelected.size} as DRAFT`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {actionMsg && (
         <div style={{ marginBottom: space['4'], padding: space['3'], borderRadius: radius.sm, background: PALETTE.goodSoft, color: PALETTE.good, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="text-action-msg">
           {actionMsg}
@@ -1398,28 +1381,12 @@ function CommandCenterContent() {
         <div style={{ marginBottom: space['4'], padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{queueError}</div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: space['3'], marginBottom: space['4'] }}>
-        {summaryTiles.map((tile) => (
-          <Card key={tile.label} tc={tc} style={{ padding: space['4'] }}>
-            <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: fontWeight.semibold }}>
-              {tile.label}
-            </div>
-            <div style={{ fontFamily: monoStack, fontSize: '28px', lineHeight: 1.1, color: tc.text.primary, marginTop: '6px' }}>
-              {queueLoading ? '—' : fmtInt(tile.value)}
-            </div>
-            <div style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, marginTop: '4px' }}>
-              {tile.help}
-            </div>
-            {'metricKey' in tile && tile.metricKey && provenanceText(metricContracts[tile.metricKey]) && (
-              <div style={{ fontFamily: fontFamily.body, fontSize: '10px', color: tc.text.muted, marginTop: '6px', lineHeight: 1.35 }}>
-                {provenanceText(metricContracts[tile.metricKey])}
-              </div>
-            )}
-          </Card>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', gap: space['4'], marginBottom: space['4'] }}>
+        <PackagePipelineCard data={pageEnhancements} loading={enhancementsLoading} error={enhancementsError} tc={tc} />
+        <NorthStarCard data={pageEnhancements} tc={tc} />
       </div>
 
-      {/* HERO — trend + freshness */}
+      {/* CONTEXT — trend + freshness */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: space['4'], marginBottom: space['4'] }}>
         <TrendChart tc={tc} window={seoWindow} onData={handleTrendData} contract={metricContracts.organic_clicks_30d} />
         <FreshnessCard tc={tc} contract={metricContracts.gsc_latest_data_age_days} />

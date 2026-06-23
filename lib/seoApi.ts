@@ -1268,6 +1268,150 @@ export async function getSeoCandidateQueue(limit?: number): Promise<SeoCandidate
   return data.data;
 }
 
+export interface SeoPageEnhancementMember {
+  candidate_id: string;
+  opportunity_id: string | null;
+  mutation_type: string | null;
+  target_field: string | null;
+  field_label: string;
+  target_page_url: string | null;
+  proposed_value: string | null;
+  current_value_snapshot: string | null;
+  mutation_label: string | null;
+  primary_remedy: string | null;
+  opportunity_score: number | null;
+  gate_status: string | null;
+  approval_status: string | null;
+  execution_status: string | null;
+  qa_status: string | null;
+  gate_reasons: string[];
+  auto_publish: boolean;
+  copy_quality_score: number | null;
+  copy_quality_floor: number | null;
+  copy_quality_passes_floor: boolean;
+  copy_regen_status: string | null;
+  safe_to_approve: boolean;
+}
+
+export interface SeoPageEnhancementPackage {
+  enhancement_id: string;
+  canonical_url: string;
+  rep_url: string | null;
+  version: number;
+  fields: string[];
+  change_count: number;
+  member_candidate_ids: string[];
+  updated_at: string | null;
+  members: SeoPageEnhancementMember[];
+  safe_to_bulk_approve: boolean;
+  auto_publish_count: number;
+  draft_count: number;
+}
+
+export interface SeoPageEnhancementLifecycle {
+  enhancement_id: string;
+  canonical_url: string;
+  rep_url: string | null;
+  version: number;
+  status: string;
+  fields: string[];
+  member_candidate_ids: string[];
+  released_at: string | null;
+  anchor_at: string | null;
+  prov_label: string | null;
+  prov_at: string | null;
+  final_label: string | null;
+  final_at: string | null;
+  action: string | null;
+  baseline_position: number | null;
+  baseline_clicks: number | null;
+  prov_position: number | null;
+  prov_clicks: number | null;
+  final_position: number | null;
+  final_clicks: number | null;
+  updated_at: string | null;
+  day: number | null;
+}
+
+export interface SeoNorthStar {
+  as_of: string | null;
+  pages_with_traffic: number;
+  ranked_top3: number;
+  ranked_top10: number;
+  ranked_top20: number;
+  pct_page1: number | null;
+  improving: number;
+  declining: number;
+  flat: number;
+  clicks_28d: number;
+  clicks_prev28d: number;
+  impr_28d: number;
+  impr_prev28d: number;
+}
+
+export interface SeoNorthStarMoneyPage {
+  canonical_url: string;
+  clicks_28d: number;
+  clicks_prev28d: number;
+  impr_28d: number;
+  pos_28d: number | null;
+}
+
+export interface SeoPageEnhancementsResponse {
+  packages: SeoPageEnhancementPackage[];
+  lifecycle: SeoPageEnhancementLifecycle[];
+  counts: { review: number; evaluating: number; resolved: number };
+  policy: { first_verdict_days: number; final_days: number };
+  north_star: SeoNorthStar | null;
+  money_pages: SeoNorthStarMoneyPage[];
+}
+
+export async function getSeoPageEnhancements(): Promise<SeoPageEnhancementsResponse> {
+  const data = await seoFetch<{ data: SeoPageEnhancementsResponse }>('/api/proxy/seo/page-enhancements');
+  return data.data;
+}
+
+export async function approveSeoPageEnhancement(enhancementId: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/page-enhancements', {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'approve_package',
+      enhancement_id: enhancementId,
+      review_notes: 'page package approval from recommendations queue',
+    }),
+  });
+}
+
+export async function rejectSeoPageEnhancement(enhancementId: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/page-enhancements', {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'reject_package',
+      enhancement_id: enhancementId,
+      review_notes: 'page package rejection from recommendations queue',
+    }),
+  });
+}
+
+export async function bulkApproveSeoPageEnhancements(enhancementIds: string[]): Promise<{
+  results: Array<{ enhancement_id: string; status: string; reason?: string; approved?: number; auto_publish_count?: number; draft_count?: number }>;
+  summary: { requested: number; approved: number; skipped: number; auto_publish_count: number; draft_count: number };
+}> {
+  const data = await seoFetch<{ data: {
+    results: Array<{ enhancement_id: string; status: string; reason?: string; approved?: number; auto_publish_count?: number; draft_count?: number }>;
+    summary: { requested: number; approved: number; skipped: number; auto_publish_count: number; draft_count: number };
+  } }>('/api/proxy/seo/page-enhancements', {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'bulk_approve_packages',
+      enhancement_ids: enhancementIds,
+      safe_only: true,
+      review_notes: 'bulk page package approval from recommendations queue',
+    }),
+  });
+  return data.data;
+}
+
 // Single engine candidate including the full `evidence` jsonb (the list/queue
 // endpoints omit the heavy jsonb). Powers the Action Card detail screen.
 // evidence shape (internal_link_insertion remedy):
