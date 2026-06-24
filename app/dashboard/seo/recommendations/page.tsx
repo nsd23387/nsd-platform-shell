@@ -8,7 +8,6 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
@@ -142,73 +141,146 @@ function FieldChange({
   candidateBusy: Record<string, 'approving' | 'skipping'>;
   pkg: SeoPageEnhancementPackage;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const guard = memberGuardText(member);
+
   return (
     <div
-      style={{ border: `1px solid ${tc.border.subtle}`, borderRadius: radius.sm, padding: space['3'], background: tc.background.surface }}
+      style={{
+        border: `1px solid ${tc.border.subtle}`,
+        borderRadius: radius.sm,
+        background: tc.background.surface,
+        overflow: 'hidden',
+      }}
       data-testid={`field-change-${member.candidate_id}`}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: space['2'], alignItems: 'center', marginBottom: space['2'] }}>
-        <Pill tone={fieldTone(member.field_label)} tc={tc}>{member.field_label}</Pill>
-        <Link
-          href={`/dashboard/seo/action/${encodeURIComponent(member.candidate_id)}`}
-          style={{ fontFamily: fontFamily.body, fontSize: '11px', color: PALETTE.violet, textDecoration: 'none', fontWeight: fontWeight.medium }}
-        >
-          Details
-        </Link>
-      </div>
-      <div
-        title={`${member.current_value_snapshot ?? '—'} → ${member.proposed_value ?? '—'}`}
-        style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', gap: space['2'], alignItems: 'start', fontFamily: fontFamily.body, fontSize: '12px', lineHeight: 1.45, color: tc.text.muted }}
+      {/* ── Summary row (always visible, click to toggle) ── */}
+      <button
+        type="button"
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          width: '100%',
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr auto',
+          alignItems: 'center',
+          gap: space['3'],
+          padding: `${space['2']} ${space['3']}`,
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
       >
-        <div style={{ minWidth: 0 }}>{valuePreview(member.current_value_snapshot, 150)}</div>
-        <div style={{ color: tc.text.muted }}>→</div>
-        <div style={{ minWidth: 0, color: tc.text.primary }}>{valuePreview(member.proposed_value, 150)}</div>
-      </div>
-      <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', marginTop: space['2'] }}>
-        {member.auto_publish ? <Pill tone="good" tc={tc}>publishes live</Pill> : <Pill tone="neutral" tc={tc}>draft</Pill>}
-        {guard ? <Pill tone="warn" tc={tc}>{guard}</Pill> : <Pill tone="good" tc={tc}>ready</Pill>}
-      </div>
-      {member.candidate_id && (
-        <div style={{ display: 'flex', gap: space['2'], marginTop: space['2'] }}>
-          <button
-            type="button"
-            onClick={() => onApproveCandidate(member.candidate_id, pkg)}
-            disabled={!!candidateBusy[member.candidate_id]}
-            style={{
-              padding: '3px 10px',
-              fontSize: '11px',
+        {/* Field type badge */}
+        <Pill tone={fieldTone(member.field_label)} tc={tc}>{member.field_label}</Pill>
+
+        {/* Proposed value preview */}
+        <span style={{
+          fontFamily: fontFamily.body,
+          fontSize: '12px',
+          color: tc.text.primary,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {valuePreview(member.proposed_value, 120)}
+        </span>
+
+        {/* Status pills + chevron */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], flexShrink: 0 }}>
+          {guard
+            ? <Pill tone="warn" tc={tc}>QA warn</Pill>
+            : <Pill tone="good" tc={tc}>ready</Pill>
+          }
+          {member.auto_publish
+            ? <Pill tone="good" tc={tc}>live</Pill>
+            : <Pill tone="neutral" tc={tc}>draft</Pill>
+          }
+          <span style={{ fontFamily: fontFamily.body, fontSize: '11px', color: tc.text.muted, lineHeight: 1 }}>
+            {expanded ? '▲' : '▼'}
+          </span>
+        </div>
+      </button>
+
+      {/* ── Expanded detail ── */}
+      {expanded && (
+        <div style={{ padding: `0 ${space['3']} ${space['3']}`, borderTop: `1px solid ${tc.border.subtle}` }}>
+          {/* Before → After diff */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)',
+            gap: space['2'],
+            alignItems: 'start',
+            fontFamily: fontFamily.body,
+            fontSize: '12px',
+            lineHeight: 1.5,
+            color: tc.text.muted,
+            paddingTop: space['3'],
+            marginBottom: space['2'],
+          }}>
+            <div style={{ minWidth: 0 }}>{member.current_value_snapshot ?? '—'}</div>
+            <div>→</div>
+            <div style={{ minWidth: 0, color: tc.text.primary }}>{member.proposed_value ?? '—'}</div>
+          </div>
+
+          {/* Guard reason if any */}
+          {guard && (
+            <div style={{
               fontFamily: fontFamily.body,
-              fontWeight: fontWeight.medium,
-              borderRadius: radius.sm,
-              border: 'none',
-              background: PALETTE.good,
-              color: '#fff',
-              cursor: candidateBusy[member.candidate_id] ? 'default' : 'pointer',
-              opacity: candidateBusy[member.candidate_id] ? 0.6 : 1,
-            }}
-          >
-            {candidateBusy[member.candidate_id] === 'approving' ? '…' : '✓ Approve field'}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSkipCandidate(member.candidate_id, pkg)}
-            disabled={!!candidateBusy[member.candidate_id]}
-            style={{
-              padding: '3px 10px',
               fontSize: '11px',
-              fontFamily: fontFamily.body,
-              fontWeight: fontWeight.medium,
+              color: PALETTE.warn,
+              marginBottom: space['2'],
+              padding: `${space['1']} ${space['2']}`,
+              background: PALETTE.warnSoft,
               borderRadius: radius.sm,
-              border: `1px solid ${tc.border.default}`,
-              background: 'transparent',
-              color: tc.text.muted,
-              cursor: candidateBusy[member.candidate_id] ? 'default' : 'pointer',
-              opacity: candidateBusy[member.candidate_id] ? 0.6 : 1,
-            }}
-          >
-            {candidateBusy[member.candidate_id] === 'skipping' ? '…' : '✗ Skip field'}
-          </button>
+            }}>
+              {guard}
+            </div>
+          )}
+
+          {/* Per-field action buttons */}
+          {member.candidate_id && (
+            <div style={{ display: 'flex', gap: space['2'], alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => onApproveCandidate(member.candidate_id, pkg)}
+                disabled={!!candidateBusy[member.candidate_id]}
+                style={{
+                  padding: '4px 12px',
+                  fontSize: '11px',
+                  fontFamily: fontFamily.body,
+                  fontWeight: fontWeight.medium,
+                  borderRadius: radius.sm,
+                  border: 'none',
+                  background: PALETTE.good,
+                  color: '#fff',
+                  cursor: candidateBusy[member.candidate_id] ? 'default' : 'pointer',
+                  opacity: candidateBusy[member.candidate_id] ? 0.6 : 1,
+                }}
+              >
+                {candidateBusy[member.candidate_id] === 'approving' ? 'Approving…' : '✓ Approve field'}
+              </button>
+              <button
+                type="button"
+                onClick={() => onSkipCandidate(member.candidate_id, pkg)}
+                disabled={!!candidateBusy[member.candidate_id]}
+                style={{
+                  padding: '4px 12px',
+                  fontSize: '11px',
+                  fontFamily: fontFamily.body,
+                  fontWeight: fontWeight.medium,
+                  borderRadius: radius.sm,
+                  border: `1px solid ${tc.border.default}`,
+                  background: 'transparent',
+                  color: tc.text.muted,
+                  cursor: candidateBusy[member.candidate_id] ? 'default' : 'pointer',
+                  opacity: candidateBusy[member.candidate_id] ? 0.6 : 1,
+                }}
+              >
+                {candidateBusy[member.candidate_id] === 'skipping' ? 'Skipping…' : '✗ Skip field'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -298,7 +370,7 @@ function PackageCard({
           )}
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: space['3'], marginTop: space['4'] }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: space['1'], marginTop: space['3'] }}>
         {pkg.members.map((member) => (
           <FieldChange
             key={member.candidate_id}
