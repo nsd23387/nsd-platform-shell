@@ -20,18 +20,21 @@ export async function GET(_req: NextRequest) {
   }
 
   try {
+    // seo_page_enhancement uses `status` (not lifecycle_state), `updated_at` for verdict timestamp
     const { rows } = await pool.query(`
       SELECT
         e.enhancement_id,
         e.canonical_url,
         e.version,
-        e.lifecycle_state  AS verdict,
-        NULL::numeric      AS rank_delta,
-        NULL::numeric      AS click_delta_pct,
-        e.updated_at       AS verdict_at
+        e.status                      AS verdict,
+        e.final_label,
+        e.prov_label,
+        e.baseline_position::numeric  AS rank_delta,
+        NULL::numeric                 AS click_delta_pct,
+        COALESCE(e.updated_at, e.released_at) AS verdict_at
       FROM analytics.seo_page_enhancement e
-      WHERE e.lifecycle_state IN ('winner','retired','inconclusive')
-      ORDER BY e.updated_at DESC
+      WHERE e.status IN ('winner','retired','inconclusive')
+      ORDER BY COALESCE(e.updated_at, e.released_at) DESC NULLS LAST
       LIMIT 500
     `);
 
@@ -49,6 +52,6 @@ export async function GET(_req: NextRequest) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[seo/results-v2] GET error:', msg);
-    return NextResponse.json({ error: 'Failed to load results' }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

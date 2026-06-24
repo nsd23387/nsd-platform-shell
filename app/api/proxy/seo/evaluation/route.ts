@@ -20,32 +20,44 @@ export async function GET(_req: NextRequest) {
   }
 
   try {
-    const { rows } = await pool.query(`
-      SELECT
-        e.enhancement_id,
-        e.canonical_url,
-        e.version,
-        e.lifecycle_state,
-        e.evaluation_start_at,
-        COALESCE(e.lifecycle_policy_first_days, 30)  AS first_verdict_days,
-        COALESCE(e.lifecycle_policy_final_days, 60)  AS final_verdict_days,
-        NULL::numeric                                 AS rank_delta,
-        NULL::numeric                                 AS click_delta_pct
-      FROM analytics.seo_page_enhancement e
-      WHERE e.lifecycle_state IN ('evaluating','performer','probation','watch')
-        AND e.evaluation_start_at IS NOT NULL
-      ORDER BY e.evaluation_start_at ASC
-      LIMIT 200
-    `);
+    // seo_page_enhancement uses `status` (not lifecycle_state) and `released_at` (not evaluation_start_at)
+    // seo_lifecycle_policy holds the verdict windows
+    const [rowsResult, policyResult] = await Promise.all([
+      pool.query(`
+        SELECT
+          e.enhancement_id,
+          e.canonical_url,
+          e.version,
+          e.status,
+          e.released_at,
+          e.anchor_at,
+          e.baseline_position::numeric AS rank_delta,
+          NULL::numeric               AS click_delta_pct
+        FROM analytics.seo_page_enhancement e
+        WHERE e.status IN ('evaluating','performer','probation','watch')
+          AND e.released_at IS NOT NULL
+        ORDER BY e.released_at ASC
+        LIMIT 200
+      `),
+      pool.query(`
+        SELECT first_verdict_days, final_days
+        FROM analytics.seo_lifecycle_policy
+        ORDER BY policy_id
+        LIMIT 1
+      `).catch(() => ({ rows: [] })),
+    ]);
 
-    const data = rows.map((r) => ({
+    const firstDays = Number(policyResult.rows[0]?.first_verdict_days ?? 30);
+    const finalDays = Number(policyResult.rows[0]?.final_days ?? 60);
+
+    const data = rowsResult.rows.map((r) => ({
       enhancement_id: r.enhancement_id,
       canonical_url: r.canonical_url,
       version: Number(r.version ?? 1),
-      lifecycle_state: r.lifecycle_state,
-      evaluation_start_at: r.evaluation_start_at,
-      first_verdict_days: Number(r.first_verdict_days ?? 30),
-      final_verdict_days: Number(r.final_verdict_days ?? 60),
+      lifecycle_state: r.status,
+      evaluation_start_at: r.released_at ?? r.anchor_at,
+      first_verdict_days: firstDays,
+      final_verdict_days: finalDays,
       rank_delta: r.rank_delta != null ? Number(r.rank_delta) : undefined,
       click_delta_pct: r.click_delta_pct != null ? Number(r.click_delta_pct) : undefined,
     }));
@@ -54,6 +66,6 @@ export async function GET(_req: NextRequest) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[seo/evaluation] GET error:', msg);
-    return NextResponse.json({ error: 'Failed to load evaluation data' }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

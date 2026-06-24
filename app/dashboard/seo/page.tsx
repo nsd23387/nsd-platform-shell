@@ -251,7 +251,7 @@ function CommandCenterContent() {
             label="Review"
             count={pipeline?.review ?? 0}
             subtitle="pages awaiting decision"
-            href="/dashboard/seo/review"
+            href="/dashboard/seo/recommendations"
           />
           <PipelineTile
             label="In Evaluation"

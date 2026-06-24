@@ -20,42 +20,52 @@ export async function GET(_req: NextRequest) {
   }
 
   try {
-    // North star metrics from GSC data
-    const nsResult = await pool.query(`
-      SELECT
-        COALESCE(SUM(clicks), 0)::int                   AS total_clicks_28d,
-        0::numeric                                        AS clicks_delta_pct,
-        0::numeric                                        AS pct_page_one,
-        0::numeric                                        AS pct_page_one_delta,
-        0::int                                            AS improving_pages,
-        0::int                                            AS declining_pages,
-        NOW()                                             AS data_freshness_at
-      FROM analytics.gsc_page_query_metrics
-      WHERE date >= CURRENT_DATE - INTERVAL '28 days'
-    `);
+    const [nsResult, pipelineResult] = await Promise.all([
+      // Canonical North Star view
+      pool.query(`SELECT * FROM analytics.v_seo_north_star LIMIT 1`)
+        .catch(() => ({ rows: [] })),
 
-    // Pipeline counts: how many enhancement packages in each stage
-    const pipelineResult = await pool.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE lifecycle_state IN ('evaluating') OR lifecycle_state IS NULL)::int AS review,
-        COUNT(*) FILTER (WHERE lifecycle_state IN ('performer','probation','watch'))::int           AS evaluation,
-        COUNT(*) FILTER (WHERE lifecycle_state IN ('winner','retired','inconclusive'))::int         AS resolved
-      FROM analytics.seo_page_enhancement
-    `).catch(() => ({ rows: [{ review: 0, evaluation: 0, resolved: 0 }] }));
+      // Pipeline counts — seo_page_enhancement uses column `status` (not lifecycle_state)
+      pool.query(`
+        SELECT
+          COUNT(*) FILTER (
+            WHERE status IS NULL
+               OR status NOT IN ('evaluating','performer','probation','watch','winner','retired','inconclusive')
+          )::int AS review,
+          COUNT(*) FILTER (
+            WHERE status IN ('evaluating','performer','probation','watch')
+          )::int AS evaluation,
+          COUNT(*) FILTER (
+            WHERE status IN ('winner','retired','inconclusive')
+          )::int AS resolved
+        FROM analytics.seo_page_enhancement
+      `).catch(() => ({ rows: [{ review: 0, evaluation: 0, resolved: 0 }] })),
+    ]);
 
     const ns = nsResult.rows[0] ?? {};
     const pip = pipelineResult.rows[0] ?? { review: 0, evaluation: 0, resolved: 0 };
 
+    // v_seo_north_star exposes clicks_28d / clicks_prev28d / pct_page1 / improving / declining
+    const clicks = Number(ns.clicks_28d ?? 0);
+    const prevClicks = Number(ns.clicks_prev28d ?? 0);
+    const clicksDelta = prevClicks > 0 ? ((clicks - prevClicks) / prevClicks) * 100 : 0;
+    // pct_page1 is 0–1 in the view; surface as a percentage
+    const pctPage1Raw = Number(ns.pct_page1 ?? 0);
+    const pctPage1 = pctPage1Raw > 1 ? pctPage1Raw : pctPage1Raw * 100;
+
     return NextResponse.json({
       data: {
         north_star: {
-          total_clicks_28d: Number(ns.total_clicks_28d ?? 0),
-          clicks_delta_pct: Number(ns.clicks_delta_pct ?? 0),
-          pct_page_one: Number(ns.pct_page_one ?? 0),
-          pct_page_one_delta: Number(ns.pct_page_one_delta ?? 0),
-          improving_pages: Number(ns.improving_pages ?? 0),
-          declining_pages: Number(ns.declining_pages ?? 0),
-          data_freshness_at: ns.data_freshness_at ?? new Date().toISOString(),
+          // raw view fields (for compatibility with other consumers)
+          ...ns,
+          // Command Center display aliases
+          total_clicks_28d: clicks,
+          clicks_delta_pct: parseFloat(clicksDelta.toFixed(1)),
+          pct_page_one: parseFloat(pctPage1.toFixed(1)),
+          pct_page_one_delta: 0, // no prior-period pct_page1 in view yet
+          improving_pages: Number(ns.improving ?? 0),
+          declining_pages: Number(ns.declining ?? 0),
+          data_freshness_at: ns.as_of ?? new Date().toISOString(),
         },
         pipeline: {
           review: Number(pip.review ?? 0),
@@ -67,6 +77,6 @@ export async function GET(_req: NextRequest) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[seo/north-star] GET error:', msg);
-    return NextResponse.json({ error: 'Failed to load north-star metrics' }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
