@@ -351,7 +351,6 @@ async function rejectPackage(client: PoolClient, enhancementId: string, reviewNo
     `UPDATE analytics.seo_execution_candidate
      SET approval_status = 'rejected',
          execution_status = 'rejected',
-         is_active = false,
          reviewer_id = 'operator',
          reviewed_at = NOW(),
          review_notes = $2
@@ -360,6 +359,12 @@ async function rejectPackage(client: PoolClient, enhancementId: string, reviewNo
        AND execution_status = 'proposed'`,
     [ids, reviewNotes || 'rejected as page package'],
   );
+  // is_active is managed by the dedupe function — direct writes are rejected by trigger
+  try {
+    await client.query(`SELECT analytics.seo_dedupe_candidates()`);
+  } catch {
+    // non-fatal if function doesn't exist in this schema version
+  }
   return { enhancement_id: enhancementId, status: 'rejected', rejected: update.rowCount };
 }
 
@@ -466,13 +471,18 @@ export async function POST(req: NextRequest) {
         `UPDATE analytics.seo_execution_candidate
          SET approval_status = 'rejected',
              execution_status = 'rejected',
-             is_active = false,
              reviewer_id = 'operator',
              reviewed_at = NOW(),
              review_notes = $2
          WHERE candidate_id = $1::uuid`,
         [candidateId, reviewNotes || 'field skipped individually'],
       );
+      // is_active is managed by the dedupe function — direct writes are rejected by trigger
+      try {
+        await client.query(`SELECT analytics.seo_dedupe_candidates()`);
+      } catch {
+        // non-fatal if function doesn't exist in this schema version
+      }
       result = { candidate_id: candidateId, status: 'skipped', rowCount: update.rowCount };
     }
     await client.query('COMMIT');
