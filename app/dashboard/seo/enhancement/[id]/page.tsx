@@ -156,7 +156,7 @@ function EnhancementDetailContent({ id }: { id: string }) {
     }
   }
 
-  const isLocked = pkg?.lifecycle_state && !['evaluating', undefined].includes(pkg.lifecycle_state as string);
+  const isLocked = Boolean(pkg?.lifecycle_state);
   const liveCount = pkg?.fields.filter((f: SeoFieldMember) => f.publish_live).length ?? 0;
   const draftCount = (pkg?.fields.length ?? 0) - liveCount;
 
@@ -217,7 +217,18 @@ function EnhancementDetailContent({ id }: { id: string }) {
               <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
                 · v{pkg.version}
               </span>
-              <LifecycleBadge state={pkg.lifecycle_state} size="sm" />
+              {pkg.lifecycle_state ? (
+                <LifecycleBadge state={pkg.lifecycle_state as import('../../components/LifecycleBadge').LifecycleState} size="sm" />
+              ) : (
+                <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: '11px', fontFamily: 'inherit', background: '#f3f4f6', color: '#6b7280', fontWeight: 500 }}>
+                  pending review
+                </span>
+              )}
+              {pkg.prov_label && (
+                <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: '11px', fontFamily: 'inherit', background: '#fef3c7', color: '#92400e', fontWeight: 500 }}>
+                  {pkg.prov_label}
+                </span>
+              )}
               <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
                 · {pkg.change_count} change{pkg.change_count !== 1 ? 's' : ''}
               </span>

@@ -20,7 +20,8 @@ function buildEnhancement(pkg: Record<string, unknown>, members: Record<string, 
     enhancement_id: pkg.enhancement_id,
     canonical_url: pkg.canonical_url,
     version: Number(pkg.version ?? 1),
-    lifecycle_state: pkg.lifecycle_state ?? 'evaluating',
+    lifecycle_state: (pkg.status as string) ?? null,
+    prov_label: (pkg.prov_label as string) ?? null,
     change_count: members.length,
     member_candidate_ids: members.map((m) => m.candidate_id),
     fields: members.map((m) => ({
@@ -77,8 +78,8 @@ export async function GET(req: NextRequest) {
     // Full queue — packages pending review
     const pkgRes = await pool.query(`
       SELECT * FROM analytics.seo_page_enhancement
-      WHERE lifecycle_state NOT IN ('winner','retired','inconclusive')
-         OR lifecycle_state IS NULL
+      WHERE status NOT IN ('winner','retired','inconclusive')
+         OR status IS NULL
       ORDER BY created_at DESC
       LIMIT 200
     `);
@@ -134,30 +135,38 @@ export async function POST(req: NextRequest) {
       // Attempt RPC first; fall back to direct update if function doesn't exist
       await pool.query(
         `UPDATE analytics.seo_page_enhancement
-         SET lifecycle_state = 'evaluating', evaluation_start_at = NOW()
+         SET status = 'evaluating', released_at = NOW()
          WHERE enhancement_id = $1`,
         [enhancement_id],
       );
       // Also approve member candidates
-      await pool.query(
-        `UPDATE analytics.seo_execution_candidate
-         SET approval_status = 'approved', approved_at = NOW()
-         WHERE enhancement_id = $1 AND approval_status = 'pending'`,
-        [enhancement_id],
-      );
+      try {
+        await pool.query(
+          `UPDATE analytics.seo_execution_candidate
+           SET approval_status = 'approved', approved_at = NOW()
+           WHERE enhancement_id = $1 AND approval_status = 'pending'`,
+          [enhancement_id],
+        );
+      } catch {
+        // column may not exist on this schema version
+      }
     } else {
       await pool.query(
         `UPDATE analytics.seo_page_enhancement
-         SET lifecycle_state = 'retired'
+         SET status = 'retired'
          WHERE enhancement_id = $1`,
         [enhancement_id],
       );
-      await pool.query(
-        `UPDATE analytics.seo_execution_candidate
-         SET approval_status = 'rejected', is_active = false
-         WHERE enhancement_id = $1 AND approval_status = 'pending'`,
-        [enhancement_id],
-      );
+      try {
+        await pool.query(
+          `UPDATE analytics.seo_execution_candidate
+           SET approval_status = 'rejected', is_active = false
+           WHERE enhancement_id = $1 AND approval_status = 'pending'`,
+          [enhancement_id],
+        );
+      } catch {
+        // column may not exist on this schema version
+      }
     }
 
     return NextResponse.json({ success: true, enhancement_id, action });

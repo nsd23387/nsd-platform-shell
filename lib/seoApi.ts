@@ -1745,7 +1745,8 @@ export interface SeoPageEnhancement {
   enhancement_id: string;
   canonical_url: string;
   version: number;
-  lifecycle_state: LifecycleState;
+  lifecycle_state: LifecycleState | null;
+  prov_label?: string | null;
   change_count: number;
   member_candidate_ids: string[];
   fields: SeoFieldMember[];
