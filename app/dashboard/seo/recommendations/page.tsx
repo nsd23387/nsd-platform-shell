@@ -8,7 +8,6 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
@@ -293,7 +292,6 @@ function PackageCard({
   busy,
   onApprove,
   onReject,
-  onReview,
   onApproveCandidate,
   onSkipCandidate,
   candidateBusy,
@@ -304,7 +302,6 @@ function PackageCard({
   busy: boolean;
   onApprove: (pkg: SeoPageEnhancementPackage) => void;
   onReject: (pkg: SeoPageEnhancementPackage) => void;
-  onReview: (pkg: SeoPageEnhancementPackage) => void;
   onApproveCandidate: (candidateId: string, pkg: SeoPageEnhancementPackage) => void;
   onSkipCandidate: (candidateId: string, pkg: SeoPageEnhancementPackage) => void;
   candidateBusy: Record<string, 'approving' | 'skipping'>;
@@ -347,27 +344,26 @@ function PackageCard({
           >
             Reject page
           </button>
-          {blocked ? (
-            <button
-              type="button"
-              onClick={() => onReview(pkg)}
-              disabled={busy}
-              title="This package has review guards. Click to open the detail page and review before approving."
-              style={{ padding: '8px 12px', borderRadius: radius.sm, border: `1px solid ${tc.border.default}`, background: 'transparent', color: tc.text.secondary, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: busy ? 'default' : 'pointer' }}
-            >
-              Review &amp; approve →
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onApprove(pkg)}
-              disabled={busy}
-              style={{ padding: '8px 12px', borderRadius: radius.sm, border: 'none', background: PALETTE.good, color: '#fff', fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: busy ? 'default' : 'pointer' }}
-              data-testid={`button-approve-package-${pkg.enhancement_id}`}
-            >
-              Approve page
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => onApprove(pkg)}
+            disabled={busy}
+            style={{
+              padding: '8px 12px',
+              borderRadius: radius.sm,
+              border: 'none',
+              background: PALETTE.good,
+              color: '#fff',
+              fontFamily: fontFamily.body,
+              fontSize: '13px',
+              fontWeight: fontWeight.medium,
+              cursor: busy ? 'default' : 'pointer',
+              opacity: busy ? 0.6 : 1,
+            }}
+            data-testid={`button-approve-package-${pkg.enhancement_id}`}
+          >
+            Approve page
+          </button>
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: space['1'], marginTop: space['3'] }}>
@@ -437,7 +433,6 @@ function LifecycleCard({
 
 function RecommendationsContent() {
   const tc = useThemeColors();
-  const router = useRouter();
   const [data, setData] = useState<SeoPageEnhancementsResponse | null>(null);
   const [packages, setPackages] = useState<SeoPageEnhancementPackage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -523,14 +518,26 @@ function RecommendationsContent() {
   }, [visibleLifecycleRows]);
 
   const approvePackage = useCallback(async (pkg: SeoPageEnhancementPackage) => {
-    if (!pkg.safe_to_bulk_approve) return;
-    const msg = `Approve this page package?\n\n${pkg.auto_publish_count} publish live through policy, ${pkg.draft_count} queue as drafts.`;
-    if (!window.confirm(msg)) return;
+    const guardedMembers = pkg.members.filter(m => !m.safe_to_approve);
+    if (guardedMembers.length > 0) {
+      const fieldList = guardedMembers.map(m => m.field_label || m.mutation_type || 'field').join(', ');
+      const ok = window.confirm(
+        `Approve page package?\n\n` +
+        `${pkg.auto_publish_count} field(s) publish live · ${pkg.draft_count} queue as drafts.\n\n` +
+        `⚠ QA warnings on: ${fieldList}\n\nApprove anyway?`
+      );
+      if (!ok) return;
+    } else {
+      const ok = window.confirm(
+        `Approve page package?\n\n${pkg.auto_publish_count} field(s) publish live · ${pkg.draft_count} queue as drafts.`
+      );
+      if (!ok) return;
+    }
     setBusy(true);
     setActionMsg(null);
     try {
       await approveSeoPageEnhancement(pkg.enhancement_id);
-      setActionMsg(`Approved ${pathOf(pkg.rep_url || pkg.canonical_url)} as one page package.`);
+      setActionMsg(`Approved ${pathOf(pkg.rep_url || pkg.canonical_url)}.`);
       load();
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : 'Approval failed');
@@ -605,11 +612,7 @@ function RecommendationsContent() {
         setActiveIndex((i) => Math.min(i + 1, Math.max(0, filtered.length - 1)));
       } else if (e.key.toLowerCase() === 'a' && activePackage) {
         e.preventDefault();
-        if (activePackage.safe_to_bulk_approve) {
-          approvePackage(activePackage);
-        } else {
-          router.push(`/dashboard/seo/enhancement/${activePackage.enhancement_id}`);
-        }
+        approvePackage(activePackage);
       } else if (e.key.toLowerCase() === 'r' && activePackage) {
         e.preventDefault();
         rejectPackage(activePackage);
@@ -617,7 +620,7 @@ function RecommendationsContent() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activePackage, approvePackage, filtered.length, rejectPackage, router, stage]);
+  }, [activePackage, approvePackage, filtered.length, rejectPackage, stage]);
 
   return (
     <div style={{ padding: space['6'], maxWidth: 1180, margin: '0 auto' }}>
@@ -721,7 +724,6 @@ function RecommendationsContent() {
             busy={busy}
             onApprove={approvePackage}
             onReject={rejectPackage}
-            onReview={(p) => router.push(`/dashboard/seo/enhancement/${p.enhancement_id}`)}
             onApproveCandidate={approveCandidate}
             onSkipCandidate={skipCandidate}
             candidateBusy={candidateBusy}

@@ -1385,6 +1385,7 @@ export async function approveSeoPageEnhancement(enhancementId: string): Promise<
     body: JSON.stringify({
       action: 'approve_package',
       enhancement_id: enhancementId,
+      force: true,
       review_notes: 'page package approval from recommendations queue',
     }),
   });
