@@ -300,8 +300,8 @@ function PackageCard({
   pkg: SeoPageEnhancementPackage;
   active: boolean;
   busy: boolean;
-  onApprove: (pkg: SeoPageEnhancementPackage) => void;
-  onReject: (pkg: SeoPageEnhancementPackage) => void;
+  onApprove: (pkg: SeoPageEnhancementPackage, e: React.MouseEvent) => void;
+  onReject: (pkg: SeoPageEnhancementPackage, e: React.MouseEvent) => void;
   onApproveCandidate: (candidateId: string, pkg: SeoPageEnhancementPackage) => void;
   onSkipCandidate: (candidateId: string, pkg: SeoPageEnhancementPackage) => void;
   candidateBusy: Record<string, 'approving' | 'skipping'>;
@@ -337,7 +337,7 @@ function PackageCard({
         <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button
             type="button"
-            onClick={() => onReject(pkg)}
+            onClick={(e) => onReject(pkg, e)}
             disabled={busy}
             style={{ padding: '8px 12px', borderRadius: radius.sm, border: `1px solid ${PALETTE.bad}`, background: tc.background.surface, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: busy ? 'default' : 'pointer' }}
             data-testid={`button-reject-package-${pkg.enhancement_id}`}
@@ -346,7 +346,7 @@ function PackageCard({
           </button>
           <button
             type="button"
-            onClick={() => onApprove(pkg)}
+            onClick={(e) => onApprove(pkg, e)}
             disabled={busy}
             style={{
               padding: '8px 12px',
@@ -449,6 +449,7 @@ function RecommendationsContent() {
     title: string;
     warnings?: string[];
     onConfirm: () => void;
+    anchorRect?: DOMRect;
   };
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
 
@@ -541,7 +542,7 @@ function RecommendationsContent() {
     );
   }, []);
 
-  const approvePackage = useCallback(async (pkg: SeoPageEnhancementPackage) => {
+  const approvePackage = useCallback(async (pkg: SeoPageEnhancementPackage, e?: React.MouseEvent) => {
     const guardedMembers = pkg.members.filter(m => !m.safe_to_approve);
     const warnings = guardedMembers.length > 0
       ? [`QA warnings on: ${guardedMembers.map(m => m.field_label || m.mutation_type || 'field').join(', ')}`]
@@ -549,6 +550,7 @@ function RecommendationsContent() {
     setPendingConfirm({
       title: `Approve page package? ${pkg.auto_publish_count} field(s) publish live · ${pkg.draft_count} queue as drafts.`,
       warnings,
+      anchorRect: (e?.currentTarget as HTMLElement | undefined)?.getBoundingClientRect(),
       onConfirm: async () => {
         setPendingConfirm(null);
         setBusy(true);
@@ -566,9 +568,10 @@ function RecommendationsContent() {
     });
   }, [removePackage]);
 
-  const rejectPackage = useCallback(async (pkg: SeoPageEnhancementPackage) => {
+  const rejectPackage = useCallback(async (pkg: SeoPageEnhancementPackage, e?: React.MouseEvent) => {
     setPendingConfirm({
       title: `Reject all ${pkg.change_count} changes for ${pathOf(pkg.rep_url || pkg.canonical_url)}?`,
+      anchorRect: (e?.currentTarget as HTMLElement | undefined)?.getBoundingClientRect(),
       onConfirm: async () => {
         setPendingConfirm(null);
         setBusy(true);
@@ -610,12 +613,13 @@ function RecommendationsContent() {
     }
   }, [removeCandidate]);
 
-  async function approveSafePackages() {
+  async function approveSafePackages(e?: React.MouseEvent) {
     if (safePackages.length === 0) return;
     const live = safePackages.reduce((sum, pkg) => sum + pkg.auto_publish_count, 0);
     const drafts = safePackages.reduce((sum, pkg) => sum + pkg.draft_count, 0);
     setPendingConfirm({
       title: `Approve ${safePackages.length} safe page package${safePackages.length === 1 ? '' : 's'}? ${live} publish live through policy, ${drafts} queue as drafts.`,
+      anchorRect: (e?.currentTarget as HTMLElement | undefined)?.getBoundingClientRect(),
       onConfirm: async () => {
         setPendingConfirm(null);
         setBusy(true);
@@ -636,6 +640,7 @@ function RecommendationsContent() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { setPendingConfirm(null); return; }
       if (stage !== 'review') return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key.toLowerCase() === 'j') {
@@ -651,7 +656,7 @@ function RecommendationsContent() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [activePackage, approvePackage, filtered.length, rejectPackage, stage]);
+  }, [activePackage, approvePackage, filtered.length, rejectPackage, setPendingConfirm, stage]);
 
   return (
     <div style={{ padding: space['6'], maxWidth: 1180, margin: '0 auto' }}>
@@ -703,7 +708,7 @@ function RecommendationsContent() {
         <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{fmtInt(filtered.length)} page{filtered.length === 1 ? '' : 's'}</span>
         <button
           type="button"
-          onClick={approveSafePackages}
+          onClick={(e) => approveSafePackages(e)}
           disabled={busy || safePackages.length === 0}
           data-testid="button-bulk-approve-safe-pages"
           style={{ padding: '8px 12px', borderRadius: radius.sm, border: 'none', background: safePackages.length ? PALETTE.violet : tc.background.muted, color: safePackages.length ? '#fff' : tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: busy || safePackages.length === 0 ? 'default' : 'pointer' }}
@@ -724,78 +729,101 @@ function RecommendationsContent() {
         </div>
       )}
 
-      {pendingConfirm && (
-        <div
-          style={{
-            marginBottom: space['4'],
-            padding: space['4'],
-            borderRadius: radius.md,
-            border: `1px solid ${tc.border.default}`,
-            background: tc.background.surface,
-            fontFamily: fontFamily.body,
-            fontSize: '13px',
-            color: tc.text.primary,
-          }}
-          role="alertdialog"
-          aria-label="Confirm action"
-        >
-          <div style={{ marginBottom: space['2'] }}>{pendingConfirm.title}</div>
-          {pendingConfirm.warnings && pendingConfirm.warnings.map((w, i) => (
+      {pendingConfirm && (() => {
+        const r = pendingConfirm.anchorRect;
+        // Position below the anchor button; flip above if too close to viewport bottom
+        const POPOVER_H_EST = 160;
+        const spaceBelow = r ? window.innerHeight - r.bottom : 9999;
+        const top = r
+          ? (spaceBelow < POPOVER_H_EST + 8 ? r.top - POPOVER_H_EST - 8 : r.bottom + 8)
+          : window.innerHeight / 2 - POPOVER_H_EST / 2;
+        const left = r ? Math.min(r.left, window.innerWidth - 332) : window.innerWidth / 2 - 160;
+        return (
+          <>
+            {/* Backdrop — click-away to cancel */}
             <div
-              key={i}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: space['2'],
-                padding: `${space['1']} ${space['2']}`,
-                borderRadius: radius.sm,
-                background: PALETTE.warnSoft,
-                color: PALETTE.warn,
-                fontSize: '12px',
-                marginBottom: space['2'],
-              }}
-            >
-              <span>⚠</span>
-              <span>{w}</span>
-            </div>
-          ))}
-          <div style={{ display: 'flex', gap: space['2'], marginTop: space['3'] }}>
-            <button
-              type="button"
-              onClick={pendingConfirm.onConfirm}
-              style={{
-                padding: '7px 16px',
-                borderRadius: radius.sm,
-                border: 'none',
-                background: PALETTE.violet,
-                color: '#fff',
-                fontFamily: fontFamily.body,
-                fontSize: '13px',
-                fontWeight: fontWeight.medium,
-                cursor: 'pointer',
-              }}
-            >
-              Confirm
-            </button>
-            <button
-              type="button"
+              aria-hidden="true"
               onClick={() => setPendingConfirm(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 49 }}
+            />
+            <div
+              role="alertdialog"
+              aria-label="Confirm action"
               style={{
-                padding: '7px 16px',
-                borderRadius: radius.sm,
+                position: 'fixed',
+                top,
+                left,
+                width: 320,
+                zIndex: 50,
+                padding: space['4'],
+                borderRadius: radius.md,
                 border: `1px solid ${tc.border.default}`,
-                background: 'transparent',
-                color: tc.text.muted,
+                background: tc.background.surface,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                 fontFamily: fontFamily.body,
                 fontSize: '13px',
-                cursor: 'pointer',
+                color: tc.text.primary,
               }}
             >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+              <div style={{ marginBottom: space['2'], lineHeight: 1.45 }}>{pendingConfirm.title}</div>
+              {pendingConfirm.warnings && pendingConfirm.warnings.map((w, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: space['2'],
+                    padding: `${space['1']} ${space['2']}`,
+                    borderRadius: radius.sm,
+                    background: PALETTE.warnSoft,
+                    color: PALETTE.warn,
+                    fontSize: '12px',
+                    marginBottom: space['2'],
+                  }}
+                >
+                  <span>⚠</span>
+                  <span>{w}</span>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: space['2'], marginTop: space['3'] }}>
+                <button
+                  type="button"
+                  onClick={pendingConfirm.onConfirm}
+                  style={{
+                    padding: '7px 16px',
+                    borderRadius: radius.sm,
+                    border: 'none',
+                    background: PALETTE.violet,
+                    color: '#fff',
+                    fontFamily: fontFamily.body,
+                    fontSize: '13px',
+                    fontWeight: fontWeight.medium,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingConfirm(null)}
+                  style={{
+                    padding: '7px 16px',
+                    borderRadius: radius.sm,
+                    border: `1px solid ${tc.border.default}`,
+                    background: 'transparent',
+                    color: tc.text.muted,
+                    fontFamily: fontFamily.body,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {loading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading page packages…</div>}
       {error && (
