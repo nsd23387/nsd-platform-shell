@@ -127,6 +127,7 @@ function NorthStarCard({ ns, tc }: { ns: SeoNorthStar; tc: Tc }) {
 function NorthStarSkeleton({ tc }: { tc: Tc }) {
   return (
     <div
+      aria-label="Loading North Star metrics"
       style={{
         border: `1px solid ${tc.border.default}`,
         borderRadius: radius.lg,
@@ -150,14 +151,20 @@ function CommandCenterContent() {
   const [pipeline, setPipeline] = useState<SeoPipelineCounts | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setError(null);
 
+    const timeout = setTimeout(() => {
+      if (alive) setError('North Star data unavailable — retrying failed. Check API status.');
+    }, 10_000);
+
     Promise.allSettled([getSeoNorthStar()]).then(([result]) => {
       if (!alive) return;
+      clearTimeout(timeout);
       if (result.status === 'fulfilled') {
         setNs(result.value.north_star);
         setPipeline(result.value.pipeline);
@@ -167,8 +174,8 @@ function CommandCenterContent() {
       setLoading(false);
     });
 
-    return () => { alive = false; };
-  }, []);
+    return () => { alive = false; clearTimeout(timeout); };
+  }, [tick]);
 
   const freshLabel = ns
     ? new Date(ns.data_freshness_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
@@ -207,9 +214,18 @@ function CommandCenterContent() {
             fontFamily: fontFamily.body,
             fontSize: '13px',
             marginBottom: space['6'],
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          {error}
+          <span>{error}</span>
+          <button
+            onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }}
+            style={{ marginLeft: space['4'], padding: `${space['1']} ${space['3']}`, borderRadius: radius.sm, border: `1px solid ${PALETTE.bad}`, background: 'transparent', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '12px', cursor: 'pointer' }}
+          >
+            Retry
+          </button>
         </div>
       )}
 

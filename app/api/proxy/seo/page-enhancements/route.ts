@@ -367,13 +367,17 @@ export async function GET() {
   if (!isConfigured()) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
   }
+  const client = await pool.connect();
   try {
-    const data = await loadPayload(pool);
+    await client.query("SET statement_timeout = '10s'");
+    const data = await loadPayload(client);
     return NextResponse.json({ data });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[seo/page-enhancements] GET error:', msg);
     return NextResponse.json({ error: 'Failed to load page enhancements', detail: msg }, { status: 500 });
+  } finally {
+    client.release();
   }
 }
 

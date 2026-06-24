@@ -288,20 +288,40 @@ function RecommendationsContent() {
   const [busy, setBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
+  const [tick, setTick] = useState(0);
+
   const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    getSeoPageEnhancements()
-      .then((data) => {
-        setData(data);
-        setPackages(data.packages ?? []);
-        setActiveIndex(0);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load page packages'))
-      .finally(() => setLoading(false));
+    setTick((t) => t + 1);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError(null);
+
+    const timeout = setTimeout(() => {
+      if (alive) setError('Package data unavailable. The page-enhancements API may be timing out.');
+    }, 12_000);
+
+    getSeoPageEnhancements()
+      .then((res) => {
+        if (!alive) return;
+        clearTimeout(timeout);
+        setData(res);
+        setPackages(res.packages ?? []);
+        setActiveIndex(0);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!alive) return;
+        clearTimeout(timeout);
+        setError(err instanceof Error ? err.message : 'Could not load page packages');
+        setLoading(false);
+      });
+
+    return () => { alive = false; clearTimeout(timeout); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -481,8 +501,22 @@ function RecommendationsContent() {
       )}
 
       {loading && <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }}>Loading page packages…</div>}
-      {error && <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px' }}>{error}</div>}
-      {!loading && !error && stage === 'review' && filtered.length === 0 && (
+      {error && (
+        <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px', marginBottom: space['4'], display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{error}</span>
+          <button onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} style={{ marginLeft: space['4'], padding: `${space['1']} ${space['3']}`, borderRadius: radius.sm, border: `1px solid ${PALETTE.bad}`, background: 'transparent', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '12px', cursor: 'pointer' }}>
+            Retry
+          </button>
+        </div>
+      )}
+      {!loading && !error && stage === 'review' && packages.length === 0 && evaluatingRows.length === 0 && resolvedRows.length === 0 && (
+        <div style={{ textAlign: 'center', padding: space['12'], color: tc.text.muted }}>
+          <div style={{ fontSize: '32px', marginBottom: space['3'] }}>✓</div>
+          <div style={{ fontFamily: fontFamily.display, fontSize: '16px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>Queue is clear</div>
+          <div style={{ fontFamily: fontFamily.body, fontSize: '13px', marginTop: space['2'] }}>No page packages are waiting for review. New packages appear here when the SEO engine generates them.</div>
+        </div>
+      )}
+      {!loading && !error && stage === 'review' && packages.length > 0 && filtered.length === 0 && (
         <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-recommendations">
           No page packages match this filter.
         </div>

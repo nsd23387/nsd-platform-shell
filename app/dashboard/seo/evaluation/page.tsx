@@ -37,7 +37,8 @@ function EvaluationTable({ rows, tc }: { rows: SeoEvaluationRow[]; tc: Tc }) {
   if (rows.length === 0) {
     return (
       <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, padding: space['6'], textAlign: 'center' }}>
-        No pages currently in evaluation.
+        <div>No pages currently in evaluation.</div>
+        <div style={{ marginTop: '6px', fontSize: '12px' }}>Pages appear here after their first approval. Packages in evaluation are measured over 30–60 days.</div>
       </div>
     );
   }
@@ -131,6 +132,7 @@ function EvaluationContent() {
   const [rows, setRows] = useState<SeoEvaluationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -156,10 +158,10 @@ function EvaluationContent() {
         }
       });
     return () => { alive = false; };
-  }, []);
+  }, [tick]);
 
   return (
-    <div style={{ maxWidth: '960px' }}>
+    <div style={{ maxWidth: '960px' }} aria-live="polite">
       <div style={{ marginBottom: space['6'] }}>
         <h1
           style={{
@@ -175,8 +177,11 @@ function EvaluationContent() {
       </div>
 
       {error && (
-        <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px', marginBottom: space['4'] }}>
-          {error}
+        <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px', marginBottom: space['4'], display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{error}</span>
+          <button onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} style={{ marginLeft: space['4'], padding: `${space['1']} ${space['3']}`, borderRadius: radius.sm, border: `1px solid ${PALETTE.bad}`, background: 'transparent', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '12px', cursor: 'pointer' }}>
+            Retry
+          </button>
         </div>
       )}
 

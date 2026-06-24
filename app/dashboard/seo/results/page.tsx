@@ -146,6 +146,7 @@ function ResultsContent() {
   const [rows, setRows] = useState<SeoResultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -153,7 +154,7 @@ function ResultsContent() {
       .then((data) => { if (alive) { setRows(data); setLoading(false); } })
       .catch((e) => { if (alive) { setError(e instanceof Error ? e.message : 'Failed to load'); setLoading(false); } });
     return () => { alive = false; };
-  }, []);
+  }, [tick]);
 
   const winners = rows.filter((r) => r.verdict === 'winner');
   const retired = rows.filter((r) => r.verdict === 'retired');
@@ -173,8 +174,11 @@ function ResultsContent() {
       </div>
 
       {error && (
-        <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px', marginBottom: space['4'] }}>
-          {error}
+        <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px', marginBottom: space['4'], display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{error}</span>
+          <button onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} style={{ marginLeft: space['4'], padding: `${space['1']} ${space['3']}`, borderRadius: radius.sm, border: `1px solid ${PALETTE.bad}`, background: 'transparent', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '12px', cursor: 'pointer' }}>
+            Retry
+          </button>
         </div>
       )}
 
