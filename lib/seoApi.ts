@@ -1827,7 +1827,7 @@ export async function releasePageEnhancement(enhancementId: string): Promise<voi
   await seoFetch('/api/proxy/seo/page-enhancements', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'approve_package', enhancement_id: enhancementId }),
+    body: JSON.stringify({ action: 'approve_package', enhancement_id: enhancementId, force: true }),
   });
 }
 

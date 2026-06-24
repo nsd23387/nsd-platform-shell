@@ -298,10 +298,13 @@ async function loadPayload(client: Pool | PoolClient) {
   };
 }
 
-async function approveLoadedPackage(client: PoolClient, pkg: any, reviewNotes?: string) {
-  if (!pkg.safe_to_bulk_approve) return { enhancement_id: pkg.enhancement_id, status: 'skipped', reason: 'package_guard_failed' };
+async function approveLoadedPackage(client: PoolClient, pkg: any, reviewNotes?: string, force = false) {
+  if (!force && !pkg.safe_to_bulk_approve) return { enhancement_id: pkg.enhancement_id, status: 'skipped', reason: 'package_guard_failed' };
 
   const ids = pkg.member_candidate_ids;
+  const whereClause = force
+    ? `WHERE candidate_id = ANY($1::uuid[]) AND approval_status = 'pending'`
+    : `WHERE candidate_id = ANY($1::uuid[]) AND approval_status = 'pending' AND execution_status = 'proposed' AND gate_status = 'accepted'`;
   const update = await client.query(
     `UPDATE analytics.seo_execution_candidate
      SET approval_status = 'approved',
@@ -309,13 +312,10 @@ async function approveLoadedPackage(client: PoolClient, pkg: any, reviewNotes?: 
          reviewer_id = 'operator',
          reviewed_at = NOW(),
          review_notes = $2
-     WHERE candidate_id = ANY($1::uuid[])
-       AND approval_status = 'pending'
-       AND execution_status = 'proposed'
-       AND gate_status = 'accepted'`,
-    [ids, reviewNotes || 'approved as page package'],
+     ${whereClause}`,
+    [ids, reviewNotes || (force ? 'force-approved as page package (override guards)' : 'approved as page package')],
   );
-  if (update.rowCount !== ids.length) {
+  if (!force && update.rowCount !== ids.length) {
     throw new Error(`approved ${update.rowCount}/${ids.length} package members`);
   }
   await client.query(`SELECT analytics.seo_release_page_enhancement($1::bigint)`, [pkg.enhancement_id]);
@@ -328,11 +328,11 @@ async function approveLoadedPackage(client: PoolClient, pkg: any, reviewNotes?: 
   };
 }
 
-async function approvePackage(client: PoolClient, enhancementId: string, reviewNotes?: string) {
+async function approvePackage(client: PoolClient, enhancementId: string, reviewNotes?: string, force = false) {
   const payload = await loadPayload(client);
   const pkg = payload.packages.find((p) => p.enhancement_id === enhancementId);
   if (!pkg) return { enhancement_id: enhancementId, status: 'skipped', reason: 'not_found_or_not_pending' };
-  return approveLoadedPackage(client, pkg, reviewNotes);
+  return approveLoadedPackage(client, pkg, reviewNotes, force);
 }
 
 async function rejectPackage(client: PoolClient, enhancementId: string, reviewNotes?: string) {
@@ -408,6 +408,7 @@ export async function POST(req: NextRequest) {
   const reviewNotes = typeof body?.review_notes === 'string' ? body.review_notes : undefined;
   const enhancementId = body?.enhancement_id != null ? String(body.enhancement_id) : null;
   const enhancementIds = Array.isArray(body?.enhancement_ids) ? body.enhancement_ids.map(String) : [];
+  const force = body?.force === true;
 
   const client = await pool.connect();
   try {
@@ -415,7 +416,7 @@ export async function POST(req: NextRequest) {
     let result: any;
     if (action === 'approve_package') {
       if (!enhancementId) throw new Error('enhancement_id required');
-      result = await approvePackage(client, enhancementId, reviewNotes);
+      result = await approvePackage(client, enhancementId, reviewNotes, force);
     } else if (action === 'reject_package') {
       if (!enhancementId) throw new Error('enhancement_id required');
       result = await rejectPackage(client, enhancementId, reviewNotes);
