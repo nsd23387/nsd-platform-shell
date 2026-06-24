@@ -251,7 +251,7 @@ function FieldChange({
                   fontWeight: fontWeight.medium,
                   borderRadius: radius.sm,
                   border: 'none',
-                  background: PALETTE.good,
+                  background: PALETTE.violet,
                   color: '#fff',
                   cursor: candidateBusy[member.candidate_id] ? 'default' : 'pointer',
                   opacity: candidateBusy[member.candidate_id] ? 0.6 : 1,
@@ -352,7 +352,7 @@ function PackageCard({
               padding: '8px 12px',
               borderRadius: radius.sm,
               border: 'none',
-              background: PALETTE.good,
+              background: PALETTE.violet,
               color: '#fff',
               fontFamily: fontFamily.body,
               fontSize: '13px',
@@ -445,6 +445,13 @@ function RecommendationsContent() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [candidateBusy, setCandidateBusy] = useState<Record<string, 'approving' | 'skipping'>>({});
 
+  type PendingConfirm = {
+    title: string;
+    warnings?: string[];
+    onConfirm: () => void;
+  };
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+
   const [tick, setTick] = useState(0);
 
   const load = useCallback(() => {
@@ -536,46 +543,47 @@ function RecommendationsContent() {
 
   const approvePackage = useCallback(async (pkg: SeoPageEnhancementPackage) => {
     const guardedMembers = pkg.members.filter(m => !m.safe_to_approve);
-    if (guardedMembers.length > 0) {
-      const fieldList = guardedMembers.map(m => m.field_label || m.mutation_type || 'field').join(', ');
-      const ok = window.confirm(
-        `Approve page package?\n\n` +
-        `${pkg.auto_publish_count} field(s) publish live · ${pkg.draft_count} queue as drafts.\n\n` +
-        `⚠ QA warnings on: ${fieldList}\n\nApprove anyway?`
-      );
-      if (!ok) return;
-    } else {
-      const ok = window.confirm(
-        `Approve page package?\n\n${pkg.auto_publish_count} field(s) publish live · ${pkg.draft_count} queue as drafts.`
-      );
-      if (!ok) return;
-    }
-    setBusy(true);
-    setActionMsg(null);
-    try {
-      await approveSeoPageEnhancement(pkg.enhancement_id);
-      removePackage(pkg.enhancement_id);
-      setActionMsg(`Approved ${pathOf(pkg.rep_url || pkg.canonical_url)}.`);
-    } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : 'Approval failed');
-    } finally {
-      setBusy(false);
-    }
+    const warnings = guardedMembers.length > 0
+      ? [`QA warnings on: ${guardedMembers.map(m => m.field_label || m.mutation_type || 'field').join(', ')}`]
+      : undefined;
+    setPendingConfirm({
+      title: `Approve page package? ${pkg.auto_publish_count} field(s) publish live · ${pkg.draft_count} queue as drafts.`,
+      warnings,
+      onConfirm: async () => {
+        setPendingConfirm(null);
+        setBusy(true);
+        setActionMsg(null);
+        try {
+          await approveSeoPageEnhancement(pkg.enhancement_id);
+          removePackage(pkg.enhancement_id);
+          setActionMsg(`Approved ${pathOf(pkg.rep_url || pkg.canonical_url)}.`);
+        } catch (err) {
+          setActionMsg(err instanceof Error ? err.message : 'Approval failed');
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
   }, [removePackage]);
 
   const rejectPackage = useCallback(async (pkg: SeoPageEnhancementPackage) => {
-    if (!window.confirm(`Reject all ${pkg.change_count} changes for ${pathOf(pkg.rep_url || pkg.canonical_url)}?`)) return;
-    setBusy(true);
-    setActionMsg(null);
-    try {
-      await rejectSeoPageEnhancement(pkg.enhancement_id);
-      removePackage(pkg.enhancement_id);
-      setActionMsg(`Rejected ${pathOf(pkg.rep_url || pkg.canonical_url)}.`);
-    } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : 'Reject failed');
-    } finally {
-      setBusy(false);
-    }
+    setPendingConfirm({
+      title: `Reject all ${pkg.change_count} changes for ${pathOf(pkg.rep_url || pkg.canonical_url)}?`,
+      onConfirm: async () => {
+        setPendingConfirm(null);
+        setBusy(true);
+        setActionMsg(null);
+        try {
+          await rejectSeoPageEnhancement(pkg.enhancement_id);
+          removePackage(pkg.enhancement_id);
+          setActionMsg(`Rejected ${pathOf(pkg.rep_url || pkg.canonical_url)}.`);
+        } catch (err) {
+          setActionMsg(err instanceof Error ? err.message : 'Reject failed');
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
   }, [removePackage]);
 
   const approveCandidate = useCallback(async (candidateId: string, pkg: SeoPageEnhancementPackage) => {
@@ -606,19 +614,24 @@ function RecommendationsContent() {
     if (safePackages.length === 0) return;
     const live = safePackages.reduce((sum, pkg) => sum + pkg.auto_publish_count, 0);
     const drafts = safePackages.reduce((sum, pkg) => sum + pkg.draft_count, 0);
-    if (!window.confirm(`Approve ${safePackages.length} safe page package${safePackages.length === 1 ? '' : 's'}?\n\n${live} publish live through policy, ${drafts} queue as drafts.`)) return;
-    setBusy(true);
-    setActionMsg(null);
-    try {
-      const approvedIds = new Set(safePackages.map(p => p.enhancement_id));
-      const result = await bulkApproveSeoPageEnhancements(safePackages.map((pkg) => pkg.enhancement_id));
-      setPackages(prev => prev.filter(p => !approvedIds.has(p.enhancement_id)));
-      setActionMsg(`Bulk approve complete: ${result.summary.approved} pages approved, ${result.summary.skipped} skipped.`);
-    } catch (err) {
-      setActionMsg(err instanceof Error ? err.message : 'Bulk approval failed');
-    } finally {
-      setBusy(false);
-    }
+    setPendingConfirm({
+      title: `Approve ${safePackages.length} safe page package${safePackages.length === 1 ? '' : 's'}? ${live} publish live through policy, ${drafts} queue as drafts.`,
+      onConfirm: async () => {
+        setPendingConfirm(null);
+        setBusy(true);
+        setActionMsg(null);
+        try {
+          const approvedIds = new Set(safePackages.map(p => p.enhancement_id));
+          const result = await bulkApproveSeoPageEnhancements(safePackages.map((pkg) => pkg.enhancement_id));
+          setPackages(prev => prev.filter(p => !approvedIds.has(p.enhancement_id)));
+          setActionMsg(`Bulk approve complete: ${result.summary.approved} pages approved, ${result.summary.skipped} skipped.`);
+        } catch (err) {
+          setActionMsg(err instanceof Error ? err.message : 'Bulk approval failed');
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
   }
 
   useEffect(() => {
@@ -693,7 +706,7 @@ function RecommendationsContent() {
           onClick={approveSafePackages}
           disabled={busy || safePackages.length === 0}
           data-testid="button-bulk-approve-safe-pages"
-          style={{ padding: '8px 12px', borderRadius: radius.sm, border: 'none', background: safePackages.length ? PALETTE.good : tc.background.muted, color: safePackages.length ? '#fff' : tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: busy || safePackages.length === 0 ? 'default' : 'pointer' }}
+          style={{ padding: '8px 12px', borderRadius: radius.sm, border: 'none', background: safePackages.length ? PALETTE.violet : tc.background.muted, color: safePackages.length ? '#fff' : tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: busy || safePackages.length === 0 ? 'default' : 'pointer' }}
         >
           Safe pages to bulk-approve ({fmtInt(safePackages.length)})
         </button>
@@ -708,6 +721,79 @@ function RecommendationsContent() {
       {actionMsg && (
         <div style={{ marginBottom: space['4'], padding: space['3'], borderRadius: radius.md, border: `1px solid ${tc.border.default}`, background: tc.background.surface, color: tc.text.secondary, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="text-action-message">
           {actionMsg}
+        </div>
+      )}
+
+      {pendingConfirm && (
+        <div
+          style={{
+            marginBottom: space['4'],
+            padding: space['4'],
+            borderRadius: radius.md,
+            border: `1px solid ${tc.border.default}`,
+            background: tc.background.surface,
+            fontFamily: fontFamily.body,
+            fontSize: '13px',
+            color: tc.text.primary,
+          }}
+          role="alertdialog"
+          aria-label="Confirm action"
+        >
+          <div style={{ marginBottom: space['2'] }}>{pendingConfirm.title}</div>
+          {pendingConfirm.warnings && pendingConfirm.warnings.map((w, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: space['2'],
+                padding: `${space['1']} ${space['2']}`,
+                borderRadius: radius.sm,
+                background: PALETTE.warnSoft,
+                color: PALETTE.warn,
+                fontSize: '12px',
+                marginBottom: space['2'],
+              }}
+            >
+              <span>⚠</span>
+              <span>{w}</span>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: space['2'], marginTop: space['3'] }}>
+            <button
+              type="button"
+              onClick={pendingConfirm.onConfirm}
+              style={{
+                padding: '7px 16px',
+                borderRadius: radius.sm,
+                border: 'none',
+                background: PALETTE.violet,
+                color: '#fff',
+                fontFamily: fontFamily.body,
+                fontSize: '13px',
+                fontWeight: fontWeight.medium,
+                cursor: 'pointer',
+              }}
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingConfirm(null)}
+              style={{
+                padding: '7px 16px',
+                borderRadius: radius.sm,
+                border: `1px solid ${tc.border.default}`,
+                background: 'transparent',
+                color: tc.text.muted,
+                fontFamily: fontFamily.body,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
