@@ -517,6 +517,23 @@ function RecommendationsContent() {
     return Array.from(groups.entries());
   }, [visibleLifecycleRows]);
 
+  // Optimistic helpers — mutate local state instantly, no reload
+  const removePackage = useCallback((enhancementId: string) => {
+    setPackages(prev => prev.filter(p => p.enhancement_id !== enhancementId));
+  }, []);
+
+  const removeCandidate = useCallback((candidateId: string, enhancementId: string) => {
+    setPackages(prev =>
+      prev
+        .map(p => {
+          if (p.enhancement_id !== enhancementId) return p;
+          const remaining = p.members.filter(m => m.candidate_id !== candidateId);
+          return { ...p, members: remaining, change_count: remaining.length };
+        })
+        .filter(p => p.members.length > 0),
+    );
+  }, []);
+
   const approvePackage = useCallback(async (pkg: SeoPageEnhancementPackage) => {
     const guardedMembers = pkg.members.filter(m => !m.safe_to_approve);
     if (guardedMembers.length > 0) {
@@ -537,14 +554,14 @@ function RecommendationsContent() {
     setActionMsg(null);
     try {
       await approveSeoPageEnhancement(pkg.enhancement_id);
+      removePackage(pkg.enhancement_id);
       setActionMsg(`Approved ${pathOf(pkg.rep_url || pkg.canonical_url)}.`);
-      load();
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : 'Approval failed');
     } finally {
       setBusy(false);
     }
-  }, [load]);
+  }, [removePackage]);
 
   const rejectPackage = useCallback(async (pkg: SeoPageEnhancementPackage) => {
     if (!window.confirm(`Reject all ${pkg.change_count} changes for ${pathOf(pkg.rep_url || pkg.canonical_url)}?`)) return;
@@ -552,38 +569,38 @@ function RecommendationsContent() {
     setActionMsg(null);
     try {
       await rejectSeoPageEnhancement(pkg.enhancement_id);
+      removePackage(pkg.enhancement_id);
       setActionMsg(`Rejected ${pathOf(pkg.rep_url || pkg.canonical_url)}.`);
-      load();
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : 'Reject failed');
     } finally {
       setBusy(false);
     }
-  }, [load]);
+  }, [removePackage]);
 
-  const approveCandidate = useCallback(async (candidateId: string, _pkg: SeoPageEnhancementPackage) => {
+  const approveCandidate = useCallback(async (candidateId: string, pkg: SeoPageEnhancementPackage) => {
     setCandidateBusy(prev => ({ ...prev, [candidateId]: 'approving' }));
     try {
       await approveSeoCandidate(candidateId);
-      await load();
+      removeCandidate(candidateId, pkg.enhancement_id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to approve field');
     } finally {
       setCandidateBusy(prev => { const next = { ...prev }; delete next[candidateId]; return next; });
     }
-  }, [load]);
+  }, [removeCandidate]);
 
-  const skipCandidate = useCallback(async (candidateId: string, _pkg: SeoPageEnhancementPackage) => {
+  const skipCandidate = useCallback(async (candidateId: string, pkg: SeoPageEnhancementPackage) => {
     setCandidateBusy(prev => ({ ...prev, [candidateId]: 'skipping' }));
     try {
       await skipSeoCandidate(candidateId);
-      await load();
+      removeCandidate(candidateId, pkg.enhancement_id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to skip field');
     } finally {
       setCandidateBusy(prev => { const next = { ...prev }; delete next[candidateId]; return next; });
     }
-  }, [load]);
+  }, [removeCandidate]);
 
   async function approveSafePackages() {
     if (safePackages.length === 0) return;
@@ -593,9 +610,10 @@ function RecommendationsContent() {
     setBusy(true);
     setActionMsg(null);
     try {
+      const approvedIds = new Set(safePackages.map(p => p.enhancement_id));
       const result = await bulkApproveSeoPageEnhancements(safePackages.map((pkg) => pkg.enhancement_id));
+      setPackages(prev => prev.filter(p => !approvedIds.has(p.enhancement_id)));
       setActionMsg(`Bulk approve complete: ${result.summary.approved} pages approved, ${result.summary.skipped} skipped.`);
-      load();
     } catch (err) {
       setActionMsg(err instanceof Error ? err.message : 'Bulk approval failed');
     } finally {
