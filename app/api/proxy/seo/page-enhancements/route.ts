@@ -363,14 +363,23 @@ async function rejectPackage(client: PoolClient, enhancementId: string, reviewNo
   return { enhancement_id: enhancementId, status: 'rejected', rejected: update.rowCount };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   if (!isConfigured()) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
   }
+  const filterById = req.nextUrl.searchParams.get('enhancement_id') ?? '';
   const client = await pool.connect();
   try {
     await client.query("SET statement_timeout = '10s'");
     const data = await loadPayload(client);
+    if (filterById) {
+      const pkg = data.packages.find((p: any) => p.enhancement_id === filterById);
+      if (pkg) {
+        const lcEntry = data.lifecycle?.find((l: any) => l.enhancement_id === filterById);
+        if (lcEntry?.prov_label) pkg.prov_label = lcEntry.prov_label;
+      }
+      return NextResponse.json({ data: pkg ?? null });
+    }
     return NextResponse.json({ data });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

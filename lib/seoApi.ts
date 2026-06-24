@@ -1791,21 +1791,51 @@ export async function getSeoEnhancementQueue(): Promise<SeoPageEnhancement[]> {
 }
 
 export async function getSeoEnhancement(id: string): Promise<SeoPageEnhancement> {
-  const data = await seoFetch<{ data: SeoPageEnhancement }>(`/api/proxy/seo/enhancement-queue?id=${encodeURIComponent(id)}`);
-  return data.data;
+  const res = await seoFetch<{ data: any }>(`/api/proxy/seo/page-enhancements?enhancement_id=${encodeURIComponent(id)}`);
+  const pkg = res.data;
+  if (!pkg) throw new Error('Enhancement not found');
+
+  return {
+    enhancement_id: String(pkg.enhancement_id),
+    canonical_url: pkg.canonical_url ?? '',
+    version: Number(pkg.version ?? 1),
+    lifecycle_state: null,
+    prov_label: pkg.prov_label ?? null,
+    change_count: Number(pkg.change_count ?? pkg.members?.length ?? 0),
+    member_candidate_ids: (pkg.member_candidate_ids ?? []).map(String),
+    fields: (pkg.members ?? []).map((m: any) => ({
+      candidate_id: String(m.candidate_id),
+      mutation_type: m.mutation_type ?? m.field_label ?? '',
+      current_value_snapshot: m.current_value_snapshot ?? null,
+      proposed_value: m.proposed_value ?? '',
+      quality_self_score: m.copy_quality_score ?? m.opportunity_score ?? 0,
+      publish_live: m.auto_publish === true,
+      guard_reason: Array.isArray(m.gate_reasons) && m.gate_reasons.length > 0
+        ? m.gate_reasons.join(', ')
+        : undefined,
+    })),
+    has_live_members: (pkg.members ?? []).some((m: any) => m.auto_publish === true),
+    has_qa_warnings: (pkg.members ?? []).some((m: any) => m.qa_status === 'warn' || m.qa_status === 'block'),
+    created_at: pkg.updated_at ?? new Date().toISOString(),
+    evaluation_start_at: undefined,
+    lifecycle_policy_first_days: 30,
+    lifecycle_policy_final_days: 60,
+  };
 }
 
 export async function releasePageEnhancement(enhancementId: string): Promise<void> {
-  await seoFetch('/api/proxy/seo/enhancement-queue', {
+  await seoFetch('/api/proxy/seo/page-enhancements', {
     method: 'POST',
-    body: JSON.stringify({ enhancement_id: enhancementId, action: 'release' }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'approve_package', enhancement_id: enhancementId }),
   });
 }
 
 export async function rejectPageEnhancement(enhancementId: string): Promise<void> {
-  await seoFetch('/api/proxy/seo/enhancement-queue', {
+  await seoFetch('/api/proxy/seo/page-enhancements', {
     method: 'POST',
-    body: JSON.stringify({ enhancement_id: enhancementId, action: 'reject' }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'reject_package', enhancement_id: enhancementId }),
   });
 }
 
