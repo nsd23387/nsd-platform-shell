@@ -1401,6 +1401,22 @@ export async function rejectSeoPageEnhancement(enhancementId: string): Promise<v
   });
 }
 
+export async function approveSeoCandidate(candidateId: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/page-enhancements', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'approve_candidate', candidate_id: candidateId }),
+  });
+}
+
+export async function skipSeoCandidate(candidateId: string): Promise<void> {
+  await seoFetch('/api/proxy/seo/page-enhancements', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'skip_candidate', candidate_id: candidateId }),
+  });
+}
+
 export async function bulkApproveSeoPageEnhancements(enhancementIds: string[]): Promise<{
   results: Array<{ enhancement_id: string; status: string; reason?: string; approved?: number; auto_publish_count?: number; draft_count?: number }>;
   summary: { requested: number; approved: number; skipped: number; auto_publish_count: number; draft_count: number };

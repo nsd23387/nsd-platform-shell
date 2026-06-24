@@ -16,10 +16,12 @@ import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
 import { space, radius } from '../../../../design/tokens/spacing';
 import {
+  approveSeoCandidate,
   approveSeoPageEnhancement,
   bulkApproveSeoPageEnhancements,
   getSeoPageEnhancements,
   rejectSeoPageEnhancement,
+  skipSeoCandidate,
 } from '../../../../lib/seoApi';
 import type { SeoPageEnhancementLifecycle, SeoPageEnhancementMember, SeoPageEnhancementPackage, SeoPageEnhancementsResponse } from '../../../../lib/seoApi';
 import { PALETTE, monoStack, Pill, fmtInt, pathOf } from '../_shared';
@@ -125,7 +127,21 @@ function memberGuardText(m: SeoPageEnhancementMember): string | null {
   return 'guard failed';
 }
 
-function FieldChange({ member, tc }: { member: SeoPageEnhancementMember; tc: ReturnType<typeof useThemeColors> }) {
+function FieldChange({
+  member,
+  tc,
+  onApproveCandidate,
+  onSkipCandidate,
+  candidateBusy,
+  pkg,
+}: {
+  member: SeoPageEnhancementMember;
+  tc: ReturnType<typeof useThemeColors>;
+  onApproveCandidate: (candidateId: string, pkg: SeoPageEnhancementPackage) => void;
+  onSkipCandidate: (candidateId: string, pkg: SeoPageEnhancementPackage) => void;
+  candidateBusy: Record<string, 'approving' | 'skipping'>;
+  pkg: SeoPageEnhancementPackage;
+}) {
   const guard = memberGuardText(member);
   return (
     <div
@@ -153,6 +169,48 @@ function FieldChange({ member, tc }: { member: SeoPageEnhancementMember; tc: Ret
         {member.auto_publish ? <Pill tone="good" tc={tc}>publishes live</Pill> : <Pill tone="neutral" tc={tc}>draft</Pill>}
         {guard ? <Pill tone="warn" tc={tc}>{guard}</Pill> : <Pill tone="good" tc={tc}>ready</Pill>}
       </div>
+      {member.candidate_id && (
+        <div style={{ display: 'flex', gap: space['2'], marginTop: space['2'] }}>
+          <button
+            type="button"
+            onClick={() => onApproveCandidate(member.candidate_id, pkg)}
+            disabled={!!candidateBusy[member.candidate_id]}
+            style={{
+              padding: '3px 10px',
+              fontSize: '11px',
+              fontFamily: fontFamily.body,
+              fontWeight: fontWeight.medium,
+              borderRadius: radius.sm,
+              border: 'none',
+              background: PALETTE.good,
+              color: '#fff',
+              cursor: candidateBusy[member.candidate_id] ? 'default' : 'pointer',
+              opacity: candidateBusy[member.candidate_id] ? 0.6 : 1,
+            }}
+          >
+            {candidateBusy[member.candidate_id] === 'approving' ? '…' : '✓ Approve field'}
+          </button>
+          <button
+            type="button"
+            onClick={() => onSkipCandidate(member.candidate_id, pkg)}
+            disabled={!!candidateBusy[member.candidate_id]}
+            style={{
+              padding: '3px 10px',
+              fontSize: '11px',
+              fontFamily: fontFamily.body,
+              fontWeight: fontWeight.medium,
+              borderRadius: radius.sm,
+              border: `1px solid ${tc.border.default}`,
+              background: 'transparent',
+              color: tc.text.muted,
+              cursor: candidateBusy[member.candidate_id] ? 'default' : 'pointer',
+              opacity: candidateBusy[member.candidate_id] ? 0.6 : 1,
+            }}
+          >
+            {candidateBusy[member.candidate_id] === 'skipping' ? '…' : '✗ Skip field'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -164,6 +222,9 @@ function PackageCard({
   onApprove,
   onReject,
   onReview,
+  onApproveCandidate,
+  onSkipCandidate,
+  candidateBusy,
   tc,
 }: {
   pkg: SeoPageEnhancementPackage;
@@ -172,6 +233,9 @@ function PackageCard({
   onApprove: (pkg: SeoPageEnhancementPackage) => void;
   onReject: (pkg: SeoPageEnhancementPackage) => void;
   onReview: (pkg: SeoPageEnhancementPackage) => void;
+  onApproveCandidate: (candidateId: string, pkg: SeoPageEnhancementPackage) => void;
+  onSkipCandidate: (candidateId: string, pkg: SeoPageEnhancementPackage) => void;
+  candidateBusy: Record<string, 'approving' | 'skipping'>;
   tc: ReturnType<typeof useThemeColors>;
 }) {
   const path = pathOf(pkg.rep_url || pkg.canonical_url);
@@ -235,7 +299,17 @@ function PackageCard({
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: space['3'], marginTop: space['4'] }}>
-        {pkg.members.map((member) => <FieldChange key={member.candidate_id} member={member} tc={tc} />)}
+        {pkg.members.map((member) => (
+          <FieldChange
+            key={member.candidate_id}
+            member={member}
+            tc={tc}
+            onApproveCandidate={onApproveCandidate}
+            onSkipCandidate={onSkipCandidate}
+            candidateBusy={candidateBusy}
+            pkg={pkg}
+          />
+        ))}
       </div>
     </article>
   );
@@ -302,6 +376,7 @@ function RecommendationsContent() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [candidateBusy, setCandidateBusy] = useState<Record<string, 'approving' | 'skipping'>>({});
 
   const [tick, setTick] = useState(0);
 
@@ -404,6 +479,30 @@ function RecommendationsContent() {
       setActionMsg(err instanceof Error ? err.message : 'Reject failed');
     } finally {
       setBusy(false);
+    }
+  }, [load]);
+
+  const approveCandidate = useCallback(async (candidateId: string, _pkg: SeoPageEnhancementPackage) => {
+    setCandidateBusy(prev => ({ ...prev, [candidateId]: 'approving' }));
+    try {
+      await approveSeoCandidate(candidateId);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to approve field');
+    } finally {
+      setCandidateBusy(prev => { const next = { ...prev }; delete next[candidateId]; return next; });
+    }
+  }, [load]);
+
+  const skipCandidate = useCallback(async (candidateId: string, _pkg: SeoPageEnhancementPackage) => {
+    setCandidateBusy(prev => ({ ...prev, [candidateId]: 'skipping' }));
+    try {
+      await skipSeoCandidate(candidateId);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to skip field');
+    } finally {
+      setCandidateBusy(prev => { const next = { ...prev }; delete next[candidateId]; return next; });
     }
   }, [load]);
 
@@ -551,6 +650,9 @@ function RecommendationsContent() {
             onApprove={approvePackage}
             onReject={rejectPackage}
             onReview={(p) => router.push(`/dashboard/seo/enhancement/${p.enhancement_id}`)}
+            onApproveCandidate={approveCandidate}
+            onSkipCandidate={skipCandidate}
+            candidateBusy={candidateBusy}
             tc={tc}
           />
         ))}

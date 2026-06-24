@@ -402,7 +402,7 @@ export async function POST(req: NextRequest) {
   }
 
   const action = String(body?.action || '');
-  if (!['approve_package', 'reject_package', 'bulk_approve_packages'].includes(action)) {
+  if (!['approve_package', 'reject_package', 'bulk_approve_packages', 'approve_candidate', 'skip_candidate'].includes(action)) {
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   }
   const reviewNotes = typeof body?.review_notes === 'string' ? body.review_notes : undefined;
@@ -445,6 +445,35 @@ export async function POST(req: NextRequest) {
           draft_count: results.reduce((sum, r) => sum + Number(r.draft_count ?? 0), 0),
         },
       };
+    } else if (action === 'approve_candidate') {
+      const candidateId = body?.candidate_id != null ? String(body.candidate_id) : null;
+      if (!candidateId) throw new Error('candidate_id required');
+      const update = await client.query(
+        `UPDATE analytics.seo_execution_candidate
+         SET approval_status = 'approved',
+             execution_status = 'approved',
+             reviewer_id = 'operator',
+             reviewed_at = NOW(),
+             review_notes = $2
+         WHERE candidate_id = $1::uuid`,
+        [candidateId, reviewNotes || 'field approved individually'],
+      );
+      result = { candidate_id: candidateId, status: 'approved', rowCount: update.rowCount };
+    } else if (action === 'skip_candidate') {
+      const candidateId = body?.candidate_id != null ? String(body.candidate_id) : null;
+      if (!candidateId) throw new Error('candidate_id required');
+      const update = await client.query(
+        `UPDATE analytics.seo_execution_candidate
+         SET approval_status = 'rejected',
+             execution_status = 'rejected',
+             is_active = false,
+             reviewer_id = 'operator',
+             reviewed_at = NOW(),
+             review_notes = $2
+         WHERE candidate_id = $1::uuid`,
+        [candidateId, reviewNotes || 'field skipped individually'],
+      );
+      result = { candidate_id: candidateId, status: 'skipped', rowCount: update.rowCount };
     }
     await client.query('COMMIT');
     return NextResponse.json({ data: result });
