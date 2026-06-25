@@ -1,148 +1,147 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { CheckCircle2, Inbox } from 'lucide-react';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
-import { useThemeColors } from '../../../../hooks/useThemeColors';
-import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
-import { space, radius } from '../../../../design/tokens/spacing';
 import { getSeoResults } from '../../../../lib/seoApi';
 import type { SeoResultRow } from '../../../../lib/seoApi';
-import { PALETTE, monoStack, type Tc } from '../_shared';
-import { LifecycleBadge } from '../components/LifecycleBadge';
+import {
+  DeltaGlyph,
+  EmptyState,
+  SeoCard,
+  SortHeader,
+  middleTruncatePath,
+  pageTitleFromUrl,
+  type SortDirection,
+} from '../_shared';
 
-function pathOf(url: string): string {
-  try {
-    return new URL(url).pathname;
-  } catch {
-    return url.replace(/^https?:\/\/[^/]+/, '') || url;
-  }
+type SortKey = 'rank' | 'click' | 'verdict';
+const PAGE_SIZE = 50;
+
+function numericValue(row: SeoResultRow, key: SortKey): number {
+  if (key === 'rank') return row.rank_delta ?? Number.NEGATIVE_INFINITY;
+  if (key === 'click') return row.click_delta_pct ?? Number.NEGATIVE_INFINITY;
+  return new Date(row.verdict_at).getTime();
 }
 
-function fmtDelta(n: number | undefined, unit = ''): string {
-  if (n == null) return '—';
-  const sign = n > 0 ? '+' : '';
-  return `${sign}${n.toFixed(1)}${unit}`;
-}
-
-function ResultsSection({
+function ResultsTable({
   title,
-  verdict,
   rows,
-  tc,
   extra,
 }: {
   title: string;
-  verdict: 'winner' | 'retired' | 'inconclusive';
   rows: SeoResultRow[];
-  tc: Tc;
   extra?: (row: SeoResultRow) => React.ReactNode;
 }) {
-  const thStyle: React.CSSProperties = {
-    padding: '8px 12px', textAlign: 'left', fontFamily: fontFamily.body,
-    fontSize: '11px', fontWeight: fontWeight.semibold, color: tc.text.muted,
-    textTransform: 'uppercase' as const, letterSpacing: '0.05em',
-  };
-  const tdStyle: React.CSSProperties = {
-    padding: '10px 12px', fontFamily: fontFamily.body, fontSize: '13px',
-    color: tc.text.secondary, verticalAlign: 'middle',
-  };
+  const [query, setQuery] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('verdict');
+  const [sortDir, setSortDir] = useState<SortDirection>('desc');
+  const [page, setPage] = useState(1);
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((row) => `${row.canonical_url} ${pageTitleFromUrl(row.canonical_url)}`.toLowerCase().includes(term));
+  }, [query, rows]);
+
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      return (numericValue(a, sortKey) - numericValue(b, sortKey)) * dir;
+    });
+  }, [filtered, sortDir, sortKey]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const visible = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  function handleSort(next: SortKey) {
+    setPage(1);
+    if (next === sortKey) {
+      setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(next);
+      setSortDir('desc');
+    }
+  }
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
 
   return (
-    <div style={{ marginBottom: space['8'] }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginBottom: space['3'] }}>
-        <h2
-          style={{
-            fontFamily: fontFamily.body, fontSize: '14px', fontWeight: fontWeight.semibold,
-            color: tc.text.primary, margin: 0,
-          }}
-        >
-          {title}
-        </h2>
-        <span
-          style={{
-            display: 'inline-block', padding: '1px 8px', borderRadius: 999,
-            fontSize: '11px', fontWeight: fontWeight.medium,
-            background: tc.background.muted, color: tc.text.muted,
-            fontFamily: fontFamily.body,
-          }}
-        >
-          {rows.length}
-        </span>
+    <section style={{ marginBottom: 30 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h2 style={{ fontSize: 16, margin: 0 }}>{title}</h2>
+          <span className="seo-chip seo-mono">{rows.length.toLocaleString('en-US')}</span>
+        </div>
+        {rows.length > 0 && (
+          <input
+            className="seo-filter"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter by page or slug..."
+            aria-label={`Filter ${title}`}
+          />
+        )}
       </div>
-
       {rows.length === 0 ? (
-        <div style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, fontStyle: 'italic' }}>
-          None yet.
-        </div>
+        <EmptyState icon={<Inbox size={18} />} title={`No ${title.toLowerCase()} yet`} body="Verdicts will appear here after packages complete the evaluation window." />
       ) : (
-        <div style={{ border: `1px solid ${tc.border.default}`, borderRadius: radius.md, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: tc.background.muted }}>
-                <th style={thStyle}>Page</th>
-                <th style={thStyle}>Ver</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Rank Δ</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Click Δ%</th>
-                <th style={thStyle}>Verdict date</th>
-                {extra && <th style={thStyle} />}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => {
-                const rankColor = row.rank_delta == null ? tc.text.muted
-                  : row.rank_delta < 0 ? PALETTE.good
-                  : row.rank_delta > 0 ? PALETTE.bad
-                  : tc.text.secondary;
-                const verdictDate = new Date(row.verdict_at).toLocaleDateString('en-US', {
-                  month: 'short', day: 'numeric', year: 'numeric',
-                });
-
-                return (
-                  <tr key={row.enhancement_id} style={{ borderTop: i > 0 ? `1px solid ${tc.border.subtle}` : undefined }}>
-                    <td style={{ ...tdStyle, maxWidth: '280px' }}>
-                      <span
-                        style={{
-                          fontFamily: monoStack, fontSize: '12px', color: tc.text.primary,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          display: 'block',
-                        }}
-                        title={row.canonical_url}
-                      >
-                        {pathOf(row.canonical_url)}
-                      </span>
-                    </td>
-                    <td style={tdStyle}>
-                      <span style={{ fontFamily: monoStack, fontSize: '11px', color: tc.text.muted }}>v{row.version}</span>
-                    </td>
-                    <td style={{ ...tdStyle, textAlign: 'right', fontFamily: monoStack, color: rankColor }}>
-                      {fmtDelta(row.rank_delta)}
-                    </td>
-                    <td style={{ ...tdStyle, textAlign: 'right', fontFamily: monoStack, color: tc.text.secondary }}>
-                      {fmtDelta(row.click_delta_pct, '%')}
-                    </td>
-                    <td style={{ ...tdStyle, fontSize: '12px', color: tc.text.muted }}>
-                      {verdictDate}
-                    </td>
-                    {extra && (
-                      <td style={{ ...tdStyle, textAlign: 'right' }}>
-                        {extra(row)}
+        <>
+          <div className="seo-mono seo-muted" style={{ fontSize: 12, marginBottom: 10 }}>— = awaiting first verdict (day 30)</div>
+          <div className="seo-table-wrap">
+            <table className="seo-table">
+              <thead>
+                <tr>
+                  <th>Page</th>
+                  <th>Ver</th>
+                  <SortHeader id="rank" label="Rank Δ" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="right" title="Δ = positions gained; ↑ is better." />
+                  <SortHeader id="click" label="Click Δ" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <SortHeader id="verdict" label="Verdict date" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                  {extra && <th />}
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((row) => {
+                  const verdictDate = new Date(row.verdict_at).toLocaleDateString('en-US', {
+                    month: 'short', day: 'numeric', year: 'numeric',
+                  });
+                  return (
+                    <tr key={row.enhancement_id}>
+                      <td style={{ minWidth: 280 }}>
+                        <div style={{ color: 'var(--fg)', fontWeight: 700 }}>{pageTitleFromUrl(row.canonical_url)}</div>
+                        <div className="seo-mono seo-muted" style={{ fontSize: 11, marginTop: 3 }} title={row.canonical_url}>
+                          {middleTruncatePath(row.canonical_url)}
+                        </div>
                       </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      <td><span className="seo-chip seo-mono">v{row.version}</span></td>
+                      <td style={{ textAlign: 'right' }}><DeltaGlyph value={row.rank_delta} /></td>
+                      <td style={{ textAlign: 'right' }}><DeltaGlyph value={row.click_delta_pct} unit="%" /></td>
+                      <td className="seo-mono seo-muted" style={{ fontSize: 12 }}>{verdictDate}</td>
+                      {extra && <td style={{ textAlign: 'right' }}>{extra(row)}</td>}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {pageCount > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', marginTop: 14 }}>
+              <button type="button" className="seo-filter" style={{ width: 'auto' }} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Previous</button>
+              <span className="seo-mono seo-muted" style={{ fontSize: 12 }}>Page {page} / {pageCount}</span>
+              <button type="button" className="seo-filter" style={{ width: 'auto' }} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={page === pageCount}>Next</button>
+            </div>
+          )}
+        </>
       )}
-    </div>
+    </section>
   );
 }
 
 function ResultsContent() {
-  const tc = useThemeColors();
   const [rows, setRows] = useState<SeoResultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +149,7 @@ function ResultsContent() {
 
   useEffect(() => {
     let alive = true;
+    setLoading(true);
     getSeoResults()
       .then((data) => { if (alive) { setRows(data); setLoading(false); } })
       .catch((e) => { if (alive) { setError(e instanceof Error ? e.message : 'Failed to load'); setLoading(false); } });
@@ -161,70 +161,38 @@ function ResultsContent() {
   const inconclusive = rows.filter((r) => r.verdict === 'inconclusive');
 
   return (
-    <div style={{ maxWidth: '960px' }}>
-      <div style={{ marginBottom: space['6'] }}>
-        <h1
-          style={{
-            fontFamily: fontFamily.display, fontSize: '24px',
-            fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0,
-          }}
-        >
-          Results
-        </h1>
+    <div className="seo-page">
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 26, margin: 0 }}>Results</h1>
+        <p className="seo-muted" style={{ fontSize: 13, marginTop: 5 }}>Final verdicts from the SEO evaluation clock.</p>
       </div>
 
       {error && (
-        <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px', marginBottom: space['4'], display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>{error}</span>
-          <button onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} style={{ marginLeft: space['4'], padding: `${space['1']} ${space['3']}`, borderRadius: radius.sm, border: `1px solid ${PALETTE.bad}`, background: 'transparent', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '12px', cursor: 'pointer' }}>
-            Retry
-          </button>
-        </div>
+        <SeoCard style={{ marginBottom: 18, borderColor: 'var(--red)', color: 'var(--red)', fontSize: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center' }}>
+            <span>{error}</span>
+            <button type="button" onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} className="seo-filter" style={{ color: 'var(--red)', width: 'auto' }}>Retry</button>
+          </div>
+        </SeoCard>
       )}
 
       {loading ? (
-        <div>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="animate-pulse"
-              style={{ background: tc.background.muted, borderRadius: radius.md, height: '48px', marginBottom: space['2'] }}
-            />
-          ))}
-        </div>
+        <div>{[0, 1, 2, 3, 4].map((i) => <div key={i} className="animate-pulse seo-card" style={{ height: 50, marginBottom: 8, background: 'var(--surface-2)' }} />)}</div>
+      ) : rows.length === 0 ? (
+        <EmptyState icon={<CheckCircle2 size={18} />} title="No verdicts yet" body="Results will populate after the first packages reach day 30 and receive a verdict." />
       ) : (
         <>
-          <ResultsSection
+          <ResultsTable
             title="Winners"
-            verdict="winner"
             rows={winners}
-            tc={tc}
             extra={(row) => (
-              <Link
-                href={`/dashboard/seo/review?suggest=${encodeURIComponent(row.canonical_url)}`}
-                style={{ fontSize: '12px', color: PALETTE.violet, textDecoration: 'none', fontFamily: fontFamily.body, whiteSpace: 'nowrap' }}
-              >
+              <Link href={`/dashboard/seo/review?suggest=${encodeURIComponent(row.canonical_url)}`} style={{ color: 'var(--violet)', fontSize: 12, whiteSpace: 'nowrap' }}>
                 Double down →
               </Link>
             )}
           />
-          <ResultsSection
-            title="Retired"
-            verdict="retired"
-            rows={retired}
-            tc={tc}
-            extra={(_row) => (
-              <span style={{ fontSize: '12px', color: tc.text.muted, fontFamily: fontFamily.body }}>
-                See repackage
-              </span>
-            )}
-          />
-          <ResultsSection
-            title="Inconclusive"
-            verdict="inconclusive"
-            rows={inconclusive}
-            tc={tc}
-          />
+          <ResultsTable title="Retired" rows={retired} extra={() => <span className="seo-muted" style={{ fontSize: 12 }}>See repackage</span>} />
+          <ResultsTable title="Inconclusive" rows={inconclusive} />
         </>
       )}
     </div>

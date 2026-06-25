@@ -12,6 +12,7 @@ build/
 graphify-out/
 
 # Environment files
+.env.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -38,3 +39,4 @@ next-env.d.ts
 # package-lock.json
 .vercel
 config.bat
+.env*.local
