@@ -284,6 +284,7 @@ a:focus-visible,
 .seo-mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "zero" 0;
 }
 
 .seo-table-wrap {

@@ -365,7 +365,32 @@ export function pathOf(url: string): string {
 }
 
 export function pageTitleFromUrl(url: string): string {
+  const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  const formatWholesaleTitle = (path: string) => {
+    const wholesaleMatch = path.match(/^\/wholesale\/([a-z0-9-]+)-([a-z]{2})$/i);
+    if (!wholesaleMatch) return null;
+    const city = wholesaleMatch[1]
+      .split('-')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+    return `${city}, ${wholesaleMatch[2].toUpperCase()}`;
+  };
+
+  try {
+    const u = new URL(normalized);
+    const path = u.pathname.replace(/\/+$/, '');
+    if (!path || path === '/') return 'Homepage';
+
+    const wholesaleTitle = formatWholesaleTitle(path);
+    if (wholesaleTitle) return wholesaleTitle;
+  } catch {
+    if (/^[^/?#]+\.[^/?#]+\/?$/i.test(url.trim())) return 'Homepage';
+  }
+
   const path = pathOf(url).split('?')[0];
+  const wholesaleTitle = formatWholesaleTitle(path.replace(/\/+$/, ''));
+  if (wholesaleTitle) return wholesaleTitle;
+
   const leaf = path.split('/').filter(Boolean).pop() || 'Home';
   return leaf
     .replace(/\.(html|php|aspx?)$/i, '')
