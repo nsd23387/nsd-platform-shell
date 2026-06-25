@@ -86,7 +86,7 @@ function EvaluationTable({ rows }: { rows: SeoEvaluationRow[] }) {
           placeholder="Filter by page or slug..."
           aria-label="Filter pages in evaluation"
         />
-        <div className="seo-mono seo-muted" style={{ fontSize: 12 }}>
+        <div className="seo-mono seo-muted" style={{ fontSize: 13 }}>
           {sorted.length.toLocaleString('en-US')} rows · — = awaiting first verdict (day 30)
         </div>
       </div>
@@ -110,8 +110,8 @@ function EvaluationTable({ rows }: { rows: SeoEvaluationRow[] }) {
               return (
                 <tr key={row.enhancement_id}>
                   <td style={{ minWidth: 280 }}>
-                    <div style={{ color: 'var(--fg)', fontWeight: 700 }}>{pageTitleFromUrl(row.canonical_url)}</div>
-                    <div className="seo-mono seo-muted" style={{ fontSize: 11, marginTop: 3 }} title={row.canonical_url}>
+                    <div className="seo-table-page-title">{pageTitleFromUrl(row.canonical_url)}</div>
+                    <div className="seo-mono seo-muted seo-table-page-slug" title={row.canonical_url}>
                       {middleTruncatePath(row.canonical_url)}
                     </div>
                   </td>
@@ -121,7 +121,7 @@ function EvaluationTable({ rows }: { rows: SeoEvaluationRow[] }) {
                       <div className="seo-progress-track" aria-hidden="true">
                         <div className="seo-progress-fill" style={{ width: `${progress * 100}%` }} />
                       </div>
-                      <span className="seo-mono seo-muted" style={{ fontSize: 11 }}>Day {clampedDay} / 30</span>
+                      <span className="seo-mono seo-muted" style={{ fontSize: 12.5 }}>Day {clampedDay} / 30</span>
                     </div>
                   </td>
                   <td className="seo-mono">{elapsed}</td>
@@ -139,9 +139,9 @@ function EvaluationTable({ rows }: { rows: SeoEvaluationRow[] }) {
       </div>
       {pageCount > 1 && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', marginTop: 14 }}>
-          <button type="button" className="seo-filter" style={{ width: 'auto' }} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Previous</button>
-          <span className="seo-mono seo-muted" style={{ fontSize: 12 }}>Page {page} / {pageCount}</span>
-          <button type="button" className="seo-filter" style={{ width: 'auto' }} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={page === pageCount}>Next</button>
+          <button type="button" className="seo-button seo-button-secondary" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Previous</button>
+          <span className="seo-mono seo-muted" style={{ fontSize: 13 }}>Page {page} / {pageCount}</span>
+          <button type="button" className="seo-button seo-button-secondary" onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={page === pageCount}>Next</button>
         </div>
       )}
     </div>
@@ -166,15 +166,15 @@ function EvaluationContent() {
   return (
     <div className="seo-page" aria-live="polite">
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 26, margin: 0 }}>In Evaluation</h1>
-        <p className="seo-muted" style={{ fontSize: 13, marginTop: 5 }}>Pages being measured. Read-only decisions happen at Review.</p>
+        <h1 className="seo-page-title">In Evaluation</h1>
+        <p className="seo-page-subtitle">Pages being measured. Read-only decisions happen at Review.</p>
       </div>
 
       {error && (
         <SeoCard style={{ marginBottom: 18, borderColor: 'var(--red)', color: 'var(--red)', fontSize: 13 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center' }}>
             <span>{error}</span>
-            <button type="button" onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} className="seo-filter" style={{ color: 'var(--red)', width: 'auto' }}>Retry</button>
+            <button type="button" onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} className="seo-button seo-button-danger">Retry</button>
           </div>
         </SeoCard>
       )}

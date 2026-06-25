@@ -74,7 +74,7 @@ function ResultsTable({
     <section style={{ marginBottom: 30 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <h2 style={{ fontSize: 16, margin: 0 }}>{title}</h2>
+          <h2 style={{ fontSize: 17, margin: 0 }}>{title}</h2>
           <span className="seo-chip seo-mono">{rows.length.toLocaleString('en-US')}</span>
         </div>
         {rows.length > 0 && (
@@ -91,7 +91,7 @@ function ResultsTable({
         <EmptyState icon={<Inbox size={18} />} title={`No ${title.toLowerCase()} yet`} body="Verdicts will appear here after packages complete the evaluation window." />
       ) : (
         <>
-          <div className="seo-mono seo-muted" style={{ fontSize: 12, marginBottom: 10 }}>— = awaiting first verdict (day 30)</div>
+          <div className="seo-mono seo-muted" style={{ fontSize: 13, marginBottom: 10 }}>— = awaiting first verdict (day 30)</div>
           <div className="seo-table-wrap">
             <table className="seo-table">
               <thead>
@@ -112,15 +112,15 @@ function ResultsTable({
                   return (
                     <tr key={row.enhancement_id}>
                       <td style={{ minWidth: 280 }}>
-                        <div style={{ color: 'var(--fg)', fontWeight: 700 }}>{pageTitleFromUrl(row.canonical_url)}</div>
-                        <div className="seo-mono seo-muted" style={{ fontSize: 11, marginTop: 3 }} title={row.canonical_url}>
+                        <div className="seo-table-page-title">{pageTitleFromUrl(row.canonical_url)}</div>
+                        <div className="seo-mono seo-muted seo-table-page-slug" title={row.canonical_url}>
                           {middleTruncatePath(row.canonical_url)}
                         </div>
                       </td>
                       <td><span className="seo-chip seo-mono">v{row.version}</span></td>
                       <td style={{ textAlign: 'right' }}><DeltaGlyph value={row.rank_delta} /></td>
                       <td style={{ textAlign: 'right' }}><DeltaGlyph value={row.click_delta_pct} unit="%" /></td>
-                      <td className="seo-mono seo-muted" style={{ fontSize: 12 }}>{verdictDate}</td>
+                      <td className="seo-mono seo-muted" style={{ fontSize: 13 }}>{verdictDate}</td>
                       {extra && <td style={{ textAlign: 'right' }}>{extra(row)}</td>}
                     </tr>
                   );
@@ -130,9 +130,9 @@ function ResultsTable({
           </div>
           {pageCount > 1 && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center', marginTop: 14 }}>
-              <button type="button" className="seo-filter" style={{ width: 'auto' }} onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Previous</button>
-              <span className="seo-mono seo-muted" style={{ fontSize: 12 }}>Page {page} / {pageCount}</span>
-              <button type="button" className="seo-filter" style={{ width: 'auto' }} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={page === pageCount}>Next</button>
+              <button type="button" className="seo-button seo-button-secondary" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Previous</button>
+              <span className="seo-mono seo-muted" style={{ fontSize: 13 }}>Page {page} / {pageCount}</span>
+              <button type="button" className="seo-button seo-button-secondary" onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={page === pageCount}>Next</button>
             </div>
           )}
         </>
@@ -163,15 +163,15 @@ function ResultsContent() {
   return (
     <div className="seo-page">
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 26, margin: 0 }}>Results</h1>
-        <p className="seo-muted" style={{ fontSize: 13, marginTop: 5 }}>Final verdicts from the SEO evaluation clock.</p>
+        <h1 className="seo-page-title">Results</h1>
+        <p className="seo-page-subtitle">Final verdicts from the SEO evaluation clock.</p>
       </div>
 
       {error && (
         <SeoCard style={{ marginBottom: 18, borderColor: 'var(--red)', color: 'var(--red)', fontSize: 13 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center' }}>
             <span>{error}</span>
-            <button type="button" onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} className="seo-filter" style={{ color: 'var(--red)', width: 'auto' }}>Retry</button>
+            <button type="button" onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} className="seo-button seo-button-danger">Retry</button>
           </div>
         </SeoCard>
       )}

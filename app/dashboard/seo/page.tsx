@@ -121,7 +121,7 @@ function NorthStarCard({ ns }: { ns: SeoNorthStar }) {
               minWidth: 0,
             }}
           >
-            <div className="seo-muted" style={{ fontSize: 12, marginBottom: 6 }}>{metric.label}</div>
+            <div className="seo-muted" style={{ fontSize: 13, marginBottom: 6 }}>{metric.label}</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
               <span className="seo-mono" style={{ fontSize: 30, fontWeight: 700, color: 'var(--fg)' }}>{metric.value}</span>
               <DeltaBadge value={metric.delta} />
@@ -129,7 +129,7 @@ function NorthStarCard({ ns }: { ns: SeoNorthStar }) {
             <div style={{ marginTop: 10 }}>
               <NorthStarSparkline metric={metric.label} data={metric.spark} color={metric.color} />
             </div>
-            <div className="seo-mono seo-muted" style={{ marginTop: 8, fontSize: 11 }}>{metric.context}</div>
+            <div className="seo-mono seo-muted" style={{ marginTop: 8, fontSize: 12 }}>{metric.context}</div>
           </div>
         ))}
       </div>
@@ -188,15 +188,15 @@ function CommandCenterContent() {
   return (
     <div className="seo-page">
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 26, margin: 0 }}>SEO Command Center</h1>
-        {freshLabel && <div className="seo-muted" style={{ fontSize: 13, marginTop: 5 }}>Data as of {freshLabel}</div>}
+        <h1 className="seo-page-title">SEO Command Center</h1>
+        {freshLabel && <div className="seo-page-subtitle">Data as of {freshLabel}</div>}
       </div>
 
       {error && (
         <SeoCard style={{ marginBottom: 20, borderColor: 'var(--red)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', color: 'var(--red)', fontSize: 13 }}>
             <span>{error}</span>
-            <button type="button" onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} className="seo-filter" style={{ flex: '0 0 auto', color: 'var(--red)' }}>
+            <button type="button" onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} className="seo-button seo-button-danger" style={{ flex: '0 0 auto' }}>
               Retry
             </button>
           </div>

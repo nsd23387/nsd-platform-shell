@@ -298,7 +298,6 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space['2'], marginBottom: space['0.5'] }}>
             <h3
               style={{
-                fontFamily: fontFamily.display,
                 fontSize: fontSize.base,
                 fontWeight: fontWeight.semibold,
                 color: 'var(--fg)',

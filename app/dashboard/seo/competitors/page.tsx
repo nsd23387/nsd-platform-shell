@@ -65,8 +65,8 @@ function CompetitorsContent() {
   return (
     <div style={{ padding: space['6'], maxWidth: 1200, margin: '0 auto' }}>
       <div style={{ marginBottom: space['5'] }}>
-        <h1 style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>Competitors</h1>
-        <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }}>
+        <h1 className="seo-page-title">Competitors</h1>
+        <p className="seo-page-subtitle">
           Keyword and content gaps where competitors rank and you don&apos;t — from the governed competitive feed. Read-only.
         </p>
         <p style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-competitor-scope">

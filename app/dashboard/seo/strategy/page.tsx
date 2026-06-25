@@ -384,7 +384,7 @@ function StrategyContent() {
             <p style={{ margin: 0, color: tc.text.muted, fontSize: '12px', textTransform: 'uppercase', letterSpacing: 0 }}>
               Strategy
             </p>
-            <h1 style={{ margin: `${space['1']} 0 0`, fontSize: '28px', lineHeight: 1.15, fontWeight: fontWeight.semibold }}>
+            <h1 className="seo-page-title" style={{ marginTop: space['1'] }}>
               Demand Strategist
             </h1>
           </div>

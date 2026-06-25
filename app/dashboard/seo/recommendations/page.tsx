@@ -245,18 +245,8 @@ function FieldChange({
                 type="button"
                 onClick={() => onApproveCandidate(member.candidate_id, pkg)}
                 disabled={!!candidateBusy[member.candidate_id]}
-                style={{
-                  padding: '4px 12px',
-                  fontSize: '11px',
-                  fontFamily: fontFamily.body,
-                  fontWeight: fontWeight.medium,
-                  borderRadius: radius.sm,
-                  border: 'none',
-                  background: PALETTE.violet,
-                  color: 'var(--fg)',
-                  cursor: candidateBusy[member.candidate_id] ? 'default' : 'pointer',
-                  opacity: candidateBusy[member.candidate_id] ? 0.6 : 1,
-                }}
+                className="seo-button seo-button-primary primary-action"
+                style={{ padding: '6px 12px', fontSize: '12px' }}
               >
                 {candidateBusy[member.candidate_id] === 'approving' ? 'Approving…' : '✓ Approve field'}
               </button>
@@ -264,18 +254,8 @@ function FieldChange({
                 type="button"
                 onClick={() => onSkipCandidate(member.candidate_id, pkg)}
                 disabled={!!candidateBusy[member.candidate_id]}
-                style={{
-                  padding: '4px 12px',
-                  fontSize: '11px',
-                  fontFamily: fontFamily.body,
-                  fontWeight: fontWeight.medium,
-                  borderRadius: radius.sm,
-                  border: `1px solid ${tc.border.default}`,
-                  background: 'transparent',
-                  color: tc.text.muted,
-                  cursor: candidateBusy[member.candidate_id] ? 'default' : 'pointer',
-                  opacity: candidateBusy[member.candidate_id] ? 0.6 : 1,
-                }}
+                className="seo-button seo-button-secondary"
+                style={{ padding: '6px 12px', fontSize: '12px' }}
               >
                 {candidateBusy[member.candidate_id] === 'skipping' ? 'Skipping…' : '✗ Skip field'}
               </button>
@@ -328,10 +308,10 @@ function PackageCard({
             <Pill tone="neutral" tc={tc}>v{pkg.version}</Pill>
             <Pill tone="violet" tc={tc}>{fmtInt(pkg.change_count)} changes</Pill>
           </div>
-          <h2 style={{ margin: 0, fontFamily: fontFamily.display, fontSize: '18px', fontWeight: fontWeight.semibold, color: tc.text.primary, wordBreak: 'break-word' }}>
+          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: fontWeight.semibold, color: tc.text.primary, wordBreak: 'break-word' }}>
             {path}
           </h2>
-          <div style={{ marginTop: '3px', fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, wordBreak: 'break-all' }}>
+          <div style={{ marginTop: '3px', fontFamily: monoStack, fontSize: '12.5px', color: tc.text.muted, wordBreak: 'break-all' }}>
             {pkg.canonical_url}
           </div>
         </div>
@@ -340,7 +320,7 @@ function PackageCard({
             type="button"
             onClick={(e) => onReject(pkg, e)}
             disabled={busy}
-            style={{ padding: '8px 12px', borderRadius: radius.sm, border: `1px solid ${PALETTE.bad}`, background: tc.background.surface, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: busy ? 'default' : 'pointer' }}
+            className="seo-button seo-button-secondary"
             data-testid={`button-reject-package-${pkg.enhancement_id}`}
           >
             Reject page
@@ -349,18 +329,7 @@ function PackageCard({
             type="button"
             onClick={(e) => onApprove(pkg, e)}
             disabled={busy}
-            style={{
-              padding: '8px 12px',
-              borderRadius: radius.sm,
-              border: 'none',
-              background: PALETTE.violet,
-              color: 'var(--fg)',
-              fontFamily: fontFamily.body,
-              fontSize: '13px',
-              fontWeight: fontWeight.medium,
-              cursor: busy ? 'default' : 'pointer',
-              opacity: busy ? 0.6 : 1,
-            }}
+            className="seo-button seo-button-primary primary-action"
             data-testid={`button-approve-package-${pkg.enhancement_id}`}
           >
             Approve page
@@ -406,10 +375,10 @@ function LifecycleCard({
             <Pill tone="neutral" tc={tc}>v{row.version}</Pill>
             <Pill tone="violet" tc={tc}>{fmtInt(row.fields.length)} fields</Pill>
           </div>
-          <h2 style={{ margin: 0, fontFamily: fontFamily.display, fontSize: '17px', fontWeight: fontWeight.semibold, color: tc.text.primary, wordBreak: 'break-word' }}>
+          <h2 style={{ margin: 0, fontSize: '17px', fontWeight: fontWeight.semibold, color: tc.text.primary, wordBreak: 'break-word' }}>
             {path}
           </h2>
-          <div style={{ marginTop: '3px', fontFamily: monoStack, fontSize: '11px', color: tc.text.muted, wordBreak: 'break-all' }}>
+          <div style={{ marginTop: '3px', fontFamily: monoStack, fontSize: '12.5px', color: tc.text.muted, wordBreak: 'break-all' }}>
             {row.canonical_url}
           </div>
         </div>
@@ -662,8 +631,8 @@ function RecommendationsContent() {
   return (
     <div style={{ padding: space['6'], maxWidth: 1180, margin: '0 auto' }}>
       <div style={{ marginBottom: space['5'] }}>
-        <h1 style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>Page Enhancements</h1>
-        <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }} data-testid="text-recommendations-subtitle">
+        <h1 className="seo-page-title">Page Enhancements</h1>
+        <p className="seo-page-subtitle" data-testid="text-recommendations-subtitle">
           Review one page package at a time, then follow its 30/60-day evaluation clock through the final verdict.
         </p>
       </div>
@@ -684,7 +653,7 @@ function RecommendationsContent() {
               data-testid={`button-stage-${key}`}
             >
               <div style={{ fontFamily: fontFamily.body, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', opacity: active ? 0.8 : 1 }}>{label}</div>
-              <div style={{ fontFamily: fontFamily.display, fontSize: '22px', fontWeight: fontWeight.semibold }}>{fmtInt(count)}</div>
+              <div style={{ fontSize: '22px', fontWeight: fontWeight.semibold }}>{fmtInt(count)}</div>
             </button>
           );
         })}
@@ -706,19 +675,19 @@ function RecommendationsContent() {
           <option value="safe">Safe pages</option>
           <option value="needs-review">Needs review</option>
         </select>
-        <span style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>{fmtInt(filtered.length)} page{filtered.length === 1 ? '' : 's'}</span>
+        <span style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted }}>{fmtInt(filtered.length)} page{filtered.length === 1 ? '' : 's'}</span>
         <button
           type="button"
           onClick={(e) => approveSafePackages(e)}
           disabled={busy || safePackages.length === 0}
           data-testid="button-bulk-approve-safe-pages"
-          style={{ padding: '8px 12px', borderRadius: radius.sm, border: 'none', background: safePackages.length ? PALETTE.violet : tc.background.muted, color: safePackages.length ? 'var(--fg)' : tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: busy || safePackages.length === 0 ? 'default' : 'pointer' }}
+          className="seo-button seo-button-primary primary-action"
         >
           Safe pages to bulk-approve ({fmtInt(safePackages.length)})
         </button>
       </div>}
 
-      {stage === 'review' && <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', marginBottom: space['4'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
+      {stage === 'review' && <div style={{ display: 'flex', gap: space['2'], flexWrap: 'wrap', marginBottom: space['4'], fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted }}>
         <span>Keys: <strong style={{ color: tc.text.primary }}>A</strong> approve safe page</span>
         <span><strong style={{ color: tc.text.primary }}>R</strong> reject page</span>
         <span><strong style={{ color: tc.text.primary }}>J</strong> next page</span>
@@ -790,33 +759,14 @@ function RecommendationsContent() {
                 <button
                   type="button"
                   onClick={pendingConfirm.onConfirm}
-                  style={{
-                    padding: '7px 16px',
-                    borderRadius: radius.sm,
-                    border: 'none',
-                    background: PALETTE.violet,
-                    color: 'var(--fg)',
-                    fontFamily: fontFamily.body,
-                    fontSize: '13px',
-                    fontWeight: fontWeight.medium,
-                    cursor: 'pointer',
-                  }}
+                  className="seo-button seo-button-primary primary-action"
                 >
                   Confirm
                 </button>
                 <button
                   type="button"
                   onClick={() => setPendingConfirm(null)}
-                  style={{
-                    padding: '7px 16px',
-                    borderRadius: radius.sm,
-                    border: `1px solid ${tc.border.default}`,
-                    background: 'transparent',
-                    color: tc.text.muted,
-                    fontFamily: fontFamily.body,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                  }}
+                  className="seo-button seo-button-secondary"
                 >
                   Cancel
                 </button>
@@ -830,7 +780,7 @@ function RecommendationsContent() {
       {error && (
         <div style={{ padding: space['4'], borderRadius: radius.md, background: PALETTE.badSoft, color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '13px', marginBottom: space['4'], display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>{error}</span>
-          <button onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} style={{ marginLeft: space['4'], padding: `${space['1']} ${space['3']}`, borderRadius: radius.sm, border: `1px solid ${PALETTE.bad}`, background: 'transparent', color: PALETTE.bad, fontFamily: fontFamily.body, fontSize: '12px', cursor: 'pointer' }}>
+          <button onClick={() => { setError(null); setLoading(true); setTick((t) => t + 1); }} className="seo-button seo-button-danger" style={{ marginLeft: space['4'] }}>
             Retry
           </button>
         </div>

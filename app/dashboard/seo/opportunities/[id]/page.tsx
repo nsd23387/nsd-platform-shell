@@ -164,8 +164,7 @@ function RecommendationDetailContent() {
               Status: {rec.status.replace('_', ' ')}
             </Pill>
           </div>
-          <h1 data-testid="text-rec-title"
-            style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, margin: 0 }}>
+          <h1 data-testid="text-rec-title" className="seo-page-title">
             {title}
           </h1>
           <div style={{ fontSize: '13px', color: tc.text.muted, marginTop: '4px', fontFamily: monoStack, wordBreak: 'break-all' }}>{url}</div>
@@ -173,12 +172,12 @@ function RecommendationDetailContent() {
         <div style={{ display: 'flex', gap: space['2'] }}>
           <button data-testid="button-reject" onClick={handleReject}
             disabled={busy != null || rec.status !== 'pending_review'}
-            style={{ padding: '8px 14px', background: tc.background.surface, border: `1px solid ${tc.border.strong}`, borderRadius: radius.md, fontSize: '13px', color: tc.text.muted, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+            className="seo-button seo-button-secondary">
             {busy === 'reject' ? 'Rejecting…' : 'Reject'}
           </button>
           <button data-testid="button-approve" onClick={handleApprove}
             disabled={busy != null || rec.status !== 'pending_review'}
-            style={{ padding: '8px 18px', background: PALETTE.violet, color: '#ffffff', border: 'none', borderRadius: radius.md, fontSize: '13px', fontWeight: fontWeight.medium, cursor: 'pointer', opacity: busy || rec.status !== 'pending_review' ? 0.6 : 1 }}>
+            className="seo-button seo-button-primary primary-action">
             {busy === 'approve' ? 'Approving…' : rec.status === 'approved' ? 'Approved' : 'Approve & queue'}
           </button>
         </div>

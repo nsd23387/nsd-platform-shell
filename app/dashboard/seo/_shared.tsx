@@ -675,11 +675,8 @@ export function CandidateCard({
             onClick={() => act('approve')}
             disabled={busy !== null || schemaPaused}
             title={schemaPaused ? 'Schema execution temporarily paused — write path under repair.' : undefined}
-            style={{
-              padding: '6px 14px', borderRadius: radius.sm, border: schemaPaused ? `1px solid ${tc.border.default}` : 'none', cursor: (busy || schemaPaused) ? 'default' : 'pointer',
-              background: schemaPaused ? tc.background.muted : PALETTE.good, color: schemaPaused ? tc.text.muted : 'var(--fg)', fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium,
-              opacity: busy ? 0.6 : 1,
-            }}
+            className="seo-button seo-button-primary primary-action"
+            style={{ padding: '6px 14px', fontSize: '12px' }}
           >
             {busy === 'approve' ? 'Approving…' : schemaPaused ? 'Schema paused' : 'Approve'}
           </button>
@@ -687,11 +684,8 @@ export function CandidateCard({
             data-testid={`button-reject-${c.candidate_id}`}
             onClick={() => act('reject')}
             disabled={busy !== null}
-            style={{
-              padding: '6px 14px', borderRadius: radius.sm, cursor: busy ? 'default' : 'pointer',
-              background: 'transparent', color: PALETTE.bad, border: `1px solid ${PALETTE.bad}`,
-              fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium, opacity: busy ? 0.6 : 1,
-            }}
+            className="seo-button seo-button-secondary"
+            style={{ padding: '6px 14px', fontSize: '12px' }}
           >
             {busy === 'reject' ? 'Rejecting…' : 'Reject'}
           </button>

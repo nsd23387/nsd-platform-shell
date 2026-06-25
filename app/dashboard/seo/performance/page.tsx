@@ -91,8 +91,8 @@ function PerformanceContent() {
   return (
     <div style={{ padding: space['6'], maxWidth: 1200, margin: '0 auto' }}>
       <div style={{ marginBottom: space['5'] }}>
-        <h1 style={{ fontFamily: fontFamily.display, fontSize: '24px', fontWeight: fontWeight.semibold, color: tc.text.primary, margin: 0 }}>Performance</h1>
-        <p style={{ fontFamily: fontFamily.body, fontSize: '13px', color: tc.text.muted, marginTop: '4px' }}>
+        <h1 className="seo-page-title">Performance</h1>
+        <p className="seo-page-subtitle">
           Governed page portfolio. Pages are bucketed on their top-query average position. Click any page to open its dossier.
         </p>
       </div>

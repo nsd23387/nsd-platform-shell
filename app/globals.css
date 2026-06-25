@@ -27,6 +27,8 @@
   --violet: #a78bfa;
   --violet-strong: #8b5cf6;
   --violet-soft: rgba(139, 92, 246, 0.16);
+  --violet-action: #6d4aed;
+  --violet-action-hover: #5b39dc;
   --green: #34d399;
   --green-soft: rgba(52, 211, 153, 0.15);
   --amber: #fbbf24;
@@ -53,6 +55,8 @@
   --violet: #6d28d9;
   --violet-strong: #5b21b6;
   --violet-soft: rgba(109, 40, 217, 0.12);
+  --violet-action: #6d28d9;
+  --violet-action-hover: #5b21b6;
   --green: #047857;
   --green-soft: rgba(4, 120, 87, 0.12);
   --amber: #b45309;
@@ -83,6 +87,8 @@ body {
    ============================================ */
 
 body {
+  --font-sans: var(--font-inter), var(--font-fira-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: var(--font-fira-code), 'SF Mono', Menlo, Consolas, monospace;
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.5;
@@ -247,10 +253,38 @@ a:focus-visible,
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
+  font-size: 14.5px;
+  line-height: 1.6;
 }
 
 .seo-page {
   width: min(1180px, 100%);
+}
+
+.seo-shell h1,
+.seo-shell h2,
+.seo-shell h3,
+.seo-shell h4,
+.seo-shell h5,
+.seo-shell h6 {
+  font-family: var(--font-sans) !important;
+}
+
+.seo-page-title {
+  margin: 0;
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.22;
+}
+
+.seo-page-subtitle {
+  margin-top: 5px;
+  color: var(--fg-muted);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .seo-card {
@@ -271,7 +305,7 @@ a:focus-visible,
 
 .seo-kicker {
   color: var(--fg-muted);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -304,7 +338,7 @@ a:focus-visible,
   padding: 10px 14px;
   background: var(--surface-2);
   color: var(--fg-muted);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-align: left;
@@ -316,8 +350,21 @@ a:focus-visible,
   padding: 13px 14px;
   border-top: 1px solid var(--border);
   color: var(--fg-secondary);
-  font-size: 13px;
+  font-size: 14px;
   vertical-align: middle;
+}
+
+.seo-table-page-title {
+  color: var(--fg);
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.seo-table-page-slug {
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.45;
 }
 
 .seo-sort-button {
@@ -344,7 +391,7 @@ a:focus-visible,
   border-radius: 10px;
   background: var(--surface);
   color: var(--fg);
-  font: 13px var(--font-sans);
+  font: 14px var(--font-sans);
   padding: 9px 11px;
 }
 
@@ -370,8 +417,71 @@ a:focus-visible,
   padding: 3px 8px;
   background: var(--surface-2);
   color: var(--fg-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
+}
+
+.seo-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  padding: 9px 17px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.seo-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.seo-button:focus-visible {
+  outline: 2px solid var(--violet-action);
+  outline-offset: 2px;
+}
+
+.seo-button-primary {
+  border: 1px solid var(--violet-action);
+  background: var(--violet-action);
+  color: #fff;
+}
+
+.seo-button-primary:hover:not(:disabled) {
+  border-color: var(--violet-action-hover);
+  background: var(--violet-action-hover);
+}
+
+.seo-button-primary:disabled {
+  border-color: var(--border);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+
+.seo-button-secondary {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--fg-secondary);
+}
+
+.seo-button-secondary:hover:not(:disabled) {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.seo-button-danger {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--fg-secondary);
+}
+
+.seo-button-danger:hover:not(:disabled) {
+  border-color: var(--red);
+  color: var(--red);
 }
 
 .seo-dot {

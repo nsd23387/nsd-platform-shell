@@ -50,7 +50,7 @@ export function RecommendationFeedbackModal({ recommendationId, onSubmit, onClos
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 style={{ fontFamily: fontFamily.display, fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['4'], lineHeight: lineHeight.snug }}>
+        <h3 style={{ fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: tc.text.primary, marginBottom: space['4'], lineHeight: lineHeight.snug }}>
           Provide Feedback
         </h3>
         <p style={{ fontFamily: fontFamily.body, fontSize: fontSize.sm, color: tc.text.muted, marginBottom: space['4'] }}>

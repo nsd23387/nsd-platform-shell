@@ -43,7 +43,6 @@ export function PipelineTile({ label, count, subtitle, href, accent, active = fa
       </div>
       <div
         style={{
-          fontFamily: fontFamily.display,
           fontSize: '40px',
           fontWeight: fontWeight.semibold,
           color: active ? 'var(--violet)' : (accent ?? 'var(--fg)'),

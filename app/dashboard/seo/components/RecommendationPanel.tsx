@@ -71,7 +71,7 @@ export function RecommendationPanel({ recommendation, onClose, onApprove, onReje
     <div style={overlayStyle} onClick={onClose} data-testid="panel-recommendation-detail">
       <div style={panelStyle} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space['6'] }}>
-          <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary, lineHeight: lineHeight.snug }}>
+          <h2 style={{ fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary, lineHeight: lineHeight.snug }}>
             Recommendation Detail
           </h2>
           <button

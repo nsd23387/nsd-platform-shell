@@ -49,7 +49,7 @@ export function ClusterDetailDrawer({ cluster, loading, onClose }: ClusterDetail
     <div style={overlayStyle} onClick={onClose} data-testid="drawer-cluster-detail">
       <div style={drawerStyle} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space['6'] }}>
-          <h2 style={{ fontFamily: fontFamily.display, fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary, lineHeight: lineHeight.snug }}>
+          <h2 style={{ fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: tc.text.primary, lineHeight: lineHeight.snug }}>
             Cluster Detail
           </h2>
           <button
@@ -84,7 +84,7 @@ export function ClusterDetailDrawer({ cluster, loading, onClose }: ClusterDetail
               </div>
             </div>
 
-            <h3 style={{ fontFamily: fontFamily.display, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: tc.text.secondary, marginBottom: space['3'] }}>
+            <h3 style={{ fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: tc.text.secondary, marginBottom: space['3'] }}>
               Member Keywords
             </h3>
             <div style={{ border: `1px solid ${tc.border.default}`, borderRadius: radius.lg, overflow: 'hidden' }}>

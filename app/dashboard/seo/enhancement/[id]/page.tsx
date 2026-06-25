@@ -68,23 +68,13 @@ function ConfirmOverlay({
         <div style={{ display: 'flex', gap: space['3'], justifyContent: 'flex-end' }}>
           <button
             onClick={onCancel}
-            style={{
-              padding: '8px 16px', borderRadius: radius.sm,
-              border: `1px solid ${tc.border.default}`, background: 'transparent',
-              color: tc.text.secondary, fontFamily: fontFamily.body, fontSize: '13px',
-              cursor: 'pointer',
-            }}
+            className="seo-button seo-button-secondary"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            style={{
-              padding: '8px 16px', borderRadius: radius.sm,
-              border: 'none', background: PALETTE.good, color: '#fff',
-              fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium,
-              cursor: 'pointer',
-            }}
+            className="seo-button seo-button-primary primary-action"
           >
             Confirm &amp; publish
           </button>
@@ -252,24 +242,14 @@ function EnhancementDetailContent({ id }: { id: string }) {
               <button
                 onClick={handleReject}
                 disabled={busy !== null}
-                style={{
-                  padding: '8px 16px', borderRadius: radius.sm, cursor: busy ? 'default' : 'pointer',
-                  background: 'transparent', color: PALETTE.bad, border: `1px solid ${PALETTE.bad}`,
-                  fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium,
-                  opacity: busy ? 0.6 : 1,
-                }}
+                className="seo-button seo-button-secondary"
               >
                 {busy === 'reject' ? 'Rejecting…' : 'Reject page'}
               </button>
               <button
                 onClick={() => setConfirmApprove(true)}
                 disabled={busy !== null}
-                style={{
-                  padding: '8px 16px', borderRadius: radius.sm, cursor: busy ? 'default' : 'pointer',
-                  background: PALETTE.good, color: '#fff', border: 'none',
-                  fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium,
-                  opacity: busy ? 0.6 : 1,
-                }}
+                className="seo-button seo-button-primary primary-action"
               >
                 {busy === 'approve' ? 'Approving…' : 'Approve & publish page'}
               </button>
@@ -379,24 +359,14 @@ function EnhancementDetailContent({ id }: { id: string }) {
             <button
               onClick={handleReject}
               disabled={busy !== null}
-              style={{
-                padding: '8px 16px', borderRadius: radius.sm, cursor: busy ? 'default' : 'pointer',
-                background: 'transparent', color: PALETTE.bad, border: `1px solid ${PALETTE.bad}`,
-                fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium,
-                opacity: busy ? 0.6 : 1,
-              }}
+              className="seo-button seo-button-secondary"
             >
               {busy === 'reject' ? 'Rejecting…' : 'Reject page'}
             </button>
             <button
               onClick={() => setConfirmApprove(true)}
               disabled={busy !== null}
-              style={{
-                padding: '8px 16px', borderRadius: radius.sm, cursor: busy ? 'default' : 'pointer',
-                background: PALETTE.good, color: '#fff', border: 'none',
-                fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium,
-                opacity: busy ? 0.6 : 1,
-              }}
+              className="seo-button seo-button-primary primary-action"
             >
               {busy === 'approve' ? 'Approving…' : 'Approve & publish'}
             </button>
