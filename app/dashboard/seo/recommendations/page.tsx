@@ -8,6 +8,7 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { DashboardGuard } from '../../../../hooks/useRBAC';
 import { AccessDenied } from '../../../../components/dashboard';
 import { useThemeColors } from '../../../../hooks/useThemeColors';
@@ -22,7 +23,7 @@ import {
   skipSeoCandidate,
 } from '../../../../lib/seoApi';
 import type { SeoPageEnhancementLifecycle, SeoPageEnhancementMember, SeoPageEnhancementPackage, SeoPageEnhancementsResponse } from '../../../../lib/seoApi';
-import { PALETTE, monoStack, Pill, fmtInt, pathOf } from '../_shared';
+import { EmptyState, PALETTE, monoStack, Pill, fmtInt, pathOf } from '../_shared';
 
 type Stage = 'review' | 'evaluating' | 'resolved';
 type Tone = 'good' | 'bad' | 'warn' | 'info' | 'violet' | 'neutral';
@@ -252,7 +253,7 @@ function FieldChange({
                   borderRadius: radius.sm,
                   border: 'none',
                   background: PALETTE.violet,
-                  color: '#fff',
+                  color: 'var(--fg)',
                   cursor: candidateBusy[member.candidate_id] ? 'default' : 'pointer',
                   opacity: candidateBusy[member.candidate_id] ? 0.6 : 1,
                 }}
@@ -353,7 +354,7 @@ function PackageCard({
               borderRadius: radius.sm,
               border: 'none',
               background: PALETTE.violet,
-              color: '#fff',
+              color: 'var(--fg)',
               fontFamily: fontFamily.body,
               fontSize: '13px',
               fontWeight: fontWeight.medium,
@@ -679,7 +680,7 @@ function RecommendationsContent() {
               key={key}
               type="button"
               onClick={() => setStage(key)}
-              style={{ padding: space['3'], borderRadius: radius.md, border: `1px solid ${active ? PALETTE.violet : tc.border.default}`, background: active ? PALETTE.violet : tc.background.surface, color: active ? '#fff' : tc.text.primary, cursor: 'pointer', textAlign: 'left' }}
+              style={{ padding: space['3'], borderRadius: radius.md, border: `1px solid ${active ? PALETTE.violet : tc.border.default}`, background: active ? PALETTE.violet : tc.background.surface, color: active ? 'var(--fg)' : tc.text.primary, cursor: 'pointer', textAlign: 'left' }}
               data-testid={`button-stage-${key}`}
             >
               <div style={{ fontFamily: fontFamily.body, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', opacity: active ? 0.8 : 1 }}>{label}</div>
@@ -711,7 +712,7 @@ function RecommendationsContent() {
           onClick={(e) => approveSafePackages(e)}
           disabled={busy || safePackages.length === 0}
           data-testid="button-bulk-approve-safe-pages"
-          style={{ padding: '8px 12px', borderRadius: radius.sm, border: 'none', background: safePackages.length ? PALETTE.violet : tc.background.muted, color: safePackages.length ? '#fff' : tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: busy || safePackages.length === 0 ? 'default' : 'pointer' }}
+          style={{ padding: '8px 12px', borderRadius: radius.sm, border: 'none', background: safePackages.length ? PALETTE.violet : tc.background.muted, color: safePackages.length ? 'var(--fg)' : tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px', fontWeight: fontWeight.medium, cursor: busy || safePackages.length === 0 ? 'default' : 'pointer' }}
         >
           Safe pages to bulk-approve ({fmtInt(safePackages.length)})
         </button>
@@ -794,7 +795,7 @@ function RecommendationsContent() {
                     borderRadius: radius.sm,
                     border: 'none',
                     background: PALETTE.violet,
-                    color: '#fff',
+                    color: 'var(--fg)',
                     fontFamily: fontFamily.body,
                     fontSize: '13px',
                     fontWeight: fontWeight.medium,
@@ -835,16 +836,23 @@ function RecommendationsContent() {
         </div>
       )}
       {!loading && !error && stage === 'review' && packages.length === 0 && evaluatingRows.length === 0 && resolvedRows.length === 0 && (
-        <div style={{ textAlign: 'center', padding: space['12'], color: tc.text.muted }}>
-          <div style={{ fontSize: '32px', marginBottom: space['3'] }}>✓</div>
-          <div style={{ fontFamily: fontFamily.display, fontSize: '16px', fontWeight: fontWeight.semibold, color: tc.text.primary }}>Queue is clear</div>
-          <div style={{ fontFamily: fontFamily.body, fontSize: '13px', marginTop: space['2'] }}>No page packages are waiting for review. New packages appear here when the SEO engine generates them.</div>
-        </div>
+        <EmptyState
+          icon="✓"
+          title="All caught up"
+          body="No pages are awaiting review. New packages appear here when the SEO engine generates them."
+          action={<Link href="/dashboard/seo/evaluation" style={{ color: 'var(--violet)', fontSize: 13 }}>View In Evaluation</Link>}
+        />
+      )}
+      {!loading && !error && stage === 'review' && packages.length === 0 && evaluatingRows.length > 0 && (
+        <EmptyState
+          icon="✓"
+          title="All caught up"
+          body={`${fmtInt(evaluatingRows.length)} in evaluation; first verdicts arrive on the 30-day clock.`}
+          action={<Link href="/dashboard/seo/evaluation" style={{ color: 'var(--violet)', fontSize: 13 }}>View In Evaluation</Link>}
+        />
       )}
       {!loading && !error && stage === 'review' && packages.length > 0 && filtered.length === 0 && (
-        <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid="empty-recommendations">
-          No page packages match this filter.
-        </div>
+        <EmptyState icon="⌕" title="No matches" body="No page packages match this filter." />
       )}
 
       {stage === 'review' && <div style={{ display: 'grid', gap: space['4'] }}>
@@ -865,9 +873,11 @@ function RecommendationsContent() {
       </div>}
 
       {stage !== 'review' && !loading && !error && visibleLifecycleRows.length === 0 && (
-        <div style={{ padding: space['6'], textAlign: 'center', color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '13px' }} data-testid={`empty-${stage}`}>
-          No page packages are currently {stage === 'evaluating' ? 'in evaluation' : 'resolved'}.
-        </div>
+        <EmptyState
+          icon="•"
+          title={stage === 'evaluating' ? 'No pages in evaluation' : 'No resolved pages yet'}
+          body={`No page packages are currently ${stage === 'evaluating' ? 'in evaluation' : 'resolved'}.`}
+        />
       )}
 
       {stage !== 'review' && !loading && !error && (

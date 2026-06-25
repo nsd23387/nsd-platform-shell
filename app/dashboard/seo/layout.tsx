@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useThemeColors } from '../../../hooks/useThemeColors';
-import { violet } from '../../../design/tokens/colors';
 import { fontFamily, fontSize, fontWeight } from '../../../design/tokens/typography';
 import { space, radius, duration, easing } from '../../../design/tokens/spacing';
 import { Icon } from '../../../design/components/Icon';
@@ -58,31 +57,31 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
 
   const [isMobile, setIsMobile] = useState(false);
   const [mobileSubNavOpen, setMobileSubNavOpen] = useState(false);
-  const [pipelineHealthColor, setPipelineHealthColor] = useState('#10b981');
+  const [pipelineHealth, setPipelineHealth] = useState<'live' | 'degraded' | 'down'>('degraded');
   const [pipelineHealthLabel, setPipelineHealthLabel] = useState('Pipeline: checking...');
 
   useEffect(() => {
     getSeoOverviewKpis()
       .then((kpis) => {
         if (!kpis.last_pipeline_run_at) {
-          setPipelineHealthColor('#f59e0b');
+          setPipelineHealth('degraded');
           setPipelineHealthLabel('Pipeline: no runs yet');
           return;
         }
         const hoursAgo = (Date.now() - new Date(kpis.last_pipeline_run_at).getTime()) / (1000 * 60 * 60);
         if (hoursAgo < 25) {
-          setPipelineHealthColor('#10b981');
+          setPipelineHealth('live');
           setPipelineHealthLabel(`Pipeline: healthy (${Math.round(hoursAgo)}h ago)`);
         } else if (hoursAgo < 48) {
-          setPipelineHealthColor('#f59e0b');
+          setPipelineHealth('degraded');
           setPipelineHealthLabel(`Pipeline: stale (${Math.round(hoursAgo)}h ago)`);
         } else {
-          setPipelineHealthColor('#ef4444');
+          setPipelineHealth('down');
           setPipelineHealthLabel(`Pipeline: offline (${Math.round(hoursAgo)}h ago)`);
         }
       })
       .catch(() => {
-        setPipelineHealthColor('#f59e0b');
+        setPipelineHealth('degraded');
         setPipelineHealthLabel('Pipeline: unknown');
       });
   }, []);
@@ -121,13 +120,15 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
 
   const currentLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.href === currentPath)?.label || 'SEO Command Center';
 
-  const navWidth = collapsed ? '48px' : '220px';
+  const navWidth = '236px';
+  const statusColor = pipelineHealth === 'live' ? 'var(--green)' : pipelineHealth === 'down' ? 'var(--red)' : 'var(--amber)';
+  const statusLabel = pipelineHealth === 'live' ? 'Live' : pipelineHealth === 'down' ? 'Down' : 'Degraded';
 
   const navLinks = (
     <>
       {NAV_GROUPS.map((group) => (
         <div key={group.title} style={{ marginBottom: space['2'] }}>
-          {!collapsed && !isMobile && (
+          {!isMobile && (
             <div
               style={{
                 padding: `${space['2']} ${space['4']}`,
@@ -164,20 +165,19 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                title={collapsed && !isMobile ? item.label : undefined}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
-                  gap: collapsed && !isMobile ? '0' : space['2.5'],
-                  padding: collapsed && !isMobile ? `${space['2']} 0` : `${space['2']} ${space['4']}`,
+                  justifyContent: 'flex-start',
+                  gap: space['2.5'],
+                  padding: `${space['2']} ${space['4']}`,
                   fontFamily: fontFamily.body,
                   fontSize: fontSize.sm,
                   fontWeight: isActive ? fontWeight.semibold : fontWeight.normal,
                   color: isActive ? tc.text.primary : tc.text.muted,
-                  backgroundColor: isActive ? tc.background.muted : 'transparent',
+                  backgroundColor: isActive ? 'var(--violet-soft)' : 'transparent',
                   textDecoration: 'none',
-                  borderLeft: collapsed && !isMobile ? 'none' : (isActive ? `3px solid ${violet[500]}` : '3px solid transparent'),
+                  borderLeft: isActive ? `2.5px solid var(--violet)` : '2.5px solid transparent',
                   transition: `all ${duration.normal} ${easing.DEFAULT}`,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
@@ -185,7 +185,7 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
                 data-testid={`nav-seo-${item.href.split('/').pop()}`}
               >
                 <Icon name={item.icon as any} size={16} />
-                {(collapsed && !isMobile) ? null : <span>{item.label}</span>}
+                <span>{item.label}</span>
               </Link>
             );
           })}
@@ -196,7 +196,7 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
 
   if (isMobile) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div className="seo-shell" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
         <button
           onClick={() => setMobileSubNavOpen(prev => !prev)}
           style={{
@@ -204,16 +204,16 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: `${space['2.5']} ${space['4']}`,
-            backgroundColor: tc.background.surface,
-            borderBottom: `1px solid ${tc.border.default}`,
+            backgroundColor: 'var(--surface)',
+            borderBottom: '1px solid var(--border)',
             fontFamily: fontFamily.body,
             fontSize: fontSize.sm,
             fontWeight: fontWeight.medium,
-            color: tc.text.primary,
+            color: 'var(--fg)',
             border: 'none',
             borderBottomWidth: '1px',
             borderBottomStyle: 'solid',
-            borderBottomColor: tc.border.default,
+            borderBottomColor: 'var(--border)',
             cursor: 'pointer',
             width: '100%',
           }}
@@ -226,8 +226,8 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
         {mobileSubNavOpen && (
           <div
             style={{
-              backgroundColor: tc.background.surface,
-              borderBottom: `1px solid ${tc.border.default}`,
+              backgroundColor: 'var(--surface)',
+              borderBottom: '1px solid var(--border)',
               padding: `${space['2']} 0`,
             }}
           >
@@ -239,12 +239,12 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
           <div
             style={{
               padding: `${space['2']} ${space['4']}`,
-              backgroundColor: '#fef3c7',
-              borderBottom: '1px solid #f59e0b',
+              backgroundColor: 'var(--amber-soft)',
+              borderBottom: '1px solid var(--amber)',
               fontFamily: fontFamily.body,
               fontSize: fontSize.sm,
               fontWeight: fontWeight.medium,
-              color: '#92400e',
+              color: 'var(--amber)',
               display: 'flex',
               alignItems: 'center',
               gap: space['2'],
@@ -265,6 +265,7 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
 
   return (
     <div
+      className="seo-shell"
       style={{
         display: 'flex',
         height: '100%',
@@ -276,8 +277,8 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
         style={{
           width: navWidth,
           minWidth: navWidth,
-          backgroundColor: tc.background.surface,
-          borderRight: `1px solid ${tc.border.default}`,
+          backgroundColor: 'var(--surface)',
+          borderRight: '1px solid var(--border)',
           padding: `${space['4']} 0`,
           overflowY: 'auto',
           overflowX: 'hidden',
@@ -287,53 +288,49 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
         }}
         data-testid="nav-seo-intelligence"
       >
-        {!collapsed && (
-          <div
-            style={{
-              padding: `0 ${space['4']} ${space['4']}`,
-              borderBottom: `1px solid ${tc.border.subtle}`,
-              marginBottom: space['3'],
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: space['2'], marginBottom: space['0.5'] }}>
-              <h3
-                style={{
-                  fontFamily: fontFamily.display,
-                  fontSize: fontSize.base,
-                  fontWeight: fontWeight.semibold,
-                  color: tc.text.primary,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                SEO Command Center
-              </h3>
-              <span
-                title={pipelineHealthLabel}
-                style={{
-                  display: 'inline-block',
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: pipelineHealthColor,
-                  flexShrink: 0,
-                }}
-                data-testid="indicator-pipeline-health"
-              />
-            </div>
-            <p
+        <div
+          style={{
+            padding: `0 ${space['4']} ${space['4']}`,
+            borderBottom: '1px solid var(--border)',
+            marginBottom: space['3'],
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: space['2'], marginBottom: space['0.5'] }}>
+            <h3
               style={{
-                fontFamily: fontFamily.body,
-                fontSize: fontSize.sm,
-                color: tc.text.muted,
+                fontFamily: fontFamily.display,
+                fontSize: fontSize.base,
+                fontWeight: fontWeight.semibold,
+                color: 'var(--fg)',
                 whiteSpace: 'nowrap',
               }}
             >
-              Cluster analysis and decisions
-            </p>
+              SEO Command Center
+            </h3>
+            <span
+              title={pipelineHealthLabel}
+              className="seo-chip"
+              style={{
+                flexShrink: 0,
+                color: statusColor,
+              }}
+              data-testid="indicator-pipeline-health"
+            >
+              <span className="seo-dot" />
+              {statusLabel}
+            </span>
           </div>
-        )}
-
-        {collapsed && <div style={{ height: space['3'], flexShrink: 0 }} />}
+          <p
+            style={{
+              fontFamily: fontFamily.body,
+              fontSize: fontSize.sm,
+              color: 'var(--fg-muted)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Cluster analysis and decisions
+          </p>
+        </div>
 
         <div style={{ flex: 1 }}>
           {navLinks}
@@ -341,19 +338,20 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
 
         <button
           onClick={handleToggleCollapse}
+          aria-hidden="true"
           style={{
-            display: 'flex',
+            display: 'none',
             alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'flex-end',
             padding: collapsed ? `${space['2']} 0` : `${space['2']} ${space['4']}`,
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            color: tc.text.muted,
+            color: 'var(--fg-muted)',
             transition: `color ${duration.normal} ${easing.DEFAULT}`,
             width: '100%',
             flexShrink: 0,
-            borderTop: `1px solid ${tc.border.subtle}`,
+            borderTop: '1px solid var(--border)',
             marginTop: space['2'],
           }}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -368,12 +366,12 @@ export default function SeoLayout({ children }: SeoLayoutProps) {
           <div
             style={{
               padding: `${space['3']} ${space['6']}`,
-              backgroundColor: '#fef3c7',
-              borderBottom: '1px solid #f59e0b',
+              backgroundColor: 'var(--amber-soft)',
+              borderBottom: '1px solid var(--amber)',
               fontFamily: fontFamily.body,
               fontSize: fontSize.sm,
               fontWeight: fontWeight.medium,
-              color: '#92400e',
+              color: 'var(--amber)',
               display: 'flex',
               alignItems: 'center',
               gap: space['2'],

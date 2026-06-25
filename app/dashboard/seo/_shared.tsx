@@ -16,7 +16,6 @@ import React, { useEffect, useState } from 'react';
 import { useThemeColors } from '../../../hooks/useThemeColors';
 import { fontFamily, fontWeight } from '../../../design/tokens/typography';
 import { space, radius } from '../../../design/tokens/spacing';
-import { violet } from '../../../design/tokens/colors';
 import {
   getSeoPageDossier, approveEngineCandidate, rejectEngineCandidate, getSeoOffpageBriefs,
 } from '../../../lib/seoApi';
@@ -32,12 +31,12 @@ import type {
 // Brand accents not present in the global theme tokens.
 // -----------------------------------------------------------------------------
 export const PALETTE = {
-  violet: violet[500],
-  violetSoft: '#ede9fe',
-  good: '#065f46', goodSoft: '#d1fae5',
-  bad: '#991b1b', badSoft: '#fee2e2',
-  warn: '#92400e', warnSoft: '#fef3c7',
-  info: '#1e40af', infoSoft: '#dbeafe',
+  violet: 'var(--violet)',
+  violetSoft: 'var(--violet-soft)',
+  good: 'var(--green)', goodSoft: 'var(--green-soft)',
+  bad: 'var(--red)', badSoft: 'var(--red-soft)',
+  warn: 'var(--amber)', warnSoft: 'var(--amber-soft)',
+  info: 'var(--violet)', infoSoft: 'var(--violet-soft)',
 };
 export const monoStack = '"JetBrains Mono", "SF Mono", Menlo, Consolas, monospace';
 
@@ -365,6 +364,120 @@ export function pathOf(url: string): string {
   }
 }
 
+export function pageTitleFromUrl(url: string): string {
+  const path = pathOf(url).split('?')[0];
+  const leaf = path.split('/').filter(Boolean).pop() || 'Home';
+  return leaf
+    .replace(/\.(html|php|aspx?)$/i, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+export function middleTruncatePath(url: string, max = 46): string {
+  const path = pathOf(url);
+  if (path.length <= max) return path;
+  const parts = path.split('/').filter(Boolean);
+  const leaf = parts.pop() || path.slice(-Math.floor(max / 2));
+  const head = `/${parts.slice(0, 2).join('/')}`;
+  const room = Math.max(12, max - head.length - leaf.length - 5);
+  const middle = parts.length > 2 ? parts.slice(2).join('/').slice(0, room) : '';
+  return `${head}${middle ? `/${middle}` : ''}/.../${leaf}`;
+}
+
+export function SeoCard({
+  children,
+  interactive = false,
+  className = '',
+  style,
+}: {
+  children: React.ReactNode;
+  interactive?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div className={`seo-card${interactive ? ' seo-card-interactive' : ''}${className ? ` ${className}` : ''}`} style={style}>
+      {children}
+    </div>
+  );
+}
+
+export function EmptyState({
+  icon,
+  title,
+  body,
+  action,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="seo-card seo-empty">
+      <div className="seo-empty-icon" aria-hidden="true">{icon}</div>
+      <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--fg)' }}>{title}</h2>
+      <div style={{ maxWidth: 560, color: 'var(--fg-muted)', fontSize: '13px', lineHeight: 1.55 }}>{body}</div>
+      {action}
+    </div>
+  );
+}
+
+export function DeltaGlyph({
+  value,
+  unit = '',
+  lowerIsBetter = false,
+}: {
+  value: number | null | undefined;
+  unit?: string;
+  lowerIsBetter?: boolean;
+}) {
+  if (value == null) return <span className="seo-mono seo-muted">—</span>;
+  const improved = lowerIsBetter ? value < 0 : value > 0;
+  const worsened = lowerIsBetter ? value > 0 : value < 0;
+  const klass = improved ? 'seo-delta-up' : worsened ? 'seo-delta-down' : 'seo-muted';
+  const glyph = improved ? '↑' : worsened ? '↓' : '—';
+  const magnitude = Math.abs(value).toFixed(1);
+  return <span className={`seo-mono ${klass}`}>{glyph} {magnitude}{unit}</span>;
+}
+
+export type SortDirection = 'asc' | 'desc';
+
+export function SortHeader<T extends string>({
+  id,
+  label,
+  sortKey,
+  sortDir,
+  onSort,
+  align = 'left',
+  title,
+}: {
+  id: T;
+  label: string;
+  sortKey: T;
+  sortDir: SortDirection;
+  onSort: (id: T) => void;
+  align?: 'left' | 'right';
+  title?: string;
+}) {
+  const active = sortKey === id;
+  return (
+    <th aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} style={{ textAlign: align }} title={title}>
+      <button
+        type="button"
+        className="seo-sort-button"
+        data-active={active}
+        onClick={() => onSort(id)}
+        style={{ marginLeft: align === 'right' ? 'auto' : undefined }}
+        title={title}
+      >
+        <span>{label}</span>
+        <span aria-hidden="true">{active ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+      </button>
+    </th>
+  );
+}
+
 // Render `text` with every case-insensitive occurrence of `term` wrapped in a
 // subtle highlight mark. Returns the plain string when there is no active term
 // (or no match) so non-searching renders stay untouched.
@@ -539,7 +652,7 @@ export function CandidateCard({
             title={schemaPaused ? 'Schema execution temporarily paused — write path under repair.' : undefined}
             style={{
               padding: '6px 14px', borderRadius: radius.sm, border: schemaPaused ? `1px solid ${tc.border.default}` : 'none', cursor: (busy || schemaPaused) ? 'default' : 'pointer',
-              background: schemaPaused ? tc.background.muted : PALETTE.good, color: schemaPaused ? tc.text.muted : '#fff', fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium,
+              background: schemaPaused ? tc.background.muted : PALETTE.good, color: schemaPaused ? tc.text.muted : 'var(--fg)', fontFamily: fontFamily.body, fontSize: '12px', fontWeight: fontWeight.medium,
               opacity: busy ? 0.6 : 1,
             }}
           >

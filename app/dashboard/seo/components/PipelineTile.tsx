@@ -2,9 +2,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useThemeColors } from '../../../../hooks/useThemeColors';
 import { fontFamily, fontWeight } from '../../../../design/tokens/typography';
-import { space, radius } from '../../../../design/tokens/spacing';
+import { space } from '../../../../design/tokens/spacing';
 
 interface Props {
   label: string;
@@ -12,30 +11,21 @@ interface Props {
   subtitle: string;
   href: string;
   accent?: string;
+  active?: boolean;
 }
 
-export function PipelineTile({ label, count, subtitle, href, accent }: Props) {
-  const tc = useThemeColors();
-
+export function PipelineTile({ label, count, subtitle, href, accent, active = false }: Props) {
   return (
     <Link
       href={href}
+      className="seo-card seo-card-interactive"
       style={{
         display: 'block',
-        border: `1px solid ${tc.border.default}`,
-        borderRadius: radius.lg,
-        padding: space['6'],
-        background: tc.background.surface,
         textDecoration: 'none',
-        transition: 'border-color 0.15s ease',
         flex: 1,
         minWidth: 0,
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = tc.border.strong;
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.borderColor = tc.border.default;
+        borderLeft: active ? '3px solid var(--violet)' : '1px solid var(--border)',
+        paddingLeft: active ? '26px' : undefined,
       }}
     >
       <div
@@ -45,7 +35,7 @@ export function PipelineTile({ label, count, subtitle, href, accent }: Props) {
           fontWeight: fontWeight.semibold,
           textTransform: 'uppercase' as const,
           letterSpacing: '0.07em',
-          color: tc.text.muted,
+          color: 'var(--fg-muted)',
           marginBottom: space['1'],
         }}
       >
@@ -56,7 +46,7 @@ export function PipelineTile({ label, count, subtitle, href, accent }: Props) {
           fontFamily: fontFamily.display,
           fontSize: '40px',
           fontWeight: fontWeight.semibold,
-          color: accent ?? tc.text.primary,
+          color: active ? 'var(--violet)' : (accent ?? 'var(--fg)'),
           lineHeight: 1.1,
           marginBottom: space['1'],
         }}
@@ -67,7 +57,7 @@ export function PipelineTile({ label, count, subtitle, href, accent }: Props) {
         style={{
           fontFamily: fontFamily.body,
           fontSize: '13px',
-          color: tc.text.muted,
+          color: 'var(--fg-muted)',
         }}
       >
         {subtitle}

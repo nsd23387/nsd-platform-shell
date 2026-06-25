@@ -11,7 +11,7 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  mode: 'light',
+  mode: 'dark',
   toggle: () => {},
   setMode: () => {},
 });
@@ -19,7 +19,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 const STORAGE_KEY = 'nsd-theme-mode';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>('light');
+  const [mode, setModeState] = useState<ThemeMode>('dark');
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
@@ -28,6 +28,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.setAttribute('data-theme', stored);
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setModeState('dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
       document.documentElement.setAttribute('data-theme', 'dark');
     }
   }, []);
