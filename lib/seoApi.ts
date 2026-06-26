@@ -1293,6 +1293,15 @@ export interface SeoPageEnhancementMember {
   safe_to_approve: boolean;
 }
 
+export interface SeoPageEnhancementChange {
+  candidate_id: string | null;
+  mutation_type: string | null;
+  change_kind: 'schema' | 'copy' | 'internal_link' | string | null;
+  current_value: string | null;
+  proposed_value: string | null;
+  is_noop: boolean;
+}
+
 export interface SeoPageEnhancementPackage {
   enhancement_id: string;
   canonical_url: string;
@@ -1302,6 +1311,7 @@ export interface SeoPageEnhancementPackage {
   change_count: number;
   member_candidate_ids: string[];
   updated_at: string | null;
+  changes: SeoPageEnhancementChange[];
   members: SeoPageEnhancementMember[];
   safe_to_bulk_approve: boolean;
   auto_publish_count: number;

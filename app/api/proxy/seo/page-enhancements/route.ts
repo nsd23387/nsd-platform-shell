@@ -1,8 +1,8 @@
 // =============================================================================
 // GET/POST /api/proxy/seo/page-enhancements
 // Page-package review surface. The decision unit is one page enhancement package
-// from analytics.v_seo_page_enhancement_queue, with member candidate details
-// joined only for review and guard evaluation.
+// from analytics.v_seo_page_enhancement_review_detail, with member candidate
+// details joined only for review and guard evaluation.
 // =============================================================================
 
 export const runtime = 'nodejs';
@@ -33,9 +33,12 @@ const packageMemberSql = `
            p.version,
            p.fields,
            p.change_count,
-           p.member_candidate_ids,
-           p.updated_at
-    FROM analytics.v_seo_page_enhancement_queue p
+           q.member_candidate_ids,
+           p.updated_at,
+           p.changes
+    FROM analytics.v_seo_page_enhancement_review_detail p
+    LEFT JOIN analytics.v_seo_page_enhancement_queue q
+      ON q.enhancement_id = p.enhancement_id
   ),
   member_rows AS (
     SELECT p.enhancement_id,
@@ -46,6 +49,7 @@ const packageMemberSql = `
            p.change_count,
            p.member_candidate_ids,
            p.updated_at,
+           p.changes,
            m.ordinality,
            q.candidate_id,
            q.opportunity_id,
@@ -157,6 +161,7 @@ function mapPackages(rows: any[]) {
         change_count: Number(r.change_count ?? 0),
         member_candidate_ids: Array.isArray(r.member_candidate_ids) ? r.member_candidate_ids.map(String) : [],
         updated_at: r.updated_at,
+        changes: Array.isArray(r.changes) ? r.changes : [],
         members: [],
         safe_to_bulk_approve: true,
         auto_publish_count: 0,

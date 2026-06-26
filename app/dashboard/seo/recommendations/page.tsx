@@ -22,7 +22,7 @@ import {
   rejectSeoPageEnhancement,
   skipSeoCandidate,
 } from '../../../../lib/seoApi';
-import type { SeoPageEnhancementLifecycle, SeoPageEnhancementMember, SeoPageEnhancementPackage, SeoPageEnhancementsResponse } from '../../../../lib/seoApi';
+import type { SeoPageEnhancementChange, SeoPageEnhancementLifecycle, SeoPageEnhancementMember, SeoPageEnhancementPackage, SeoPageEnhancementsResponse } from '../../../../lib/seoApi';
 import { EmptyState, PALETTE, monoStack, Pill, fmtInt, pathOf } from '../_shared';
 
 type Stage = 'review' | 'evaluating' | 'resolved';
@@ -45,6 +45,262 @@ function fieldTone(field: string): Tone {
     case 'alt': return 'neutral';
     default: return 'warn';
   }
+}
+
+function mutationLabel(type: string | null | undefined): string {
+  const raw = String(type ?? '').toLowerCase();
+  const labels: Record<string, string> = {
+    title_tag_refinement: 'Title tag',
+    meta_description_update: 'Meta description',
+    h1_tag_refinement: 'H1',
+    heading_refinement: 'Heading',
+    image_alt_text_improvement: 'Image alt text',
+    breadcrumb_schema_addition: 'Breadcrumb schema',
+    product_offer_schema_addition: 'Product offer schema',
+    internal_link_insertion: 'Internal link',
+  };
+  if (labels[raw]) return labels[raw];
+  return raw
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ') || 'Change';
+}
+
+function parseJsonValue(value: string | null | undefined): unknown | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function prettyJson(value: string | null | undefined): string {
+  const parsed = parseJsonValue(value);
+  if (parsed == null) return value ?? '';
+  return JSON.stringify(parsed, null, 2);
+}
+
+function findSchemaType(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findSchemaType(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const direct = record['@type'];
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  const graph = record['@graph'];
+  if (Array.isArray(graph)) return findSchemaType(graph);
+  for (const v of Object.values(record)) {
+    const found = findSchemaType(v);
+    if (found) return found;
+  }
+  return null;
+}
+
+function schemaSummary(change: SeoPageEnhancementChange): string {
+  const schemaType = findSchemaType(parseJsonValue(change.proposed_value));
+  return schemaType ? `Adds structured data: ${schemaType}` : `Adds structured data: ${mutationLabel(change.mutation_type)}`;
+}
+
+function ChangeValue({
+  children,
+  muted = false,
+  strike = false,
+  tc,
+}: {
+  children: React.ReactNode;
+  muted?: boolean;
+  strike?: boolean;
+  tc: ReturnType<typeof useThemeColors>;
+}) {
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        fontFamily: monoStack,
+        fontSize: '12px',
+        lineHeight: 1.55,
+        color: muted ? tc.text.muted : tc.text.primary,
+        textDecoration: strike ? 'line-through' : 'none',
+        whiteSpace: 'pre-wrap',
+        overflowWrap: 'anywhere',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SchemaPre({
+  label,
+  value,
+  defaultOpen = false,
+  tc,
+}: {
+  label: string;
+  value: string | null | undefined;
+  defaultOpen?: boolean;
+  tc: ReturnType<typeof useThemeColors>;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (!value) return null;
+  return (
+    <div style={{ marginTop: space['2'] }}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((next) => !next)}
+        style={{
+          padding: 0,
+          border: 0,
+          background: 'transparent',
+          color: PALETTE.violet,
+          cursor: 'pointer',
+          fontFamily: fontFamily.body,
+          fontSize: '12px',
+        }}
+      >
+        {open ? 'Hide' : 'View'} {label}
+      </button>
+      {open && (
+        <pre
+          style={{
+            margin: `${space['2']} 0 0`,
+            padding: space['3'],
+            border: `1px solid ${tc.border.subtle}`,
+            borderRadius: radius.sm,
+            background: tc.background.muted,
+            color: tc.text.primary,
+            fontFamily: monoStack,
+            fontSize: '11.5px',
+            lineHeight: 1.5,
+            overflowX: 'auto',
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {prettyJson(value)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function ChangeItem({ change, tc }: { change: SeoPageEnhancementChange; tc: ReturnType<typeof useThemeColors> }) {
+  const kind = String(change.change_kind ?? '').toLowerCase();
+  const label = mutationLabel(change.mutation_type);
+
+  if (kind === 'schema') {
+    return (
+      <div data-testid={`review-change-${change.candidate_id ?? label}`}>
+        <div style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.primary, marginBottom: space['1'] }}>
+          {schemaSummary(change)}
+        </div>
+        <SchemaPre label="structured data" value={change.proposed_value} tc={tc} />
+        {change.current_value && String(change.current_value).toLowerCase() !== 'missing' && (
+          <SchemaPre label="current structured data" value={change.current_value} tc={tc} />
+        )}
+      </div>
+    );
+  }
+
+  if (kind === 'internal_link') {
+    return (
+      <div data-testid={`review-change-${change.candidate_id ?? label}`} style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.primary }}>
+        Adds internal link: <span style={{ fontFamily: monoStack }}>&ldquo;{change.proposed_value ?? '—'}&rdquo;</span>
+      </div>
+    );
+  }
+
+  if (change.is_noop) {
+    return (
+      <div data-testid={`review-change-${change.candidate_id ?? label}`} style={{ fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
+        <span style={{ color: tc.text.secondary }}>{label}</span>: No change (proposed equals current)
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid={`review-change-${change.candidate_id ?? label}`}>
+      <div style={{ fontFamily: fontFamily.body, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', color: tc.text.muted, marginBottom: space['2'] }}>
+        {label}
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
+          gap: space['2'],
+          alignItems: 'start',
+        }}
+      >
+        <ChangeValue muted strike tc={tc}>{change.current_value ?? '—'}</ChangeValue>
+        <span style={{ color: tc.text.muted, fontFamily: fontFamily.body, fontSize: '12px', lineHeight: 1.55 }}>→</span>
+        <ChangeValue tc={tc}>{change.proposed_value ?? '—'}</ChangeValue>
+      </div>
+    </div>
+  );
+}
+
+function ChangesSection({ changes, tc }: { changes: SeoPageEnhancementChange[]; tc: ReturnType<typeof useThemeColors> }) {
+  const [open, setOpen] = useState(true);
+  if (!changes.length) {
+    return (
+      <div style={{ marginTop: space['3'], fontFamily: fontFamily.body, fontSize: '12px', color: tc.text.muted }}>
+        Change details are unavailable for this package.
+      </div>
+    );
+  }
+  return (
+    <section style={{ marginTop: space['4'] }} aria-label="Proposed changes">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((next) => !next)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: space['2'],
+          padding: 0,
+          border: 0,
+          background: 'transparent',
+          color: PALETTE.violet,
+          cursor: 'pointer',
+          fontFamily: fontFamily.body,
+          fontSize: '12px',
+          fontWeight: fontWeight.semibold,
+        }}
+      >
+        <span>{open ? 'Hide' : 'Show'} Changes</span>
+        <span style={{ color: tc.text.muted, fontWeight: fontWeight.normal }}>({fmtInt(changes.length)})</span>
+      </button>
+      {open && (
+        <div
+          style={{
+            marginTop: space['3'],
+            borderTop: `1px solid ${tc.border.subtle}`,
+            borderBottom: `1px solid ${tc.border.subtle}`,
+          }}
+        >
+          {changes.map((change, index) => (
+            <div
+              key={`${change.candidate_id ?? change.mutation_type ?? 'change'}-${index}`}
+              style={{
+                padding: `${space['3']} 0`,
+                borderTop: index === 0 ? 'none' : `1px solid ${tc.border.subtle}`,
+              }}
+            >
+              <ChangeItem change={change} tc={tc} />
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function lifecycleLabel(status: string | null | undefined): string {
@@ -306,7 +562,6 @@ function PackageCard({
           <div style={{ display: 'flex', gap: space['2'], alignItems: 'center', flexWrap: 'wrap', marginBottom: '4px' }}>
             <Pill tone={blocked ? 'warn' : 'good'} tc={tc}>{blocked ? 'review guards' : 'safe page'}</Pill>
             <Pill tone="neutral" tc={tc}>v{pkg.version}</Pill>
-            <Pill tone="violet" tc={tc}>{fmtInt(pkg.change_count)} changes</Pill>
           </div>
           <h2 style={{ margin: 0, fontSize: '18px', fontWeight: fontWeight.semibold, color: tc.text.primary, wordBreak: 'break-word' }}>
             {path}
@@ -336,6 +591,7 @@ function PackageCard({
           </button>
         </div>
       </div>
+      <ChangesSection changes={pkg.changes ?? []} tc={tc} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: space['1'], marginTop: space['3'] }}>
         {pkg.members.map((member) => (
           <FieldChange
@@ -468,7 +724,12 @@ function RecommendationsContent() {
       })
       .filter((pkg) => {
         if (!term) return true;
-        return [pkg.canonical_url, pkg.rep_url, ...pkg.members.map((m) => `${m.proposed_value ?? ''} ${m.current_value_snapshot ?? ''}`)]
+        return [
+          pkg.canonical_url,
+          pkg.rep_url,
+          ...pkg.members.map((m) => `${m.proposed_value ?? ''} ${m.current_value_snapshot ?? ''}`),
+          ...(pkg.changes ?? []).map((c) => `${c.current_value ?? ''} ${c.proposed_value ?? ''} ${c.mutation_type ?? ''}`),
+        ]
           .join(' ')
           .toLowerCase()
           .includes(term);
@@ -506,7 +767,8 @@ function RecommendationsContent() {
         .map(p => {
           if (p.enhancement_id !== enhancementId) return p;
           const remaining = p.members.filter(m => m.candidate_id !== candidateId);
-          return { ...p, members: remaining, change_count: remaining.length };
+          const remainingChanges = (p.changes ?? []).filter((change) => change.candidate_id !== candidateId);
+          return { ...p, members: remaining, changes: remainingChanges, change_count: remainingChanges.length || remaining.length };
         })
         .filter(p => p.members.length > 0),
     );

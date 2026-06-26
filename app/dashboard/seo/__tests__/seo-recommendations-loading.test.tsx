@@ -2,9 +2,8 @@
 
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import type { PageDossierCandidate } from '../../../../lib/seoApi';
 
 vi.mock('../../../../hooks/useRBAC', () => ({
   DashboardGuard: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -23,36 +22,94 @@ vi.mock('../../../../hooks/useThemeColors', () => ({
 }));
 
 vi.mock('../../../../lib/seoApi', () => ({
-  getSeoPortfolio: vi.fn(),
-  getSeoCandidateQueue: vi.fn(),
+  getSeoPageEnhancements: vi.fn(),
+  approveSeoCandidate: vi.fn(),
+  approveSeoPageEnhancement: vi.fn(),
+  bulkApproveSeoPageEnhancements: vi.fn(),
+  rejectSeoPageEnhancement: vi.fn(),
+  skipSeoCandidate: vi.fn(),
 }));
 
 import SeoRecommendationsPage from '../recommendations/page';
 import * as seoApi from '../../../../lib/seoApi';
 
-const QUEUE: PageDossierCandidate[] = [
-  {
-    candidate_id: 'q-1',
-    opportunity_id: 'opp-q-1',
-    mutation_type: 'seo_title',
-    primary_remedy: 'improve_ctr',
-    proposed_value: 'Custom Neon Signs | Neon Signs Depot',
-    current_value_snapshot: 'Neon Signs',
-    evidence_summary: 'Ranking position 6 with low CTR vs SERP average.',
-    gate_reasons: [],
-    opportunity_score: 87,
-    opportunity_urgency: 'high',
-    confidence_tier: 'high',
-    source_confidence: 'high',
-    approval_status: 'pending',
-    execution_status: null,
-    target_page_url: 'https://www.neonsignsdepot.com/win-a',
-  },
-];
+const PACKAGE_RESPONSE = {
+  packages: [
+    {
+      enhancement_id: '101',
+      canonical_url: 'https://www.neonsignsdepot.com/custom-neon-cocktails/',
+      rep_url: null,
+      version: 2,
+      fields: ['title', 'schema', 'internal_link'],
+      change_count: 3,
+      member_candidate_ids: ['cand-title', 'cand-schema', 'cand-link'],
+      updated_at: '2026-06-25T12:00:00Z',
+      changes: [
+        {
+          candidate_id: 'cand-title',
+          mutation_type: 'title_tag_refinement',
+          change_kind: 'copy',
+          current_value: 'LA Letters Neon Sign',
+          proposed_value: 'LA Letters Neon Sign | Custom LED Signs',
+          is_noop: false,
+        },
+        {
+          candidate_id: 'cand-schema',
+          mutation_type: 'breadcrumb_schema_addition',
+          change_kind: 'schema',
+          current_value: 'missing',
+          proposed_value: JSON.stringify({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [] }),
+          is_noop: false,
+        },
+        {
+          candidate_id: 'cand-link',
+          mutation_type: 'internal_link_insertion',
+          change_kind: 'internal_link',
+          current_value: null,
+          proposed_value: 'custom neon cocktails',
+          is_noop: false,
+        },
+      ],
+      members: [
+        {
+          candidate_id: 'cand-title',
+          opportunity_id: 'opp-title',
+          mutation_type: 'title_tag_refinement',
+          target_field: 'title',
+          field_label: 'title',
+          target_page_url: 'https://www.neonsignsdepot.com/custom-neon-cocktails/',
+          proposed_value: 'LA Letters Neon Sign | Custom LED Signs',
+          current_value_snapshot: 'LA Letters Neon Sign',
+          mutation_label: 'Title tag',
+          primary_remedy: null,
+          opportunity_score: null,
+          gate_status: 'accepted',
+          approval_status: 'pending',
+          execution_status: 'proposed',
+          qa_status: null,
+          gate_reasons: [],
+          auto_publish: true,
+          copy_quality_score: null,
+          copy_quality_floor: null,
+          copy_quality_passes_floor: true,
+          copy_regen_status: null,
+          safe_to_approve: true,
+        },
+      ],
+      safe_to_bulk_approve: true,
+      auto_publish_count: 1,
+      draft_count: 0,
+    },
+  ],
+  lifecycle: [],
+  counts: { review: 1, evaluating: 0, resolved: 0 },
+  policy: { first_verdict_days: 30, final_days: 60 },
+  north_star: null,
+  money_pages: [],
+};
 
 beforeEach(() => {
-  vi.mocked(seoApi.getSeoCandidateQueue).mockResolvedValue({ candidates: QUEUE, returned: QUEUE.length });
-  vi.mocked(seoApi.getSeoPortfolio).mockResolvedValue([]);
+  vi.mocked(seoApi.getSeoPageEnhancements).mockResolvedValue(PACKAGE_RESPONSE);
 });
 
 afterEach(() => {
@@ -60,21 +117,25 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('SEO Recommendations — loading lifecycle', () => {
-  it('settles to an error/empty state without retrying forever when one sub-request fails', async () => {
-    vi.mocked(seoApi.getSeoPortfolio).mockRejectedValue(new Error('portfolio timeout'));
-
+describe('SEO Recommendations — review card changes', () => {
+  it('renders concrete copy, schema, and internal-link changes instead of a bare count', async () => {
     render(<SeoRecommendationsPage />);
 
-    expect(screen.getByText('Loading recommendations…')).toBeInTheDocument();
-
     await waitFor(() => {
-      expect(screen.queryByText('Loading recommendations…')).not.toBeInTheDocument();
+      expect(screen.getByTestId('package-card-101')).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/portfolio timeout/)).toBeInTheDocument();
-    expect(screen.getByTestId('empty-recommendations')).toHaveTextContent('Recommendations could not fully load');
-    expect(seoApi.getSeoCandidateQueue).toHaveBeenCalledTimes(1);
-    expect(seoApi.getSeoPortfolio).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('3 changes')).not.toBeInTheDocument();
+
+    expect(screen.getByText('Title tag')).toBeInTheDocument();
+    expect(screen.getByText('LA Letters Neon Sign')).toBeInTheDocument();
+    expect(screen.getAllByText('LA Letters Neon Sign | Custom LED Signs').length).toBeGreaterThan(0);
+    expect(screen.getByText('Adds structured data: BreadcrumbList')).toBeInTheDocument();
+    expect(screen.getByText(/Adds internal link:/)).toBeInTheDocument();
+    expect(screen.getByText('“custom neon cocktails”')).toBeInTheDocument();
+
+    expect(screen.queryByText(/"@type": "BreadcrumbList"/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /View structured data/i }));
+    expect(screen.getByText(/"@type": "BreadcrumbList"/)).toBeInTheDocument();
   });
 });
